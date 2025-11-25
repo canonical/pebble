@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,11 +43,7 @@ type ClientOptions struct {
 
 type entryWithService struct {
 	service   string
-	Priority  int
-	Version   int
 	Timestamp string
-	PID       string
-	MsgID     string
 	Message   string
 }
 
@@ -66,8 +63,7 @@ type Client struct {
 	location      *url.URL
 	waitReconnect time.Duration
 	closed        bool
-	hostname      string
-	data          bytes.Buffer
+	sendBuf       bytes.Buffer
 }
 
 // priorityVal calculates the syslog Priority value (PRIVAL) from the given
@@ -93,13 +89,17 @@ func fillDefaultOptions(options *ClientOptions) {
 
 // NewClient creates a syslog client.
 func NewClient(options *ClientOptions) (*Client, error) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "-"
-	}
 
 	opts := *options
 	fillDefaultOptions(&opts)
+
+	if len(opts.Hostname) == 0 {
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "-"
+		}
+		opts.Hostname = hostname
+	}
 
 	u, err := url.Parse(opts.Location)
 	if err != nil {
@@ -110,7 +110,6 @@ func NewClient(options *ClientOptions) (*Client, error) {
 	}
 
 	c := &Client{
-		hostname: hostname,
 		location: u,
 		options:  &opts,
 		buffer:   make([]entryWithService, 2*opts.MaxRequestEntries),
@@ -184,11 +183,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
 	c.entries = append(c.entries, entryWithService{
-		Priority:  priorityVal(facilityUserLevelMessage, severityNotice),
-		Version:   1,
 		Timestamp: entry.Time.Format(time.RFC3339), // Format: 2021-05-26T12:37:01Z
-		PID:       "-",
-		MsgID:     "-",
 		Message:   entry.Message,
 		service:   entry.Service,
 	})
@@ -252,7 +247,7 @@ func (c *Client) Flush(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c.data.Reset()
+	c.sendBuf.Reset()
 
 	for _, entry := range c.entries {
 		structuredData, ok := c.labels[entry.service]
@@ -260,23 +255,33 @@ func (c *Client) Flush(ctx context.Context) error {
 			structuredData = "-"
 		}
 
-		msg := fmt.Sprintf("<%d>%d %s %s %s %s %s %s %s",
-			entry.Priority,
-			entry.Version,
-			entry.Timestamp,
-			c.hostname,
-			entry.service,
-			entry.PID,
-			entry.MsgID,
-			structuredData,
-			entry.Message,
-		)
+		defaultPriority := priorityVal(facilityUserLevelMessage, severityNotice)
 
-		// Octet framing as per RFC 5425.
-		_, _ = fmt.Fprintf(&c.data, "%d %s", len(msg), msg)
+		// Build the message first to calculate length
+		var msgBuf bytes.Buffer
+		msgBuf.WriteByte('<')
+		// Convert priority to string without fmt.Sprint
+		priorityStr := strconv.Itoa(defaultPriority)
+		msgBuf.WriteString(priorityStr)
+		msgBuf.WriteString(">1 ")
+		msgBuf.WriteString(entry.Timestamp)
+		msgBuf.WriteByte(' ')
+		msgBuf.WriteString(c.options.Hostname)
+		msgBuf.WriteByte(' ')
+		msgBuf.WriteString(entry.service)
+		msgBuf.WriteString(" - - ")
+		msgBuf.WriteString(structuredData)
+		msgBuf.WriteByte(' ')
+		msgBuf.WriteString(entry.Message)
+
+		// Octet framing as per RFC 5425: <length> <message>
+		lengthStr := strconv.Itoa(msgBuf.Len())
+		c.sendBuf.WriteString(lengthStr)
+		c.sendBuf.WriteByte(' ')
+		c.sendBuf.Write(msgBuf.Bytes())
 	}
 
-	_, err = io.Copy(c.conn, &c.data)
+	_, err = io.Copy(c.conn, &c.sendBuf)
 	if err != nil {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).
 		c.conn.Close()

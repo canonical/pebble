@@ -56,6 +56,7 @@ func (*suite) TestAddEntries(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location:   "tcp://" + ln.Addr().String(),
 		TargetName: "test-target",
+		Hostname:   "test-machine",
 	})
 	c.Assert(err, IsNil)
 	defer client.Close()
@@ -124,13 +125,14 @@ func (*suite) TestAddEntries(c *C) {
 	case msg := <-msgChan:
 		// Use regex to match messages with dynamic hostname
 		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
-		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:00Z \S+ svc1 - - \[pebble@28978 env="test" version="0.0.1"\] message from svc1.*`)
-		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:01Z \S+ svc2 - - \[pebble@28978 env="production" owner="team-2" version="1.2.3"\] msg from svc2.*`)
-		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:02Z \S+ svc1 - - \[pebble@28978 env="test" version="0.0.1"\] long message from svc1.*`)
-		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:03Z \S+ svc3 - - - log of svc3 doesn't have any labels.*`)
-		c.Check(msg, Matches, `(?s).*<14>1 2023-12-31T12:00:04Z \S+ svc4 - - - multiline.*`)
-		// // Verify multiline content
-		c.Check(msg, Matches, `(?s).*multiline\nline2\nline3.*`)
+		c.Check(msg, Equals,
+			`108 <13>1 2023-12-31T12:00:00Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] message from svc1`+
+				`125 <13>1 2023-12-31T12:00:01Z test-machine svc2 - - [pebble@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
+				`113 <13>1 2023-12-31T12:00:02Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] long message from svc1`+
+				`86 <13>1 2023-12-31T12:00:03Z test-machine svc3 - - - log of svc3 doesn't have any labels`+
+				`72 <13>1 2023-12-31T12:00:04Z test-machine svc4 - - - multiline
+line2
+line3`)
 	case <-time.After(2 * time.Second):
 		c.Fatal("timed out waiting for message")
 	}
@@ -235,7 +237,7 @@ func (*suite) TestInvalidLocation(c *C) {
 	_, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "http://example.com:514",
 	})
-	c.Assert(err, ErrorMatches, `invalid syslog server address scheme "http"`)
+	c.Assert(err, ErrorMatches, `invalid syslog server location http://example.com:514, syslog server location must be in form 'tcp://host:port'`)
 
 	// Valid schemes should work
 	_, err = syslog.NewClient(&syslog.ClientOptions{
@@ -246,7 +248,7 @@ func (*suite) TestInvalidLocation(c *C) {
 	_, err = syslog.NewClient(&syslog.ClientOptions{
 		Location: "udp://localhost:514",
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, ErrorMatches, `invalid syslog server location udp://localhost:514, syslog server location must be in form 'tcp://host:port'`)
 }
 
 type testSyslogServer struct {
