@@ -46,11 +46,13 @@ func (*suite) TestAddEntries(c *C) {
 	}
 
 	serverStarted := make(chan struct{})
+	serverStopped := make(chan struct{})
 	go func() {
 		close(serverStarted)
-		_ = srv.run()
+		err := srv.run()
+		c.Assert(err, IsNil)
+		close(serverStopped)
 	}()
-	defer srv.close()
 	<-serverStarted
 
 	client, err := syslog.NewClient(&syslog.ClientOptions{
@@ -121,6 +123,10 @@ func (*suite) TestAddEntries(c *C) {
 	err = client.Flush(context.Background())
 	c.Assert(err, IsNil)
 
+	// Close the client connection so the server stops reading
+	err = client.Close()
+	c.Assert(err, IsNil)
+
 	select {
 	case msg := <-msgChan:
 		// Use regex to match messages with dynamic hostname
@@ -135,6 +141,15 @@ line2
 line3`)
 	case <-time.After(2 * time.Second):
 		c.Fatal("timed out waiting for message")
+	}
+
+	// Check server stops correctly
+	err = srv.close()
+	c.Assert(err, IsNil)
+	select {
+	case <-serverStopped:
+	case <-time.After(1 * time.Second):
+		c.Fatal("timed out waiting for syslog server to stop")
 	}
 }
 
@@ -265,33 +280,16 @@ func (s *testSyslogServer) run() error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 
-	go func() {
-		defer conn.Close()
-		// Read with a timeout
-		conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-		buf := make([]byte, 4096)
-		var fullMessage string
-		for {
-			n, err := conn.Read(buf)
-			if n > 0 {
-				fullMessage += string(buf[:n])
-			}
-			if err != nil {
-				break
-			}
-			// Reset deadline for next read
-			conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	buf := make([]byte, 8192)
+	for {
+		n, err := conn.Read(buf)
+		s.msgChan <- string(buf[:n])
+		if err != nil {
+			break
 		}
-
-		if fullMessage != "" {
-			select {
-			case s.msgChan <- fullMessage:
-			case <-time.After(1 * time.Second):
-				// Avoid blocking if no one is reading
-			}
-		}
-	}()
+	}
 
 	return nil
 }
