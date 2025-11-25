@@ -25,7 +25,7 @@ const (
 // Syslog Priority values - see RFC 5424 6.2.1
 const (
 	facilityUserLevelMessage = 1
-	SeverityInformational    = 6
+	severityNotice = 5
 )
 
 type ClientOptions struct {
