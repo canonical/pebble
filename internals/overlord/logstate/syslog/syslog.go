@@ -15,26 +15,26 @@ import (
 )
 
 const (
-	maxRequestEntries    = 100
-	initialBackoff = 100 * time.Millisecond
-	defaultSyslogMaxBackoff     = 10 * time.Second
-	defaultDialTimeout          = 10 * time.Second
-	canonicalPrivEnterpriseNum  = 28978
+	maxRequestEntries          = 100
+	initialBackoff             = 100 * time.Millisecond
+	defaultSyslogMaxBackoff    = 10 * time.Second
+	dialTimeout                = 10 * time.Second
+	canonicalPrivEnterpriseNum = 28978
 )
 
 // Syslog Priority values - see RFC 5424 6.2.1
 const (
 	facilityUserLevelMessage = 1
-	severityNotice = 5
+	severityNotice           = 5
 )
 
 type ClientOptions struct {
-	MaxRequestEntries    int
-	TargetName           string
-	Location             string
-	InitialBackoff time.Duration
-	MaxBackoff     time.Duration
-	DialTimeout          time.Duration
+	MaxRequestEntries int
+	TargetName        string
+	Location          string
+	InitialBackoff    time.Duration
+	MaxBackoff        time.Duration
+	DialTimeout       time.Duration
 }
 
 type entryWithService struct {
@@ -75,16 +75,16 @@ func priorityVal(facility, severity int) int {
 
 func fillDefaultOptions(options *ClientOptions) {
 	if options.MaxRequestEntries == 0 {
-		options.MaxRequestEntries = defaultMaxRequestEntries
+		options.MaxRequestEntries = maxRequestEntries
 	}
-	if options.SyslogInitialBackoff == 0 {
-		options.SyslogInitialBackoff = defaultSyslogInitialBackoff
+	if options.InitialBackoff == 0 {
+		options.InitialBackoff = initialBackoff
 	}
-	if options.SyslogMaxBackoff == 0 {
-		options.SyslogMaxBackoff = defaultSyslogMaxBackoff
+	if options.MaxBackoff == 0 {
+		options.MaxBackoff = defaultSyslogMaxBackoff
 	}
 	if options.DialTimeout == 0 {
-		options.DialTimeout = defaultDialTimeout
+		options.DialTimeout = dialTimeout
 	}
 }
 
@@ -186,7 +186,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	}
 
 	c.entries = append(c.entries, entryWithService{
-		Priority:  priorityVal(FacilityUserLevelMessage, SeverityInformational),
+		Priority:  priorityVal(facilityUserLevelMessage, severityNotice),
 		Version:   1,
 		Timestamp: entry.Time.Format(time.RFC3339), // Format: 2021-05-26T12:37:01Z
 		PID:       "-",
@@ -217,12 +217,12 @@ func (c *Client) ensureConnected(ctx context.Context) error {
 	if err != nil {
 		// start an exponential backoff for reconnection attempts
 		if c.waitReconnect == 0 {
-			c.waitReconnect = c.options.SyslogInitialBackoff
+			c.waitReconnect = c.options.InitialBackoff
 		}
 		newWait := 2 * c.waitReconnect
 
-		if newWait > c.options.SyslogMaxBackoff {
-			newWait = c.options.SyslogMaxBackoff
+		if newWait > c.options.MaxBackoff {
+			newWait = c.options.MaxBackoff
 		}
 		c.waitReconnect = newWait
 		return err
