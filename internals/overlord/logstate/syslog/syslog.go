@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	defaultMaxRequestEntries    = 100
+	maxRequestEntries    = 100
 	defaultSyslogInitialBackoff = 100 * time.Millisecond
 	defaultSyslogMaxBackoff     = 10 * time.Second
 	defaultDialTimeout          = 10 * time.Second
