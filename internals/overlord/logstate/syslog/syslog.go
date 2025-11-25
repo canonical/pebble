@@ -33,6 +33,8 @@ type ClientOptions struct {
 	MaxRequestEntries int
 	TargetName        string
 	Location          string
+	Hostname          string
+	SDID              string
 	InitialBackoff    time.Duration
 	MaxBackoff        time.Duration
 	DialTimeout       time.Duration
@@ -133,7 +135,12 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 		return
 	}
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "[%s@%d", "pebble", canonicalPrivEnterpriseNum)
+
+	if len(c.options.SDID) > 0 {
+		fmt.Fprintf(&buf, "[%s@%d", c.options.SDID, canonicalPrivEnterpriseNum)
+	} else {
+		fmt.Fprintf(&buf, "[%s@%d", "pebble", canonicalPrivEnterpriseNum)
+	}
 
 	// Sort label keys to get deterministic output
 	keys := make([]string, 0, len(labels))
