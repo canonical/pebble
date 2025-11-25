@@ -123,6 +123,88 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ai)
 }
 
+// validateAccess checks that the identity's access and type are valid, returning an error if not.
+func (d *Identity) validateAccess() error {
+	if d == nil {
+		return errors.New("identity must not be nil")
+	}
+
+	switch d.Access {
+	case AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess:
+	case "":
+		return fmt.Errorf("access value must be specified (%q, %q, %q, or %q)",
+			AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
+	default:
+		return fmt.Errorf("invalid access value %q, must be %q, %q, %q, or %q",
+			d.Access, AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
+	}
+
+	gotType := false
+	if d.Local != nil {
+		gotType = true
+	}
+	if d.Basic != nil {
+		if d.Basic.Password == "" {
+			return errors.New("basic identity must specify password (hashed)")
+		}
+		gotType = true
+	}
+
+	// Build-tag-specific cert validation
+	certValid, err := d.validateCert()
+	if err != nil {
+		return err
+	}
+	if certValid {
+		gotType = true
+	}
+
+	if !gotType {
+		return noTypeError()
+	}
+	return nil
+}
+
+func (d *Identity) UnmarshalJSON(data []byte) error {
+	var ai apiIdentity
+	err := json.Unmarshal(data, &ai)
+	if err != nil {
+		return err
+	}
+
+	identity := Identity{
+		Access: IdentityAccess(ai.Access),
+	}
+
+	if ai.Local != nil {
+		if ai.Local.UserID == nil {
+			return errors.New("local identity must specify user-id")
+		}
+		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
+	}
+	if ai.Basic != nil {
+		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
+	}
+
+	// Build-tag-specific cert unmarshaling
+	if ai.Cert != nil {
+		certIdentity, err := unmarshalCert(ai.Cert)
+		if err != nil {
+			return err
+		}
+		identity.Cert = certIdentity
+	}
+
+	// Perform additional validation using the local Identity type.
+	err = identity.validateAccess()
+	if err != nil {
+		return err
+	}
+
+	*d = identity
+	return nil
+}
+
 // AddIdentities adds the given identities to the system. It's an error if any
 // of the named identities already exist.
 func (s *State) AddIdentities(identities map[string]*Identity) error {
@@ -277,6 +359,36 @@ func (s *State) Identities() map[string]*Identity {
 func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	s.reading()
 	return s.identityFromInputs(userID, username, password, clientCert)
+}
+
+// identityFromInputs returns an identity matching the given inputs.
+func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
+	// Try cert auth first (build-tag-specific)
+	if clientCert != nil {
+		return s.identityFromCert(clientCert)
+	}
+
+	// Try basic auth (build-tag-specific)
+	if username != "" || password != "" {
+		return s.identityFromBasicAuth(username, password)
+	}
+
+	// UID-based auth (common to both)
+	if userID != nil {
+		return s.identityFromUserID(userID)
+	}
+
+	return nil
+}
+
+// identityFromUserID returns an identity matching the given user ID.
+func (s *State) identityFromUserID(userID *uint32) *Identity {
+	for _, identity := range s.identities {
+		if identity.Local != nil && identity.Local.UserID == *userID {
+			return identity
+		}
+	}
+	return nil
 }
 
 func (s *State) cloneIdentities() map[string]*Identity {
