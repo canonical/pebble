@@ -197,31 +197,12 @@ func (c *Client) ensureConnected(ctx context.Context) error {
 		return fmt.Errorf("write to closed SyslogBackend")
 	}
 
-	if c.waitReconnect > 0 {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(c.waitReconnect):
-		}
-	}
-
 	d := net.Dialer{Timeout: c.options.DialTimeout}
 	conn, err := d.DialContext(ctx, c.location.Scheme, c.location.Host)
 	if err != nil {
-		// start an exponential backoff for reconnection attempts
-		if c.waitReconnect == 0 {
-			c.waitReconnect = c.options.InitialBackoff
-		}
-		newWait := 2 * c.waitReconnect
-
-		if newWait > c.options.MaxBackoff {
-			newWait = c.options.MaxBackoff
-		}
-		c.waitReconnect = newWait
-		return err
+		return fmt.Errorf("cannot connect to %s", c.location)
 	}
 
-	c.waitReconnect = 0 // reset backoff
 	c.conn = conn
 	return nil
 }
