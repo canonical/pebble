@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/canonical/pebble/internals/servicelog"
@@ -60,7 +61,7 @@ type Client struct {
 
 	// connection info
 	conn          net.Conn
-	address       *url.URL
+	location      *url.URL
 	waitReconnect time.Duration
 	closed        bool
 	hostname      string
@@ -115,7 +116,7 @@ func NewClient(options *ClientOptions) (*Client, error) {
 
 	c := &Client{
 		hostname: hostname,
-		address:  u,
+		location: u,
 		options:  &opts,
 		buffer:   make([]entryWithService, 2*opts.MaxRequestEntries),
 		labels:   make(map[string]string),
@@ -180,10 +181,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 		}
 	}
 
-	message := entry.Message
-	if len(message) > 0 && message[len(message)-1] == '\n' {
-		message = message[:len(message)-1]
-	}
+	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
 	c.entries = append(c.entries, entryWithService{
 		Priority:  priorityVal(facilityUserLevelMessage, severityNotice),
@@ -191,7 +189,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 		Timestamp: entry.Time.Format(time.RFC3339), // Format: 2021-05-26T12:37:01Z
 		PID:       "-",
 		MsgID:     "-",
-		Message:   message,
+		Message:   entry.Message,
 		service:   entry.Service,
 	})
 	return nil
@@ -213,7 +211,7 @@ func (c *Client) ensureConnected(ctx context.Context) error {
 	}
 
 	d := net.Dialer{Timeout: c.options.DialTimeout}
-	conn, err := d.DialContext(ctx, c.address.Scheme, c.address.Host)
+	conn, err := d.DialContext(ctx, c.location.Scheme, c.location.Host)
 	if err != nil {
 		// start an exponential backoff for reconnection attempts
 		if c.waitReconnect == 0 {
