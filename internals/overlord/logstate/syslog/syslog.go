@@ -18,8 +18,6 @@ import (
 
 const (
 	maxRequestEntries          = 100
-	initialBackoff             = 100 * time.Millisecond
-	defaultSyslogMaxBackoff    = 10 * time.Second
 	dialTimeout                = 10 * time.Second
 	canonicalPrivEnterpriseNum = 28978
 )
@@ -36,8 +34,6 @@ type ClientOptions struct {
 	Location          string
 	Hostname          string
 	SDID              string
-	InitialBackoff    time.Duration
-	MaxBackoff        time.Duration
 	DialTimeout       time.Duration
 }
 
@@ -59,11 +55,10 @@ type Client struct {
 	labels map[string]string
 
 	// connection info
-	conn          net.Conn
-	location      *url.URL
-	waitReconnect time.Duration
-	closed        bool
-	sendBuf       bytes.Buffer
+	conn     net.Conn
+	location *url.URL
+	closed   bool
+	sendBuf  bytes.Buffer
 }
 
 // priorityVal calculates the syslog Priority value (PRIVAL) from the given
@@ -75,12 +70,6 @@ func priorityVal(facility, severity int) int {
 func fillDefaultOptions(options *ClientOptions) {
 	if options.MaxRequestEntries == 0 {
 		options.MaxRequestEntries = maxRequestEntries
-	}
-	if options.InitialBackoff == 0 {
-		options.InitialBackoff = initialBackoff
-	}
-	if options.MaxBackoff == 0 {
-		options.MaxBackoff = defaultSyslogMaxBackoff
 	}
 	if options.DialTimeout == 0 {
 		options.DialTimeout = dialTimeout
