@@ -84,23 +84,23 @@ func (*suite) TestAddEntries(c *C) {
 
 	// Add entries from different services
 	entries := []servicelog.Entry{{
-		Time:    time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
+		Time:    time.Date(2023, 12, 31, 12, 0, 0, 123456789, time.UTC),
 		Service: "svc1",
 		Message: "message from svc1",
 	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 1, 0, time.UTC),
+		Time:    time.Date(2023, 12, 31, 12, 0, 1, 123456789, time.UTC),
 		Service: "svc2",
 		Message: "msg from svc2",
 	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 2, 0, time.UTC),
+		Time:    time.Date(2023, 12, 31, 12, 0, 2, 123456789, time.UTC),
 		Service: "svc1",
 		Message: "long message from svc1",
 	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 3, 0, time.UTC),
+		Time:    time.Date(2023, 12, 31, 12, 0, 3, 123456789, time.UTC),
 		Service: "svc3",
 		Message: "log of svc3 doesn't have any labels",
 	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 4, 0, time.UTC),
+		Time:    time.Date(2023, 12, 31, 12, 0, 4, 123456789, time.UTC),
 		Service: "svc4",
 		Message: "multiline\nline2\nline3",
 	}}
@@ -126,11 +126,11 @@ func (*suite) TestAddEntries(c *C) {
 		// Use regex to match messages with dynamic hostname
 		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 		c.Check(msg, Equals,
-			`108 <13>1 2023-12-31T12:00:00Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] message from svc1`+
-				`125 <13>1 2023-12-31T12:00:01Z test-machine svc2 - - [pebble@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
-				`113 <13>1 2023-12-31T12:00:02Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] long message from svc1`+
-				`86 <13>1 2023-12-31T12:00:03Z test-machine svc3 - - - log of svc3 doesn't have any labels`+
-				`72 <13>1 2023-12-31T12:00:04Z test-machine svc4 - - - multiline
+			`118 <13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] message from svc1`+
+				`135 <13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - [pebble@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
+				`123 <13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] long message from svc1`+
+				`96 <13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`+
+				`82 <13>1 2023-12-31T12:00:04.123456789Z test-machine svc4 - - - multiline
 line2
 line3`)
 	case <-time.After(2 * time.Second):

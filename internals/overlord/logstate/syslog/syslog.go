@@ -183,7 +183,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
 	c.entries = append(c.entries, entryWithService{
-		Timestamp: entry.Time.Format(time.RFC3339), // Format: 2021-05-26T12:37:01Z
+		Timestamp: entry.Time.Format(time.RFC3339Nano), // Format: 2021-05-26T12:37:01Z
 		Message:   entry.Message,
 		service:   entry.Service,
 	})
