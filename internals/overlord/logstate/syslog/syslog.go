@@ -16,7 +16,7 @@ import (
 
 const (
 	maxRequestEntries    = 100
-	defaultSyslogInitialBackoff = 100 * time.Millisecond
+	initialBackoff = 100 * time.Millisecond
 	defaultSyslogMaxBackoff     = 10 * time.Second
 	defaultDialTimeout          = 10 * time.Second
 	canonicalPrivEnterpriseNum  = 28978
