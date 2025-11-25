@@ -102,18 +102,11 @@ func NewClient(options *ClientOptions) (*Client, error) {
 	fillDefaultOptions(&opts)
 
 	u, err := url.Parse(opts.Location)
-	if err != nil || u.Host == "" {
-		u, err = url.Parse("//" + opts.Location)
-	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid syslog server location: %v", err)
 	}
-
-	if u.Scheme != "tcp" && u.Scheme != "udp" && u.Scheme != "" {
-		return nil, fmt.Errorf("invalid syslog server address scheme %q", u.Scheme)
-	}
-	if u.Scheme == "" {
-		u.Scheme = "tcp"
+	if u.Scheme != "tcp" || u.Host == "" { // may support udp later
+		return nil, fmt.Errorf("invalid syslog server location %s, syslog server location must be in form 'tcp://host:port'", opts.Location)
 	}
 
 	c := &Client{
