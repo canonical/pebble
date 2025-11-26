@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"time"
@@ -356,12 +357,7 @@ func (f *NoticeFilter) matches(n *Notice) bool {
 }
 
 func sliceContains[T comparable](haystack []T, needle T) bool {
-	for _, v := range haystack {
-		if v == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(haystack, needle)
 }
 
 // Notices returns the list of notices that match the filter (if any),

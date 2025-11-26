@@ -14,6 +14,8 @@
 
 package patch
 
+import "maps"
+
 // PatchesForTest returns the registered set of patches for testing purposes.
 func PatchesForTest() map[int][]PatchFunc {
 	return patches
@@ -26,9 +28,7 @@ func FakeLevel(flevel, fsublevel int) (restore func()) {
 	Level = flevel
 	Sublevel = fsublevel
 	oldPatches := make(map[int][]PatchFunc)
-	for k, v := range patches {
-		oldPatches[k] = v
-	}
+	maps.Copy(oldPatches, patches)
 
 	for plevel, psublevels := range patches {
 		if plevel > flevel {

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -432,9 +433,7 @@ func (c *Change) addNotice() error {
 	var extraData map[string]string
 	err := c.Get("notice-data", &extraData)
 	if err == nil {
-		for k, v := range extraData {
-			opts.Data[k] = v
-		}
+		maps.Copy(opts.Data, extraData)
 	} else if !errors.Is(err, ErrNoState) {
 		return fmt.Errorf("cannot get notice data from change %s: %w", c.ID(), err)
 	}

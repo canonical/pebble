@@ -35,7 +35,7 @@ var _ = Suite(&iteratorSuite{})
 
 func (s *iteratorSuite) TestReads(c *C) {
 	rb := servicelog.NewRingBuffer(100)
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		n, err := fmt.Fprint(rb, "0123456789")
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 10)
@@ -61,21 +61,18 @@ func (s *iteratorSuite) TestReads(c *C) {
 
 func (s *iteratorSuite) TestConcurrentReaders(c *C) {
 	rb := servicelog.NewRingBuffer(10000)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		n, err := fmt.Fprintln(rb, "123456789")
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 10)
 	}
 
-	numReaders := runtime.NumCPU()
-	if numReaders < 2 {
-		numReaders = 2
-	}
+	numReaders := max(runtime.NumCPU(), 2)
 	start := make(chan struct{})
 	wg := sync.WaitGroup{}
 	wg.Add(numReaders)
 	num := int32(0)
-	for i := 0; i < numReaders; i++ {
+	for range numReaders {
 		go func() {
 			defer wg.Done()
 			<-start
@@ -105,7 +102,7 @@ func (s *iteratorSuite) TestConcurrentReaders(c *C) {
 func (s *iteratorSuite) TestMore(c *C) {
 	n := 1000
 	expectedSum := 0
-	for i := 0; i < n; i++ {
+	for i := range n {
 		expectedSum += i
 	}
 
@@ -121,7 +118,7 @@ func (s *iteratorSuite) TestMore(c *C) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			select {
 			case <-sendMore:
 			case <-timeout:
@@ -204,7 +201,7 @@ func (s *iteratorSuite) TestLongReaders(c *C) {
 		close(timeout)
 	})
 	numReaders := 100
-	for i := 0; i < numReaders; i++ {
+	for range numReaders {
 		wg.Add(1)
 		// Iterator needs to be created before the writes start
 		// as to not miss them.
@@ -225,7 +222,7 @@ func (s *iteratorSuite) TestLongReaders(c *C) {
 
 	startTime := time.Now()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		n, err := fmt.Fprintf(rb, "%d", i)
 		c.Assert(err, IsNil)
 		c.Assert(n, Equals, 1)

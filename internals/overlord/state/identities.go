@@ -20,6 +20,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"sort"
 	"strings"
@@ -349,9 +350,7 @@ func (s *State) Identities() map[string]*Identity {
 	s.reading()
 
 	result := make(map[string]*Identity, len(s.identities))
-	for name, identity := range s.identities {
-		result[name] = identity
-	}
+	maps.Copy(result, s.identities)
 	return result
 }
 
@@ -420,9 +419,7 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 
 func (s *State) cloneIdentities() map[string]*Identity {
 	newIdentities := make(map[string]*Identity, len(s.identities))
-	for name, identity := range s.identities {
-		newIdentities[name] = identity
-	}
+	maps.Copy(newIdentities, s.identities)
 	return newIdentities
 }
 
