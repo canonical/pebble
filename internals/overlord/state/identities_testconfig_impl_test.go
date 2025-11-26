@@ -19,13 +19,14 @@ package state_test
 // Non-FIPS build: certificate authentication is supported.
 const certAuthSupported = true
 
-// Error message for when no identity type is specified (non-FIPS).
+// Error message for when no identity type is specified in the default build.
 const noTypeErrorMsg = `identity must have at least one type \("local", "basic", or "cert"\)`
 
-// Error messages for certificate validation (non-FIPS).
+// Error messages for certificate validation in the default build.
 const (
 	certPEMRequiredError  = `cert identity must include a PEM-encoded certificate`
 	certParseError        = `cannot parse certificate from cert identity: x509: .*`
 	certExtraDataError    = `cert identity cannot have extra data after the PEM block`
-	certNotSupportedError = `certificate authentication is not supported in FIPS builds` // Not used in non-FIPS
+	// Not used in the default build.
+	certNotSupportedError = `certificate authentication is not supported in FIPS builds`
 )

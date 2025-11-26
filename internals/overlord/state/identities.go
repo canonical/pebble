@@ -33,7 +33,8 @@ type Identity struct {
 	// non-nil.
 	Local *LocalIdentity
 	Basic *BasicIdentity
-	Cert  *CertIdentity
+	// This field is always nil in FIPS builds.
+	Cert *CertIdentity
 }
 
 // IdentityAccess defines the access level for an identity.
@@ -61,7 +62,13 @@ type BasicIdentity struct {
 
 // Certificate identity represents the client in an mTLS connection. We
 // only support a self-signed x509 certificate without intermediaries.
+//
+// In FIPS builds, certificate authentication is not supported. The X509
+// field will always be nil, and any identity with Type="certificate" will
+// fail validation.
 type CertIdentity struct {
+	// X509 is the parsed certificate. In FIPS builds, this field is always
+	// nil as certificate authentication is disabled.
 	X509 *x509.Certificate
 }
 
@@ -186,7 +193,6 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
 
-	// Build-tag-specific cert unmarshaling
 	if ai.Cert != nil {
 		certIdentity, err := unmarshalCert(ai.Cert)
 		if err != nil {
@@ -356,12 +362,19 @@ func (s *State) Identities() map[string]*Identity {
 // because they are intentionally setup by the client.
 //
 // If no matching identity is found for the given inputs, nil is returned.
+//
+// In FIPS builds, the clientCert parameter is accepted for API compatibility
+// but will never match an identity, as certificate authentication is disabled.
 func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	s.reading()
 	return s.identityFromInputs(userID, username, password, clientCert)
 }
 
 // identityFromInputs returns an identity matching the given inputs.
+//
+// In FIPS builds, clientCert will never match (identityFromCert always returns
+// nil), and basic auth credentials will not match (identityFromBasicAuth always
+// returns nil).
 func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	// Try cert auth first (build-tag-specific)
 	if clientCert != nil {
