@@ -129,7 +129,6 @@ func (*suite) TestAddEntries(c *C) {
 
 	select {
 	case msg := <-msgChan:
-		// Use regex to match messages with dynamic hostname
 		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 		c.Check(msg, Equals,
 			`118 <13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] message from svc1`+
