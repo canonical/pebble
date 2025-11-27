@@ -376,17 +376,14 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 // nil), and basic auth credentials will not match (identityFromBasicAuth always
 // returns nil).
 func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
-	// Try cert auth first (build-tag-specific)
 	if clientCert != nil {
 		return s.identityFromCert(clientCert)
 	}
 
-	// Try basic auth (build-tag-specific)
 	if username != "" || password != "" {
 		return s.identityFromBasicAuth(username, password)
 	}
 
-	// UID-based auth (common to both)
 	if userID != nil {
 		return s.identityFromUserID(userID)
 	}
