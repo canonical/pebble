@@ -93,7 +93,7 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 		delete(c.labels, serviceName)
 		return
 	}
-	var buf bytes.Buffer
+	var buf strings.Builder
 
 	sdID := c.options.SDID
 	if sdID == "" {
