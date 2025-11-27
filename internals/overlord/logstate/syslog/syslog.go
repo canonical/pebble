@@ -21,12 +21,6 @@ const (
 	canonicalPrivEnterpriseNum = 28978
 )
 
-// Syslog Priority values - see RFC 5424 6.2.1
-const (
-	facilityUserLevelMessage = 1
-	severityNotice           = 5
-)
-
 type ClientOptions struct {
 	MaxRequestEntries int
 	Location          string
@@ -58,12 +52,6 @@ type Client struct {
 	closed   bool
 
 	sendBuf bytes.Buffer
-}
-
-// priorityVal calculates the syslog Priority value (PRIVAL) from the given
-// Facility and Severity values. See RFC 5424, sec 6.2.1 for details.
-func priorityVal(facility, severity int) int {
-	return facility*8 + severity
 }
 
 func fillDefaultOptions(options *ClientOptions) {
@@ -197,6 +185,44 @@ func (c *Client) Close() error {
 	return err
 }
 
+func (c *Client) buildSendBuffer() {
+	c.sendBuf.Reset()
+	hostname := c.options.Hostname
+	if hostname == "" {
+		hostname = "-"
+	}
+
+	for _, entry := range c.entries {
+		structuredData, ok := c.labels[entry.service]
+		if !ok {
+			structuredData = "-"
+		}
+
+		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
+		const prefix = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
+		frameLength := len(prefix) + len(entry.Timestamp) + 1 + len(hostname) + 1 +
+			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.Message)
+
+		// Octet framing as per RFC 5425: <length> <message>
+		lengthBuf := make([]byte, 0, 8) // fixed-length buffer to avoid allocations
+		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
+		c.sendBuf.Write(lengthBuf)
+		c.sendBuf.WriteByte(' ')
+
+		// Message format as per RFC 5424
+		c.sendBuf.WriteString(prefix)
+		c.sendBuf.WriteString(entry.Timestamp)
+		c.sendBuf.WriteByte(' ')
+		c.sendBuf.WriteString(hostname)
+		c.sendBuf.WriteByte(' ')
+		c.sendBuf.WriteString(entry.service)
+		c.sendBuf.WriteString(" - - ")
+		c.sendBuf.WriteString(structuredData)
+		c.sendBuf.WriteByte(' ')
+		c.sendBuf.WriteString(entry.Message)
+	}
+}
+
 // Flush sends buffered logs to the syslog endpoint.
 func (c *Client) Flush(ctx context.Context) error {
 	if len(c.entries) == 0 {
@@ -207,44 +233,8 @@ func (c *Client) Flush(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c.sendBuf.Reset()
 
-	for _, entry := range c.entries {
-		structuredData, ok := c.labels[entry.service]
-		if !ok {
-			structuredData = "-"
-		}
-
-		defaultPriority := priorityVal(facilityUserLevelMessage, severityNotice)
-
-		// Build the message first to calculate length
-		var msgBuf bytes.Buffer
-		msgBuf.WriteByte('<')
-		// Convert priority to string without fmt.Sprint
-		priorityStr := strconv.Itoa(defaultPriority)
-		msgBuf.WriteString(priorityStr)
-		msgBuf.WriteString(">1 ")
-		msgBuf.WriteString(entry.Timestamp)
-		msgBuf.WriteByte(' ')
-		if len(c.options.Hostname) == 0 {
-			msgBuf.WriteByte('-')
-		} else {
-			msgBuf.WriteString(c.options.Hostname)
-		}
-		msgBuf.WriteByte(' ')
-		msgBuf.WriteString(entry.service)
-		msgBuf.WriteString(" - - ")
-		msgBuf.WriteString(structuredData)
-		msgBuf.WriteByte(' ')
-		msgBuf.WriteString(entry.Message)
-
-		// Octet framing as per RFC 5425: <length> <message>
-		lengthStr := strconv.Itoa(msgBuf.Len())
-		c.sendBuf.WriteString(lengthStr)
-		c.sendBuf.WriteByte(' ')
-		c.sendBuf.Write(msgBuf.Bytes())
-	}
-
+	c.buildSendBuffer()
 	_, err = io.Copy(c.conn, &c.sendBuf)
 	if err != nil {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).

@@ -55,6 +55,7 @@ func (*suite) TestAddEntries(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://" + listener.Addr().String(),
 		Hostname: "test-machine",
+		SDID:     "test-sdid",
 	})
 	c.Assert(err, IsNil)
 	defer client.Close()
@@ -127,11 +128,11 @@ func (*suite) TestAddEntries(c *C) {
 	case msg := <-msgChan:
 		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 		c.Check(msg, Equals,
-			`118 <13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] message from svc1`+
-				`135 <13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - [pebble@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
-				`123 <13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] long message from svc1`+
+			`121 <13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`+
+				`138 <13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - [test-sdid@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
+				`126 <13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] long message from svc1`+
 				`96 <13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`+
-				`95 <13>1 2023-12-31T12:00:04.123456789Z test-machine svc4 - - [pebble@28978] multiline
+				`98 <13>1 2023-12-31T12:00:04.123456789Z test-machine svc4 - - [test-sdid@28978] multiline
 line2
 line3`)
 	case <-time.After(2 * time.Second):
