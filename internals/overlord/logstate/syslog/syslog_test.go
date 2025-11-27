@@ -35,28 +35,25 @@ func Test(t *testing.T) {
 }
 
 func (*suite) TestAddEntries(c *C) {
-	ln, err := net.Listen("tcp", "localhost:0")
+	listener, err := net.Listen("tcp", "localhost:0")
 	c.Assert(err, IsNil)
-	defer ln.Close()
+	defer listener.Close()
 
 	msgChan := make(chan string, 1)
 	srv := &testSyslogServer{
-		listener: ln,
+		listener: listener,
 		msgChan:  msgChan,
 	}
 
-	serverStarted := make(chan struct{})
 	serverStopped := make(chan struct{})
 	go func() {
-		close(serverStarted)
 		err := srv.run()
 		c.Assert(err, IsNil)
 		close(serverStopped)
 	}()
-	<-serverStarted
 
 	client, err := syslog.NewClient(&syslog.ClientOptions{
-		Location: "tcp://" + ln.Addr().String(),
+		Location: "tcp://" + listener.Addr().String(),
 		Hostname: "test-machine",
 	})
 	c.Assert(err, IsNil)
