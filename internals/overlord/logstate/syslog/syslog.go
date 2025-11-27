@@ -50,14 +50,15 @@ type Client struct {
 	buffer  []entryWithService
 	entries []entryWithService
 
-	// Store the custom labels(syslog's structured-data) for each service
+	// Store the custom labels (syslog's structured-data) for each service
 	labels map[string]string
 
 	// connection info
 	conn     net.Conn
 	location *url.URL
 	closed   bool
-	sendBuf  bytes.Buffer
+
+	sendBuf bytes.Buffer
 }
 
 // priorityVal calculates the syslog Priority value (PRIVAL) from the given
@@ -171,7 +172,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
 	c.entries = append(c.entries, entryWithService{
-		Timestamp: entry.Time.Format(time.RFC3339Nano), // Format: 2021-05-26T12:37:01Z
+		Timestamp: entry.Time.Format(time.RFC3339Nano), // Format: 2021-05-26T12:37:01.123456789Z
 		Message:   entry.Message,
 		service:   entry.Service,
 	})
