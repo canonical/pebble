@@ -383,8 +383,13 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 			ScopeName:  cmd.ProgramName,
 		}), nil
 	case plan.SyslogTarget:
+		hostname, err := os.Hostname()
+		if err != nil {
+			return nil, fmt.Errorf("cannot get hostname: %w", err)
+		}
 		return syslog.NewClient(&syslog.ClientOptions{
 			Location: target.Location,
+			Hostname: hostname,
 		})
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)

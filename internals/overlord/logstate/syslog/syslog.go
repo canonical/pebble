@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/url"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,14 +79,6 @@ func fillDefaultOptions(options *ClientOptions) {
 func NewClient(options *ClientOptions) (*Client, error) {
 	opts := *options
 	fillDefaultOptions(&opts)
-
-	if len(opts.Hostname) == 0 {
-		hostname, err := os.Hostname()
-		if err != nil {
-			hostname = "-"
-		}
-		opts.Hostname = hostname
-	}
 
 	u, err := url.Parse(opts.Location)
 	if err != nil {
@@ -235,7 +226,11 @@ func (c *Client) Flush(ctx context.Context) error {
 		msgBuf.WriteString(">1 ")
 		msgBuf.WriteString(entry.Timestamp)
 		msgBuf.WriteByte(' ')
-		msgBuf.WriteString(c.options.Hostname)
+		if len(c.options.Hostname) == 0 {
+			msgBuf.WriteByte('-')
+		} else {
+			msgBuf.WriteString(c.options.Hostname)
+		}
 		msgBuf.WriteByte(' ')
 		msgBuf.WriteString(entry.service)
 		msgBuf.WriteString(" - - ")
