@@ -85,7 +85,7 @@ func NewClient(options *ClientOptions) (*Client, error) {
 		return nil, fmt.Errorf("invalid syslog server location: %v", err)
 	}
 	if u.Scheme != "tcp" || u.Host == "" { // may support udp later
-		return nil, fmt.Errorf("invalid syslog server location %s, syslog server location must be in form 'tcp://host:port'", opts.Location)
+		return nil, fmt.Errorf(`invalid syslog server location %q, must be in form "tcp://host:port"`, opts.Location)
 	}
 
 	c := &Client{
