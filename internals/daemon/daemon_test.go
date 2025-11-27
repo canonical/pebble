@@ -1171,6 +1171,10 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
 }
 
 func (s *daemonSuite) TestRestartServiceFailure(c *C) {
+	if !httpsSupported {
+		c.Skip("HTTPS not supported in FIPS builds")
+	}
+
 	writeTestLayer(s.pebbleDir, `
 services:
     test1:
@@ -1378,6 +1382,10 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 }
 
 func (s *daemonSuite) TestStopRunning(c *C) {
+	if !httpsSupported {
+		c.Skip("HTTPS not supported in FIPS builds")
+	}
+
 	// Start the daemon.
 	writeTestLayer(s.pebbleDir, `
 services:
@@ -1437,6 +1445,10 @@ services:
 }
 
 func (s *daemonSuite) TestStopWithinOkayDelay(c *C) {
+	if !httpsSupported {
+		c.Skip("HTTPS not supported in FIPS builds")
+	}
+
 	// Start the daemon.
 	writeTestLayer(s.pebbleDir, `
 services:
@@ -2031,6 +2043,10 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateCert(c *C) {
+	if !certAuthSupported {
+		c.Skip("certificate authentication not supported in FIPS builds")
+	}
+
 	d := s.newDaemon(c)
 
 	// Create a test certificate.

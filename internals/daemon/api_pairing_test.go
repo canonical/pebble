@@ -28,6 +28,10 @@ import (
 
 // TestPairing checks that we can pair a client.
 func (s *apiSuite) TestPairing(c *C) {
+	if !mtlsPairingSupported {
+		c.Skip("mTLS pairing not supported in FIPS builds")
+	}
+
 	clientCert := createTestClientCertificate(c)
 
 	pairingLayer := `
@@ -65,6 +69,10 @@ pairing:
 // TestPairingPairManagerError checks that pairing fails if attemped without
 // the pairing window enabled.
 func (s *apiSuite) TestPairingPairManagerError(c *C) {
+	if !mtlsPairingSupported {
+		c.Skip("mTLS pairing not supported in FIPS builds")
+	}
+
 	clientCert := createTestClientCertificate(c)
 
 	_ = s.daemon(c)
@@ -141,6 +149,10 @@ func (s *apiSuite) TestPairingPairInvalidAction(c *C) {
 // TestPairingPairNonHTTPS confirms that any non-HTTPS transport is not
 // supported.
 func (s *apiSuite) TestPairingPairNonHTTPS(c *C) {
+	if !httpsSupported {
+		c.Skip("HTTPS not supported in FIPS builds")
+	}
+
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
@@ -164,6 +176,10 @@ func (s *apiSuite) TestPairingPairNonHTTPS(c *C) {
 // TestPairingPairMissingTLSState verifies that missing TLS state
 // will result in pairing failure.
 func (s *apiSuite) TestPairingPairMissingTLSState(c *C) {
+	if !httpsSupported {
+		c.Skip("HTTPS not supported in FIPS builds")
+	}
+
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
@@ -187,6 +203,10 @@ func (s *apiSuite) TestPairingPairMissingTLSState(c *C) {
 // TestPairingPairZeroPeerCertificates verifies that if the client does
 // not supply exactly one certificate, we will not proceed with pairing.
 func (s *apiSuite) TestPairingPairZeroPeerCertificates(c *C) {
+	if !mtlsPairingSupported {
+		c.Skip("mTLS pairing not supported in FIPS builds")
+	}
+
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
