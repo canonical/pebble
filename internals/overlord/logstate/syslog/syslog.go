@@ -30,7 +30,6 @@ const (
 
 type ClientOptions struct {
 	MaxRequestEntries int
-	TargetName        string
 	Location          string
 	Hostname          string
 	SDID              string

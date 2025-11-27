@@ -384,8 +384,7 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 		}), nil
 	case plan.SyslogTarget:
 		return syslog.NewClient(&syslog.ClientOptions{
-			TargetName: target.Name,
-			Location:   target.Location,
+			Location: target.Location,
 		})
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)

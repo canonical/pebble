@@ -56,9 +56,8 @@ func (*suite) TestAddEntries(c *C) {
 	<-serverStarted
 
 	client, err := syslog.NewClient(&syslog.ClientOptions{
-		Location:   "tcp://" + ln.Addr().String(),
-		TargetName: "test-target",
-		Hostname:   "test-machine",
+		Location: "tcp://" + ln.Addr().String(),
+		Hostname: "test-machine",
 	})
 	c.Assert(err, IsNil)
 	defer client.Close()
@@ -185,7 +184,6 @@ func (*suite) TestFlushCancelContext(c *C) {
 }
 func (*suite) TestBufferFull(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
-		TargetName:        "tgt1",
 		Location:          "tcp://fake:514",
 		MaxRequestEntries: 3,
 	})
@@ -236,8 +234,7 @@ func (*suite) TestBufferFull(c *C) {
 
 func (*suite) TestFlushEmpty(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
-		Location:   "tcp://fake:514",
-		TargetName: "test",
+		Location: "tcp://fake:514",
 	})
 	c.Assert(err, IsNil)
 
