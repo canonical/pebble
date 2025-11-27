@@ -107,11 +107,11 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 	}
 	var buf bytes.Buffer
 
-	if len(c.options.SDID) > 0 {
-		fmt.Fprintf(&buf, "[%s@%d", c.options.SDID, canonicalPrivEnterpriseNum)
-	} else {
-		fmt.Fprintf(&buf, "[%s@%d", "pebble", canonicalPrivEnterpriseNum)
+	sdID := c.options.SDID
+	if sdID == "" {
+		sdID = "pebble"
 	}
+	fmt.Fprintf(&buf, "[%s@%d", sdID, canonicalPrivEnterpriseNum)
 
 	// Sort label keys to get deterministic output
 	keys := make([]string, 0, len(labels))
