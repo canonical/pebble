@@ -27,6 +27,4 @@ const (
 	certPEMRequiredError = `cert identity must include a PEM-encoded certificate`
 	certParseError       = `cannot parse certificate from cert identity: x509: .*`
 	certExtraDataError   = `cert identity cannot have extra data after the PEM block`
-	// Not used in the default build.
-	certNotSupportedError = `certificate authentication is not supported in FIPS builds`
 )

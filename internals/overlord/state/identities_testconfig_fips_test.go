@@ -24,8 +24,7 @@ const noTypeErrorMsg = `identity must have at least one type \("local" or "basic
 
 // Error messages for certificate validation (FIPS).
 const (
-	certPEMRequiredError  = `certificate authentication is not supported in FIPS builds`
-	certParseError        = `certificate authentication is not supported in FIPS builds`
-	certExtraDataError    = `certificate authentication is not supported in FIPS builds`
-	certNotSupportedError = `certificate authentication is not supported in FIPS builds`
+	certPEMRequiredError = `certificate authentication is not supported in FIPS builds`
+	certParseError       = `certificate authentication is not supported in FIPS builds`
+	certExtraDataError   = `certificate authentication is not supported in FIPS builds`
 )
