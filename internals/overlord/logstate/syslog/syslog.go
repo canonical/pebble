@@ -189,7 +189,7 @@ func (c *Client) ensureConnected(ctx context.Context) error {
 	d := net.Dialer{Timeout: c.options.DialTimeout}
 	conn, err := d.DialContext(ctx, c.location.Scheme, c.location.Host)
 	if err != nil {
-		return fmt.Errorf("cannot connect to %s", c.location)
+		return fmt.Errorf("cannot connect to %s: %w", c.location, err)
 	}
 
 	c.conn = conn
@@ -256,7 +256,7 @@ func (c *Client) Flush(ctx context.Context) error {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).
 		c.conn.Close()
 		c.conn = nil
-		return fmt.Errorf("cannot send syslog: %v", err)
+		return fmt.Errorf("cannot send syslogs: %w", err)
 	}
 
 	c.resetBuffer()
