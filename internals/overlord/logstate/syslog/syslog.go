@@ -78,7 +78,6 @@ func fillDefaultOptions(options *ClientOptions) {
 
 // NewClient creates a syslog client.
 func NewClient(options *ClientOptions) (*Client, error) {
-
 	opts := *options
 	fillDefaultOptions(&opts)
 
