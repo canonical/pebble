@@ -31,8 +31,8 @@ type ClientOptions struct {
 
 type entryWithService struct {
 	service   string
-	Timestamp string
-	Message   string
+	timestamp string
+	message   string
 }
 
 type Client struct {
@@ -150,8 +150,8 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
 	c.entries = append(c.entries, entryWithService{
-		Timestamp: entry.Time.Format(time.RFC3339Nano), // Format: 2021-05-26T12:37:01.123456789Z
-		Message:   entry.Message,
+		timestamp: entry.Time.Format(time.RFC3339Nano), // Format: 2021-05-26T12:37:01.123456789Z
+		message:   entry.Message,
 		service:   entry.Service,
 	})
 	return nil
@@ -200,8 +200,8 @@ func (c *Client) buildSendBuffer() {
 
 		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 		const prefix = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
-		frameLength := len(prefix) + len(entry.Timestamp) + 1 + len(hostname) + 1 +
-			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.Message)
+		frameLength := len(prefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
+			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
 
 		// Octet framing as per RFC 5425: <length> <message>
 		lengthBuf := make([]byte, 0, 8) // fixed-length buffer to avoid allocations
@@ -211,7 +211,7 @@ func (c *Client) buildSendBuffer() {
 
 		// Message format as per RFC 5424
 		c.sendBuf.WriteString(prefix)
-		c.sendBuf.WriteString(entry.Timestamp)
+		c.sendBuf.WriteString(entry.timestamp)
 		c.sendBuf.WriteByte(' ')
 		c.sendBuf.WriteString(hostname)
 		c.sendBuf.WriteByte(' ')
@@ -219,7 +219,7 @@ func (c *Client) buildSendBuffer() {
 		c.sendBuf.WriteString(" - - ")
 		c.sendBuf.WriteString(structuredData)
 		c.sendBuf.WriteByte(' ')
-		c.sendBuf.WriteString(entry.Message)
+		c.sendBuf.WriteString(entry.message)
 	}
 }
 
