@@ -18,7 +18,6 @@ package daemon
 
 // FIPS build: HTTPS and certificate authentication are not supported.
 const (
-	httpsSupported       = false
-	certAuthSupported    = false
-	mtlsPairingSupported = false
+	httpsSupported    = false
+	certAuthSupported = false
 )

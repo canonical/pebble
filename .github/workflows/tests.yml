@@ -41,6 +41,7 @@ jobs:
     - name: Test
       run: |
         PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H go test ./...
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H go test -tags fips ./...
 
   format:
     runs-on: ubuntu-latest

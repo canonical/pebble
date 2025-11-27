@@ -18,7 +18,6 @@ package daemon
 
 // Non-FIPS build: HTTPS and certificate authentication are supported.
 const (
-	httpsSupported       = true
-	certAuthSupported    = true
-	mtlsPairingSupported = true
+	httpsSupported    = true
+	certAuthSupported = true
 )
