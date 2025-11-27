@@ -73,7 +73,7 @@ func (*suite) TestAddEntries(c *C) {
 	})
 	client.SetLabels("svc3", nil)
 
-	// label for svc4 is set and then removed AFTER adding entries
+	// label for svc4 is set and then reset to default AFTER adding entries
 	client.SetLabels("svc4", map[string]string{
 		"to-be-removed": "to-be-removed",
 	})
@@ -134,7 +134,7 @@ func (*suite) TestAddEntries(c *C) {
 				`135 <13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - [pebble@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
 				`123 <13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [pebble@28978 env="test" version="0.0.1"] long message from svc1`+
 				`96 <13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`+
-				`82 <13>1 2023-12-31T12:00:04.123456789Z test-machine svc4 - - - multiline
+				`95 <13>1 2023-12-31T12:00:04.123456789Z test-machine svc4 - - [pebble@28978] multiline
 line2
 line3`)
 	case <-time.After(2 * time.Second):

@@ -111,7 +111,7 @@ func NewClient(options *ClientOptions) (*Client, error) {
 // SetLabels formats the given service's labels into a structured-data section
 // for a syslog message, according to RFC5424 section 6
 func (c *Client) SetLabels(serviceName string, labels map[string]string) {
-	if len(labels) == 0 {
+	if labels == nil {
 		delete(c.labels, serviceName)
 		return
 	}
