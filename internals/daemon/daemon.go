@@ -1056,7 +1056,7 @@ func getListener(socketPath string, listenerMap map[string]net.Listener) (net.Li
 	}
 
 	runtime.LockOSThread()
-	oldmask := syscall.Umask(0111)
+	oldmask := syscall.Umask(0o111)
 	listener, err := net.ListenUnix("unix", address)
 	syscall.Umask(oldmask)
 	runtime.UnlockOSThread()

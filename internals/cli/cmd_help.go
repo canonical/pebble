@@ -27,10 +27,12 @@ import (
 	cmdpkg "github.com/canonical/pebble/cmd"
 )
 
-const cmdHelpSummary = "Show help about a command"
-const cmdHelpDescription = `
+const (
+	cmdHelpSummary     = "Show help about a command"
+	cmdHelpDescription = `
 The help command displays information about commands.
 `
+)
 
 type cmdHelp struct {
 	parser *flags.Parser
@@ -152,7 +154,7 @@ func (cmd cmdHelp) Execute(args []string) error {
 		return nil
 	}
 
-	var subcmd = cmd.parser.Command
+	subcmd := cmd.parser.Command
 	for _, subname := range cmd.Positional.Subs {
 		subcmd = subcmd.Find(subname)
 		if subcmd == nil {

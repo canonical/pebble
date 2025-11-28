@@ -27,11 +27,13 @@ import (
 	"github.com/canonical/pebble/client"
 )
 
-const cmdLogsSummary = "Fetch service logs"
-const cmdLogsDescription = `
+const (
+	cmdLogsSummary     = "Fetch service logs"
+	cmdLogsDescription = `
 The logs command fetches buffered logs from the given services (or all services
 if none are specified) and displays them in chronological order.
 `
+)
 
 type cmdLogs struct {
 	client *client.Client

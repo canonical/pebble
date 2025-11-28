@@ -30,7 +30,7 @@ var _ = Suite(&StatTestSuite{})
 
 func (ts *StatTestSuite) TestCanStat(c *C) {
 	fname := filepath.Join(c.MkDir(), "foo")
-	err := os.WriteFile(fname, []byte(fname), 0644)
+	err := os.WriteFile(fname, []byte(fname), 0o644)
 	c.Assert(err, IsNil)
 
 	c.Assert(CanStat(fname), Equals, true)
@@ -39,7 +39,7 @@ func (ts *StatTestSuite) TestCanStat(c *C) {
 
 func (ts *StatTestSuite) TestCanStatOddPerms(c *C) {
 	fname := filepath.Join(c.MkDir(), "foo")
-	err := os.WriteFile(fname, []byte(fname), 0100)
+	err := os.WriteFile(fname, []byte(fname), 0o100)
 	c.Assert(err, IsNil)
 
 	c.Assert(CanStat(fname), Equals, true)
@@ -47,7 +47,7 @@ func (ts *StatTestSuite) TestCanStatOddPerms(c *C) {
 
 func (ts *StatTestSuite) TestIsDir(c *C) {
 	dname := filepath.Join(c.MkDir(), "bar")
-	err := os.Mkdir(dname, 0700)
+	err := os.Mkdir(dname, 0o700)
 	c.Assert(err, IsNil)
 
 	c.Assert(IsDir(dname), Equals, true)
@@ -71,10 +71,10 @@ func (ts *StatTestSuite) TestIsExecInPath(c *C) {
 	c.Check(IsExecInPath("xyzzy"), Equals, false)
 
 	fname := filepath.Join(d, "xyzzy")
-	c.Assert(os.WriteFile(fname, []byte{}, 0644), IsNil)
+	c.Assert(os.WriteFile(fname, []byte{}, 0o644), IsNil)
 	c.Check(IsExecInPath("xyzzy"), Equals, false)
 
-	c.Assert(os.Chmod(fname, 0755), IsNil)
+	c.Assert(os.Chmod(fname, 0o755), IsNil)
 	c.Check(IsExecInPath("xyzzy"), Equals, true)
 }
 
@@ -101,7 +101,7 @@ func makeTestPathInDir(c *C, dir string, path string, mode os.FileMode) string {
 		c.Assert(os.MkdirAll(path, mode), IsNil)
 	} else {
 		// request for a file
-		c.Assert(os.MkdirAll(filepath.Dir(path), 0755), IsNil)
+		c.Assert(os.MkdirAll(filepath.Dir(path), 0o755), IsNil)
 		c.Assert(os.WriteFile(path, nil, mode), IsNil)
 	}
 
@@ -118,19 +118,19 @@ func (s *StatTestSuite) TestIsWritableDir(c *C) {
 		mode       os.FileMode
 		isWritable bool
 	}{
-		{"dir/", 0755, true},
-		{"dir/", 0555, false},
-		{"dir/", 0750, true},
-		{"dir/", 0550, false},
-		{"dir/", 0700, true},
-		{"dir/", 0500, false},
+		{"dir/", 0o755, true},
+		{"dir/", 0o555, false},
+		{"dir/", 0o750, true},
+		{"dir/", 0o550, false},
+		{"dir/", 0o700, true},
+		{"dir/", 0o500, false},
 
-		{"file", 0644, true},
-		{"file", 0444, false},
-		{"file", 0640, true},
-		{"file", 0440, false},
-		{"file", 0600, true},
-		{"file", 0400, false},
+		{"file", 0o644, true},
+		{"file", 0o444, false},
+		{"file", 0o640, true},
+		{"file", 0o440, false},
+		{"file", 0o600, true},
+		{"file", 0o400, false},
 	} {
 		writable := IsWritable(makeTestPath(c, t.path, t.mode))
 		c.Check(writable, Equals, t.isWritable, Commentf("incorrect result for %q (%s), got %v, expected %v", t.path, t.mode, writable, t.isWritable))
@@ -176,7 +176,7 @@ func (s *StatTestSuite) TestExistsIsDir(c *C) {
 		base := c.MkDir()
 		comm := Commentf("path:%q make:%q", t.path, t.make)
 		if t.make != "" {
-			makeTestPathInDir(c, base, t.make, 0755)
+			makeTestPathInDir(c, base, t.make, 0o755)
 		}
 		exists, isDir, err := ExistsIsDir(filepath.Join(base, t.path))
 		c.Check(exists, Equals, t.exists, comm)
@@ -189,7 +189,7 @@ func (s *StatTestSuite) TestExistsIsDir(c *C) {
 	}
 	p := makeTestPath(c, "foo/bar", 0)
 	c.Assert(os.Chmod(filepath.Dir(p), 0), IsNil)
-	defer os.Chmod(filepath.Dir(p), 0755)
+	defer os.Chmod(filepath.Dir(p), 0o755)
 	exists, isDir, err := ExistsIsDir(p)
 	c.Check(exists, Equals, false)
 	c.Check(isDir, Equals, false)
@@ -206,14 +206,14 @@ func (s *StatTestSuite) TestIsExec(c *C) {
 		mode os.FileMode
 		is   bool
 	}{
-		{0644, false},
-		{0444, false},
-		{0444, false},
-		{0000, false},
-		{0100, true},
-		{0010, true},
-		{0001, true},
-		{0755, true},
+		{0o644, false},
+		{0o444, false},
+		{0o444, false},
+		{0o000, false},
+		{0o100, true},
+		{0o010, true},
+		{0o001, true},
+		{0o755, true},
 	} {
 		c.Logf("tc: %v %v", tc.mode, tc.is)
 		p := filepath.Join(dir, "foo")

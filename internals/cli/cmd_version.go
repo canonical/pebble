@@ -23,10 +23,12 @@ import (
 	version "github.com/canonical/pebble/cmd"
 )
 
-const cmdVersionSummary = "Show version details"
-const cmdVersionDescription = `
+const (
+	cmdVersionSummary     = "Show version details"
+	cmdVersionDescription = `
 The version command displays the versions of the running client and server.
 `
+)
 
 type cmdVersion struct {
 	client *client.Client

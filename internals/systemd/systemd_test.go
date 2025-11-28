@@ -76,7 +76,7 @@ var _ = Suite(&SystemdTestSuite{})
 func (s *SystemdTestSuite) SetUpTest(c *C) {
 	s.rootDir = c.MkDir()
 	s.restoreServicesDir = systemd.FakeServicesDir(filepath.Join(s.rootDir, systemd.ServicesDir))
-	err := os.MkdirAll(systemd.ServicesDir, 0755)
+	err := os.MkdirAll(systemd.ServicesDir, 0o755)
 	c.Assert(err, IsNil)
 
 	// force UTC timezone, for reproducible timestamps
@@ -493,9 +493,9 @@ func (s *SystemdTestSuite) TestMountUnitPath(c *C) {
 }
 
 func makeFakeFile(c *C, path string) {
-	err := os.MkdirAll(filepath.Dir(path), 0755)
+	err := os.MkdirAll(filepath.Dir(path), 0o755)
 	c.Assert(err, IsNil)
-	err = os.WriteFile(path, nil, 0644)
+	err = os.WriteFile(path, nil, 0o644)
 	c.Assert(err, IsNil)
 }
 
@@ -581,9 +581,9 @@ exit 0
 	defer fuseCmd.Restore()
 
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
-	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0755)
+	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0o755)
 	c.Assert(err, IsNil)
-	err = os.WriteFile(fakeSnapPath, nil, 0644)
+	err = os.WriteFile(fakeSnapPath, nil, 0o644)
 	c.Assert(err, IsNil)
 
 	mountUnitName, err := systemd.New("", systemd.SystemMode, nil).AddMountUnitFile("foo", "x1", fakeSnapPath, "/snap/snapname/123", "squashfs")
@@ -619,9 +619,9 @@ exit 0
 	defer fuseCmd.Restore()
 
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
-	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0755)
+	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0o755)
 	c.Assert(err, IsNil)
-	err = os.WriteFile(fakeSnapPath, nil, 0644)
+	err = os.WriteFile(fakeSnapPath, nil, 0o644)
 	c.Assert(err, IsNil)
 
 	mountUnitName, err := systemd.New("", systemd.SystemMode, nil).AddMountUnitFile("foo", "x1", fakeSnapPath, "/snap/snapname/123", "squashfs")
@@ -698,7 +698,7 @@ func (s *SystemdTestSuite) TestIsActiveErr(c *C) {
 
 func makeFakeMountUnit(c *C, mountDir string) string {
 	mountUnit := systemd.MountUnitPath(mountDir)
-	err := os.WriteFile(mountUnit, nil, 0644)
+	err := os.WriteFile(mountUnit, nil, 0o644)
 	c.Assert(err, IsNil)
 	return mountUnit
 }
@@ -736,7 +736,7 @@ func (s *SystemdTestSuite) TestDaemonReloadMutex(c *C) {
 				close(stoppedCh)
 				return
 			default:
-				//pass
+				// pass
 			}
 		}
 	}()

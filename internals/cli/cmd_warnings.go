@@ -28,8 +28,9 @@ import (
 	"github.com/canonical/pebble/cmd"
 )
 
-const cmdWarningsSummary = "List warnings"
-const cmdWarningsDescription = `
+const (
+	cmdWarningsSummary     = "List warnings"
+	cmdWarningsDescription = `
 The warnings command lists the warnings that have been reported to the system.
 
 Once warnings have been listed with '{{.ProgramName}} warnings', '{{.ProgramName}} okay' may be
@@ -38,6 +39,7 @@ listed again unless it happens again, _and_ a cooldown time has passed.
 
 Warnings expire automatically, and once expired they are forgotten.
 `
+)
 
 type cmdWarnings struct {
 	client *client.Client

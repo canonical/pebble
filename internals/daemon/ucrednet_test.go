@@ -42,6 +42,7 @@ func (s *ucrednetSuite) TearDownTest(c *check.C) {
 	s.ucred = nil
 	s.err = nil
 }
+
 func (s *ucrednetSuite) TearDownSuite(c *check.C) {
 	getUcred = sys.GetsockoptUcred
 }

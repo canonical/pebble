@@ -46,7 +46,7 @@ func setupChanges(st *state.State) []string {
 }
 
 func (s *apiSuite) TestStateChangesDefaultToInProgress(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	// Setup
@@ -75,7 +75,7 @@ func (s *apiSuite) TestStateChangesDefaultToInProgress(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChangesInProgress(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	// Setup
@@ -104,7 +104,7 @@ func (s *apiSuite) TestStateChangesInProgress(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChangesAll(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	// Setup
@@ -133,7 +133,7 @@ func (s *apiSuite) TestStateChangesAll(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChangesReady(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	// Setup
@@ -161,7 +161,7 @@ func (s *apiSuite) TestStateChangesReady(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChangesForServiceName(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	// Setup
@@ -192,7 +192,7 @@ func (s *apiSuite) TestStateChangesForServiceName(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChange(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	// Setup
@@ -261,7 +261,7 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChangeAbort(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	soon := 0
@@ -334,7 +334,7 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 }
 
 func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
-	restore := state.FakeTime(time.Date(2016, 04, 21, 1, 2, 3, 0, time.UTC))
+	restore := state.FakeTime(time.Date(2016, 0o4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
 	// Setup

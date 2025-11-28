@@ -16,7 +16,9 @@ package pairingstate
 
 const PairingDetailsAttr = pairingDetailsAttr
 
-type PairingDetails = pairingDetails
-type PairingConfig = pairingConfig
+type (
+	PairingDetails = pairingDetails
+	PairingConfig  = pairingConfig
+)
 
 var GenerateUniqueUsername = generateUniqueUsername
