@@ -31,6 +31,5 @@ func BenchmarkEncodeEntry(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		client.buildSendBuffer()
-		client.sendBuf.Reset()
 	}
 }
