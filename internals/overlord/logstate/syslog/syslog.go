@@ -19,6 +19,7 @@ const (
 	maxRequestEntries          = 100
 	dialTimeout                = 10 * time.Second
 	canonicalPrivEnterpriseNum = 28978
+	initialSendBufferSize      = 4 * 1024
 )
 
 type ClientOptions struct {
@@ -83,6 +84,8 @@ func NewClient(options *ClientOptions) (*Client, error) {
 		labels:   make(map[string]string),
 	}
 	c.entries = c.buffer[:0]
+	c.sendBuf.Grow(initialSendBufferSize)
+
 	return c, nil
 }
 
