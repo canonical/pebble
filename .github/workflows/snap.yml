@@ -179,11 +179,13 @@ jobs:
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
-          revision="$(snapcraft status ${{ env.SNAP_NAME }} \
+          snapcraft status ${{ env.SNAP_NAME }} \
             --track ${{ env.DEFAULT_TRACK }} --arch ${{ matrix.arch }} \
-            | awk 'NR==1 { pos = index($0, "Revision") }  /edge/ { print 0+substr($0, pos) }'"
+            | awk 'NR==1 { pos = index($0, "Revision") }  /edge/ { print 0+substr($0, pos) }' \
+            > revision.txt
 
-          echo "revision=$revision" >> $GITHUB_OUTPUT
+          echo "Revision $(cat revision.txt)"
+          echo "revision=$(cat revision.txt)" >> $GITHUB_OUTPUT
 
       # It would be easier to use `snapcraft promote`, but there's an error when trying
       # to avoid the prompt with the "--yes" option:
