@@ -46,13 +46,13 @@ To build Pebble with FIPS compliance:
 go build -tags=fips ./cmd/pebble
 ```
 
-To run Pebble in FIPS mode during development:
+To run the Pebble daemon in FIPS mode during development:
 
 ```
 go run -tags=fips ./cmd/pebble run
 ```
 
-When running a FIPS build, only "local" (UID-based) identity authentication and HTTP-only communication is available. The daemon can only listen on Unix sockets and HTTP (not HTTPS), and health checks cannot use HTTPS URLs.
+When running a FIPS build, only "local" (UID-based) identity authentication and HTTP-only communication is available.
 
 To run tests with FIPS mode enabled:
 
