@@ -53,7 +53,7 @@ type ticker struct {
 }
 
 func (w *ticker) tick(n int) {
-	for i := 0; i < n; i++ {
+	for range n {
 		w.tickerChannel <- time.Now()
 	}
 }
@@ -133,7 +133,7 @@ func (ovs *overlordSuite) TestNewInMemoryBackend(c *C) {
 }
 
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{
+	fakeState := fmt.Appendf(nil, `{
 		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data", "pairing-details": {"paired": false}},
 		"changes": null,
 		"tasks": null,
@@ -141,7 +141,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 		"last-task-id": 0,
 		"last-lane-id": 0,
 		"last-notice-id": 0
-	}`, patch.Level, patch.Sublevel, cmd.Version))
+	}`, patch.Level, patch.Sublevel, cmd.Version)
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -994,7 +994,7 @@ func (ovs *overlordSuite) TestRequestRestartHandler(c *C) {
 }
 
 func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel)
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1007,7 +1007,7 @@ func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
 }
 
 func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev"))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev")
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1020,7 +1020,7 @@ func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
 }
 
 func (ovs *overlordSuite) TestVerifyRebootOKButError(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev"))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev")
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1037,7 +1037,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID)
 	err = os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1053,7 +1053,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID)
 	err = os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 

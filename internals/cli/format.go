@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"go/doc"
 	"io"
+	maps0 "maps"
 	"os"
 	"strconv"
 	"strings"
@@ -113,9 +114,7 @@ func merge(maps ...map[string]string) map[string]string {
 	}
 	merged := make(map[string]string, count)
 	for _, m := range maps {
-		for k, v := range m {
-			merged[k] = v
-		}
+		maps0.Copy(merged, m)
 	}
 	return merged
 }

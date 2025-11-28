@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"os/user"
 	"strconv"
@@ -80,10 +81,8 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		delete(environment, "USER")
 	}
 
-	for k, v := range args.Environment {
-		// Requested environment takes precedence.
-		environment[k] = v
-	}
+	// Requested environment takes precedence.
+	maps.Copy(environment, args.Environment)
 
 	// Set a reasonable default for PATH.
 	_, ok := environment["PATH"]

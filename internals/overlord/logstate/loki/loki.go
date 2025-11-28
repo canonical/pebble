@@ -88,8 +88,7 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 	}
 
 	// Make a copy to avoid altering the original map
-	newLabels := make(map[string]string, len(labels)+1)
-	maps.Copy(newLabels, labels)
+	newLabels := maps.Clone(labels)
 
 	// Add Loki-specific default labels
 	newLabels["pebble_service"] = serviceName

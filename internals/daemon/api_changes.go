@@ -17,6 +17,7 @@ package daemon
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -32,7 +33,7 @@ type changeInfo struct {
 	Ready   bool        `json:"ready"`
 	Err     string      `json:"err,omitempty"`
 
-	SpawnTime time.Time  `json:"spawn-time,omitempty"`
+	SpawnTime time.Time  `json:"spawn-time"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
 
 	Data map[string]*json.RawMessage `json:"data,omitempty"`
@@ -46,7 +47,7 @@ type taskInfo struct {
 	Log      []string         `json:"log,omitempty"`
 	Progress taskInfoProgress `json:"progress"`
 
-	SpawnTime time.Time  `json:"spawn-time,omitempty"`
+	SpawnTime time.Time  `json:"spawn-time"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
 
 	Data map[string]*json.RawMessage `json:"data,omitempty"`
@@ -146,13 +147,7 @@ func v1GetChanges(c *Command, r *http.Request, _ *UserState) Response {
 				return false
 			}
 
-			for _, serviceName := range serviceNames {
-				if serviceName == wantedName {
-					return true
-				}
-			}
-
-			return false
+			return slices.Contains(serviceNames, wantedName)
 		}
 	}
 
