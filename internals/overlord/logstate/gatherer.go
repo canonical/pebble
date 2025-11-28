@@ -26,6 +26,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
+	"github.com/canonical/pebble/internals/overlord/logstate/syslog"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -381,6 +382,17 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
 			ScopeName:  cmd.ProgramName,
 		}), nil
+	case plan.SyslogTarget:
+		hostname, err := os.Hostname()
+		if err != nil {
+			logger.Noticef("Cannot get hostname for syslog: %v", err)
+			hostname = ""
+		}
+		return syslog.NewClient(&syslog.ClientOptions{
+			Location: target.Location,
+			Hostname: hostname,
+			SDID:     cmd.ProgramName,
+		})
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
 	}
