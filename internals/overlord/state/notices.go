@@ -227,7 +227,7 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 	if options == nil {
 		options = &AddNoticeOptions{}
 	}
-	err := validateNotice(noticeType, key, options)
+	err := validateNotice(noticeType, key)
 	if err != nil {
 		return "", err
 	}
@@ -303,7 +303,7 @@ func (s *State) Warnf(template string, args ...any) {
 	}
 }
 
-func validateNotice(noticeType NoticeType, key string, options *AddNoticeOptions) error {
+func validateNotice(noticeType NoticeType, key string) error {
 	if !noticeType.Valid() {
 		return fmt.Errorf("internal error: attempted to add notice with invalid type %q", noticeType)
 	}
@@ -344,20 +344,16 @@ func (f *NoticeFilter) matches(n *Notice) bool {
 		return false
 	}
 	// Can't use strutil.ListContains as Types is []NoticeType, not []string
-	if len(f.Types) > 0 && !sliceContains(f.Types, n.noticeType) {
+	if len(f.Types) > 0 && !slices.Contains(f.Types, n.noticeType) {
 		return false
 	}
-	if len(f.Keys) > 0 && !sliceContains(f.Keys, n.key) {
+	if len(f.Keys) > 0 && !slices.Contains(f.Keys, n.key) {
 		return false
 	}
 	if !f.After.IsZero() && !n.lastRepeated.After(f.After) {
 		return false
 	}
 	return true
-}
-
-func sliceContains[T comparable](haystack []T, needle T) bool {
-	return slices.Contains(haystack, needle)
 }
 
 // Notices returns the list of notices that match the filter (if any),
