@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"go/doc"
 	"io"
-	maps0 "maps"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -107,14 +107,14 @@ var unicodeArgsHelp = map[string]string{
 	"--unicode": "Use a little bit of Unicode to improve legibility.",
 }
 
-func merge(maps ...map[string]string) map[string]string {
+func merge(srcs ...map[string]string) map[string]string {
 	count := 0
-	for _, m := range maps {
+	for _, m := range srcs {
 		count += len(m)
 	}
 	merged := make(map[string]string, count)
-	for _, m := range maps {
-		maps0.Copy(merged, m)
+	for _, m := range srcs {
+		maps.Copy(merged, m)
 	}
 	return merged
 }
