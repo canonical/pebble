@@ -239,20 +239,14 @@ func (s *Service) Copy() *Service {
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
-	if s.Environment != nil {
-		copied.Environment = make(map[string]string)
-		maps.Copy(copied.Environment, s.Environment)
-	}
+	copied.Environment = maps.Clone(s.Environment)
 	if s.UserID != nil {
 		copied.UserID = copyIntPtr(s.UserID)
 	}
 	if s.GroupID != nil {
 		copied.GroupID = copyIntPtr(s.GroupID)
 	}
-	if s.OnCheckFailure != nil {
-		copied.OnCheckFailure = make(map[string]ServiceAction)
-		maps.Copy(copied.OnCheckFailure, s.OnCheckFailure)
-	}
+	copied.OnCheckFailure = maps.Clone(s.OnCheckFailure)
 	return &copied
 }
 
@@ -540,8 +534,7 @@ type HTTPCheck struct {
 func (c *HTTPCheck) Copy() *HTTPCheck {
 	copied := *c
 	if c.Headers != nil {
-		copied.Headers = make(map[string]string, len(c.Headers))
-		maps.Copy(copied.Headers, c.Headers)
+		copied.Headers = maps.Clone(c.Headers)
 	}
 	return &copied
 }
@@ -596,10 +589,7 @@ type ExecCheck struct {
 // Copy returns a deep copy of the exec check configuration.
 func (c *ExecCheck) Copy() *ExecCheck {
 	copied := *c
-	if c.Environment != nil {
-		copied.Environment = make(map[string]string, len(c.Environment))
-		maps.Copy(copied.Environment, c.Environment)
-	}
+	copied.Environment = maps.Clone(c.Environment)
 	if c.UserID != nil {
 		copied.UserID = copyIntPtr(c.UserID)
 	}
@@ -663,10 +653,7 @@ const (
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
-	if t.Labels != nil {
-		copied.Labels = make(map[string]string)
-		maps.Copy(copied.Labels, t.Labels)
-	}
+	copied.Labels = maps.Clone(t.Labels)
 	return &copied
 }
 
