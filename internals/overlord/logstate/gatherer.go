@@ -385,7 +385,8 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 	case plan.SyslogTarget:
 		hostname, err := os.Hostname()
 		if err != nil {
-			return nil, fmt.Errorf("cannot get hostname: %w", err)
+			logger.Noticef("Cannot get hostname for syslog: %v", err)
+			hostname = ""
 		}
 		return syslog.NewClient(&syslog.ClientOptions{
 			Location: target.Location,
