@@ -391,6 +391,7 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 		return syslog.NewClient(&syslog.ClientOptions{
 			Location: target.Location,
 			Hostname: hostname,
+			SDID:     cmd.ProgramName,
 		})
 	default:
 		return nil, fmt.Errorf("unknown type %q for log target %q", target.Type, target.Name)
