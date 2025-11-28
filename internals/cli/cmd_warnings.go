@@ -145,7 +145,7 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 func writeWarning(w io.Writer, descr string, termWidth int) error {
 	var err error
 	descr = strings.TrimRightFunc(descr, unicode.IsSpace)
-	for _, line := range strings.Split(descr, "\n") {
+	for line := range strings.SplitSeq(descr, "\n") {
 		err = wrapLine(w, []rune(line), "  ", termWidth)
 		if err != nil {
 			break

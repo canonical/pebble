@@ -403,13 +403,13 @@ func (cs *taskSuite) TestLogf(c *C) {
 
 	t := st.NewTask("download", "1...")
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		t.Logf("Message #%d", i)
 	}
 
 	log := t.Log()
 	c.Assert(log, HasLen, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		c.Assert(log[i], Matches, fmt.Sprintf("....-..-..T.* INFO Message #%d", i+10))
 	}
 }

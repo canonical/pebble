@@ -23,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -72,14 +73,11 @@ func (m testServiceManager) ServiceLogs(services []string, last int) (map[string
 	}
 	its := make(map[string]servicelog.Iterator)
 	for name, wb := range m.buffers {
-		for _, s := range services {
-			if name == s {
-				if last >= 0 {
-					its[name] = wb.HeadIterator(last)
-				} else {
-					its[name] = wb.TailIterator()
-				}
-				break
+		if slices.Contains(services, name) {
+			if last >= 0 {
+				its[name] = wb.HeadIterator(last)
+			} else {
+				its[name] = wb.TailIterator()
 			}
 		}
 	}
@@ -123,7 +121,7 @@ func (s *logsSuite) TestServiceLogsError(c *C) {
 func (s *logsSuite) TestOneServiceDefaults(c *C) {
 	rb := servicelog.NewRingBuffer(4096)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		fmt.Fprintf(lw, "message %d\n", i)
 	}
 	fmt.Fprintf(lw, "truncated")
@@ -138,7 +136,7 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 30)
-	for i := 0; i < 29; i++ {
+	for i := range 29 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+3))
 	}
 	c.Check(logs[29].Time, Not(Equals), time.Time{})
@@ -149,7 +147,7 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 func (s *logsSuite) TestOneServiceWithN(c *C) {
 	rb := servicelog.NewRingBuffer(4096)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
@@ -163,7 +161,7 @@ func (s *logsSuite) TestOneServiceWithN(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+17))
 	}
 }
@@ -172,7 +170,7 @@ func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 	exampleLog := "2021-05-20T16:55:00.000Z [nginx] message 00\n"
 	rb := servicelog.NewRingBuffer(len(exampleLog) * 20)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
-	for i := 0; i < 40; i++ {
+	for i := range 40 {
 		fmt.Fprintf(lw, "message %02d\n", i)
 	}
 
@@ -186,7 +184,7 @@ func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+20))
 	}
 }
@@ -194,7 +192,7 @@ func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
 	rb := servicelog.NewRingBuffer(4096)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
@@ -209,7 +207,7 @@ func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+17))
 	}
 }
@@ -234,7 +232,7 @@ func (s *logsSuite) TestMultipleServicesAll(c *C) {
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")
 	lw2 := servicelog.NewFormatWriter(rb2, "two")
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fmt.Fprintf(lw1, "message1 %d\n", i)
 		time.Sleep(time.Millisecond)
 		fmt.Fprintf(lw2, "message2 %d\n", i)
@@ -252,7 +250,7 @@ func (s *logsSuite) TestMultipleServicesAll(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 20)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", i))
 		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", i))
 	}
@@ -263,7 +261,7 @@ func (s *logsSuite) TestMultipleServicesN(c *C) {
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")
 	lw2 := servicelog.NewFormatWriter(rb2, "two")
-	for i := 0; i < 30; i++ {
+	for i := range 30 {
 		fmt.Fprintf(lw1, "message1 %d\n", i)
 		time.Sleep(time.Millisecond)
 		fmt.Fprintf(lw2, "message2 %d\n", i)
@@ -281,7 +279,7 @@ func (s *logsSuite) TestMultipleServicesN(c *C) {
 
 	logs := decodeLogs(c, rec.Body)
 	c.Assert(logs, HasLen, 30)
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", 15+i))
 		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", 15+i))
 	}
@@ -317,7 +315,7 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 	lw := servicelog.NewFormatWriter(rb, "svc")
 
 	// We should only receive these first three logs
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		fmt.Fprintf(lw, "message %d\n", i)
 	}
 
@@ -346,7 +344,7 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 
 	logs := decodeLogs(c, bytes.NewReader(rec.buf.Bytes()))
 	c.Assert(len(logs), Equals, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		checkLog(c, logs[i], "svc", fmt.Sprintf("message %d", i))
 	}
 }

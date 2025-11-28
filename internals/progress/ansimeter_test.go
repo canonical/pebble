@@ -234,7 +234,7 @@ func (ansiSuite) TestWrite(c *check.C) {
 
 	p := &progress.ANSIMeter{}
 	p.Start("123456789x", 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		n, err := fmt.Fprintf(p, "%d", i)
 		c.Assert(err, check.IsNil)
 		c.Check(n, check.Equals, 1)

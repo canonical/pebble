@@ -817,7 +817,7 @@ func (s *filesSuite) TestWriteSingle(c *C) {
 		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
-		[]byte(fmt.Sprintf(`
+		fmt.Appendf(nil, `
 --01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
@@ -829,7 +829,7 @@ Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 Hello world
 --01234567890123456789012345678901--
-`, path)))
+`, path))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
@@ -853,7 +853,7 @@ func (s *filesSuite) TestWriteOverwrite(c *C) {
 			"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 		}
 		response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
-			[]byte(fmt.Sprintf(`
+			fmt.Appendf(nil, `
 --01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
@@ -865,7 +865,7 @@ Content-Disposition: form-data; name="files"; filename="%[1]s"
 
 %[2]s
 --01234567890123456789012345678901--
-`, path, content)))
+`, path, content))
 		c.Check(response.StatusCode, Equals, http.StatusOK)
 
 		var r testFilesResponse
@@ -895,7 +895,7 @@ func (s *filesSuite) TestWriteMultiple(c *C) {
 		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
-		[]byte(fmt.Sprintf(`
+		fmt.Appendf(nil, `
 --01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
@@ -921,7 +921,7 @@ Content-Disposition: form-data; name="files"; filename="%[3]s"
 Foo
 Bar
 --01234567890123456789012345678901--
-`, path0, path1, path2)))
+`, path0, path1, path2))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
@@ -1075,7 +1075,7 @@ func (s *filesSuite) testWriteUserGroup(c *C, uid, gid int, user, group string) 
 		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
-		[]byte(fmt.Sprintf(`
+		fmt.Appendf(nil, `
 --01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
@@ -1111,7 +1111,7 @@ Content-Disposition: form-data; name="files"; filename="%[9]s"
 nested user group
 --01234567890123456789012345678901--
 `, pathNormal, pathUidGid, uid, gid, pathUserGroup, user, group,
-			pathNested, pathNestedUserGroup, user, group)))
+			pathNested, pathNestedUserGroup, user, group))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse
@@ -1152,7 +1152,7 @@ func (s *filesSuite) TestWriteErrors(c *C) {
 		"Content-Type": []string{"multipart/form-data; boundary=01234567890123456789012345678901"},
 	}
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers,
-		[]byte(fmt.Sprintf(`
+		fmt.Appendf(nil, `
 --01234567890123456789012345678901
 Content-Disposition: form-data; name="request"
 
@@ -1189,7 +1189,7 @@ Content-Disposition: form-data; name="files"; filename="%[6]s"
 group not found
 --01234567890123456789012345678901--
 `, pathNoContent, pathNotAbsolute, pathNotFound, pathPermissionDenied,
-			pathUserNotFound, pathGroupNotFound)))
+			pathUserNotFound, pathGroupNotFound))
 	c.Check(response.StatusCode, Equals, http.StatusOK)
 
 	var r testFilesResponse

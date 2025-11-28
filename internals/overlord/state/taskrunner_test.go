@@ -63,7 +63,7 @@ func (b *stateBackend) NeedsCheckpoint() bool {
 }
 
 func ensureChange(c *C, r *state.TaskRunner, sb *stateBackend, chg *state.Change) {
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		sb.ensureBefore = time.Hour
 		r.Ensure()
 		r.Wait()
@@ -200,7 +200,7 @@ func (ts *taskRunnerSuite) TestSequenceTests(c *C) {
 
 		chg := st.NewChange("install", "...")
 		tasks := make(map[string]*state.Task)
-		for _, name := range strings.Fields("t11 t12 t21 t31 t32") {
+		for name := range strings.FieldsSeq("t11 t12 t21 t31 t32") {
 			if name == "t12" {
 				tasks[name] = st.NewTask("do", name)
 			} else {
@@ -231,7 +231,7 @@ func (ts *taskRunnerSuite) TestSequenceTests(c *C) {
 			t.Set("undo-error", false)
 			t.Set("undo-block", false)
 		}
-		for _, item := range strings.Fields(test.setup) {
+		for item := range strings.FieldsSeq(test.setup) {
 			parts := strings.Split(item, ":")
 			if parts[0] == "chg" && parts[1] == "abort" {
 				chg.Abort()
@@ -243,8 +243,8 @@ func (ts *taskRunnerSuite) TestSequenceTests(c *C) {
 				}
 			}
 			if len(parts) > 2 {
-				lanes := strings.Split(parts[2], ",")
-				for _, lane := range lanes {
+				lanes := strings.SplitSeq(parts[2], ",")
+				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
 					c.Assert(err, IsNil)
 					tasks[parts[0]].JoinLane(n)
@@ -293,7 +293,7 @@ func (ts *taskRunnerSuite) TestSequenceTests(c *C) {
 			finalStatus[tname] = state.HoldStatus
 		}
 		// ... overwrite based on relevant setup
-		for _, item := range strings.Fields(test.setup) {
+		for item := range strings.FieldsSeq(test.setup) {
 			parts := strings.Split(item, ":")
 			if parts[0] == "chg" && parts[1] == "abort" && strings.Contains(test.setup, "t12:was-doing") {
 				// t12 has no undo so must hold if asked to abort when was doing.
@@ -613,7 +613,7 @@ func (ts *taskRunnerSuite) TestUndoSingleLane(c *C) {
 
 	// first taskset
 	var prev *state.Task
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		t := st.NewTask("noop-slow", "...")
 		if prev != nil {
 			t.WaitFor(prev)
@@ -626,7 +626,7 @@ func (ts *taskRunnerSuite) TestUndoSingleLane(c *C) {
 
 	// second taskset with a failing task that triggers undo of the change
 	prev = nil
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		t := st.NewTask("noop", "...")
 		if prev != nil {
 			t.WaitFor(prev)
@@ -1154,8 +1154,8 @@ func (ts *taskRunnerSuite) TestUndoSequence(c *C) {
 	// no undo handler, 3 tasks with undo handler, a task with no undo
 	// handler, finally a task that errors out. Every task waits for previous
 	// taske.
-	for i := 0; i < 2; i++ {
-		for j := 0; j < 3; j++ {
+	for range 2 {
+		for range 3 {
 			t := st.NewTask("do-with-undo", "...")
 			if prev != nil {
 				t.WaitFor(prev)

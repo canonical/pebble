@@ -98,13 +98,13 @@ func (s *LogSuite) TestSecurityCritical(c *C) {
 func (s *LogSuite) TestMockLoggerReadWriteThreadsafe(c *C) {
 	var t tomb.Tomb
 	t.Go(func() error {
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			logger.Noticef("foo")
 			logger.Noticef("bar")
 		}
 		return nil
 	})
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		logger.Noticef("%s", s.logbuf.String())
 	}
 	err := t.Wait()

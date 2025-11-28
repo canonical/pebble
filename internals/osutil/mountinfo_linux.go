@@ -184,7 +184,7 @@ func ParseMountInfoEntry(s string) (*MountInfoEntry, error) {
 
 func parseMountOpts(opts string) map[string]string {
 	result := make(map[string]string)
-	for _, opt := range strings.Split(opts, ",") {
+	for opt := range strings.SplitSeq(opts, ",") {
 		keyValue := strings.SplitN(opt, "=", 2)
 		key := keyValue[0]
 		if len(keyValue) == 2 {

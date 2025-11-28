@@ -775,7 +775,7 @@ func (ts *timeutilSuite) TestScheduleNext(c *C) {
 		previous := time.Duration(0)
 		calls := 2
 
-		for i := 0; i < calls; i++ {
+		for range calls {
 			next := timeutil.Next(sched, last, maxDuration)
 			if t.randomized {
 				c.Check(next, Not(Equals), previous)

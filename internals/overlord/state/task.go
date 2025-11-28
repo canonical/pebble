@@ -17,6 +17,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -482,10 +483,8 @@ func (t *Task) Clear(key string) {
 }
 
 func addOnce(set []string, s string) []string {
-	for _, cur := range set {
-		if s == cur {
-			return set
-		}
+	if slices.Contains(set, s) {
+		return set
 	}
 	return append(set, s)
 }
@@ -547,10 +546,7 @@ func (t *Task) At(when time.Time) {
 	}
 	t.atTime = when
 	if !iszero {
-		d := when.Sub(timeNow())
-		if d < 0 {
-			d = 0
-		}
+		d := max(when.Sub(timeNow()), 0)
 		t.state.EnsureBefore(d)
 	}
 }
@@ -607,10 +603,8 @@ func (ts *TaskSet) WaitAll(anotherTs *TaskSet) {
 
 // AddTask adds the task to the task set.
 func (ts *TaskSet) AddTask(task *Task) {
-	for _, t := range ts.tasks {
-		if t == task {
-			return
-		}
+	if slices.Contains(ts.tasks, task) {
+		return
 	}
 	ts.tasks = append(ts.tasks, task)
 }

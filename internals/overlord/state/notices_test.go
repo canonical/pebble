@@ -592,7 +592,7 @@ func (s *noticesSuite) TestWaitNoticesLongPoll(c *C) {
 	defer st.Unlock()
 
 	go func() {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			st.Lock()
 			addNotice(c, st, nil, state.CustomNotice, fmt.Sprintf("a.b/%d", i), nil)
 			st.Unlock()
@@ -621,7 +621,7 @@ func (s *noticesSuite) TestWaitNoticesConcurrent(c *C) {
 	st := state.New(nil)
 
 	var wg sync.WaitGroup
-	for i := 0; i < numWaiters; i++ {
+	for i := range numWaiters {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -638,7 +638,7 @@ func (s *noticesSuite) TestWaitNoticesConcurrent(c *C) {
 		}(i)
 	}
 
-	for i := 0; i < numWaiters; i++ {
+	for i := range numWaiters {
 		st.Lock()
 		addNotice(c, st, nil, state.CustomNotice, fmt.Sprintf("a.b/%d", i), nil)
 		st.Unlock()

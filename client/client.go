@@ -474,7 +474,7 @@ func decodeInto(reader io.Reader, v any) error {
 		r := dec.Buffered()
 		buf, err1 := io.ReadAll(r)
 		if err1 != nil {
-			buf = []byte(fmt.Sprintf("error reading buffered response body: %s", err1))
+			buf = fmt.Appendf(nil, "error reading buffered response body: %s", err1)
 		}
 		return fmt.Errorf("cannot decode %q: %w", buf, err)
 	}

@@ -85,7 +85,7 @@ func FakeCommand(c *check.C, basename, script string) *FakeCmd {
 // Useful when you want to check the ordering of things.
 func (cmd *FakeCmd) Also(basename, script string) *FakeCmd {
 	exeFile := path.Join(cmd.binDir, basename)
-	err := os.WriteFile(exeFile, []byte(fmt.Sprintf(scriptTpl, cmd.logFile, script)), 0700)
+	err := os.WriteFile(exeFile, fmt.Appendf(nil, scriptTpl, cmd.logFile, script), 0700)
 	if err != nil {
 		panic(err)
 	}
@@ -122,8 +122,8 @@ func (cmd *FakeCmd) Calls() [][]string {
 	logContent := strings.TrimSuffix(string(raw), "\000\f\n\r")
 
 	allCalls := [][]string{}
-	calls := strings.Split(logContent, "\000\f\n\r")
-	for _, call := range calls {
+	calls := strings.SplitSeq(logContent, "\000\f\n\r")
+	for call := range calls {
 		allCalls = append(allCalls, strings.Split(call, "\000"))
 	}
 	return allCalls

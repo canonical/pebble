@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"sort"
 	"strconv"
@@ -87,10 +88,7 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 	}
 
 	// Make a copy to avoid altering the original map
-	newLabels := make(map[string]string, len(labels)+1)
-	for k, v := range labels {
-		newLabels[k] = v
-	}
+	newLabels := maps.Clone(labels)
 
 	// Add Loki-specific default labels
 	newLabels["pebble_service"] = serviceName

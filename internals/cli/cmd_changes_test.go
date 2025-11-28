@@ -276,7 +276,7 @@ func (s *PebbleSuite) TestTasksLastQuestionmark(c *check.C) {
 			c.Errorf("expected 4 calls, now on %d", n)
 		}
 	})
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--last=foobar?"})
 		c.Assert(err, check.IsNil)
 		c.Assert(rest, check.DeepEquals, []string{})

@@ -154,7 +154,7 @@ func (s *parserSuite) TestRoundTrip(c *C) {
 	time.Sleep(10 * time.Millisecond) // to ensure that log timestamps are strictly after start
 	buf := &bytes.Buffer{}
 	fw := servicelog.NewFormatWriter(buf, "svc")
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		fmt.Fprintf(fw, "message %d\n", i)
 	}
 	parser := servicelog.NewParser(buf, 1024)
