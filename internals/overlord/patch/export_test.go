@@ -27,8 +27,7 @@ func FakeLevel(flevel, fsublevel int) (restore func()) {
 	oldSublevel := Sublevel
 	Level = flevel
 	Sublevel = fsublevel
-	oldPatches := make(map[int][]PatchFunc)
-	maps.Copy(oldPatches, patches)
+	oldPatches := maps.Clone(patches)
 
 	for plevel, psublevels := range patches {
 		if plevel > flevel {

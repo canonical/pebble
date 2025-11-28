@@ -232,7 +232,7 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		return fmt.Errorf("identities already exist: %s", strings.Join(existing, ", "))
 	}
 
-	newIdentities := s.cloneIdentities()
+	newIdentities := maps.Clone(s.identities)
 	for name, identity := range identities {
 		identity.Name = name
 		newIdentities[name] = identity
@@ -269,7 +269,7 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		return fmt.Errorf("identities do not exist: %s", strings.Join(missing, ", "))
 	}
 
-	newIdentities := s.cloneIdentities()
+	newIdentities := maps.Clone(s.identities)
 	for name, identity := range identities {
 		identity.Name = name
 		newIdentities[name] = identity
@@ -300,7 +300,7 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 		}
 	}
 
-	newIdentities := s.cloneIdentities()
+	newIdentities := maps.Clone(s.identities)
 	for name, identity := range identities {
 		if identity == nil {
 			delete(newIdentities, name)
@@ -349,9 +349,7 @@ func (s *State) RemoveIdentities(identities map[string]struct{}) error {
 func (s *State) Identities() map[string]*Identity {
 	s.reading()
 
-	result := make(map[string]*Identity, len(s.identities))
-	maps.Copy(result, s.identities)
-	return result
+	return maps.Clone(s.identities)
 }
 
 // IdentityFromInputs returns an identity matching the given inputs.
@@ -415,12 +413,6 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 	}
 
 	return nil
-}
-
-func (s *State) cloneIdentities() map[string]*Identity {
-	newIdentities := make(map[string]*Identity, len(s.identities))
-	maps.Copy(newIdentities, s.identities)
-	return newIdentities
 }
 
 func verifyUniqueUserIDs(identities map[string]*Identity) error {
