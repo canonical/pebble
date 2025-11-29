@@ -8,7 +8,9 @@ require (
 	github.com/canonical/x-go v0.0.0-20230522092633-7947a7587f5b
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
+	github.com/leodido/go-syslog/v4 v4.3.0
 	github.com/pkg/term v1.1.0
+	github.com/sanity-io/litter v1.5.8
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.32.0
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
