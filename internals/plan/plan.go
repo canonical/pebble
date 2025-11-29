@@ -230,6 +230,7 @@ type Service struct {
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
 	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
 	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
+	StopSignal     OptionalSyscallSignal    `yaml:"stop-signal,omitempty"`
 }
 
 // Copy returns a deep copy of the service.
