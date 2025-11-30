@@ -170,6 +170,10 @@ func (ps *pairingSuite) TestEnablePairingUnknownMode(c *C) {
 // TestPairMTLSSuccess verifies that a successful pairing request closes the
 // pairing window and updates identities correctly.
 func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
+	if !mtlsPairingSupported {
+		c.Skip("mTLS pairing not supported in FIPS builds")
+	}
+
 	clientCert := generateTestClientCert(c)
 	ps.newManager(c, nil)
 
@@ -204,6 +208,10 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 // TestPairMTLSNotOpen verifies pairing is rejected if the pairing window
 // is not open.
 func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
+	if !mtlsPairingSupported {
+		c.Skip("mTLS pairing not supported in FIPS builds")
+	}
+
 	clientCert := generateTestClientCert(c)
 	ps.newManager(c, nil)
 
@@ -225,6 +233,10 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 // by a different means (e.g. using the identities add CLI) will result in
 // the pairing request succeeding.
 func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
+	if !mtlsPairingSupported {
+		c.Skip("mTLS pairing not supported in FIPS builds")
+	}
+
 	clientCert := generateTestClientCert(c)
 	ps.newManager(c, nil)
 
@@ -258,6 +270,10 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 
 // TestPairMTLSUsernameIncrementing verifies name allocation.
 func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
+	if !mtlsPairingSupported {
+		c.Skip("mTLS pairing not supported in FIPS builds")
+	}
+
 	clientCert := generateTestClientCert(c)
 	ps.newManager(c, nil)
 

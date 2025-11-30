@@ -63,6 +63,10 @@ GV6pXv511MycDg==
 
 // IMPORTANT NOTE: be sure secrets aren't included when adding to this!
 func (s *identitiesSuite) TestMarshalAPI(c *C) {
+	if !certAuthSupported {
+		c.Skip("certificate authentication not supported in FIPS builds")
+	}
+
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -120,6 +124,10 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 }
 
 func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
+	if !certAuthSupported {
+		c.Skip("certificate authentication not supported in FIPS builds")
+	}
+
 	jsonCert, err := json.Marshal(validPEMX509Cert)
 	c.Assert(err, IsNil)
 	data := fmt.Appendf(nil, `
@@ -185,7 +193,7 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error string
 	}{{
 		data:  `{"no-type": {"access": "admin"}}`,
-		error: `identity must have at least one type \("local", "basic", or "cert"\)`,
+		error: noTypeErrorMsg,
 	}, {
 		data:  `{"invalid-access": {"access": "admin", "local": {}}}`,
 		error: `local identity must specify user-id`,
@@ -194,16 +202,16 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 		error: `basic identity must specify password \(hashed\)`,
 	}, {
 		data:  `{"invalid-access": {"access": "read", "cert": {}}}`,
-		error: `cert identity must include a PEM-encoded certificate`,
+		error: certPEMRequiredError,
 	}, {
 		data:  `{"invalid-access": {"access": "read", "cert": {"pem": "..."}}}`,
-		error: `cert identity must include a PEM-encoded certificate`,
+		error: certPEMRequiredError,
 	}, {
 		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertReq),
-		error: `cannot parse certificate from cert identity: x509: .*`,
+		error: certParseError,
 	}, {
 		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertExtra),
-		error: `cert identity cannot have extra data after the PEM block`,
+		error: certExtraDataError,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
 		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
@@ -300,6 +308,10 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
 }
 
 func (s *identitiesSuite) TestAddIdentities(c *C) {
+	if !certAuthSupported {
+		c.Skip("certificate authentication not supported in FIPS builds")
+	}
+
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -570,7 +582,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
+	c.Assert(err, ErrorMatches, `identity "bill" invalid: `+noTypeErrorMsg)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
 	err = st.ReplaceIdentities(map[string]*state.Identity{
@@ -694,6 +706,10 @@ func (s *identitiesSuite) TestIdentities(c *C) {
 }
 
 func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
+	if !certAuthSupported {
+		c.Skip("certificate authentication not supported in FIPS builds")
+	}
+
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()

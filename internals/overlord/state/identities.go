@@ -17,14 +17,11 @@ package state
 import (
 	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/GehirnInc/crypt/sha512_crypt"
 )
 
 // Identity holds the configuration of a single identity.
@@ -36,7 +33,8 @@ type Identity struct {
 	// non-nil.
 	Local *LocalIdentity
 	Basic *BasicIdentity
-	Cert  *CertIdentity
+	// This field is always nil in FIPS builds.
+	Cert *CertIdentity
 }
 
 // IdentityAccess defines the access level for an identity.
@@ -64,7 +62,13 @@ type BasicIdentity struct {
 
 // Certificate identity represents the client in an mTLS connection. We
 // only support a self-signed x509 certificate without intermediaries.
+//
+// In FIPS builds, certificate authentication is not supported. The X509
+// field will always be nil, and any identity with Type="certificate" will
+// fail validation.
 type CertIdentity struct {
+	// X509 is the parsed certificate. In FIPS builds, this field is always
+	// nil as certificate authentication is disabled.
 	X509 *x509.Certificate
 }
 
@@ -82,45 +86,6 @@ func (d *Identity) validate(name string) error {
 	}
 
 	return d.validateAccess()
-}
-
-// validateAccess checks that the identity's access and type are valid, returning an error if not.
-func (d *Identity) validateAccess() error {
-	if d == nil {
-		return errors.New("identity must not be nil")
-	}
-
-	switch d.Access {
-	case AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess:
-	case "":
-		return fmt.Errorf("access value must be specified (%q, %q, %q, or %q)",
-			AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
-	default:
-		return fmt.Errorf("invalid access value %q, must be %q, %q, %q, or %q",
-			d.Access, AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
-	}
-
-	gotType := false
-	if d.Local != nil {
-		gotType = true
-	}
-	if d.Basic != nil {
-		if d.Basic.Password == "" {
-			return errors.New("basic identity must specify password (hashed)")
-		}
-		gotType = true
-	}
-	if d.Cert != nil {
-		if d.Cert.X509 == nil {
-			return errors.New("cert identity must include an X.509 certificate")
-		}
-		gotType = true
-	}
-	if !gotType {
-		return errors.New(`identity must have at least one type ("local", "basic", or "cert")`)
-	}
-
-	return nil
 }
 
 // apiIdentity exists so the default JSON marshalling of an Identity (used
@@ -165,6 +130,48 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 	return json.Marshal(ai)
 }
 
+// validateAccess checks that the identity's access and type are valid, returning an error if not.
+func (d *Identity) validateAccess() error {
+	if d == nil {
+		return errors.New("identity must not be nil")
+	}
+
+	switch d.Access {
+	case AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess:
+	case "":
+		return fmt.Errorf("access value must be specified (%q, %q, %q, or %q)",
+			AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
+	default:
+		return fmt.Errorf("invalid access value %q, must be %q, %q, %q, or %q",
+			d.Access, AdminAccess, ReadAccess, MetricsAccess, UntrustedAccess)
+	}
+
+	gotType := false
+	if d.Local != nil {
+		gotType = true
+	}
+	if d.Basic != nil {
+		if d.Basic.Password == "" {
+			return errors.New("basic identity must specify password (hashed)")
+		}
+		gotType = true
+	}
+
+	// Build-tag-specific cert validation
+	certValid, err := d.validateCert()
+	if err != nil {
+		return err
+	}
+	if certValid {
+		gotType = true
+	}
+
+	if !gotType {
+		return noTypeError()
+	}
+	return nil
+}
+
 func (d *Identity) UnmarshalJSON(data []byte) error {
 	var ai apiIdentity
 	err := json.Unmarshal(data, &ai)
@@ -185,19 +192,13 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	if ai.Basic != nil {
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
 	}
+
 	if ai.Cert != nil {
-		block, rest := pem.Decode([]byte(ai.Cert.PEM))
-		if block == nil {
-			return errors.New("cert identity must include a PEM-encoded certificate")
-		}
-		if len(rest) > 0 {
-			return errors.New("cert identity cannot have extra data after the PEM block")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
+		certIdentity, err := unmarshalCert(ai.Cert)
 		if err != nil {
-			return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
+			return err
 		}
-		identity.Cert = &CertIdentity{X509: cert}
+		identity.Cert = certIdentity
 	}
 
 	// Perform additional validation using the local Identity type.
@@ -361,60 +362,42 @@ func (s *State) Identities() map[string]*Identity {
 // because they are intentionally setup by the client.
 //
 // If no matching identity is found for the given inputs, nil is returned.
+//
+// In FIPS builds, the clientCert parameter is accepted for API compatibility
+// but will never match an identity, as certificate authentication is disabled.
 func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	s.reading()
+	return s.identityFromInputs(userID, username, password, clientCert)
+}
 
-	switch {
-	case clientCert != nil:
-		for _, identity := range s.identities {
-			if identity.Cert != nil && identity.Cert.X509.Equal(clientCert) {
-				// Certificate identities can be added
-				// manually, so we still need to verify
-				// this was a self-signed client identity
-				// certificate without intermediaries.
-				roots := x509.NewCertPool()
-				roots.AddCert(identity.Cert.X509)
-				opts := x509.VerifyOptions{
-					Roots: roots,
-					// We only support verifying client TLS certificates.
-					KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-				}
-				_, err := clientCert.Verify(opts)
-				if err == nil {
-					return identity
-				}
-			}
-		}
-		// If a client certificate is provided, but did not match, we bail.
-		return nil
-
-	case username != "" || password != "":
-		passwordBytes := []byte(password)
-		for _, identity := range s.identities {
-			if identity.Basic == nil || identity.Name != username {
-				continue
-			}
-			crypt := sha512_crypt.New()
-			err := crypt.Verify(identity.Basic.Password, passwordBytes)
-			if err == nil {
-				return identity
-			}
-			// No further username match possible.
-			break
-		}
-		// If basic auth credentials were provided, but did not match, we bail.
-		return nil
-
-	case userID != nil:
-		for _, identity := range s.identities {
-			if identity.Local != nil && identity.Local.UserID == *userID {
-				return identity
-			}
-		}
-		// If UID was provided, but did not match, we bail.
-		return nil
+// identityFromInputs returns an identity matching the given inputs.
+//
+// In FIPS builds, clientCert will never match (identityFromCert always returns
+// nil), and basic auth credentials will not match (identityFromBasicAuth always
+// returns nil).
+func (s *State) identityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
+	if clientCert != nil {
+		return s.identityFromCert(clientCert)
 	}
 
+	if username != "" || password != "" {
+		return s.identityFromBasicAuth(username, password)
+	}
+
+	if userID != nil {
+		return s.identityFromUserID(userID)
+	}
+
+	return nil
+}
+
+// identityFromUserID returns an identity matching the given user ID.
+func (s *State) identityFromUserID(userID *uint32) *Identity {
+	for _, identity := range s.identities {
+		if identity.Local != nil && identity.Local.UserID == *userID {
+			return identity
+		}
+	}
 	return nil
 }
 
