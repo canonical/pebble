@@ -34,7 +34,7 @@ func Test(t *testing.T) {
 	TestingT(t)
 }
 
-func (*suite) TestAddEntries(c *C) {
+func (*suite) TestTCPAddEntries(c *C) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	c.Assert(err, IsNil)
 	defer listener.Close()
@@ -149,7 +149,7 @@ line3`)
 	}
 }
 
-func (*suite) TestFlushCancelContext(c *C) {
+func (*suite) TestTCPFlushCancelContext(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://fake:514",
 	})
@@ -180,6 +180,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	}
 
 }
+
 func (*suite) TestBufferFull(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location:          "tcp://fake:514",
@@ -230,7 +231,7 @@ func (*suite) TestBufferFull(c *C) {
 	checkBuffer([]any{"5", "6", "7", nil, nil, nil})
 }
 
-func (*suite) TestFlushEmpty(c *C) {
+func (*suite) TestTCPFlushEmpty(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://fake:514",
 	})
@@ -254,7 +255,6 @@ func (*suite) TestInvalidLocation(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	// UDP should also be valid now
 	_, err = syslog.NewClient(&syslog.ClientOptions{
 		Location: "udp://localhost:514",
 	})
@@ -287,4 +287,63 @@ func (s *testSyslogServer) run() error {
 	}
 
 	return nil
+}
+
+func (*suite) TestUDPAddEntries(c *C) {
+	conn, err := net.ListenPacket("udp", "localhost:0")
+	c.Assert(err, IsNil)
+	defer conn.Close()
+
+	msgChan := make(chan string, 1)
+	serverStopped := make(chan struct{})
+
+	go func() {
+		buf := make([]byte, 8192)
+		n, _, err := conn.ReadFrom(buf)
+		if err == nil && n > 0 {
+			msgChan <- string(buf[:n])
+		}
+		close(serverStopped)
+	}()
+
+	client, err := syslog.NewClient(&syslog.ClientOptions{
+		Location: "udp://" + conn.LocalAddr().String(),
+		Hostname: "test-host",
+		SDID:     "test-app",
+	})
+	c.Assert(err, IsNil)
+	defer client.Close()
+
+	// Set labels
+	client.SetLabels("app", map[string]string{
+		"env":     "prod",
+		"version": "1.0",
+	})
+
+	err = client.Add(servicelog.Entry{
+		Time:    time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC),
+		Service: "app",
+		Message: "labeled message",
+	})
+	c.Assert(err, IsNil)
+
+	err = client.Flush(context.Background())
+	c.Assert(err, IsNil)
+
+	select {
+	case msg := <-msgChan:
+		// Verify structured data is included (no octet framing)
+		pattern := `^<13>1 2024-01-01T10:00:00Z test-host app - - \[test-app@28978 env="prod" version="1\.0"\] labeled message$`
+		c.Check(msg, Matches, pattern)
+	case <-time.After(2 * time.Second):
+		c.Fatal("timed out waiting for UDP message")
+	}
+
+	// Wait for server to finish
+	select {
+	case <-serverStopped:
+	case <-time.After(1 * time.Second):
+		c.Fatal("timed out waiting for UDP server to stop")
+	}
+
 }
