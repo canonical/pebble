@@ -73,8 +73,8 @@ func NewClient(options *ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid syslog server location: %v", err)
 	}
-	if u.Scheme != "tcp" || u.Host == "" { // may support udp later
-		return nil, fmt.Errorf(`invalid syslog server location %q, must be in form "tcp://host:port"`, opts.Location)
+	if (u.Scheme != "tcp" && u.Scheme != "udp") || u.Host == "" {
+		return nil, fmt.Errorf(`invalid syslog server location %q, must be in form "tcp://host:port" or "udp://host:port"`, opts.Location)
 	}
 
 	c := &Client{
@@ -195,24 +195,27 @@ func (c *Client) buildSendBuffer() {
 		hostname = "-"
 	}
 
+	isTCP := c.location.Scheme == "tcp"
+
 	for _, entry := range c.entries {
 		structuredData, ok := c.labels[entry.service]
 		if !ok {
 			structuredData = "-"
 		}
 
-		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
-		const prefix = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
-		frameLength := len(prefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
-			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
-
-		// Octet framing as per RFC 5425: <length> <message>
-		lengthBuf := make([]byte, 0, 8) // fixed-length buffer to avoid allocations
-		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
-		c.sendBuf.Write(lengthBuf)
-		c.sendBuf.WriteByte(' ')
-
 		// Message format as per RFC 5424
+		const prefix = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
+
+		if isTCP {
+			// TCP: Octet framing as per RFC 5425: <length> <message>
+			frameLength := len(prefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
+				len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
+			lengthBuf := make([]byte, 0, 8)
+			lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
+			c.sendBuf.Write(lengthBuf)
+			c.sendBuf.WriteByte(' ')
+		}
+
 		c.sendBuf.WriteString(prefix)
 		c.sendBuf.WriteString(entry.timestamp)
 		c.sendBuf.WriteByte(' ')
@@ -232,6 +235,13 @@ func (c *Client) Flush(ctx context.Context) error {
 		return nil
 	}
 
+	if c.location.Scheme == "udp" {
+		return c.flushUDP(ctx)
+	}
+	return c.flushTCP(ctx)
+}
+
+func (c *Client) flushTCP(ctx context.Context) error {
 	err := c.ensureConnected(ctx)
 	if err != nil {
 		return err
@@ -243,6 +253,26 @@ func (c *Client) Flush(ctx context.Context) error {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).
 		c.conn.Close()
 		c.conn = nil
+		return fmt.Errorf("cannot send syslogs: %w", err)
+	}
+
+	c.resetBuffer()
+	return nil
+}
+
+func (c *Client) flushUDP(ctx context.Context) error {
+	// For UDP, we send each message as a separate datagram (RFC 5426 section 3.1)
+	// UDP connections don't need persistent state, so we create a fresh connection
+	var d net.Dialer
+	conn, err := d.DialContext(ctx, "udp", c.location.Host)
+	if err != nil {
+		return fmt.Errorf("cannot connect to %s: %w", c.location, err)
+	}
+	defer conn.Close()
+
+	c.buildSendBuffer()
+	_, err = io.Copy(conn, &c.sendBuf)
+	if err != nil {
 		return fmt.Errorf("cannot send syslogs: %w", err)
 	}
 

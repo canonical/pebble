@@ -246,7 +246,7 @@ func (*suite) TestInvalidLocation(c *C) {
 	_, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "http://example.com:514",
 	})
-	c.Assert(err, ErrorMatches, `invalid syslog server location "http://example.com:514", must be in form "tcp://host:port"`)
+	c.Assert(err, ErrorMatches, `invalid syslog server location "http://example.com:514", must be in form "tcp://host:port" or "udp://host:port"`)
 
 	// Valid schemes should work
 	_, err = syslog.NewClient(&syslog.ClientOptions{
@@ -254,10 +254,11 @@ func (*suite) TestInvalidLocation(c *C) {
 	})
 	c.Assert(err, IsNil)
 
+	// UDP should also be valid now
 	_, err = syslog.NewClient(&syslog.ClientOptions{
 		Location: "udp://localhost:514",
 	})
-	c.Assert(err, ErrorMatches, `invalid syslog server location "udp://localhost:514", must be in form "tcp://host:port"`)
+	c.Assert(err, IsNil)
 }
 
 type testSyslogServer struct {
