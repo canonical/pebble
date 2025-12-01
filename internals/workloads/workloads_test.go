@@ -130,7 +130,8 @@ workloads:
     `,
 }, {
 	summary: "override replace policy",
-	layers: []string{`
+	layers: []string{
+		`
 workloads:
     default:
         override: replace

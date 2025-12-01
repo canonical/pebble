@@ -223,7 +223,6 @@ func (ansiSuite) TestNotify(c *check.C) {
 		"\r<MR><ME>working    ages!"+ // the Set(0)
 		"\r<ME><CE>hello there\n"+ // first line of the Notify (no wrap!)
 		"\r<MR><ME>working    ages!") // the Set(1)
-
 }
 
 func (ansiSuite) TestWrite(c *check.C) {

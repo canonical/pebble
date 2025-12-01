@@ -66,21 +66,20 @@ services:
     "result": true
 }`)
 			}
-
 		})
 
 		tempDir := c.MkDir()
 		layerPath := filepath.Join(tempDir, "layer.yaml")
-		err := os.WriteFile(layerPath, []byte(layerYAML), 0755)
+		err := os.WriteFile(layerPath, []byte(layerYAML), 0o755)
 		c.Assert(err, check.IsNil)
 
 		unreadableLayerPath := filepath.Join(tempDir, "unreadable-layer.yaml")
-		err = os.WriteFile(unreadableLayerPath, []byte(layerYAML), 0055)
+		err = os.WriteFile(unreadableLayerPath, []byte(layerYAML), 0o055)
 		c.Assert(err, check.IsNil)
 
 		// The trigger layer will trigger an error in the mocked API response
 		triggerLayerPath := filepath.Join(tempDir, "trigger-layer.yaml")
-		err = os.WriteFile(triggerLayerPath, []byte(triggerLayerContent), 0755)
+		err = os.WriteFile(triggerLayerPath, []byte(triggerLayerContent), 0o755)
 		c.Assert(err, check.IsNil)
 
 		var args []string

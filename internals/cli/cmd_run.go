@@ -39,8 +39,9 @@ import (
 	"github.com/canonical/pebble/internals/workloads"
 )
 
-const cmdRunSummary = "Run the service manager environment"
-const cmdRunDescription = `
+const (
+	cmdRunSummary     = "Run the service manager environment"
+	cmdRunDescription = `
 The run command starts {{.DisplayName}} and runs the configured environment.
 
 Additional arguments may be provided to the service command with the --args
@@ -50,6 +51,7 @@ replace any default arguments defined in the service plan. For example:
 
 {{.ProgramName}} run --args myservice --port 8080 \; --hold
 `
+)
 
 type sharedRunEnterOpts struct {
 	CreateDirs bool       `long:"create-dirs"`

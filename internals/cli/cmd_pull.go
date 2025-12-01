@@ -23,10 +23,12 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-const cmdPullSummary = "Retrieve a file from the remote system"
-const cmdPullDescription = `
+const (
+	cmdPullSummary     = "Retrieve a file from the remote system"
+	cmdPullDescription = `
 The pull command retrieves a file from the remote system.
 `
+)
 
 type cmdPull struct {
 	client *client.Client

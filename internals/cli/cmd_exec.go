@@ -30,8 +30,9 @@ import (
 	"github.com/canonical/pebble/internals/ptyutil"
 )
 
-const cmdExecSummary = "Execute a remote command and wait for it to finish"
-const cmdExecDescription = `
+const (
+	cmdExecSummary     = "Execute a remote command and wait for it to finish"
+	cmdExecDescription = `
 The exec command runs a remote command and waits for it to finish. The local
 stdin is sent as the input to the remote process, while the remote stdout and
 stderr are output locally.
@@ -41,6 +42,7 @@ arguments using "--", for example:
 
 {{.ProgramName}} exec --timeout 10s -- echo -n foo bar
 `
+)
 
 type cmdExec struct {
 	client *client.Client

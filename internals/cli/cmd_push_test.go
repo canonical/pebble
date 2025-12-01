@@ -98,7 +98,7 @@ func (s *PebbleSuite) TestPush(c *C) {
 	// Create temporary file
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
-	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
+	err := os.WriteFile(filePath, []byte("Hello, world!"), 0o755)
 	c.Assert(err, IsNil)
 
 	args := []string{"push", filePath, "/tmp/file.bin"}
@@ -191,7 +191,7 @@ func (s *PebbleSuite) TestPushAPIFails(c *C) {
 	// Create temporary file
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
-	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
+	err := os.WriteFile(filePath, []byte("Hello, world!"), 0o755)
 	c.Assert(err, IsNil)
 
 	args := []string{"push", "-m", "600", filePath, "/tmp/file.bin"}

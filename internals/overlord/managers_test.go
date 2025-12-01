@@ -31,9 +31,7 @@ type mgrsSuite struct {
 	o *overlord.Overlord
 }
 
-var (
-	_ = Suite(&mgrsSuite{})
-)
+var _ = Suite(&mgrsSuite{})
 
 func (s *mgrsSuite) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)

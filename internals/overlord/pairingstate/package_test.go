@@ -61,7 +61,6 @@ func (ps *pairingSuite) TearDownTest(c *C) {
 // newManager creates a new pairing manager only after it
 // persists the paired state.
 func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingDetails) {
-
 	if s != nil {
 		ps.state.Lock()
 		ps.state.Set(pairingstate.PairingDetailsAttr, *s)
