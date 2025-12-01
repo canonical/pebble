@@ -660,31 +660,31 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 			basicUsername: opts.BasicUsername,
 			basicPassword: opts.BasicPassword,
 		}
+		// Even over unix socket, block redirects to HTTPS in FIPS builds.
+		requester.doer = createHTTPClient(requester.transport)
+		requester.userAgent = opts.UserAgent
+		requester.client = client
+		return requester, nil
 	} else {
 		// Otherwise talk regular HTTP-over-TCP.
 		baseURL, err := url.Parse(opts.BaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse base URL: %w", err)
 		}
-		transport := &http.Transport{
-			DisableKeepAlives: opts.DisableKeepAlive,
-			TLSClientConfig: &tls.Config{
-				// We disable the internal full X509 metadata based validation logic
-				// since the typical use-case do not have the server as a public URL
-				// baked into the certificate, signed with an external CA. The client
-				// config provides a TLSServerVerify hook that must be used to verify
-				// the server certificate chain.
-				InsecureSkipVerify: true,
-				VerifyConnection: func(state tls.ConnectionState) error {
-					return verifyConnection(state, opts)
-				},
-				// The server is configured to request a certificate from the client
-				// which will result in this hook getting called to retrieve it.
-				GetClientCertificate: func(request *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return opts.TLSClientIDCert, nil
-				},
-			},
+		// Validate that the URL scheme is supported in this build.
+		if err := validateBaseURL(baseURL); err != nil {
+			return nil, err
 		}
+
+		var transport *http.Transport
+		if baseURL.Scheme == "https" {
+			// HTTPS requires TLS configuration
+			transport = createTLSTransport(opts)
+		} else {
+			// Plain HTTP
+			transport = &http.Transport{DisableKeepAlives: opts.DisableKeepAlive}
+		}
+
 		requester = &defaultRequester{
 			baseURL:       baseURL,
 			transport:     transport,
@@ -693,7 +693,7 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		}
 	}
 
-	requester.doer = &http.Client{Transport: requester.transport}
+	requester.doer = createHTTPClient(requester.transport)
 	requester.userAgent = opts.UserAgent
 	requester.client = client
 
