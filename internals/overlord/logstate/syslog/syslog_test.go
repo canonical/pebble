@@ -16,6 +16,7 @@ package syslog_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -28,7 +29,30 @@ import (
 
 type suite struct{}
 
-var _ = Suite(&suite{})
+var (
+	_              = Suite(&suite{})
+	exampleEntries = []servicelog.Entry{{
+		Time:    time.Date(2023, 12, 31, 12, 0, 0, 123456789, time.UTC),
+		Service: "svc1",
+		Message: "message from svc1",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 1, 123456789, time.UTC),
+		Service: "svc2",
+		Message: "msg from svc2",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 2, 123456789, time.UTC),
+		Service: "svc1",
+		Message: "long message from svc1",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 3, 123456789, time.UTC),
+		Service: "svc3",
+		Message: "log of svc3 doesn't have any labels",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 4, 123456789, time.UTC),
+		Service: "svc4",
+		Message: "multiline\nline2\nline3",
+	}}
+)
 
 func Test(t *testing.T) {
 	TestingT(t)
@@ -82,29 +106,7 @@ func (*suite) TestTCPAddEntries(c *C) {
 	})
 
 	// Add entries from different services
-	entries := []servicelog.Entry{{
-		Time:    time.Date(2023, 12, 31, 12, 0, 0, 123456789, time.UTC),
-		Service: "svc1",
-		Message: "message from svc1",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 1, 123456789, time.UTC),
-		Service: "svc2",
-		Message: "msg from svc2",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 2, 123456789, time.UTC),
-		Service: "svc1",
-		Message: "long message from svc1",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 3, 123456789, time.UTC),
-		Service: "svc3",
-		Message: "log of svc3 doesn't have any labels",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 4, 123456789, time.UTC),
-		Service: "svc4",
-		Message: "multiline\nline2\nline3",
-	}}
-
-	for _, entry := range entries {
+	for _, entry := range exampleEntries {
 		err = client.Add(entry)
 		c.Assert(err, IsNil)
 	}
@@ -295,55 +297,63 @@ func (*suite) TestUDPAddEntries(c *C) {
 	defer conn.Close()
 
 	msgChan := make(chan string, 1)
-	serverStopped := make(chan struct{})
-
 	go func() {
-		buf := make([]byte, 8192)
-		n, _, err := conn.ReadFrom(buf)
-		if err == nil && n > 0 {
-			msgChan <- string(buf[:n])
+		for {
+			buf := make([]byte, 8192)
+			n, _, err := conn.ReadFrom(buf)
+			if err != nil {
+				c.Assert(errors.Is(err, net.ErrClosed), Equals, true)
+				break
+			}
+			if n > 0 {
+				msgChan <- string(buf[:n])
+			}
 		}
-		close(serverStopped)
+		close(msgChan)
 	}()
 
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "udp://" + conn.LocalAddr().String(),
-		Hostname: "test-host",
-		SDID:     "test-app",
+		Hostname: "test-machine",
+		SDID:     "test-sdid",
 	})
 	c.Assert(err, IsNil)
 	defer client.Close()
 
-	// Set labels
-	client.SetLabels("app", map[string]string{
-		"env":     "prod",
-		"version": "1.0",
+	client.SetLabels("svc1", map[string]string{
+		"env":     "test",
+		"version": "0.0.1",
 	})
-
-	err = client.Add(servicelog.Entry{
-		Time:    time.Date(2024, 1, 1, 10, 0, 0, 0, time.UTC),
-		Service: "app",
-		Message: "labeled message",
-	})
-	c.Assert(err, IsNil)
+	for _, entry := range exampleEntries {
+		err = client.Add(entry)
+		c.Assert(err, IsNil)
+	}
 
 	err = client.Flush(context.Background())
 	c.Assert(err, IsNil)
 
-	select {
-	case msg := <-msgChan:
-		// Verify structured data is included (no octet framing)
-		pattern := `^<13>1 2024-01-01T10:00:00Z test-host app - - \[test-app@28978 env="prod" version="1\.0"\] labeled message$`
-		c.Check(msg, Matches, pattern)
-	case <-time.After(2 * time.Second):
-		c.Fatal("timed out waiting for UDP message")
+	expectedLogMsg := []string{
+		`<13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`,
+		`<13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - - msg from svc2`,
+		`<13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] long message from svc1`,
+		`<13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`,
+		`<13>1 2023-12-31T12:00:04.123456789Z test-machine svc4 - - - multiline
+line2
+line3`,
+	}
+	for _, expected := range expectedLogMsg {
+		select {
+		case msg := <-msgChan:
+			c.Check(msg, Equals, expected)
+		case <-time.After(2 * time.Second):
+			c.Fatal("timed out waiting for UDP message")
+		}
 	}
 
-	// Wait for server to finish
+	conn.Close()
 	select {
-	case <-serverStopped:
+	case <-msgChan: // check if msgChan is closed correctly
 	case <-time.After(1 * time.Second):
 		c.Fatal("timed out waiting for UDP server to stop")
 	}
-
 }

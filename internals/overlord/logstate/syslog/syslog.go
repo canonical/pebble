@@ -20,6 +20,7 @@ const (
 	dialTimeout                = 10 * time.Second
 	canonicalPrivEnterpriseNum = 28978
 	initialSendBufferSize      = 4 * 1024
+	syslogRFC5424Prefix        = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
 )
 
 type ClientOptions struct {
@@ -188,14 +189,37 @@ func (c *Client) Close() error {
 	return err
 }
 
-func (c *Client) buildSendBuffer() {
-	c.sendBuf.Reset()
+// encodeOneEntry encodes common parts for UDP and TCP syslog entries into c.sendBuf
+func (c *Client) encodeOneEntry(entry *entryWithService) {
 	hostname := c.options.Hostname
 	if hostname == "" {
 		hostname = "-"
 	}
 
-	isTCP := c.location.Scheme == "tcp"
+	structuredData, ok := c.labels[entry.service]
+	if !ok {
+		structuredData = "-"
+	}
+
+	// Message format as per RFC 5424
+	c.sendBuf.WriteString(syslogRFC5424Prefix)
+	c.sendBuf.WriteString(entry.timestamp)
+	c.sendBuf.WriteByte(' ')
+	c.sendBuf.WriteString(hostname)
+	c.sendBuf.WriteByte(' ')
+	c.sendBuf.WriteString(entry.service)
+	c.sendBuf.WriteString(" - - ")
+	c.sendBuf.WriteString(structuredData)
+	c.sendBuf.WriteByte(' ')
+	c.sendBuf.WriteString(entry.message)
+}
+
+func (c *Client) buildSendBufferTCP() {
+	c.sendBuf.Reset()
+	hostname := c.options.Hostname
+	if hostname == "" {
+		hostname = "-"
+	}
 
 	for _, entry := range c.entries {
 		structuredData, ok := c.labels[entry.service]
@@ -203,29 +227,14 @@ func (c *Client) buildSendBuffer() {
 			structuredData = "-"
 		}
 
-		// Message format as per RFC 5424
-		const prefix = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
-
-		if isTCP {
-			// TCP: Octet framing as per RFC 5425: <length> <message>
-			frameLength := len(prefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
-				len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
-			lengthBuf := make([]byte, 0, 8)
-			lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
-			c.sendBuf.Write(lengthBuf)
-			c.sendBuf.WriteByte(' ')
-		}
-
-		c.sendBuf.WriteString(prefix)
-		c.sendBuf.WriteString(entry.timestamp)
+		// TCP: Octet framing as per RFC 5425: <length> <message>
+		frameLength := len(syslogRFC5424Prefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
+			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
+		lengthBuf := make([]byte, 0, 8)
+		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
+		c.sendBuf.Write(lengthBuf)
 		c.sendBuf.WriteByte(' ')
-		c.sendBuf.WriteString(hostname)
-		c.sendBuf.WriteByte(' ')
-		c.sendBuf.WriteString(entry.service)
-		c.sendBuf.WriteString(" - - ")
-		c.sendBuf.WriteString(structuredData)
-		c.sendBuf.WriteByte(' ')
-		c.sendBuf.WriteString(entry.message)
+		c.encodeOneEntry(&entry)
 	}
 }
 
@@ -247,7 +256,7 @@ func (c *Client) flushTCP(ctx context.Context) error {
 		return err
 	}
 
-	c.buildSendBuffer()
+	c.buildSendBufferTCP()
 	_, err = io.Copy(c.conn, &c.sendBuf)
 	if err != nil {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).
@@ -263,19 +272,18 @@ func (c *Client) flushTCP(ctx context.Context) error {
 func (c *Client) flushUDP(ctx context.Context) error {
 	// For UDP, we send each message as a separate datagram (RFC 5426 section 3.1)
 	// UDP connections don't need persistent state, so we create a fresh connection
-	var d net.Dialer
-	conn, err := d.DialContext(ctx, "udp", c.location.Host)
-	if err != nil {
-		return fmt.Errorf("cannot connect to %s: %w", c.location, err)
-	}
-	defer conn.Close()
+	for _, entry := range c.entries {
+		err := c.ensureConnected(ctx)
+		if err != nil {
+			return err
+		}
 
-	c.buildSendBuffer()
-	_, err = io.Copy(conn, &c.sendBuf)
-	if err != nil {
-		return fmt.Errorf("cannot send syslogs: %w", err)
+		c.encodeOneEntry(&entry)
+		_, err = io.Copy(c.conn, &c.sendBuf)
+		if err != nil {
+			return fmt.Errorf("cannot send syslogs: %w", err)
+		}
 	}
-
 	c.resetBuffer()
 	return nil
 }
