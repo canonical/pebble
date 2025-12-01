@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/canonical/pebble/internals/httputil"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -129,9 +130,15 @@ type Client struct {
 func NewClient(options *ClientOptions) *Client {
 	opts := *options
 	fillDefaultOptions(&opts)
+
+	// Validate URL in FIPS builds
+	if err := httputil.ValidateURL(opts.Location); err != nil {
+		logger.Panicf("OpenTelemetry client for %q: invalid location URL: %v", opts.TargetName, err)
+	}
+
 	c := &Client{
 		options:            &opts,
-		httpClient:         &http.Client{Timeout: opts.RequestTimeout},
+		httpClient:         httputil.NewClient(httputil.ClientOptions{Timeout: opts.RequestTimeout}),
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}

@@ -1,6 +1,6 @@
 //go:build !fips
 
-// Copyright (c) 2021 Canonical Ltd
+// Copyright (c) 2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -14,18 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package checkstate
+package httputil
 
 import (
 	"net/http"
 )
 
-// checkHTTPSURL is a no-op in the default build.
-func checkHTTPSURL(url string) error {
+// validateScheme allows both HTTP and HTTPS in non-FIPS builds.
+func validateScheme(scheme string) error {
+	// All schemes allowed in non-FIPS builds
 	return nil
 }
 
-// createHTTPClient creates a standard HTTP client in the default build.
-func createHTTPClient() *http.Client {
-	return &http.Client{}
+// checkRedirectPolicy returns the default redirect policy (follow up to 10 redirects).
+func checkRedirectPolicy() func(*http.Request, []*http.Request) error {
+	// Use default behavior (nil means follow up to 10 redirects)
+	return nil
 }

@@ -29,6 +29,7 @@ import (
 
 	"github.com/canonical/x-go/strutil/shlex"
 
+	"github.com/canonical/pebble/internals/httputil"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/reaper"
@@ -49,12 +50,12 @@ type httpChecker struct {
 }
 
 func (c *httpChecker) check(ctx context.Context) error {
-	if err := checkHTTPSURL(c.url); err != nil {
+	if err := httputil.ValidateURL(c.url); err != nil {
 		return err
 	}
 
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
-	client := createHTTPClient()
+	client := httputil.NewClient(httputil.ClientOptions{})
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)
