@@ -55,9 +55,3 @@ func createTLSTransport(opts *Config) *http.Transport {
 		},
 	}
 }
-
-// checkRedirectPolicy returns a redirect policy that blocks redirects to HTTPS
-// in FIPS builds. In non-FIPS builds, use the default policy (follow up to 10 redirects).
-func checkRedirectPolicy() func(req *http.Request, via []*http.Request) error {
-	return nil // Use default policy
-}
