@@ -1,7 +1,9 @@
 name: SBOM and secscan
 
 on:
-  workflow_call:
+  push:
+    tags: [v*]  # when publishing a release
+  pull_request:  # temporarily for testing in this PR
   workflow_dispatch:
 
 permissions: {}
