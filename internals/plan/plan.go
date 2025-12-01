@@ -533,9 +533,7 @@ type HTTPCheck struct {
 // Copy returns a deep copy of the HTTP check configuration.
 func (c *HTTPCheck) Copy() *HTTPCheck {
 	copied := *c
-	if c.Headers != nil {
-		copied.Headers = maps.Clone(c.Headers)
-	}
+	copied.Headers = maps.Clone(c.Headers)
 	return &copied
 }
 
