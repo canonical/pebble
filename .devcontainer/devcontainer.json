@@ -1,0 +1,25 @@
+{
+	"name": "Pebble Development (ARM64 Linux)",
+	"image": "golang:1.24",
+	"workspaceFolder": "/workspace",
+	"workspaceMount": "source=/code/pebble,target=/workspace,type=bind",
+	"containerEnv": {
+		"GOOS": "linux",
+		"GOARCH": "arm64"
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"golang.go"
+			],
+			"settings": {
+				"go.toolsManagement.autoUpdate": true,
+				"go.useLanguageServer": true,
+				"go.buildTags": "fips",
+				"go.buildFlags": ["-tags=fips"]
+			}
+		}
+	},
+	"postCreateCommand": "useradd -m -s /bin/bash testuser && usermod -aG sudo testuser && go mod download",
+	"remoteUser": "root"
+}
