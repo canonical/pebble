@@ -8,7 +8,7 @@ clients:
 
 artifacts:
   - name: 'pebble'
-    type: 'charm'
+    type: 'snap'
     ssdlc_params:
         name: 'pebble'
         version: ''  # auto-detect
