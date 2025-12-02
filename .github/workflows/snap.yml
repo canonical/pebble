@@ -15,7 +15,7 @@ concurrency: ${{ github.workflow }}
 
 env:
   SNAP_NAME: pebble
-  DEFAULT_TRACK: latest
+  DEFAULT_TRACK: fips
   DEFAULT_RISK: edge
 
 jobs:
@@ -168,7 +168,7 @@ jobs:
       matrix:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     env:
-      TO_TRACK: latest
+      TO_TRACK: fips
       TO_RISK: candidate
     steps:
       - name: Install Snapcraft
@@ -189,7 +189,7 @@ jobs:
 
       # It would be easier to use `snapcraft promote`, but there's an error when trying
       # to avoid the prompt with the "--yes" option:
-      # > 'latest/edge' is not a valid set value for --from-channel when using --yes.
+      # > 'fips/edge' is not a valid set value for --from-channel when using --yes.
       - name: Promote ${{ env.SNAP_NAME }} snap rev${{ steps.get-snap.outputs.revision }} to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

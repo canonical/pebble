@@ -17,8 +17,6 @@ package daemon
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -46,7 +44,6 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
@@ -129,15 +126,6 @@ type Options struct {
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
 
-	// TLSDir is an optional path for where the TLS manager persists PEM files.
-	// Defaults to "tls" inside the pebble directory.
-	TLSDir string
-
-	// IDSigner is a private key representing the identity of a Pebble
-	// instance (machine, container or device), which implements the
-	// tlsstate.IDSigner interface (for digest signing).
-	IDSigner tlsstate.IDSigner
-
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
 	// the pebble directory.
@@ -147,11 +135,6 @@ type Options struct {
 	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
 	// server is not started.
 	HTTPAddress string
-
-	// HTTPSAddress is the address for the HTTPS API server, for example
-	// ":8443" to listen on any address, port 8443. If not set, the HTTPS
-	// API server is not started.
-	HTTPSAddress string
 
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
@@ -219,13 +202,6 @@ type Command struct {
 }
 
 func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserState {
-	// Does the connection include a single mTLS client identity
-	// certificate?
-	var clientCert *x509.Certificate
-	if r.TLS != nil && len(r.TLS.PeerCertificates) == 1 {
-		clientCert = r.TLS.PeerCertificates[0]
-	}
-
 	// Does the HTTP header include basic auth credentials? Note that
 	// we explicitly prohibit using basic auth credentials for HTTPS
 	// for now.
@@ -242,7 +218,7 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserSta
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(userID, username, password, clientCert)
+	identity := st.IdentityFromInputs(userID, username, password)
 	st.Unlock()
 
 	if identity != nil {
@@ -486,16 +462,6 @@ func (d *Daemon) Init() error {
 		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
 	}
 
-	if d.options.HTTPSAddress != "" {
-		tlsConf := d.overlord.TLSManager().ListenConfig()
-		listener, err := tls.Listen("tcp", d.options.HTTPSAddress, tlsConf)
-		if err != nil {
-			return fmt.Errorf("cannot TLS listen on %q: %v", d.options.HTTPSAddress, err)
-		}
-		d.httpsListener = listener
-		logger.Noticef("HTTPS API server listening on %q.", d.options.HTTPSAddress)
-	}
-
 	logger.Noticef("Started daemon.")
 	return nil
 }
@@ -597,8 +563,6 @@ func (d *Daemon) Start() error {
 				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnixSocket)
 			case *net.TCPConn:
 				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTP)
-			case *tls.Conn:
-				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTPS)
 			}
 			return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnknown)
 		},
@@ -1009,11 +973,9 @@ func New(opts *Options) (*Daemon, error) {
 	ovldOptions := overlord.Options{
 		PebbleDir:      opts.Dir,
 		LayersDir:      opts.LayersDir,
-		TLSDir:         opts.TLSDir,
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
-		IDSigner:       opts.IDSigner,
 		Persist:        opts.Persist,
 	}
 

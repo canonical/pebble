@@ -15,9 +15,7 @@
 package state
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"maps"
@@ -37,7 +35,6 @@ type Identity struct {
 	// non-nil.
 	Local *LocalIdentity
 	Basic *BasicIdentity
-	Cert  *CertIdentity
 }
 
 // IdentityAccess defines the access level for an identity.
@@ -61,12 +58,6 @@ type LocalIdentity struct {
 type BasicIdentity struct {
 	// Password holds the user's sha512-crypt-hashed password.
 	Password string
-}
-
-// Certificate identity represents the client in an mTLS connection. We
-// only support a self-signed x509 certificate without intermediaries.
-type CertIdentity struct {
-	X509 *x509.Certificate
 }
 
 // This is used to ensure we send a well-formed identity Name.
@@ -111,12 +102,6 @@ func (d *Identity) validateAccess() error {
 		}
 		gotType = true
 	}
-	if d.Cert != nil {
-		if d.Cert.X509 == nil {
-			return errors.New("cert identity must include an X.509 certificate")
-		}
-		gotType = true
-	}
 	if !gotType {
 		return errors.New(`identity must have at least one type ("local", "basic", or "cert")`)
 	}
@@ -157,12 +142,6 @@ func (d *Identity) MarshalJSON() ([]byte, error) {
 	if d.Basic != nil {
 		ai.Basic = &apiBasicIdentity{Password: "*****"}
 	}
-	if d.Cert != nil {
-		// This isn't actually secret, it's a public key by design, but we
-		// replace it with ***** for consistency with the password field to
-		// avoid confusion for the user. We can show it in future if needed.
-		ai.Cert = &apiCertIdentity{PEM: "*****"}
-	}
 	return json.Marshal(ai)
 }
 
@@ -185,20 +164,6 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	}
 	if ai.Basic != nil {
 		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
-	}
-	if ai.Cert != nil {
-		block, rest := pem.Decode([]byte(ai.Cert.PEM))
-		if block == nil {
-			return errors.New("cert identity must include a PEM-encoded certificate")
-		}
-		if len(rest) > 0 {
-			return errors.New("cert identity cannot have extra data after the PEM block")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
-		}
-		identity.Cert = &CertIdentity{X509: cert}
 	}
 
 	// Perform additional validation using the local Identity type.
@@ -354,37 +319,11 @@ func (s *State) Identities() map[string]*Identity {
 
 // IdentityFromInputs returns an identity matching the given inputs.
 //
-// We prioritize clientCert and username/password if either is provided,
-// because they are intentionally setup by the client.
-//
 // If no matching identity is found for the given inputs, nil is returned.
-func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
+func (s *State) IdentityFromInputs(userID *uint32, username, password string) *Identity {
 	s.reading()
 
 	switch {
-	case clientCert != nil:
-		for _, identity := range s.identities {
-			if identity.Cert != nil && identity.Cert.X509.Equal(clientCert) {
-				// Certificate identities can be added
-				// manually, so we still need to verify
-				// this was a self-signed client identity
-				// certificate without intermediaries.
-				roots := x509.NewCertPool()
-				roots.AddCert(identity.Cert.X509)
-				opts := x509.VerifyOptions{
-					Roots: roots,
-					// We only support verifying client TLS certificates.
-					KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-				}
-				_, err := clientCert.Verify(opts)
-				if err == nil {
-					return identity
-				}
-			}
-		}
-		// If a client certificate is provided, but did not match, we bail.
-		return nil
-
 	case username != "" || password != "":
 		passwordBytes := []byte(password)
 		for _, identity := range s.identities {
