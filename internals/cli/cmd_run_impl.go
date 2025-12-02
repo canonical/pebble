@@ -1,6 +1,6 @@
 //go:build !fips
 
-// Copyright (C) 2025 Canonical Ltd
+// Copyright (c) 2014-2020 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -14,17 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package idkey_test
+package cli
 
 import (
-	"testing"
+	"path/filepath"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/pebble/internals/idkey"
+	"github.com/canonical/pebble/internals/overlord/tlsstate"
 )
 
-// Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
-
-type keySuite struct{}
-
-var _ = Suite(&keySuite{})
+// getIDSigner loads the identity key for signing TLS certificates.
+func getIDSigner(pebbleDir string) (tlsstate.IDSigner, error) {
+	idPath := filepath.Join(pebbleDir, "identity")
+	return idkey.Get(idPath)
+}

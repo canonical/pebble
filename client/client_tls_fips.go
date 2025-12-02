@@ -1,6 +1,6 @@
-//go:build !fips
+//go:build fips
 
-// Copyright (C) 2025 Canonical Ltd
+// Copyright (c) 2014-2020 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -14,17 +14,20 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package idkey_test
+package client
 
 import (
-	"testing"
-
-	. "gopkg.in/check.v1"
+	"crypto/tls"
+	"crypto/x509"
+	"errors"
 )
 
-// Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
+// verifyConnection is not supported in FIPS builds (HTTPS is blocked).
+func verifyConnection(state tls.ConnectionState, opts *Config) error {
+	return errors.New("TLS connections are not supported in FIPS builds")
+}
 
-type keySuite struct{}
-
-var _ = Suite(&keySuite{})
+// getIdentityFingerprint is not supported in FIPS builds (HTTPS is blocked).
+func getIdentityFingerprint(cert *x509.Certificate) (string, error) {
+	return "", errors.New("certificate operations are not supported in FIPS builds")
+}

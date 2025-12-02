@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -29,7 +28,6 @@ import (
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/daemon"
-	"github.com/canonical/pebble/internals/idkey"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
@@ -193,8 +191,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 
-	idPath := filepath.Join(rcmd.pebbleDir, "identity")
-	idSigner, err := idkey.Get(idPath)
+	idSigner, err := getIDSigner(rcmd.pebbleDir)
 	if err != nil {
 		return err
 	}
