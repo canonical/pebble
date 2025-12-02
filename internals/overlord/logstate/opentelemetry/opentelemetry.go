@@ -127,13 +127,13 @@ type Client struct {
 	resourceAttributes map[string][]keyValue
 }
 
-func NewClient(options *ClientOptions) *Client {
+func NewClient(options *ClientOptions) (*Client, error) {
 	opts := *options
 	fillDefaultOptions(&opts)
 
 	// Validate URL in FIPS builds
 	if err := httputil.ValidateURL(opts.Location); err != nil {
-		logger.Panicf("OpenTelemetry client for %q: invalid location URL: %v", opts.TargetName, err)
+		return nil, fmt.Errorf("invalid location URL for target %q: %w", opts.TargetName, err)
 	}
 
 	c := &Client{
@@ -144,7 +144,7 @@ func NewClient(options *ClientOptions) *Client {
 	}
 	// c.entries should be backed by the same array as c.buffer.
 	c.entries = c.buffer[:0]
-	return c
+	return c, nil
 }
 
 // ClientOptions allows overriding default parameters (e.g. for testing).

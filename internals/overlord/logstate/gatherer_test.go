@@ -161,11 +161,12 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
 			newClient: func(target *plan.LogTarget) (logClient, error) {
-				return loki.NewClient(&loki.ClientOptions{
+				client, err := loki.NewClient(&loki.ClientOptions{
 					TargetName:        target.Name,
 					Location:          target.Location,
 					MaxRequestEntries: 5,
-				}), nil
+				})
+				return client, err
 			},
 		},
 	)
@@ -237,6 +238,7 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 	target := &plan.LogTarget{
 		Name:     "tgt1",
 		Type:     plan.LokiTarget,
+		Location: testLocation,
 		Services: []string{"all"},
 		Labels:   map[string]string{"foo": "bar-$SECRET-$SECRET2", "baz": "foo"},
 	}

@@ -164,17 +164,18 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, err := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:  server.URL,
 		UserAgent: "pebble/1.23.0",
 		ScopeName: "pebble",
 	})
+	c.Assert(err, IsNil)
 	for _, entry := range input {
 		err := client.Add(entry)
 		c.Assert(err, IsNil)
 	}
 
-	err := client.Flush(context.Background())
+	err = client.Flush(context.Background())
 	c.Assert(err, IsNil)
 	c.Assert(numRequests, Equals, 1)
 }
@@ -191,8 +192,9 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer server.Close()
 	defer killServer()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
-	err := client.Add(servicelog.Entry{
+	client, err := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
+	c.Assert(err, IsNil)
+	err = client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
 		Message: "this is a log line\n",
@@ -226,11 +228,12 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, err := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:       server.URL,
 		RequestTimeout: 1 * time.Microsecond,
 	})
-	err := client.Add(servicelog.Entry{
+	c.Assert(err, IsNil)
+	err = client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
 		Message: "this is a log line\n",
@@ -242,11 +245,12 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 func (*suite) TestBufferFull(c *C) {
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, err := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		TargetName:        "tgt1",
-		Location:          "fake",
+		Location:          testURL,
 		MaxRequestEntries: 3,
 	})
+	c.Assert(err, IsNil)
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
@@ -303,17 +307,18 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, err := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:  server.URL,
 		ScopeName: "pebble",
 	})
+	c.Assert(err, IsNil)
 
 	client.SetLabels("svc1", map[string]string{
 		"label1": "val1",
 		"label2": "val2",
 	})
 
-	err := client.Add(servicelog.Entry{
+	err = client.Add(servicelog.Entry{
 		Service: "svc1",
 		Time:    time.Date(2023, 10, 3, 4, 20, 33, 0, time.UTC),
 		Message: "hello",
