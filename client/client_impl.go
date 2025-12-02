@@ -22,19 +22,23 @@ import (
 	"net/url"
 )
 
-// validateBaseURL checks if the base URL is valid for non-FIPS builds.
-// HTTPS is allowed in non-FIPS builds.
-func validateBaseURL(baseURL *url.URL) error {
-	return nil
-}
-
 // createHTTPClient creates an HTTP client with optional TLS support.
 func createHTTPClient(transport *http.Transport) *http.Client {
 	return &http.Client{Transport: transport}
 }
 
+// websocketScheme returns the appropriate WebSocket scheme for the HTTP scheme.
+// In non-FIPS builds, "https" maps to "wss", everything else to "ws".
+func websocketScheme(httpScheme string) string {
+	if httpScheme == "https" {
+		return "wss"
+	}
+	return "ws"
+}
+
 // createTLSTransport creates a transport with TLS configuration for non-FIPS builds.
-func createTLSTransport(opts *Config) *http.Transport {
+// The baseURL parameter is accepted for consistency with the FIPS implementation.
+func createTLSTransport(opts *Config, baseURL *url.URL) (*http.Transport, error) {
 	return &http.Transport{
 		DisableKeepAlives: opts.DisableKeepAlive,
 		TLSClientConfig: &tls.Config{
@@ -53,5 +57,5 @@ func createTLSTransport(opts *Config) *http.Transport {
 				return opts.TLSClientIDCert, nil
 			},
 		},
-	}
+	}, nil
 }

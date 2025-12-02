@@ -22,15 +22,6 @@ import (
 	"net/url"
 )
 
-// validateBaseURL checks if the base URL is valid for FIPS builds.
-// HTTPS is not allowed in FIPS builds.
-func validateBaseURL(baseURL *url.URL) error {
-	if baseURL.Scheme == "https" {
-		return fmt.Errorf("HTTPS is not supported in FIPS builds")
-	}
-	return nil
-}
-
 // createHTTPClient creates an HTTP client with a redirect policy that blocks HTTPS.
 func createHTTPClient(transport *http.Transport) *http.Client {
 	return &http.Client{
@@ -39,10 +30,21 @@ func createHTTPClient(transport *http.Transport) *http.Client {
 	}
 }
 
-// createTLSTransport is not supported in FIPS builds and will panic if called.
-// This should never be reached due to validateBaseURL blocking HTTPS URLs.
-func createTLSTransport(opts *Config) *http.Transport {
-	panic("HTTPS transport is not supported in FIPS builds")
+// websocketScheme returns the appropriate WebSocket scheme for the HTTP scheme.
+// In FIPS builds, only "ws" is supported (HTTPS/WSS not allowed).
+func websocketScheme(httpScheme string) string {
+	return "ws"
+}
+
+// createTLSTransport is not supported in FIPS builds.
+// It validates the baseURL and returns an error if HTTPS is attempted.
+func createTLSTransport(opts *Config, baseURL *url.URL) (*http.Transport, error) {
+	if baseURL.Scheme != "http" {
+		return nil, fmt.Errorf("Only the HTTP scheme is supported in FIPS builds")
+	}
+	// This should never be reached since we check for https scheme above,
+	// but kept as a safeguard.
+	panic("createTLSTransport called in FIPS build with non-HTTPS URL")
 }
 
 // checkRedirectPolicy returns a redirect policy that blocks redirects to HTTPS.

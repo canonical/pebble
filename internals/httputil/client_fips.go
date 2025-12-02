@@ -23,8 +23,8 @@ import (
 
 // validateScheme blocks HTTPS in FIPS builds, allows HTTP and other schemes.
 func validateScheme(scheme string) error {
-	if scheme == "https" {
-		return errors.New("HTTPS is not supported in FIPS builds")
+	if scheme != "http" {
+		return errors.New("Only the HTTP scheme is supported in FIPS builds")
 	}
 	return nil
 }
@@ -32,8 +32,8 @@ func validateScheme(scheme string) error {
 // checkRedirectPolicy blocks HTTPS redirects in FIPS builds.
 func checkRedirectPolicy() func(*http.Request, []*http.Request) error {
 	return func(req *http.Request, via []*http.Request) error {
-		if req.URL.Scheme == "https" {
-			return errors.New("HTTPS redirects are not allowed in FIPS builds")
+		if req.URL.Scheme != "http" {
+			return errors.New("Only HTTP redirects are allowed in FIPS builds")
 		}
 		// Allow HTTP redirects up to 10 times (Go default)
 		if len(via) >= 10 {

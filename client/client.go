@@ -655,47 +655,39 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
 		baseURL := &url.URL{Scheme: "http", Host: "localhost"}
 		requester = &defaultRequester{
-			baseURL:       baseURL,
-			transport:     transport,
-			basicUsername: opts.BasicUsername,
-			basicPassword: opts.BasicPassword,
+			baseURL:   baseURL,
+			transport: transport,
 		}
-		// Even over unix socket, block redirects to HTTPS in FIPS builds.
-		requester.doer = createHTTPClient(requester.transport)
-		requester.userAgent = opts.UserAgent
-		requester.client = client
-		return requester, nil
 	} else {
 		// Otherwise talk regular HTTP-over-TCP.
 		baseURL, err := url.Parse(opts.BaseURL)
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse base URL: %w", err)
 		}
-		// Validate that the URL scheme is supported in this build.
-		if err := validateBaseURL(baseURL); err != nil {
-			return nil, err
-		}
 
 		var transport *http.Transport
 		if baseURL.Scheme == "https" {
 			// HTTPS requires TLS configuration
-			transport = createTLSTransport(opts)
+			transport, err = createTLSTransport(opts, baseURL)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			// Plain HTTP
 			transport = &http.Transport{DisableKeepAlives: opts.DisableKeepAlive}
 		}
 
 		requester = &defaultRequester{
-			baseURL:       baseURL,
-			transport:     transport,
-			basicUsername: opts.BasicUsername,
-			basicPassword: opts.BasicPassword,
+			baseURL:   baseURL,
+			transport: transport,
 		}
 	}
 
 	requester.doer = createHTTPClient(requester.transport)
 	requester.userAgent = opts.UserAgent
 	requester.client = client
+	requester.basicUsername = opts.BasicUsername
+	requester.basicPassword = opts.BasicPassword
 
 	return requester, nil
 }
@@ -757,10 +749,7 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 		HandshakeTimeout: 5 * time.Second,
 	}
 
-	scheme := "ws"
-	if rq.baseURL.Scheme == "https" {
-		scheme = "wss"
-	}
+	scheme := websocketScheme(rq.baseURL.Scheme)
 	url := fmt.Sprintf("%s://%s%s", scheme, rq.baseURL.Host, urlPath)
 
 	r := http.Request{Header: make(http.Header)}
