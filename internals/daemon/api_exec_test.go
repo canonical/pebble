@@ -369,7 +369,7 @@ func (s *execSuite) TestStreaming(c *C) {
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		chunk := fmt.Sprintf("chunk %d ", i)
 		select {
 		case stdinCh <- []byte(chunk):

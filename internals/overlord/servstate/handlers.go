@@ -647,10 +647,7 @@ func calculateNextBackoff(config *plan.Service, current time.Duration) time.Dura
 	}
 	// Multiply current time by backoff factor. If it has exceeded the limit, clamp it.
 	nextSeconds := current.Seconds() * config.BackoffFactor.Value
-	next := time.Duration(nextSeconds * float64(time.Second))
-	if next > config.BackoffLimit.Value {
-		next = config.BackoffLimit.Value
-	}
+	next := min(time.Duration(nextSeconds*float64(time.Second)), config.BackoffLimit.Value)
 	return next
 }
 

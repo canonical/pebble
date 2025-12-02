@@ -37,7 +37,7 @@ func (cs *clientSuite) TestStartStop(c *check.C) {
 		Names: []string{"one", "two"},
 	}
 
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		cs.req = nil
 
 		startStop := cs.cli.Start

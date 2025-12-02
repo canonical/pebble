@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os/exec"
@@ -134,10 +135,8 @@ func (c *execChecker) check(ctx context.Context) error {
 
 	// Similar to services and exec, inherit the daemon's environment.
 	environment := osutil.Environ()
-	for k, v := range c.environment {
-		// Requested environment takes precedence.
-		environment[k] = v
-	}
+	// Requested environment takes precedence.
+	maps.Copy(environment, c.environment)
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = make([]string, 0, len(environment)) // avoid additional allocations

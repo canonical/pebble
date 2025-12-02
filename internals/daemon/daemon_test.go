@@ -1001,7 +1001,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339))
 	err = os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1049,7 +1049,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 }
 
 func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339)))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339))
 	err := os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1073,7 +1073,7 @@ func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339))
 	err = os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1107,7 +1107,7 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *C) {
 	c.Assert(d.Start(), IsNil)
 
 	// pretend some ensure happened
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		c.Check(d.overlord.StateEngine().Ensure(), IsNil)
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -1142,7 +1142,7 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
 
 	c.Assert(d.Start(), IsNil)
 	// pretend some ensure happened
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		c.Check(d.overlord.StateEngine().Ensure(), IsNil)
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -1463,7 +1463,7 @@ services:
 	// in the starting state, so here we wait until the service is in the starting
 	// state. We wait up to 25*20=500ms to make sure there is still half a second
 	// left to stop the service before okayDelay.
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		svcInfo, err := d.overlord.ServiceManager().Services([]string{"test1"})
 		c.Assert(err, IsNil)
 		if len(svcInfo) > 0 && svcInfo[0].Current == servstate.StatusActive {
@@ -1654,7 +1654,7 @@ func ensureSecurityLog(c *C, logs, level, event, description string) {
 	}
 
 	gotLog := false
-	for _, line := range strings.Split(logs, "\n") {
+	for line := range strings.SplitSeq(logs, "\n") {
 		// Remove initial datetime prefix
 		fields := strings.SplitN(line, " ", 2)
 		if len(fields) != 2 {
