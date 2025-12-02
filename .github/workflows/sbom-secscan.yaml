@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        manifest: [sdist, wheel]
+        manifest: [snap]
 
     name: SBOM generation
     runs-on: [self-hosted, self-hosted-linux-amd64-jammy-private-endpoint-medium]
