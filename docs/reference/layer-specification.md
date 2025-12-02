@@ -254,8 +254,11 @@ log-targets:
     # - loki: Use the Grafana Loki protocol. A "pebble_service" label is
     #   added automatically, with the name of the Pebble service as its value.
     # - opentelemetry: Use the OpenTelemetry protocol (OTLP). A "service.name"
-    # label is added automatically, with the name of the Pebble service as its
-    # value.
+    #   label is added automatically, with the name of the Pebble service as its
+    #   value.
+    # - syslog: Use the syslog protocol. A "${SDID}@28978" is added as SD-ID.
+    #   28978 is Canonical's enterprise number. ${SDID} has default value
+    #   "pebble" and can be override by custom name.
     type: loki
 
     # (Required) The URL of the remote log target.

@@ -21,7 +21,7 @@ log-targets:
 Required configuration:
 
 - `override`: How this log target definition is combined with other pre-existing definitions with the same name in the plan. Supported values are `merge` and `replace`.
-- `type`: The type of log target. Supported types are `loki` and `opentelemetry`.
+- `type`: The type of log target. Supported types are `loki`, `opentelemetry` and `syslog`.
 - `location`: The URL of the remote log target. For Loki, this needs to be the fully-qualified URL of the push API, including the API endpoint; use the format `http://<ip-address>:3100/loki/api/v1/push`. For OpenTelemetry, include the TCP port (normally 4318) without the API endpoint, for example: `http://<ip-address>:4318`.
 
 Optional configuration:
