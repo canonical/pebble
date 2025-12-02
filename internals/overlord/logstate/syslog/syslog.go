@@ -21,6 +21,7 @@ const (
 	canonicalPrivEnterpriseNum = 28978
 	initialSendBufferSize      = 4 * 1024
 	syslogRFC5424Prefix        = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
+	maxUDPMessageSize          = 4000     // Maximum size of a UDP syslog message payload
 )
 
 type ClientOptions struct {
@@ -278,6 +279,7 @@ func (c *Client) flushUDP(ctx context.Context) error {
 			return err
 		}
 
+		entry.message = entry.message[:min(len(entry.message), maxUDPMessageSize)]
 		c.encodeOneEntry(&entry)
 		_, err = io.Copy(c.conn, &c.sendBuf)
 		if err != nil {

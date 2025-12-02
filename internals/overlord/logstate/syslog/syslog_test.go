@@ -58,7 +58,7 @@ func Test(t *testing.T) {
 	TestingT(t)
 }
 
-func (*suite) TestTCPAddEntries(c *C) {
+func (*suite) TestTCPAddAndFlush(c *C) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	c.Assert(err, IsNil)
 	defer listener.Close()
@@ -291,7 +291,7 @@ func (s *testSyslogServer) run() error {
 	return nil
 }
 
-func (*suite) TestUDPAddEntries(c *C) {
+func (*suite) TestUDPAddAndFlush(c *C) {
 	conn, err := net.ListenPacket("udp", "localhost:0")
 	c.Assert(err, IsNil)
 	defer conn.Close()
@@ -348,6 +348,27 @@ line3`,
 		case <-time.After(2 * time.Second):
 			c.Fatal("timed out waiting for UDP message")
 		}
+	}
+
+	// Test message longer than max UDP size is truncated
+	longMsg := make([]byte, 5000)
+	for i := range longMsg {
+		longMsg[i] = 'A'
+	}
+
+	c.Assert(client.Add(servicelog.Entry{
+		Time:    time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
+		Service: "svc2",
+		Message: string(longMsg),
+	}), IsNil)
+	c.Assert(client.Flush(context.Background()), IsNil)
+
+	select {
+	case shortMsg := <-msgChan:
+		c.Check(len(longMsg) == 5000, Equals, true)
+		c.Check(len(shortMsg) < 4100, Equals, true) // +100 for syslog headers
+	case <-time.After(2 * time.Second):
+		c.Fatal("timed out waiting for long UDP message")
 	}
 
 	conn.Close()
