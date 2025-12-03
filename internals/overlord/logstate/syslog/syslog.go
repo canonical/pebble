@@ -277,6 +277,7 @@ func (c *Client) flushUDP(ctx context.Context) error {
 	// For UDP, we send each message as a separate datagram (RFC 5426 section 3.1)
 	// UDP connections don't need persistent state, so we create a fresh connection
 	for _, entry := range c.entries {
+		c.sendBuf.Reset()
 		err := c.ensureConnected(ctx)
 		if err != nil {
 			return err
