@@ -124,48 +124,7 @@ func (s *accessSuite) TestAccess(c *C) {
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
 		},
-		// API source: HTTPS
-		{
-			// User: nil
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            nil,
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-		}, {
-			// User access: UntrustedAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: errUnauthorized,
-		}, {
-			// User access: MetricsAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    errUnauthorized,
-			metricsCheckErr: nil,
-		}, {
-			// User access: ReadAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.ReadAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   errUnauthorized,
-			userCheckErr:    nil,
-			metricsCheckErr: nil,
-		}, {
-			// User access: AdminAccess
-			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.AdminAccess},
-			openCheckErr:    nil,
-			adminCheckErr:   nil,
-			userCheckErr:    nil,
-			metricsCheckErr: nil,
-		}}
+	}
 	for _, t := range tests {
 		// Fake a test request.
 		r := &http.Request{

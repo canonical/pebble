@@ -68,7 +68,6 @@ const (
 	TransportTypeUnknown TransportType = iota // Must be zero value => 0
 	TransportTypeUnixSocket
 	TransportTypeHTTP
-	TransportTypeHTTPS
 )
 
 // RequestTransportType extracts the transport type of the HTTP request. If
@@ -91,8 +90,6 @@ func (t TransportType) String() string {
 		return "http+unix"
 	case TransportTypeHTTP:
 		return "http"
-	case TransportTypeHTTPS:
-		return "https"
 	default:
 		return "unknown"
 	}
@@ -101,17 +98,16 @@ func (t TransportType) String() string {
 // IsValid reports whether the transport type is valid.
 func (t TransportType) IsValid() bool {
 	switch t {
-	case TransportTypeUnixSocket, TransportTypeHTTP, TransportTypeHTTPS:
+	case TransportTypeUnixSocket, TransportTypeHTTP:
 		return true
 	}
 	return false
 }
 
-// IsConcealed returns true if the transport type is either encrypted (HTTPS) or
-// if its local to the device (Unix Domain Socket).
+// IsConcealed returns true if it's local to the device (Unix Domain Socket).
 func (t TransportType) IsConcealed() bool {
 	switch t {
-	case TransportTypeUnixSocket, TransportTypeHTTPS:
+	case TransportTypeUnixSocket:
 		return true
 	}
 	return false
@@ -157,7 +153,6 @@ type Daemon struct {
 	state           *state.State
 	generalListener net.Listener
 	httpListener    net.Listener
-	httpsListener   net.Listener
 	connTracker     *connTracker
 	serve           *http.Server
 	tomb            tomb.Tomb
@@ -202,14 +197,8 @@ type Command struct {
 }
 
 func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserState {
-	// Does the HTTP header include basic auth credentials? Note that
-	// we explicitly prohibit using basic auth credentials for HTTPS
-	// for now.
-	var username string
-	var password string
-	if RequestTransportType(r) != TransportTypeHTTPS {
-		username, password, _ = r.BasicAuth()
-	}
+	// Does the HTTP header include basic auth credentials?
+	username, password, _ := r.BasicAuth()
 
 	// Is a unix socket peer credential UID available?
 	var userID *uint32
@@ -587,16 +576,6 @@ func (d *Daemon) Start() error {
 		// Start additional HTTP API
 		d.tomb.Go(func() error {
 			err := d.serve.Serve(d.httpListener)
-			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
-				return err
-			}
-			return nil
-		})
-	}
-	if d.httpsListener != nil {
-		// Start additional HTTPS API
-		d.tomb.Go(func() error {
-			err := d.serve.Serve(d.httpsListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 				return err
 			}

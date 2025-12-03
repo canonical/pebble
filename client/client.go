@@ -586,6 +586,9 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse base URL: %w", err)
 		}
+		if baseURL.Scheme != "http" {
+			return nil, fmt.Errorf("only HTTP URLs are allowed in FIPS builds (got %q)", opts.BaseURL)
+		}
 		transport := &http.Transport{
 			DisableKeepAlives: opts.DisableKeepAlive,
 		}

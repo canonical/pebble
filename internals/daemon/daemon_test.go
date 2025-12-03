@@ -1840,13 +1840,6 @@ func (t *transportTypeSuite) TestTransportTypeContext(c *C) {
 	c.Assert(transport.IsValid(), Equals, true)
 	c.Assert(transport.IsConcealed(), Equals, false)
 	c.Assert(transport.String(), Equals, "http")
-	// Request has HTTPS context.
-	r = &http.Request{}
-	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
-	transport = RequestTransportType(r)
-	c.Assert(transport.IsValid(), Equals, true)
-	c.Assert(transport.IsConcealed(), Equals, true)
-	c.Assert(transport.String(), Equals, "https")
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -127,7 +128,14 @@ type Client struct {
 	resourceAttributes map[string][]keyValue
 }
 
-func NewClient(options *ClientOptions) *Client {
+func NewClient(options *ClientOptions) (*Client, error) {
+	u, err := url.Parse(options.Location)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL %q: %w", options.Location, err)
+	}
+	if u.Scheme != "http" {
+		return nil, fmt.Errorf("only HTTP URLs are allowed in FIPS builds (got %q)", options.Location)
+	}
 	opts := *options
 	fillDefaultOptions(&opts)
 	c := &Client{
@@ -148,7 +156,7 @@ func NewClient(options *ClientOptions) *Client {
 	}
 	// c.entries should be backed by the same array as c.buffer.
 	c.entries = c.buffer[:0]
-	return c
+	return c, nil
 }
 
 // ClientOptions allows overriding default parameters (e.g. for testing).

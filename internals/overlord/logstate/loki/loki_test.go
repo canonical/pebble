@@ -117,10 +117,11 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	client := loki.NewClient(&loki.ClientOptions{
+	client, _ := loki.NewClient(&loki.ClientOptions{
 		Location:  server.URL,
 		UserAgent: "pebble/1.23.0",
 	})
+	// FIXME add test against HTTPS
 	client.SetLabels("svc1", map[string]string{})
 	client.SetLabels("svc2", map[string]string{})
 	client.SetLabels("svc3", map[string]string{})
@@ -146,7 +147,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer server.Close()
 	defer killServer()
 
-	client := loki.NewClient(&loki.ClientOptions{Location: server.URL})
+	client, _ := loki.NewClient(&loki.ClientOptions{Location: server.URL})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -181,7 +182,7 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := loki.NewClient(&loki.ClientOptions{
+	client, _ := loki.NewClient(&loki.ClientOptions{
 		Location:       server.URL,
 		RequestTimeout: 1 * time.Microsecond,
 	})
@@ -197,9 +198,9 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 func (*suite) TestBufferFull(c *C) {
-	client := loki.NewClient(&loki.ClientOptions{
+	client, _ := loki.NewClient(&loki.ClientOptions{
 		TargetName:        "tgt1",
-		Location:          "fake",
+		Location:          "http://test.example",
 		MaxRequestEntries: 3,
 	})
 
@@ -258,7 +259,7 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := loki.NewClient(&loki.ClientOptions{Location: server.URL})
+	client, _ := loki.NewClient(&loki.ClientOptions{Location: server.URL})
 
 	client.SetLabels("svc1", map[string]string{
 		"label1": "val1",

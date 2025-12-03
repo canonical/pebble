@@ -22,6 +22,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	"net/url"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -51,6 +52,13 @@ type httpChecker struct {
 
 func (c *httpChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
+	u, err := url.Parse(c.url)
+	if err != nil {
+		return fmt.Errorf("invalid URL %q: %w", c.url, err)
+	}
+	if u.Scheme != "http" {
+		return fmt.Errorf("only HTTP URLs are allowed in FIPS builds (got %q)", c.url)
+	}
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Scheme != "http" {

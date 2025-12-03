@@ -641,11 +641,10 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		expectedUser: "",
 	}, {
 		// Basic authentication tests (medium priority)
-		name:           "valid basic auth",
-		basicUser:      "basic",
-		basicPass:      "test",
-		expectedUser:   "basic",
-		expectedAccess: state.ReadAccess,
+		name:         "valid basic auth",
+		basicUser:    "basic",
+		basicPass:    "test",
+		expectedUser: "", // disabled in FIPS builds
 	}, {
 		name:         "valid user invalid password",
 		basicUser:    "basic",
@@ -682,8 +681,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		basicUser:      "basic",
 		basicPass:      "test",
 		userID:         ptr(uint32(42)),
-		expectedUser:   "basic",
-		expectedAccess: state.ReadAccess,
+		expectedUser:   "",  // disabled in FIPS builds
 	}, {
 		name:         "invalid basic auth with valid uid ignored",
 		basicUser:    "basic",
