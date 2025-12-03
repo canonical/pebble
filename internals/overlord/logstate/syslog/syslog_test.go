@@ -351,10 +351,7 @@ line3`,
 	}
 
 	// Test message longer than max UDP size is truncated
-	longMsg := make([]byte, 5000)
-	for i := range longMsg {
-		longMsg[i] = 'A'
-	}
+	longMsg := bytes.Repeat([]byte("A"), 5000)
 
 	c.Assert(client.Add(servicelog.Entry{
 		Time:    time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
