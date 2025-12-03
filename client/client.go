@@ -597,7 +597,17 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		}
 	}
 
-	requester.doer = &http.Client{Transport: requester.transport}
+	requester.doer = &http.Client{Transport: requester.transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Scheme != "http" {
+				return errors.New("Only HTTP redirects are allowed in FIPS builds")
+			}
+			// Allow HTTP redirects up to 10 times (Go default)
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		}}
 	requester.userAgent = opts.UserAgent
 	requester.client = client
 

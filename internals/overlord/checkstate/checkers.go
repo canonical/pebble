@@ -51,7 +51,17 @@ type httpChecker struct {
 
 func (c *httpChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
-	client := &http.Client{}
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Scheme != "http" {
+				return errors.New("Only HTTP redirects are allowed in FIPS builds")
+			}
+			// Allow HTTP redirects up to 10 times (Go default)
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		}}
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -130,8 +131,18 @@ func NewClient(options *ClientOptions) *Client {
 	opts := *options
 	fillDefaultOptions(&opts)
 	c := &Client{
-		options:            &opts,
-		httpClient:         &http.Client{Timeout: opts.RequestTimeout},
+		options: &opts,
+		httpClient: &http.Client{Timeout: opts.RequestTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if req.URL.Scheme != "http" {
+					return errors.New("Only HTTP redirects are allowed in FIPS builds")
+				}
+				// Allow HTTP redirects up to 10 times (Go default)
+				if len(via) >= 10 {
+					return errors.New("stopped after 10 redirects")
+				}
+				return nil
+			}},
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}
