@@ -958,13 +958,6 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 	return d.overlord.PlanManager().SetServiceArgs(serviceArgs)
 }
 
-// pairingWindowEnabled is a helper function to simplify testing of code
-// dependant on the Pairing Manager.
-func (d *Daemon) pairingWindowEnabled() bool {
-	pairingManager := d.overlord.PairingManager()
-	return pairingManager.PairingEnabled()
-}
-
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
 		options: opts,

@@ -42,13 +42,11 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
-	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
@@ -58,20 +56,18 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type daemonSuite struct {
-	pebbleDir    string
-	socketPath   string
-	httpAddress  string
-	httpsAddress string
-	statePath    string
-	authorized   bool
-	err          error
-	notified     []string
+	pebbleDir   string
+	socketPath  string
+	httpAddress string
+	statePath   string
+	authorized  bool
+	err         error
+	notified    []string
 }
 
 var _ = Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *C) {
-	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -96,14 +92,13 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
-	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
 	d, err := New(&Options{
-		Dir:          s.pebbleDir,
-		SocketPath:   s.socketPath,
-		HTTPAddress:  s.httpAddress,
+		Dir:         s.pebbleDir,
+		SocketPath:  s.socketPath,
+		HTTPAddress: s.httpAddress,
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()

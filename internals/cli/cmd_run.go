@@ -30,7 +30,6 @@ import (
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord"
-	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
@@ -189,12 +188,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	}
 
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
-	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 
 	dopts := daemon.Options{
-		Dir:          rcmd.pebbleDir,
-		SocketPath:   rcmd.socketPath,
-		HTTPAddress:  rcmd.HTTP,
+		Dir:         rcmd.pebbleDir,
+		SocketPath:  rcmd.socketPath,
+		HTTPAddress: rcmd.HTTP,
 	}
 	if os.Getenv("PEBBLE_VERBOSE") == "1" || rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout

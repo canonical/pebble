@@ -22,9 +22,7 @@ import (
 
 	"gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 )
 
@@ -42,7 +40,6 @@ type apiSuite struct {
 }
 
 func (s *apiSuite) SetUpTest(c *check.C) {
-	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -65,7 +62,6 @@ func (s *apiSuite) TearDownTest(c *check.C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
-	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 func (s *apiSuite) muxVars(*http.Request) map[string]string {
@@ -122,10 +118,9 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	c.Check(rec.Result().Header.Get("Content-Type"), check.Equals, "application/json")
 
 	expected := map[string]any{
-		"boot-id":       "ffffffff-ffff-ffff-ffff-ffffffffffff",
-		"http-address":  ":4000",
-		"https-address": ":4443",
-		"version":       "42b1",
+		"boot-id":      "ffffffff-ffff-ffff-ffff-ffffffffffff",
+		"http-address": ":4000",
+		"version":      "42b1",
 	}
 	var rsp resp
 	c.Assert(json.Unmarshal(rec.Body.Bytes(), &rsp), check.IsNil)

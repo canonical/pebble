@@ -38,18 +38,18 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type clientSuite struct {
-	cli          *client.Client
-	req          *http.Request
-	reqs         []*http.Request
-	rsp          string
-	rsps         []string
-	err          error
-	doCalls      int
-	header       http.Header
-	status       int
-	tmpDir       string
-	socketPath   string
-	restore      func()
+	cli        *client.Client
+	req        *http.Request
+	reqs       []*http.Request
+	rsp        string
+	rsps       []string
+	err        error
+	doCalls    int
+	header     http.Header
+	status     int
+	tmpDir     string
+	socketPath string
+	restore    func()
 }
 
 var _ = Suite(&clientSuite{})

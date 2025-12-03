@@ -49,12 +49,6 @@ const (
 	AsyncRequest
 )
 
-const (
-	// expectedServerCertCount is the number of certificates expected from the server
-	// during a TLS handshake: TLS certificate + Identity certificate (root CA).
-	expectedServerCertCount = 2
-)
-
 type RequestOptions struct {
 	Type    RequestType
 	Method  string
@@ -332,9 +326,9 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 	// Is the result expecting a caller-managed raw body?
 	if opts.Type == RawRequest {
 		return &RequestResponse{
-			StatusCode:      httpResp.StatusCode,
-			Headers:         httpResp.Header,
-			Body:            httpResp.Body,
+			StatusCode: httpResp.StatusCode,
+			Headers:    httpResp.Header,
+			Body:       httpResp.Body,
 		}, nil
 	}
 
@@ -387,10 +381,10 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 
 	// Common response
 	return &RequestResponse{
-		StatusCode:      serverResp.StatusCode,
-		Headers:         httpResp.Header,
-		ChangeID:        serverResp.Change,
-		Result:          serverResp.Result,
+		StatusCode: serverResp.StatusCode,
+		Headers:    httpResp.Header,
+		ChangeID:   serverResp.Change,
+		Result:     serverResp.Result,
 	}, nil
 }
 
