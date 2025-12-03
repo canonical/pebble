@@ -121,7 +121,6 @@ func (*suite) TestRequest(c *C) {
 		Location:  server.URL,
 		UserAgent: "pebble/1.23.0",
 	})
-	// FIXME add test against HTTPS
 	client.SetLabels("svc1", map[string]string{})
 	client.SetLabels("svc2", map[string]string{})
 	client.SetLabels("svc3", map[string]string{})
@@ -133,6 +132,14 @@ func (*suite) TestRequest(c *C) {
 
 	err := client.Flush(context.Background())
 	c.Assert(err, IsNil)
+}
+
+func (*suite) TestHTTPSIsRejected(c *C) {
+	_, err := loki.NewClient(&loki.ClientOptions{
+		Location:  "https://test.example",
+		UserAgent: "pebble/1.23.0",
+	})
+	c.Assert(err, ErrorMatches, "only HTTP .*")
 }
 
 func (*suite) TestFlushCancelContext(c *C) {

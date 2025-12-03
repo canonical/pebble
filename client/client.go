@@ -629,10 +629,9 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 		HandshakeTimeout: 5 * time.Second,
 	}
 
+	// Only plain WebSockets in FIPS builds.
+	// The library we use doesn't handle redirects, so those need not be filtered.
 	scheme := "ws"
-	if rq.baseURL.Scheme == "https" {
-		scheme = "wss"
-	}
 	url := fmt.Sprintf("%s://%s%s", scheme, rq.baseURL.Host, urlPath)
 
 	r := http.Request{Header: make(http.Header)}

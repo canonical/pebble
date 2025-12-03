@@ -164,7 +164,6 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	// FIXME add a test against HTTPS
 	client, _ := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:  server.URL,
 		UserAgent: "pebble/1.23.0",
@@ -178,6 +177,15 @@ func (*suite) TestRequest(c *C) {
 	err := client.Flush(context.Background())
 	c.Assert(err, IsNil)
 	c.Assert(numRequests, Equals, 1)
+}
+
+func (*suite) TestHTTPSIsRejected(c *C) {
+	_, err := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:  "https://test.example",
+		UserAgent: "pebble/1.23.0",
+		ScopeName: "pebble",
+	})
+	c.Assert(err, ErrorMatches, "only HTTP .*")
 }
 
 func (*suite) TestFlushCancelContext(c *C) {
