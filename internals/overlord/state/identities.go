@@ -22,8 +22,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"github.com/GehirnInc/crypt/sha512_crypt"
 )
 
 // Identity holds the configuration of a single identity.
@@ -325,20 +323,7 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string) *I
 
 	switch {
 	case username != "" || password != "":
-		passwordBytes := []byte(password)
-		for _, identity := range s.identities {
-			if identity.Basic == nil || identity.Name != username {
-				continue
-			}
-			crypt := sha512_crypt.New()
-			err := crypt.Verify(identity.Basic.Password, passwordBytes)
-			if err == nil {
-				return identity
-			}
-			// No further username match possible.
-			break
-		}
-		// If basic auth credentials were provided, but did not match, we bail.
+		// Password validation is disabled in FIPS builds, so we bail.
 		return nil
 
 	case userID != nil:
