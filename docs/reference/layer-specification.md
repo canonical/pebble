@@ -256,9 +256,9 @@ log-targets:
     # - opentelemetry: Use the OpenTelemetry protocol (OTLP). A "service.name"
     #   label is added automatically, with the name of the Pebble service as its
     #   value.
-    # - syslog: Use the syslog protocol. A "${SDID}@28978" is added as SD-ID.
-    #   28978 is Canonical's enterprise number. ${SDID} has default value
-    #   "pebble" and can be override by custom name.
+    # - syslog: Use the syslog protocol. The syslog SD-ID field is set to "pebble@28978"
+    #   (28978 is Canonical's enterprise number). The syslog APP-NAME field is set to
+    #   the Pebble service name.
     type: loki
 
     # (Required) The URL of the remote log target.
