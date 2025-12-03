@@ -202,7 +202,7 @@ func (c *Client) encodeOneEntry(entry *entryWithService) {
 		structuredData = "-"
 	}
 
-	// Message format as per RFC 5424
+	// Message format as per RFC 5424: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 	c.sendBuf.WriteString(syslogRFC5424Prefix)
 	c.sendBuf.WriteString(entry.timestamp)
 	c.sendBuf.WriteByte(' ')
