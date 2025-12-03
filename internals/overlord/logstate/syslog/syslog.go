@@ -20,7 +20,7 @@ const (
 	dialTimeout                = 10 * time.Second
 	canonicalPrivEnterpriseNum = 28978
 	initialSendBufferSize      = 4 * 1024
-	syslogRFC5424Prefix        = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
+	priorityAndVersionPrefix   = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
 	maxUDPMessageSize          = 4000     // Maximum size of a UDP syslog message payload
 )
 
@@ -203,7 +203,7 @@ func (c *Client) encodeOneEntry(entry *entryWithService) {
 	}
 
 	// Message format as per RFC 5424: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
-	c.sendBuf.WriteString(syslogRFC5424Prefix)
+	c.sendBuf.WriteString(priorityAndVersionPrefix)
 	c.sendBuf.WriteString(entry.timestamp)
 	c.sendBuf.WriteByte(' ')
 	c.sendBuf.WriteString(hostname)
@@ -229,7 +229,7 @@ func (c *Client) buildSendBufferTCP() {
 		}
 
 		// TCP: Octet framing as per RFC 5425: <length> <message>
-		frameLength := len(syslogRFC5424Prefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
+		frameLength := len(priorityAndVersionPrefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
 			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
 		lengthBuf := make([]byte, 0, 8)
 		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
