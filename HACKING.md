@@ -278,5 +278,6 @@ To create a new tagged release, go to the [GitHub Releases page](https://github.
 - Write release notes: describe new features and bug fixes, and include a link to the full list of commits.
 - Click "Publish release".
 - Once the release GitHub Actions have finished, and the new [Snap](https://snapcraft.io/pebble) has been successfully built, update `Version` again to `v1.{next}.0-dev` (for example `v1.10.0-dev`).
+- Find the security scan artifact on the 'SBOM and secscan' run corresponding the pushing the release tag, and upload it to the [SSDLC Pebble folder in Drive](https://drive.google.com/drive/folders/11WR629JFPJ8IMPI0kcsNp_qdf39c6no3). Open the artifact and verify that the security scan has not found any vulnerabilities.
 
 Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Actions job. In addition, a new Snap version is built and uploaded to the [Snap Store](https://snapcraft.io/pebble).
