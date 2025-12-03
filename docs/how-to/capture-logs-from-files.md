@@ -61,9 +61,7 @@ The `coreutils_bins` slice brings in around a dozen shared objects and some hund
 For a truly minimal rock, consider
 {external+rockcraft:ref}`defining a custom chisel slice <how-to-create-a-package-slice-for-chisel>`.
 
-See the
-[Rockcraft documentation](https://documentation.ubuntu.com/rockcraft/stable/)
-to learn more.
+See the {external+rockcraft:doc}`Rockcraft documentation <index>` to learn more.
 
 ## See more
 
