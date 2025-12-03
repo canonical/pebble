@@ -340,4 +340,5 @@ if os.path.exists('./reuse/substitutions.yaml'):
 intersphinx_mapping = {
     "operator": ("https://documentation.ubuntu.com/ops/latest/", None),
     "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
+    "rockcraft": ("https://documentation.ubuntu.com/rockcraft/stable/", None),
 }
