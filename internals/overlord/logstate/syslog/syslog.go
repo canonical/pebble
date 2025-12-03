@@ -283,6 +283,9 @@ func (c *Client) flushUDP(ctx context.Context) error {
 		c.encodeOneEntry(&entry)
 		_, err = io.Copy(c.conn, &c.sendBuf)
 		if err != nil {
+			// Error occurred, close and reset connection so we reconnect next time around.
+			c.conn.Close()
+			c.conn = nil
 			return fmt.Errorf("cannot send syslogs: %w", err)
 		}
 	}
