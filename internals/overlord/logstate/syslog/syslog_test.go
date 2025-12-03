@@ -15,6 +15,7 @@
 package syslog_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net"
@@ -361,9 +362,8 @@ line3`,
 	c.Assert(client.Flush(context.Background()), IsNil)
 
 	select {
-	case shortMsg := <-msgChan:
-		c.Check(len(longMsg) == 5000, Equals, true)
-		c.Check(len(shortMsg) < 4100, Equals, true) // +100 for syslog headers
+	case truncatedMsg := <-msgChan:
+		c.Check(len(truncatedMsg) < 4100, Equals, true) // +100 for syslog headers
 	case <-time.After(2 * time.Second):
 		c.Fatal("timed out waiting for long UDP message")
 	}
