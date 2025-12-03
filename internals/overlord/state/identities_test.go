@@ -677,11 +677,11 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		expectedUser: "",
 	}, {
 		// Basic auth overrides UID
-		name:           "basic auth with uid ignored",
-		basicUser:      "basic",
-		basicPass:      "test",
-		userID:         ptr(uint32(42)),
-		expectedUser:   "",  // disabled in FIPS builds
+		name:         "basic auth with uid ignored",
+		basicUser:    "basic",
+		basicPass:    "test",
+		userID:       ptr(uint32(42)),
+		expectedUser: "", // disabled in FIPS builds
 	}, {
 		name:         "invalid basic auth with valid uid ignored",
 		basicUser:    "basic",

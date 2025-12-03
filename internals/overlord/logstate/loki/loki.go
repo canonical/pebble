@@ -66,7 +66,7 @@ func NewClient(options *ClientOptions) (*Client, error) {
 		httpClient: &http.Client{Timeout: opts.RequestTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if req.URL.Scheme != "http" {
-					return errors.New("Only HTTP redirects are allowed in FIPS builds")
+					return errors.New("only HTTP redirects are allowed in FIPS builds")
 				}
 				// Allow HTTP redirects up to 10 times (Go default)
 				if len(via) >= 10 {

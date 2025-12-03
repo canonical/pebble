@@ -245,7 +245,7 @@ func (*suite) TestServerTimeout(c *C) {
 func (*suite) TestBufferFull(c *C) {
 	client, _ := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		TargetName:        "tgt1",
-		Location:          "fake",
+		Location:          "http://test.example",
 		MaxRequestEntries: 3,
 	})
 
