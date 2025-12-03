@@ -264,10 +264,12 @@ log-targets:
     # (Required) The URL of the remote log target.
     # For Loki, this needs to be the fully-qualified URL of the push API,
     # including the API endpoint, for example:
-    #     http://<ip-address>:3100/loki/api/v1/push
+    #     http://<host-or-ip>:3100/loki/api/v1/push
     # For OpenTelemetry, this needs to include the TCP port (normally 4318)
     # without the API endpoint, for example:
-    #     http://<ip-address>:4318
+    #     http://<host-or-ip>:4318
+    # For Syslog, this needs to include transport layer protocol as prefix,
+    #     either `tcp://<host-or-ip>:<port>` or `udp://<host-or-ip>:<port>`
     location: <url>
 
     # (Optional) A list of services whose logs will be sent to this target.
