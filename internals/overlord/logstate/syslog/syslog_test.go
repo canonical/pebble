@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -363,7 +364,7 @@ line3`,
 
 	select {
 	case truncatedMsg := <-msgChan:
-		c.Check(len(truncatedMsg) < 4100, Equals, true) // +100 for syslog headers
+		c.Check(truncatedMsg, Equals, "<13>1 2023-12-31T12:00:00Z test-machine svc2 - - - "+strings.Repeat("A", 4000-3)+"...")
 	case <-time.After(2 * time.Second):
 		c.Fatal("timed out waiting for long UDP message")
 	}

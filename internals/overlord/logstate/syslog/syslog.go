@@ -191,7 +191,7 @@ func (c *Client) Close() error {
 }
 
 // encodeOneEntry encodes common parts for UDP and TCP syslog entries into c.sendBuf
-func (c *Client) encodeOneEntry(entry *entryWithService) {
+func (c *Client) encodeOneEntry(entry *entryWithService, messageSuffix string) {
 	hostname := c.options.Hostname
 	if hostname == "" {
 		hostname = "-"
@@ -213,6 +213,9 @@ func (c *Client) encodeOneEntry(entry *entryWithService) {
 	c.sendBuf.WriteString(structuredData)
 	c.sendBuf.WriteByte(' ')
 	c.sendBuf.WriteString(entry.message)
+	if messageSuffix != "" {
+		c.sendBuf.WriteString(messageSuffix)
+	}
 }
 
 func (c *Client) buildSendBufferTCP() {
@@ -235,7 +238,7 @@ func (c *Client) buildSendBufferTCP() {
 		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
 		c.sendBuf.Write(lengthBuf)
 		c.sendBuf.WriteByte(' ')
-		c.encodeOneEntry(&entry)
+		c.encodeOneEntry(&entry, "")
 	}
 }
 
@@ -279,8 +282,13 @@ func (c *Client) flushUDP(ctx context.Context) error {
 			return err
 		}
 
-		entry.message = entry.message[:min(len(entry.message), maxUDPMessageSize)]
-		c.encodeOneEntry(&entry)
+		messageSuffix := ""
+		if len(entry.message) > maxUDPMessageSize {
+			messageSuffix = "..."
+			entry.message = entry.message[:maxUDPMessageSize-len(messageSuffix)]
+		}
+
+		c.encodeOneEntry(&entry, messageSuffix)
 		_, err = io.Copy(c.conn, &c.sendBuf)
 		if err != nil {
 			// Error occurred, close and reset connection so we reconnect next time around.
