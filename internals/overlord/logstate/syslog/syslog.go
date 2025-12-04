@@ -34,7 +34,7 @@ type ClientOptions struct {
 
 type entryWithService struct {
 	service   string
-	timestamp string
+	timestamp time.Time
 	message   string
 }
 
@@ -155,7 +155,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
 	c.entries = append(c.entries, entryWithService{
-		timestamp: entry.Time.Format(time.RFC3339Nano), // Format: 2021-05-26T12:37:01.123456789Z
+		timestamp: entry.Time,
 		message:   entry.Message,
 		service:   entry.Service,
 	})
@@ -204,7 +204,10 @@ func (c *Client) encodeOneEntry(entry *entryWithService, messageSuffix string) {
 
 	// Message format as per RFC 5424: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 	c.sendBuf.WriteString(priorityAndVersionPrefix)
-	c.sendBuf.WriteString(entry.timestamp)
+
+	timeBuf := make([]byte, 0, 32)
+	c.sendBuf.Write(entry.timestamp.AppendFormat(timeBuf, time.RFC3339Nano))
+
 	c.sendBuf.WriteByte(' ')
 	c.sendBuf.WriteString(hostname)
 	c.sendBuf.WriteByte(' ')
@@ -232,7 +235,8 @@ func (c *Client) buildSendBufferTCP() {
 		}
 
 		// TCP: Octet framing as per RFC 5425: <length> <message>
-		frameLength := len(priorityAndVersionPrefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
+		// RFC3339Nano time string ("2023-12-31T12:00:00.123456789Z") has length 30
+		frameLength := len(priorityAndVersionPrefix) + 30 + 1 + len(hostname) + 1 +
 			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
 		lengthBuf := make([]byte, 0, 8)
 		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
