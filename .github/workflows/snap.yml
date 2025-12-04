@@ -2,9 +2,9 @@ name: Pebble snap
 
 on:
   pull_request:
-    branches: [master]
+    branches: [fips]
   push:
-    branches: [master]
+    branches: [fips]
   release:
     types: [published]
 
