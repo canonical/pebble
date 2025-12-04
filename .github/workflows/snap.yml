@@ -59,9 +59,9 @@ jobs:
 
   remote-build:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    # if: github.event_name != 'pull_request' # FIXME don't merge it like this
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
@@ -93,16 +93,19 @@ jobs:
         uses: snapcore/action-build@v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
-
+      - run: |
+          ls -lR ~ || echo oops # FIXME
+          zip logs.zip snapcraft-${{ env.SNAP_NAME }}-*.txt || touch logs.zip # FIXME
       - uses: actions/upload-artifact@v4
-        if: failure()
+        # if: failure()  # FIXME
         with:
           name: snapcraft-logs
           path: |
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
             ${{ env.SNAP_NAME }}_*.txt
-            snapcraft-${{ env.SNAP_NAME }}-*.txt
+            logs.zip
+        # snapcraft-${{ env.SNAP_NAME }}-*.txt  # name contains a colon
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@v4
