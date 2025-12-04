@@ -32,6 +32,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
@@ -119,17 +120,18 @@ type Overlord struct {
 	startOfOperationTime time.Time
 
 	// managers
-	inited     bool
-	startedUp  bool
-	runner     *state.TaskRunner
-	restartMgr *restart.RestartManager
-	planMgr    *planstate.PlanManager
-	serviceMgr *servstate.ServiceManager
-	commandMgr *cmdstate.CommandManager
-	checkMgr   *checkstate.CheckManager
-	logMgr     *logstate.LogManager
-	tlsMgr     *tlsstate.TLSManager
-	pairingMgr *pairingstate.PairingManager
+	inited        bool
+	startedUp     bool
+	runner        *state.TaskRunner
+	restartMgr    *restart.RestartManager
+	planMgr       *planstate.PlanManager
+	serviceMgr    *servstate.ServiceManager
+	commandMgr    *cmdstate.CommandManager
+	checkMgr      *checkstate.CheckManager
+	logMgr        *logstate.LogManager
+	tlsMgr        *tlsstate.TLSManager
+	identitiesMgr *identities.Manager
+	pairingMgr    *pairingstate.PairingManager
 
 	extension Extension
 }
@@ -211,7 +213,13 @@ func New(opts *Options) (*Overlord, error) {
 	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
 	o.stateEng.AddManager(o.tlsMgr)
 
-	o.pairingMgr, err = pairingstate.NewManager(s)
+	o.identitiesMgr, err = identities.NewManager(s)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create identities manager: %w", err)
+	}
+	o.stateEng.AddManager(o.identitiesMgr)
+
+	o.pairingMgr, err = pairingstate.NewManager(s, o.identitiesMgr)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create pairing manager: %w", err)
 	}
@@ -649,6 +657,12 @@ func (o *Overlord) PlanManager() *planstate.PlanManager {
 // TLS keypairs for HTTPS connections.
 func (o *Overlord) TLSManager() *tlsstate.TLSManager {
 	return o.tlsMgr
+}
+
+// IdentitiesManager returns the manager responsible for managing client
+// identities.
+func (o *Overlord) IdentitiesManager() *identities.Manager {
+	return o.identitiesMgr
 }
 
 // PairingManager returns the manager that handles client pairing.

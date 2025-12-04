@@ -16,9 +16,7 @@
 package state
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -91,12 +89,11 @@ type State struct {
 	// for registering runtime callbacks
 	lastHandlerId int
 
-	backend    Backend
-	data       customData
-	changes    map[string]*Change
-	tasks      map[string]*Task
-	notices    map[noticeKey]*Notice
-	identities map[string]*Identity
+	backend Backend
+	data    customData
+	changes map[string]*Change
+	tasks   map[string]*Task
+	notices map[noticeKey]*Notice
 
 	noticeCond        *sync.Cond
 	latestWarningTime atomic.Pointer[time.Time]
@@ -120,7 +117,6 @@ func New(backend Backend) *State {
 		changes:             make(map[string]*Change),
 		tasks:               make(map[string]*Task),
 		notices:             make(map[noticeKey]*Notice),
-		identities:          make(map[string]*Identity),
 		modified:            true,
 		cache:               make(map[any]any),
 		pendingChangeByAttr: make(map[string]func(*Change) bool),
@@ -161,11 +157,10 @@ func (s *State) unlock() {
 }
 
 type marshalledState struct {
-	Data       map[string]*json.RawMessage    `json:"data"`
-	Changes    map[string]*Change             `json:"changes"`
-	Tasks      map[string]*Task               `json:"tasks"`
-	Notices    []*Notice                      `json:"notices,omitempty"`
-	Identities map[string]*marshalledIdentity `json:"identities,omitempty"`
+	Data    map[string]*json.RawMessage `json:"data"`
+	Changes map[string]*Change          `json:"changes"`
+	Tasks   map[string]*Task            `json:"tasks"`
+	Notices []*Notice                   `json:"notices,omitempty"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
@@ -173,65 +168,20 @@ type marshalledState struct {
 	LastNoticeId int `json:"last-notice-id"`
 }
 
-// marshalledIdentity is used specifically for marshalling to the state
-// database file. Unlike apiIdentity, it should include secrets.
-type marshalledIdentity struct {
-	Access string                   `json:"access"`
-	Local  *marshalledLocalIdentity `json:"local,omitempty"`
-	Basic  *marshalledBasicIdentity `json:"basic,omitempty"`
-	Cert   *marshalledCertIdentity  `json:"cert,omitempty"`
-}
-
-type marshalledLocalIdentity struct {
-	UserID uint32 `json:"user-id"`
-}
-
-type marshalledBasicIdentity struct {
-	Password string `json:"password"`
-}
-
-type marshalledCertIdentity struct {
-	PEM string `json:"pem"`
-}
-
 // MarshalJSON makes State a json.Marshaller
 func (s *State) MarshalJSON() ([]byte, error) {
 	s.reading()
 	return json.Marshal(marshalledState{
-		Data:       s.data,
-		Changes:    s.changes,
-		Tasks:      s.tasks,
-		Notices:    s.flattenNotices(nil),
-		Identities: s.marshalledIdentities(),
+		Data:    s.data,
+		Changes: s.changes,
+		Tasks:   s.tasks,
+		Notices: s.flattenNotices(nil),
 
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
 		LastLaneId:   s.lastLaneId,
 		LastNoticeId: s.lastNoticeId,
 	})
-}
-
-func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
-	marshalled := make(map[string]*marshalledIdentity, len(s.identities))
-	for name, identity := range s.identities {
-		marshalled[name] = &marshalledIdentity{
-			Access: string(identity.Access),
-		}
-		if identity.Local != nil {
-			marshalled[name].Local = &marshalledLocalIdentity{UserID: identity.Local.UserID}
-		}
-		if identity.Basic != nil {
-			marshalled[name].Basic = &marshalledBasicIdentity{Password: identity.Basic.Password}
-		}
-		if identity.Cert != nil {
-			pemBlock := &pem.Block{
-				Type:  "CERTIFICATE",
-				Bytes: identity.Cert.X509.Raw,
-			}
-			marshalled[name].Cert = &marshalledCertIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
-		}
-	}
-	return marshalled
 }
 
 // UnmarshalJSON makes State a json.Unmarshaller
@@ -246,9 +196,6 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
 	s.unflattenNotices(unmarshalled.Notices)
-	if err := s.unmarshalIdentities(unmarshalled.Identities); err != nil {
-		return err
-	}
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
@@ -260,31 +207,6 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	for _, chg := range s.changes {
 		chg.state = s
 		chg.finishUnmarshal()
-	}
-	return nil
-}
-
-func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) error {
-	s.identities = make(map[string]*Identity, len(marshalled))
-	for name, mi := range marshalled {
-		s.identities[name] = &Identity{
-			Name:   name,
-			Access: IdentityAccess(mi.Access),
-		}
-		if mi.Local != nil {
-			s.identities[name].Local = &LocalIdentity{UserID: mi.Local.UserID}
-		}
-		if mi.Basic != nil {
-			s.identities[name].Basic = &BasicIdentity{Password: mi.Basic.Password}
-		}
-		if mi.Cert != nil {
-			block, _ := pem.Decode([]byte(mi.Cert.PEM))
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
-			}
-			s.identities[name].Cert = &CertIdentity{X509: cert}
-		}
 	}
 	return nil
 }

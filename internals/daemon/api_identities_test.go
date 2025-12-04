@@ -22,22 +22,25 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/identities"
 )
 
 func (s *apiSuite) TestIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
+	identitiesMgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
 	st.Lock()
-	err := st.AddIdentities(map[string]*state.Identity{
+
+	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -51,7 +54,7 @@ func (s *apiSuite) TestIdentities(c *C) {
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(rsp.Status, Equals, http.StatusOK)
-	identities, ok := rsp.Result.(map[string]*state.Identity)
+	identities, ok := rsp.Result.(map[string]*identities.Identity)
 	c.Assert(ok, Equals, true)
 
 	data, err := json.MarshalIndent(identities, "", "    ")
@@ -102,18 +105,20 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
 	st := s.d.overlord.State()
+	identitiesMgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
 	st.Lock()
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := identitiesMgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
 			Name:   "mary",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	st.Unlock()
@@ -147,15 +152,17 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
+	identitiesMgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
 	st.Lock()
-	err := st.AddIdentities(map[string]*state.Identity{
+	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -184,17 +191,17 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
 	st.Lock()
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := identitiesMgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"mary": {
 			Name:   "mary",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 	})
 	st.Unlock()
@@ -228,15 +235,17 @@ func (s *apiSuite) TestReplaceIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
+	identitiesMgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
 	st.Lock()
-	err := st.AddIdentities(map[string]*state.Identity{
+	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -266,17 +275,17 @@ func (s *apiSuite) TestReplaceIdentities(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
 	st.Lock()
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := identitiesMgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"mary": {
 			Name:   "mary",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 		"newguy": {
 			Name:   "newguy",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 44},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 44},
 		},
 	})
 	st.Unlock()
@@ -293,15 +302,17 @@ func (s *apiSuite) TestRemoveIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
+	identitiesMgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
 	st.Lock()
-	err := st.AddIdentities(map[string]*state.Identity{
+	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -319,12 +330,12 @@ func (s *apiSuite) TestRemoveIdentities(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
 	st.Lock()
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := identitiesMgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"mary": {
 			Name:   "mary",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	st.Unlock()

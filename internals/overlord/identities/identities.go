@@ -1,4 +1,4 @@
-// Copyright (c) 2024 Canonical Ltd
+// Copyright (c) 2025 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,7 +12,80 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package state
+/*
+TODO: from state package -- what to do with these?
+// marshalledIdentity is used specifically for marshalling to the state
+// database file. Unlike apiIdentity, it should include secrets.
+type marshalledIdentity struct {
+	Access string                   `json:"access"`
+	Local  *marshalledLocalIdentity `json:"local,omitempty"`
+	Basic  *marshalledBasicIdentity `json:"basic,omitempty"`
+	Cert   *marshalledCertIdentity  `json:"cert,omitempty"`
+}
+
+type marshalledLocalIdentity struct {
+	UserID uint32 `json:"user-id"`
+}
+
+type marshalledBasicIdentity struct {
+	Password string `json:"password"`
+}
+
+type marshalledCertIdentity struct {
+	PEM string `json:"pem"`
+}
+
+func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
+	marshalled := make(map[string]*marshalledIdentity, len(s.identities))
+	for name, identity := range s.identities {
+		marshalled[name] = &marshalledIdentity{
+			Access: string(identity.Access),
+		}
+		if identity.Local != nil {
+			marshalled[name].Local = &marshalledLocalIdentity{UserID: identity.Local.UserID}
+		}
+		if identity.Basic != nil {
+			marshalled[name].Basic = &marshalledBasicIdentity{Password: identity.Basic.Password}
+		}
+		if identity.Cert != nil {
+			pemBlock := &pem.Block{
+				Type:  "CERTIFICATE",
+				Bytes: identity.Cert.X509.Raw,
+			}
+			marshalled[name].Cert = &marshalledCertIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
+		}
+	}
+	return marshalled
+}
+
+
+func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) error {
+	s.identities = make(map[string]*Identity, len(marshalled))
+	for name, mi := range marshalled {
+		s.identities[name] = &Identity{
+			Name:   name,
+			Access: IdentityAccess(mi.Access),
+		}
+		if mi.Local != nil {
+			s.identities[name].Local = &LocalIdentity{UserID: mi.Local.UserID}
+		}
+		if mi.Basic != nil {
+			s.identities[name].Basic = &BasicIdentity{Password: mi.Basic.Password}
+		}
+		if mi.Cert != nil {
+			block, _ := pem.Decode([]byte(mi.Cert.PEM))
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
+			}
+			s.identities[name].Cert = &CertIdentity{X509: cert}
+		}
+	}
+	return nil
+}
+*/
+
+package identities
 
 import (
 	"crypto/x509"
@@ -20,12 +93,41 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
 	"sort"
 	"strings"
 
 	"github.com/GehirnInc/crypt/sha512_crypt"
+
+	"github.com/canonical/pebble/internals/overlord/state"
 )
+
+const (
+	identitiesKey = "identities"
+)
+
+type Manager struct {
+	state *state.State
+
+	// Keep a local copy to avoid having to deserialize from state each time.
+	identities map[string]*Identity
+}
+
+func NewManager(st *state.State) (*Manager, error) {
+	m := &Manager{
+		state: st,
+	}
+	err := st.Get(identitiesKey, &m.identities)
+	if err != nil && !errors.Is(err, state.ErrNoState) {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (m *Manager) Ensure() error {
+	return nil
+}
 
 // Identity holds the configuration of a single identity.
 type Identity struct {
@@ -212,13 +314,13 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 
 // AddIdentities adds the given identities to the system. It's an error if any
 // of the named identities already exist.
-func (s *State) AddIdentities(identities map[string]*Identity) error {
-	s.reading()
-
+//
+// The state lock must be held for the duration of this call.
+func (m *Manager) AddIdentities(identities map[string]*Identity) error {
 	// If any of the named identities already exist, return an error.
 	var existing []string
 	for name, identity := range identities {
-		if _, ok := s.identities[name]; ok {
+		if _, ok := m.identities[name]; ok {
 			existing = append(existing, name)
 		}
 		err := identity.validate(name)
@@ -231,7 +333,7 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		return fmt.Errorf("identities already exist: %s", strings.Join(existing, ", "))
 	}
 
-	newIdentities := s.cloneIdentities()
+	newIdentities := maps.Clone(m.identities)
 	for name, identity := range identities {
 		identity.Name = name
 		newIdentities[name] = identity
@@ -242,20 +344,20 @@ func (s *State) AddIdentities(identities map[string]*Identity) error {
 		return err
 	}
 
-	s.writing()
-	s.identities = newIdentities
+	m.identities = newIdentities
+	m.state.Set(identitiesKey, newIdentities)
 	return nil
 }
 
 // UpdateIdentities updates the given identities in the system. It's an error
 // if any of the named identities do not exist.
-func (s *State) UpdateIdentities(identities map[string]*Identity) error {
-	s.reading()
-
+//
+// The state lock must be held for the duration of this call.
+func (m *Manager) UpdateIdentities(identities map[string]*Identity) error {
 	// If any of the named identities don't exist, return an error.
 	var missing []string
 	for name, identity := range identities {
-		if _, ok := s.identities[name]; !ok {
+		if _, ok := m.identities[name]; !ok {
 			missing = append(missing, name)
 		}
 		err := identity.validate(name)
@@ -268,7 +370,7 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		return fmt.Errorf("identities do not exist: %s", strings.Join(missing, ", "))
 	}
 
-	newIdentities := s.cloneIdentities()
+	newIdentities := maps.Clone(m.identities)
 	for name, identity := range identities {
 		identity.Name = name
 		newIdentities[name] = identity
@@ -279,17 +381,17 @@ func (s *State) UpdateIdentities(identities map[string]*Identity) error {
 		return err
 	}
 
-	s.writing()
-	s.identities = newIdentities
+	m.identities = newIdentities
+	m.state.Set(identitiesKey, newIdentities)
 	return nil
 }
 
 // ReplaceIdentities replaces the named identities in the system with the
 // given identities (adding those that don't exist), or removes them if the
 // map value is nil.
-func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
-	s.reading()
-
+//
+// The state lock must be held for the duration of this call.
+func (m *Manager) ReplaceIdentities(identities map[string]*Identity) error {
 	for name, identity := range identities {
 		if identity != nil {
 			err := identity.validate(name)
@@ -299,7 +401,7 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 		}
 	}
 
-	newIdentities := s.cloneIdentities()
+	newIdentities := maps.Clone(m.identities)
 	for name, identity := range identities {
 		if identity == nil {
 			delete(newIdentities, name)
@@ -314,20 +416,20 @@ func (s *State) ReplaceIdentities(identities map[string]*Identity) error {
 		return err
 	}
 
-	s.writing()
-	s.identities = newIdentities
+	m.identities = newIdentities
+	m.state.Set(identitiesKey, newIdentities)
 	return nil
 }
 
 // RemoveIdentities removes the named identities from the system. It's an
 // error if any of the named identities do not exist.
-func (s *State) RemoveIdentities(identities map[string]struct{}) error {
-	s.reading()
-
+//
+// The state lock must be held for the duration of this call.
+func (m *Manager) RemoveIdentities(identities map[string]struct{}) error {
 	// If any of the named identities don't exist, return an error.
 	var missing []string
 	for name := range identities {
-		if _, ok := s.identities[name]; !ok {
+		if _, ok := m.identities[name]; !ok {
 			missing = append(missing, name)
 		}
 	}
@@ -336,23 +438,19 @@ func (s *State) RemoveIdentities(identities map[string]struct{}) error {
 		return fmt.Errorf("identities do not exist: %s", strings.Join(missing, ", "))
 	}
 
-	s.writing()
 	for name := range identities {
-		delete(s.identities, name)
+		delete(m.identities, name)
 	}
+	m.state.Set(identitiesKey, m.identities)
 	return nil
 }
 
 // Identities returns all the identities in the system. The returned map is a
 // shallow clone, so map mutations won't affect state.
-func (s *State) Identities() map[string]*Identity {
-	s.reading()
-
-	result := make(map[string]*Identity, len(s.identities))
-	for name, identity := range s.identities {
-		result[name] = identity
-	}
-	return result
+//
+// The state lock must be held for the duration of this call.
+func (m *Manager) Identities() map[string]*Identity {
+	return maps.Clone(m.identities)
 }
 
 // IdentityFromInputs returns an identity matching the given inputs.
@@ -361,12 +459,12 @@ func (s *State) Identities() map[string]*Identity {
 // because they are intentionally setup by the client.
 //
 // If no matching identity is found for the given inputs, nil is returned.
-func (s *State) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
-	s.reading()
-
+//
+// The state lock must be held for the duration of this call.
+func (m *Manager) IdentityFromInputs(userID *uint32, username, password string, clientCert *x509.Certificate) *Identity {
 	switch {
 	case clientCert != nil:
-		for _, identity := range s.identities {
+		for _, identity := range m.identities {
 			if identity.Cert != nil && identity.Cert.X509.Equal(clientCert) {
 				// Certificate identities can be added
 				// manually, so we still need to verify
@@ -390,7 +488,7 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 
 	case username != "" || password != "":
 		passwordBytes := []byte(password)
-		for _, identity := range s.identities {
+		for _, identity := range m.identities {
 			if identity.Basic == nil || identity.Name != username {
 				continue
 			}
@@ -406,7 +504,7 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 		return nil
 
 	case userID != nil:
-		for _, identity := range s.identities {
+		for _, identity := range m.identities {
 			if identity.Local != nil && identity.Local.UserID == *userID {
 				return identity
 			}
@@ -416,14 +514,6 @@ func (s *State) IdentityFromInputs(userID *uint32, username, password string, cl
 	}
 
 	return nil
-}
-
-func (s *State) cloneIdentities() map[string]*Identity {
-	newIdentities := make(map[string]*Identity, len(s.identities))
-	for name, identity := range s.identities {
-		newIdentities[name] = identity
-	}
-	return newIdentities
 }
 
 func verifyUniqueUserIDs(identities map[string]*Identity) error {

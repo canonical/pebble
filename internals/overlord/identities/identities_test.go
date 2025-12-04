@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package state_test
+package identities_test
 
 import (
 	"crypto/x509"
@@ -22,6 +22,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -64,30 +65,33 @@ GV6pXv511MycDg==
 // IMPORTANT NOTE: be sure secrets aren't included when adding to this!
 func (s *identitiesSuite) TestMarshalAPI(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	err := st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
+			Access: identities.ReadAccess,
+			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 	c.Assert(err, IsNil)
 
-	identities := st.Identities()
+	identities := mgr.Identities()
 	data, err := json.MarshalIndent(identities, "", "    ")
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, `
@@ -149,25 +153,25 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
         }
     }
 }`, jsonCert)
-	var identities map[string]*state.Identity
-	err = json.Unmarshal(data, &identities)
+	var idents map[string]*identities.Identity
+	err = json.Unmarshal(data, &idents)
 	c.Assert(err, IsNil)
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
+			Access: identities.ReadAccess,
+			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 }
@@ -213,7 +217,7 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 	}}
 	for _, test := range tests {
 		c.Logf("Input data: %s", test.data)
-		var identities map[string]*state.Identity
+		var identities map[string]*identities.Identity
 		err := json.Unmarshal([]byte(test.data), &identities)
 		c.Check(err, ErrorMatches, test.error)
 	}
@@ -221,22 +225,25 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 
 func (s *identitiesSuite) TestMarshalState(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	err := st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, IsNil)
 
-	// Marshal entire state, then pull out just the "identities" key to test that.
+	// Marshal entire identities, then pull out just the "identities" key to test that.
 	data, err := json.Marshal(st)
 	c.Assert(err, IsNil)
 	var unmarshalled map[string]any
@@ -263,6 +270,9 @@ func (s *identitiesSuite) TestMarshalState(c *C) {
 
 func (s *identitiesSuite) TestUnmarshalState(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
@@ -283,107 +293,110 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
         }
     }
 }`)
-	err := json.Unmarshal(data, &st)
+	err = json.Unmarshal(data, &st)
 	c.Assert(err, IsNil)
-	c.Assert(st.Identities(), DeepEquals, map[string]*state.Identity{
+	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
 			Name:   "mary",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 }
 
 func (s *identitiesSuite) TestAddIdentities(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	original := map[string]*state.Identity{
+	original := map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
+			Access: identities.ReadAccess,
+			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	}
-	err := st.AddIdentities(original)
+	err = mgr.AddIdentities(original)
 	c.Assert(err, IsNil)
 
 	// Ensure they were added correctly (and Name fields have been set).
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := mgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
 			Name:   "mary",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
 			Name:   "nancy",
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 		"olivia": {
 			Name:   "olivia",
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
+			Access: identities.ReadAccess,
+			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 
 	// Can't add identity names that already exist.
-	err = st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, ErrorMatches, "identities already exist: bob, mary")
 
 	// Can't add a nil identity.
-	err = st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": nil,
 	})
 	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must not be nil`)
 
 	// Access value must be valid.
-	err = st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": {
 			Access: "bar",
-			Local:  &state.LocalIdentity{UserID: 43},
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 	})
 	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", "metrics", or "untrusted"`)
 
 	// Must have at least one type.
-	err = st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": {
 			Access: "admin",
 		},
@@ -391,37 +404,37 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
 
 	// May have two types.
-	err = st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"peter": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
-			Local:  &state.LocalIdentity{UserID: 1001},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
+			Local:  &identities.LocalIdentity{UserID: 1001},
 		},
 	})
 	c.Assert(err, IsNil)
 
 	// Ensure user IDs are unique with existing users.
-	err = st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 1000 \(bill, mary\)`)
 
 	// Ensure user IDs are unique among the ones being added (and test >2 with same UID).
-	err = st.AddIdentities(map[string]*state.Identity{
+	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 2000},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 2000},
 		},
 		"bale": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 2000},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 2000},
 		},
 		"boll": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 2000},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 2000},
 		},
 	})
 	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 2000 \(bale, bill, boll\)`)
@@ -429,90 +442,93 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 
 func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	original := map[string]*state.Identity{
+	original := map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 	}
-	err := st.AddIdentities(original)
+	err = mgr.AddIdentities(original)
 	c.Assert(err, IsNil)
 
-	err = st.UpdateIdentities(map[string]*state.Identity{
+	err = mgr.UpdateIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"mary": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"nancy": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "new hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "new hash"},
 		},
 	})
 	c.Assert(err, IsNil)
 
 	// Ensure they were updated correctly.
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := mgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"mary": {
 			Name:   "mary",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"nancy": {
 			Name:   "nancy",
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "new hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "new hash"},
 		},
 	})
 
 	// Can't update identity names that don't exist.
-	err = st.UpdateIdentities(map[string]*state.Identity{
+	err = mgr.UpdateIdentities(map[string]*identities.Identity{
 		"bill": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 		"bale": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	c.Assert(err, ErrorMatches, "identities do not exist: bale, bill")
 
 	// Ensure validation is being done (full testing done in AddIdentity).
-	err = st.UpdateIdentities(map[string]*state.Identity{
+	err = mgr.UpdateIdentities(map[string]*identities.Identity{
 		"bob": nil,
 	})
 	c.Assert(err, ErrorMatches, `identity "bob" invalid: identity must not be nil`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
-	err = st.UpdateIdentities(map[string]*state.Identity{
+	err = mgr.UpdateIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 	})
 	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 42 \(bob, mary\)`)
@@ -520,52 +536,55 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 
 func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	original := map[string]*state.Identity{
+	original := map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	}
-	err := st.AddIdentities(original)
+	err = mgr.AddIdentities(original)
 	c.Assert(err, IsNil)
 
-	err = st.ReplaceIdentities(map[string]*state.Identity{
+	err = mgr.ReplaceIdentities(map[string]*identities.Identity{
 		"bob": nil, // nil means remove it
 		"mary": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 		"newguy": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 44},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 44},
 		},
 	})
 	c.Assert(err, IsNil)
 
 	// Ensure they were added/updated/deleted correctly.
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := mgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"mary": {
 			Name:   "mary",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 		"newguy": {
 			Name:   "newguy",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 44},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 44},
 		},
 	})
 
 	// Ensure validation is being done (full testing done in AddIdentity).
-	err = st.ReplaceIdentities(map[string]*state.Identity{
+	err = mgr.ReplaceIdentities(map[string]*identities.Identity{
 		"bill": {
 			Access: "admin",
 		},
@@ -573,10 +592,10 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
-	err = st.ReplaceIdentities(map[string]*state.Identity{
+	err = mgr.ReplaceIdentities(map[string]*identities.Identity{
 		"bob": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 	})
 	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 43 \(bob, mary\)`)
@@ -584,35 +603,38 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 
 func (s *identitiesSuite) TestRemoveIdentities(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	original := map[string]*state.Identity{
+	original := map[string]*identities.Identity{
 		"bill": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 		"queen": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1001},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1001},
 		},
 	}
-	err := st.AddIdentities(original)
+	err = mgr.AddIdentities(original)
 	c.Assert(err, IsNil)
 
-	err = st.RemoveIdentities(map[string]struct{}{
+	err = mgr.RemoveIdentities(map[string]struct{}{
 		"bob":   {},
 		"mary":  {},
 		"nancy": {},
@@ -620,22 +642,22 @@ func (s *identitiesSuite) TestRemoveIdentities(c *C) {
 	c.Assert(err, IsNil)
 
 	// Ensure they were removed correctly.
-	identities := st.Identities()
-	c.Assert(identities, DeepEquals, map[string]*state.Identity{
+	idents := mgr.Identities()
+	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"bill": {
 			Name:   "bill",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 43},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 		"queen": {
 			Name:   "queen",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1001},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1001},
 		},
 	})
 
 	// Can't remove identity names that don't exist.
-	err = st.RemoveIdentities(map[string]struct{}{
+	err = mgr.RemoveIdentities(map[string]struct{}{
 		"bill": {},
 		"bale": {},
 		"mary": {},
@@ -645,77 +667,83 @@ func (s *identitiesSuite) TestRemoveIdentities(c *C) {
 
 func (s *identitiesSuite) TestIdentities(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	original := map[string]*state.Identity{
+	original := map[string]*identities.Identity{
 		"bob": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 	}
-	err := st.AddIdentities(original)
+	err = mgr.AddIdentities(original)
 	c.Assert(err, IsNil)
 
 	// Ensure it returns correct results.
-	identities := st.Identities()
-	expected := map[string]*state.Identity{
+	idents := mgr.Identities()
+	expected := map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"mary": {
 			Name:   "mary",
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 		"nancy": {
 			Name:   "nancy",
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: "hash"},
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 	}
-	c.Assert(identities, DeepEquals, expected)
+	c.Assert(idents, DeepEquals, expected)
 
 	// Ensure the map was cloned (mutations to first map won't affect second).
-	identities2 := st.Identities()
-	c.Assert(identities2, DeepEquals, expected)
-	identities["changed"] = &state.Identity{}
-	c.Assert(identities2, DeepEquals, expected)
+	idents2 := mgr.Identities()
+	c.Assert(idents2, DeepEquals, expected)
+	idents2["changed"] = &identities.Identity{}
+	c.Assert(idents2, DeepEquals, expected)
 }
 
 func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	st := state.New(nil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
 	st.Lock()
 	defer st.Unlock()
 
-	ids := map[string]*state.Identity{
+	ids := map[string]*identities.Identity{
 		"uid": {
-			Access: state.MetricsAccess,
-			Local:  &state.LocalIdentity{UserID: 42},
+			Access: identities.MetricsAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 		"basic": {
-			Access: state.ReadAccess,
-			Basic: &state.BasicIdentity{
+			Access: identities.ReadAccess,
+			Basic: &identities.BasicIdentity{
 				// password: test
 				Password: "$6$F9cFSVEKyO4gB1Wh$8S1BSKsNkF.jBAixGc4W7l80OpfCNk65LZBDHBng3NAmbcHuMj4RIm7992rrJ8YA.SJ0hvm.vGk2z483am4Ym1",
 			},
 		},
 		"cert": {
-			Access: state.AdminAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
+			Access: identities.AdminAccess,
+			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	}
-	err := st.AddIdentities(ids)
+	err = mgr.AddIdentities(ids)
 	c.Assert(err, IsNil)
 
 	validCert := parseCert(c, validPEMX509Cert)
@@ -728,7 +756,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		basicPass      string
 		cert           *x509.Certificate
 		expectedUser   string
-		expectedAccess state.IdentityAccess
+		expectedAccess identities.IdentityAccess
 	}{{
 		name:         "no inputs",
 		expectedUser: "",
@@ -737,7 +765,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		name:           "valid cert",
 		cert:           validCert,
 		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
+		expectedAccess: identities.AdminAccess,
 	}, {
 		name:         "invalid cert",
 		cert:         invalidCert,
@@ -749,13 +777,13 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		basicUser:      "basic",
 		basicPass:      "test",
 		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
+		expectedAccess: identities.AdminAccess,
 	}, {
 		name:           "cert with uid ignored",
 		cert:           validCert,
 		userID:         ptr(uint32(42)),
 		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
+		expectedAccess: identities.AdminAccess,
 	}, {
 		name:           "cert with both basic and uid ignored",
 		cert:           validCert,
@@ -763,14 +791,14 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		basicPass:      "test",
 		userID:         ptr(uint32(42)),
 		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
+		expectedAccess: identities.AdminAccess,
 	}, {
 		// Basic authentication tests (medium priority)
 		name:           "valid basic auth",
 		basicUser:      "basic",
 		basicPass:      "test",
 		expectedUser:   "basic",
-		expectedAccess: state.ReadAccess,
+		expectedAccess: identities.ReadAccess,
 	}, {
 		name:         "valid user invalid password",
 		basicUser:    "basic",
@@ -808,7 +836,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		basicPass:      "test",
 		userID:         ptr(uint32(42)),
 		expectedUser:   "basic",
-		expectedAccess: state.ReadAccess,
+		expectedAccess: identities.ReadAccess,
 	}, {
 		name:         "invalid basic auth with valid uid ignored",
 		basicUser:    "basic",
@@ -820,7 +848,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		name:           "valid uid",
 		userID:         ptr(uint32(42)),
 		expectedUser:   "uid",
-		expectedAccess: state.MetricsAccess,
+		expectedAccess: identities.MetricsAccess,
 	}, {
 		name:         "invalid uid",
 		userID:       ptr(uint32(100)),
@@ -834,7 +862,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 
 	for _, test := range tests {
 		c.Logf("Running test: %s", test.name)
-		identity := st.IdentityFromInputs(test.userID, test.basicUser, test.basicPass, test.cert)
+		identity := mgr.IdentityFromInputs(test.userID, test.basicUser, test.basicPass, test.cert)
 
 		if test.expectedUser != "" {
 			c.Assert(identity, NotNil)
