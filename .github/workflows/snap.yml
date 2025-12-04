@@ -94,19 +94,21 @@ jobs:
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
       - run: |
-          ls -lR ~ || echo oops # FIXME
-          zip logs.zip snapcraft-${{ env.SNAP_NAME }}-*.txt || touch logs.zip # FIXME
+          set -vex
+          ls -alR ~ || echo oops # FIXME
+          cat snapcraft-${{ env.SNAP_NAME }}-*.txt || echo oops
+          cat ~/.cache/snapcraft/log/* || echo oops
+          cat ~/.local/state/snapcraft/log/* || echo oops
         if: always()
       - uses: actions/upload-artifact@v4
         if: always()  # FIXME
         with:
-          name: snapcraft-logs
+          name: snapcraft-logs-${{ matrix.arch }}  # FIXME keep this change!
           path: |
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
             ${{ env.SNAP_NAME }}_*.txt
-            logs.zip
-        # snapcraft-${{ env.SNAP_NAME }}-*.txt  # name contains a colon
+        # snapcraft-${{ env.SNAP_NAME }}-*.txt  # name contains a colon, can't be uploaded
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@v4
