@@ -23,3 +23,7 @@ func GetBuffer(c *Client) []EntryWithService {
 func GetMessage(e EntryWithService) string {
 	return e.message
 }
+
+func ResetBufferToIndex(c *Client, index int) {
+	c.resetBufferToIndex(index)
+}

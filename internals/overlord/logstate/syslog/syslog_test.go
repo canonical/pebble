@@ -187,7 +187,7 @@ func (*suite) TestTCPFlushCancelContext(c *C) {
 
 func (*suite) TestBufferFull(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
-		Location:          "tcp://fake:514",
+		Location:          "udp://fake:514",
 		MaxRequestEntries: 3,
 	})
 	c.Assert(err, IsNil)
@@ -233,6 +233,16 @@ func (*suite) TestBufferFull(c *C) {
 	checkBuffer([]any{nil, nil, nil, "4", "5", "6"})
 	addEntry("7")
 	checkBuffer([]any{"5", "6", "7", nil, nil, nil})
+
+	// Simulate that first 2 messages were sent successfully, but 3rd failed
+	// This is what happens in flushUDP when err != nil at iteration i=2
+	syslog.ResetBufferToIndex(client, 2)
+	checkBuffer([]any{nil, nil, "7", nil, nil, nil})
+	addEntry("8")
+	addEntry("9")
+	checkBuffer([]any{nil, nil, "7", "8", "9", nil})
+	syslog.ResetBufferToIndex(client, 1) // 1st msg ok, but 2nd msg failed
+	checkBuffer([]any{nil, nil, nil, "8", "9", nil})
 }
 
 func (*suite) TestTCPFlushEmpty(c *C) {

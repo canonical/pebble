@@ -280,7 +280,7 @@ func (c *Client) flushTCP(ctx context.Context) error {
 func (c *Client) flushUDP(ctx context.Context) error {
 	// For UDP, we send each message as a separate datagram (RFC 5426 section 3.1)
 	// UDP connections don't need persistent state, so we create a fresh connection
-	for _, entry := range c.entries {
+	for i, entry := range c.entries {
 		c.sendBuf.Reset()
 		err := c.ensureConnected(ctx)
 		if err != nil {
@@ -297,13 +297,25 @@ func (c *Client) flushUDP(ctx context.Context) error {
 		_, err = io.Copy(c.conn, &c.sendBuf)
 		if err != nil {
 			// Error occurred, close and reset connection so we reconnect next time around.
+			// Has sent i entries successfully, remove them from the buffer.
+			c.resetBufferToIndex(i)
 			c.conn.Close()
 			c.conn = nil
 			return fmt.Errorf("cannot send syslogs: %w", err)
 		}
 	}
+
+	// resetBuffer has the same effect as resetBufferToIndex(len(c.entries)),
+	// but is more efficient, since it avoids future possible entry copying in `Add`.
 	c.resetBuffer()
 	return nil
+}
+
+func (c *Client) resetBufferToIndex(last int) {
+	for i := 0; i < last; i++ {
+		c.entries[i] = entryWithService{}
+	}
+	c.entries = c.entries[last:]
 }
 
 func (c *Client) resetBuffer() {
