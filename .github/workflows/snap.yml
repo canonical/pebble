@@ -96,8 +96,9 @@ jobs:
       - run: |
           ls -lR ~ || echo oops # FIXME
           zip logs.zip snapcraft-${{ env.SNAP_NAME }}-*.txt || touch logs.zip # FIXME
+        if: always()
       - uses: actions/upload-artifact@v4
-        # if: failure()  # FIXME
+        if: always()  # FIXME
         with:
           name: snapcraft-logs
           path: |
