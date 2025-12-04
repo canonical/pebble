@@ -1,0 +1,22 @@
+name: SBOM and secscan
+
+on:
+  push:
+    tags: [v*]  # when publishing a release
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  scan:
+    runs-on: [self-hosted, self-hosted-linux-amd64-jammy-private-endpoint-medium]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: sbomber
+        uses: canonical/sbomber/.github/actions/run@cf7a76e810497ec932e8285b2c9d6b373d225e79  # main -- and sbomber-ref input should match
+        with:
+          manifest: '${{ github.workspace }}/.sbomber-manifest-snap.yaml'
+          artifact-name: secscan-report-upload-snap
+          sbomber-ref: cf7a76e810497ec932e8285b2c9d6b373d225e79
