@@ -41,9 +41,10 @@ fi
 if [ -z "$v" ]; then
     # Let's try to derive the version from git..
     if command -v git >/dev/null; then
-        # not using "--dirty" here until the following bug is fixed:
-        # https://bugs.launchpad.net/snapcraft/+bug/1662388
-        v="$(git describe --tags --always | sed -e 's/-/+git/;y/-/./' )"
+        # Examples:
+        # - directly tagged "v1.99.0-fips" --> "v1.99.0+fips"
+        # - tag in branch history "v1.99.0-fips" --> "v1.99.0+fips+1d21027"
+        v="$(git describe --tags --always --match 'v*-fips' | sed -e 's/-[0-9]-g/-/' -e 's/-/+/g')"
         o=git
     fi
 fi
