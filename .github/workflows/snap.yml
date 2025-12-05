@@ -93,6 +93,7 @@ jobs:
         uses: snapcore/action-build@v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
+          snapcraft-channel: latest/beta
       - run: |
           set -vex
           ls -alR ~ || echo oops # FIXME
