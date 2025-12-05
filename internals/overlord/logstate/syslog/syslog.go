@@ -195,7 +195,7 @@ func (c *Client) encodeOneEntry(entry *servicelog.Entry, messageSuffix string) {
 	// Message format as per RFC 5424: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 	c.sendBuf.WriteString(priorityAndVersionPrefix)
 
-	timeBuf := make([]byte, 0, 32)
+	timeBuf := make([]byte, 0, len("2006-01-02T15:04:05.999999999Z"))
 	c.sendBuf.Write(entry.Time.AppendFormat(timeBuf, time.RFC3339Nano))
 
 	c.sendBuf.WriteByte(' ')
