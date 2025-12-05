@@ -32,19 +32,13 @@ type ClientOptions struct {
 	DialTimeout       time.Duration
 }
 
-type entryWithService struct {
-	service   string
-	timestamp time.Time
-	message   string
-}
-
 type Client struct {
 	options *ClientOptions
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
 	// sliding window "entries" of size MaxRequestEntries.
-	buffer  []entryWithService
-	entries []entryWithService
+	buffer  []servicelog.Entry
+	entries []servicelog.Entry
 
 	// Store the custom labels (syslog's structured-data) for each service
 	labels map[string]string
@@ -82,7 +76,7 @@ func NewClient(options *ClientOptions) (*Client, error) {
 	c := &Client{
 		location: u,
 		options:  &opts,
-		buffer:   make([]entryWithService, 2*opts.MaxRequestEntries),
+		buffer:   make([]servicelog.Entry, 2*opts.MaxRequestEntries),
 		labels:   make(map[string]string),
 	}
 	c.entries = c.buffer[:0]
@@ -135,7 +129,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	if len(c.entries) >= c.options.MaxRequestEntries {
 		// 'entries' is full - remove the first element to make room
 		// Zero the removed element to allow garbage collection
-		c.entries[0] = entryWithService{}
+		c.entries[0] = servicelog.Entry{}
 		c.entries = c.entries[1:]
 	}
 
@@ -148,17 +142,13 @@ func (c *Client) Add(entry servicelog.Entry) error {
 
 		// Zero removed elements to allow garbage collection
 		for i := len(c.entries); i < len(c.buffer); i++ {
-			c.buffer[i] = entryWithService{}
+			c.buffer[i] = servicelog.Entry{}
 		}
 	}
 
 	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
-	c.entries = append(c.entries, entryWithService{
-		timestamp: entry.Time,
-		message:   entry.Message,
-		service:   entry.Service,
-	})
+	c.entries = append(c.entries, entry)
 	return nil
 }
 
@@ -191,13 +181,13 @@ func (c *Client) Close() error {
 }
 
 // encodeOneEntry encodes common parts for UDP and TCP syslog entries into c.sendBuf
-func (c *Client) encodeOneEntry(entry *entryWithService, messageSuffix string) {
+func (c *Client) encodeOneEntry(entry *servicelog.Entry, messageSuffix string) {
 	hostname := c.options.Hostname
 	if hostname == "" {
 		hostname = "-"
 	}
 
-	structuredData, ok := c.labels[entry.service]
+	structuredData, ok := c.labels[entry.Service]
 	if !ok {
 		structuredData = "-"
 	}
@@ -206,16 +196,16 @@ func (c *Client) encodeOneEntry(entry *entryWithService, messageSuffix string) {
 	c.sendBuf.WriteString(priorityAndVersionPrefix)
 
 	timeBuf := make([]byte, 0, 32)
-	c.sendBuf.Write(entry.timestamp.AppendFormat(timeBuf, time.RFC3339Nano))
+	c.sendBuf.Write(entry.Time.AppendFormat(timeBuf, time.RFC3339Nano))
 
 	c.sendBuf.WriteByte(' ')
 	c.sendBuf.WriteString(hostname)
 	c.sendBuf.WriteByte(' ')
-	c.sendBuf.WriteString(entry.service)
+	c.sendBuf.WriteString(entry.Service)
 	c.sendBuf.WriteString(" - - ")
 	c.sendBuf.WriteString(structuredData)
 	c.sendBuf.WriteByte(' ')
-	c.sendBuf.WriteString(entry.message)
+	c.sendBuf.WriteString(entry.Message)
 	if messageSuffix != "" {
 		c.sendBuf.WriteString(messageSuffix)
 	}
@@ -229,7 +219,7 @@ func (c *Client) buildSendBufferTCP() {
 	}
 
 	for _, entry := range c.entries {
-		structuredData, ok := c.labels[entry.service]
+		structuredData, ok := c.labels[entry.Service]
 		if !ok {
 			structuredData = "-"
 		}
@@ -237,7 +227,7 @@ func (c *Client) buildSendBufferTCP() {
 		// TCP: Octet framing as per RFC 5425: <length> <message>
 		// RFC3339Nano time string ("2023-12-31T12:00:00.123456789Z") has length 30
 		frameLength := len(priorityAndVersionPrefix) + 30 + 1 + len(hostname) + 1 +
-			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
+			len(entry.Service) + 5 + len(structuredData) + 1 + len(entry.Message)
 		lengthBuf := make([]byte, 0, 8)
 		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
 		c.sendBuf.Write(lengthBuf)
@@ -288,9 +278,9 @@ func (c *Client) flushUDP(ctx context.Context) error {
 		}
 
 		messageSuffix := ""
-		if len(entry.message) > maxUDPMessageSize {
+		if len(entry.Message) > maxUDPMessageSize {
 			messageSuffix = "..."
-			entry.message = entry.message[:maxUDPMessageSize-len(messageSuffix)]
+			entry.Message = entry.Message[:maxUDPMessageSize-len(messageSuffix)]
 		}
 
 		c.encodeOneEntry(&entry, messageSuffix)
@@ -313,14 +303,14 @@ func (c *Client) flushUDP(ctx context.Context) error {
 
 func (c *Client) resetBufferToIndex(last int) {
 	for i := range last {
-		c.entries[i] = entryWithService{}
+		c.entries[i] = servicelog.Entry{}
 	}
 	c.entries = c.entries[last:]
 }
 
 func (c *Client) resetBuffer() {
 	for i := range c.entries {
-		c.entries[i] = entryWithService{}
+		c.entries[i] = servicelog.Entry{}
 	}
 	c.entries = c.buffer[:0]
 }

@@ -14,14 +14,14 @@
 
 package syslog
 
-type EntryWithService = entryWithService
+import "github.com/canonical/pebble/internals/servicelog"
 
-func GetBuffer(c *Client) []EntryWithService {
+func GetBuffer(c *Client) []servicelog.Entry {
 	return c.buffer
 }
 
-func GetMessage(e EntryWithService) string {
-	return e.message
+func GetMessage(e servicelog.Entry) string {
+	return e.Message
 }
 
 func ResetBufferToIndex(c *Client, index int) {

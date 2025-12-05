@@ -207,7 +207,7 @@ func (*suite) TestBufferFull(c *C) {
 		for i := range expected {
 			// 'nil' means c.buffer[i] should be zero
 			if expected[i] == nil {
-				c.Assert(buffer[i], DeepEquals, syslog.EntryWithService{},
+				c.Assert(buffer[i], DeepEquals, servicelog.Entry{},
 					Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
 				continue
 			}
