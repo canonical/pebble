@@ -94,13 +94,9 @@ jobs:
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
           snapcraft-channel: latest/beta
-      - run: |
-          set -vex
-          ls -alR ~ || echo oops # FIXME
-          cat snapcraft-${{ env.SNAP_NAME }}-*.txt || echo oops
-          cat ~/.cache/snapcraft/log/* || echo oops
-          cat ~/.local/state/snapcraft/log/* || echo oops
+      - name: Rename the logs file, because artifacts can't have colons
         if: always()
+        run: cat snapcraft-${{ env.SNAP_NAME }}-*.txt > snapcraft-logs.txt
       - uses: actions/upload-artifact@v4
         if: always()  # FIXME
         with:
@@ -109,7 +105,7 @@ jobs:
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
             ${{ env.SNAP_NAME }}_*.txt
-        # snapcraft-${{ env.SNAP_NAME }}-*.txt  # name contains a colon, can't be uploaded
+            snapcraft-logs.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@v4
