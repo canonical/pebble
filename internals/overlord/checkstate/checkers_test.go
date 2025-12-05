@@ -116,7 +116,12 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	// Malformed URL returns an error
 	chk = &httpChecker{url: "#!@$%@#@"}
 	err = chk.check(ctx)
-	c.Assert(err, ErrorMatches, "cannot build request: .*")
+	c.Assert(err, ErrorMatches, "invalid URL .*")
+
+	// HTTPS URLs return errors in FIPS builds
+	chk = &httpChecker{url: "https://test.example"}
+	err = chk.check(ctx)
+	c.Assert(err, ErrorMatches, "only HTTP URLs are allowed .*")
 }
 
 func (s *CheckersSuite) TestTCP(c *C) {

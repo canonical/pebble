@@ -16,9 +16,7 @@
 package state
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -223,13 +221,6 @@ func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
 		if identity.Basic != nil {
 			marshalled[name].Basic = &marshalledBasicIdentity{Password: identity.Basic.Password}
 		}
-		if identity.Cert != nil {
-			pemBlock := &pem.Block{
-				Type:  "CERTIFICATE",
-				Bytes: identity.Cert.X509.Raw,
-			}
-			marshalled[name].Cert = &marshalledCertIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
-		}
 	}
 	return marshalled
 }
@@ -276,14 +267,6 @@ func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) e
 		}
 		if mi.Basic != nil {
 			s.identities[name].Basic = &BasicIdentity{Password: mi.Basic.Password}
-		}
-		if mi.Cert != nil {
-			block, _ := pem.Decode([]byte(mi.Cert.PEM))
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
-			}
-			s.identities[name].Cert = &CertIdentity{X509: cert}
 		}
 	}
 	return nil

@@ -116,10 +116,6 @@ var API = []*Command{{
 	GET:         v1GetIdentities,
 	POST:        v1PostIdentities,
 }, {
-	Path:        "/v1/pairing",
-	WriteAccess: PairingAccess{},
-	POST:        v1PostPairing,
-}, {
 	Path:       "/v1/metrics",
 	ReadAccess: MetricsAccess{},
 	GET:        v1GetMetrics,
@@ -141,15 +137,13 @@ func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
 	defer state.Unlock()
 
 	result := struct {
-		BootID       string `json:"boot-id"`
-		HTTPAddress  string `json:"http-address,omitempty"`
-		HTTPSAddress string `json:"https-address,omitempty"`
-		Version      string `json:"version"`
+		BootID      string `json:"boot-id"`
+		HTTPAddress string `json:"http-address,omitempty"`
+		Version     string `json:"version"`
 	}{
-		BootID:       restart.BootID(state),
-		HTTPAddress:  c.d.options.HTTPAddress,
-		HTTPSAddress: c.d.options.HTTPSAddress,
-		Version:      c.d.Version,
+		BootID:      restart.BootID(state),
+		HTTPAddress: c.d.options.HTTPAddress,
+		Version:     c.d.Version,
 	}
 	return SyncResponse(result)
 }

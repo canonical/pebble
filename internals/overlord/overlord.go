@@ -33,13 +33,11 @@ import (
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
 	"github.com/canonical/pebble/internals/overlord/logstate"
-	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/timing"
 )
 
@@ -79,18 +77,12 @@ type Options struct {
 	PebbleDir string
 	// LayersDir is the path to the layers directory. It defaults to "<PebbleDir>/layers" if empty.
 	LayersDir string
-	// TLSDir is the path to the TLS keypairs. It defaults to "<PebbleDir>/tls" if empty.
-	TLSDir string
 	// RestartHandler is an optional structure to handle restart requests.
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
 	ServiceOutput io.Writer
 	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
-	// IDSigner is a private key representing the identity of a Pebble
-	// instance (machine, container or device), which implements the
-	// tlsstate.IDSigner interface (allowing it to sign digests).
-	IDSigner tlsstate.IDSigner
 	// Persist specifies whether the state should be persisted to disk.
 	Persist PersistMode
 }
@@ -128,8 +120,6 @@ type Overlord struct {
 	commandMgr *cmdstate.CommandManager
 	checkMgr   *checkstate.CheckManager
 	logMgr     *logstate.LogManager
-	tlsMgr     *tlsstate.TLSManager
-	pairingMgr *pairingstate.PairingManager
 
 	extension Extension
 }
@@ -203,20 +193,6 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
 	o.stateEng.AddManager(o.planMgr)
-
-	tlsDir := opts.TLSDir
-	if tlsDir == "" {
-		tlsDir = filepath.Join(opts.PebbleDir, "tls")
-	}
-	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
-	o.stateEng.AddManager(o.tlsMgr)
-
-	o.pairingMgr, err = pairingstate.NewManager(s)
-	if err != nil {
-		return nil, fmt.Errorf("cannot create pairing manager: %w", err)
-	}
-	o.stateEng.AddManager(o.pairingMgr)
-	o.planMgr.AddChangeListener(o.pairingMgr.PlanChanged)
 
 	o.logMgr = logstate.NewLogManager()
 
@@ -643,17 +619,6 @@ func (o *Overlord) CheckManager() *checkstate.CheckManager {
 // system configuration
 func (o *Overlord) PlanManager() *planstate.PlanManager {
 	return o.planMgr
-}
-
-// TLSManager returns the TLS manager responsible for managing
-// TLS keypairs for HTTPS connections.
-func (o *Overlord) TLSManager() *tlsstate.TLSManager {
-	return o.tlsMgr
-}
-
-// PairingManager returns the manager that handles client pairing.
-func (o *Overlord) PairingManager() *pairingstate.PairingManager {
-	return o.pairingMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend

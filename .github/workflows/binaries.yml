@@ -3,9 +3,9 @@ name: Binaries
 on:
   push:
     tags: [v*]
-    branches: [master]
+    branches: [fips]
   pull_request:
-    branches: [master]
+    branches: [fips]
   release:
     types: [published]
 

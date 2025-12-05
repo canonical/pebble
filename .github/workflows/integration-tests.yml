@@ -2,9 +2,9 @@ name: Integration Tests
 
 on:
   push:
-    branches: [ master ]
+    branches: [fips]
   pull_request:
-    branches: [ master ]
+    branches: [fips]
 
 jobs:
   test:

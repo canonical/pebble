@@ -17,14 +17,7 @@ package daemon
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/sha512"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/base32"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -41,7 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GehirnInc/crypt/sha512_crypt"
 	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
@@ -49,13 +41,11 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
-	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
@@ -65,20 +55,18 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type daemonSuite struct {
-	pebbleDir    string
-	socketPath   string
-	httpAddress  string
-	httpsAddress string
-	statePath    string
-	authorized   bool
-	err          error
-	notified     []string
+	pebbleDir   string
+	socketPath  string
+	httpAddress string
+	statePath   string
+	authorized  bool
+	err         error
+	notified    []string
 }
 
 var _ = Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *C) {
-	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -103,40 +91,17 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
-	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
 	d, err := New(&Options{
-		Dir:          s.pebbleDir,
-		SocketPath:   s.socketPath,
-		HTTPAddress:  s.httpAddress,
-		HTTPSAddress: s.httpsAddress,
-		IDSigner:     newIDKey(c),
+		Dir:         s.pebbleDir,
+		SocketPath:  s.socketPath,
+		HTTPAddress: s.httpAddress,
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
 	return d
-}
-
-// idkey implements a purely ephemeral tlsstate.IDSigner interface for testing
-// purposes so we do not depend on the idkey package.
-type idkey struct {
-	ed25519.PrivateKey
-}
-
-func newIDKey(c *C) *idkey {
-	k := &idkey{}
-	var err error
-	_, k.PrivateKey, err = ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, IsNil)
-	return k
-}
-
-func (k *idkey) Fingerprint() string {
-	publicBytes := k.PrivateKey.Public().(ed25519.PublicKey)
-	hashBytes := sha512.Sum384(publicBytes)
-	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hashBytes[:])
 }
 
 // a Response suitable for testing
@@ -1875,13 +1840,6 @@ func (t *transportTypeSuite) TestTransportTypeContext(c *C) {
 	c.Assert(transport.IsValid(), Equals, true)
 	c.Assert(transport.IsConcealed(), Equals, false)
 	c.Assert(transport.String(), Equals, "http")
-	// Request has HTTPS context.
-	r = &http.Request{}
-	r = r.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
-	transport = RequestTransportType(r)
-	c.Assert(transport.IsValid(), Equals, true)
-	c.Assert(transport.IsConcealed(), Equals, true)
-	c.Assert(transport.String(), Equals, "https")
 }
 
 func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
@@ -2029,161 +1987,4 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
 	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
 	c.Assert(capturedUser.UID, NotNil)
 	c.Assert(*capturedUser.UID, Equals, daemonUID)
-}
-
-func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
-	d := s.newDaemon(c)
-
-	// Set up a Basic auth identity with a hashed password.
-	// Generate sha512-crypt hash for password "test".
-	crypt := sha512_crypt.New()
-	hashedPassword, err := crypt.Generate([]byte("test"), nil)
-	c.Assert(err, IsNil)
-
-	d.state.Lock()
-	err = d.state.AddIdentities(map[string]*state.Identity{
-		"basicuser": {
-			Access: state.ReadAccess,
-			Basic:  &state.BasicIdentity{Password: hashedPassword},
-		},
-	})
-	d.state.Unlock()
-	c.Assert(err, IsNil)
-
-	// Capture the UserState passed to the response function.
-	var capturedUser *UserState
-	cmd := &Command{
-		d: d,
-		GET: func(c *Command, r *http.Request, user *UserState) Response {
-			capturedUser = user
-			return SyncResponse(true)
-		},
-		ReadAccess: UserAccess{},
-	}
-
-	// Make request with Basic auth credentials over Unix Socket.
-	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
-	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("basicuser", "test")
-	req.RemoteAddr = "pid=100;uid=1000;socket=;"
-
-	rec := httptest.NewRecorder()
-	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, Equals, http.StatusOK)
-
-	// Verify UserState for Basic identity over Unix Socket.
-	c.Assert(capturedUser, NotNil)
-	c.Assert(capturedUser.Username, Equals, "basicuser")
-	c.Assert(capturedUser.Access, Equals, state.ReadAccess)
-	c.Assert(capturedUser.UID, IsNil)
-}
-
-func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *C) {
-	d := s.newDaemon(c)
-
-	// Set up a Basic auth identity with a hashed password.
-	// Generate sha512-crypt hash for password "test".
-	crypt := sha512_crypt.New()
-	hashedPassword, err := crypt.Generate([]byte("test"), nil)
-	c.Assert(err, IsNil)
-
-	d.state.Lock()
-	err = d.state.AddIdentities(map[string]*state.Identity{
-		"basicuser": {
-			Access: state.MetricsAccess,
-			Basic:  &state.BasicIdentity{Password: hashedPassword},
-		},
-	})
-	d.state.Unlock()
-	c.Assert(err, IsNil)
-
-	// Capture the UserState passed to the response function.
-	var capturedUser *UserState
-	cmd := &Command{
-		d: d,
-		GET: func(c *Command, r *http.Request, user *UserState) Response {
-			capturedUser = user
-			return SyncResponse(true)
-		},
-		ReadAccess: MetricsAccess{},
-	}
-
-	// Make request with Basic auth credentials over HTTP (not HTTPS).
-	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP)
-	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, IsNil)
-	req.SetBasicAuth("basicuser", "test")
-	req.RemoteAddr = "192.168.1.100:8888"
-
-	rec := httptest.NewRecorder()
-	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, Equals, http.StatusOK)
-
-	// Verify UserState for Basic identity over HTTP.
-	c.Assert(capturedUser, NotNil)
-	c.Assert(capturedUser.Username, Equals, "basicuser")
-	c.Assert(capturedUser.Access, Equals, state.MetricsAccess)
-	c.Assert(capturedUser.UID, IsNil)
-}
-
-func (s *daemonSuite) TestServeHTTPUserStateCert(c *C) {
-	d := s.newDaemon(c)
-
-	// Create a test certificate.
-	certPEM := `-----BEGIN CERTIFICATE-----
-MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
-A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
-NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
-ffcoJ0jNn9ys8uDFeHnQ6JRxgNFvomDTHqNTMFEwHQYDVR0OBBYEFI/oHjhG1A7F
-3HM7McXP7w7CxtrwMB8GA1UdIwQYMBaAFI/oHjhG1A7F3HM7McXP7w7CxtrwMA8G
-A1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EA40v4eckaV7RBXyRb0sfcCcgCAGYtiCSD
-jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
------END CERTIFICATE-----`
-
-	block, _ := pem.Decode([]byte(certPEM))
-	c.Assert(block, NotNil)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	c.Assert(err, IsNil)
-
-	// Set up a Cert identity.
-	d.state.Lock()
-	err = d.state.AddIdentities(map[string]*state.Identity{
-		"certuser1": {
-			Access: state.AdminAccess,
-			Cert:   &state.CertIdentity{X509: cert},
-		},
-	})
-	d.state.Unlock()
-	c.Assert(err, IsNil)
-
-	// Capture the UserState passed to the response function.
-	var capturedUser *UserState
-	cmd := &Command{
-		d: d,
-		GET: func(c *Command, r *http.Request, user *UserState) Response {
-			capturedUser = user
-			return SyncResponse(true)
-		},
-		ReadAccess: UserAccess{},
-	}
-
-	// Make request with mTLS client certificate.
-	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS)
-	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, IsNil)
-	req.RemoteAddr = "192.168.1.100:8443"
-	req.TLS = &tls.ConnectionState{
-		PeerCertificates: []*x509.Certificate{cert},
-	}
-
-	rec := httptest.NewRecorder()
-	cmd.ServeHTTP(rec, req)
-	c.Check(rec.Code, Equals, http.StatusOK)
-
-	// Verify UserState for Cert identity.
-	c.Assert(capturedUser, NotNil)
-	c.Assert(capturedUser.Username, Equals, "certuser1")
-	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
-	c.Assert(capturedUser.UID, IsNil)
 }
