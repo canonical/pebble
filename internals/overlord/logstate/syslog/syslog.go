@@ -111,7 +111,7 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 		fmt.Fprintf(&buf, " %s=\"", key)
 		value := labels[key]
 		// escape the value according to RFC5424 6.3.3
-		for i := 0; i < len(value); i++ {
+		for i := range value {
 			// don't use "for _, c := range value" as we don't want runes
 			c := value[i]
 			if c == '"' || c == '\\' || c == ']' {
