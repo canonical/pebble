@@ -102,7 +102,6 @@ jobs:
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
             ${{ env.SNAP_NAME }}_*.txt
-            snapcraft-${{ env.SNAP_NAME }}-*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@v4
