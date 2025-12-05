@@ -312,14 +312,14 @@ func (c *Client) flushUDP(ctx context.Context) error {
 }
 
 func (c *Client) resetBufferToIndex(last int) {
-	for i := 0; i < last; i++ {
+	for i := range last {
 		c.entries[i] = entryWithService{}
 	}
 	c.entries = c.entries[last:]
 }
 
 func (c *Client) resetBuffer() {
-	for i := 0; i < len(c.entries); i++ {
+	for i := range c.entries {
 		c.entries[i] = entryWithService{}
 	}
 	c.entries = c.buffer[:0]
