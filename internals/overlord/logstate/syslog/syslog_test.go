@@ -34,7 +34,7 @@ type suite struct{}
 var (
 	_              = Suite(&suite{})
 	exampleEntries = []servicelog.Entry{{
-		Time:    time.Date(2023, 12, 31, 12, 0, 0, 123456789, time.UTC),
+		Time:    time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
 		Service: "svc1",
 		Message: "message from svc1",
 	}, {
@@ -132,7 +132,7 @@ func (*suite) TestTCPAddAndFlush(c *C) {
 	case msg := <-msgChan:
 		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 		c.Check(msg, Equals,
-			`121 <13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`+
+			`111 <13>1 2023-12-31T12:00:00Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`+
 				`138 <13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - [test-sdid@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
 				`126 <13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] long message from svc1`+
 				`96 <13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`+
@@ -345,7 +345,7 @@ func (*suite) TestUDPAddAndFlush(c *C) {
 	c.Assert(err, IsNil)
 
 	expectedLogMsg := []string{
-		`<13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`,
+		`<13>1 2023-12-31T12:00:00Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`,
 		`<13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - - msg from svc2`,
 		`<13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] long message from svc1`,
 		`<13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`,

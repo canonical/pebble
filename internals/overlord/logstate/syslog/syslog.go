@@ -181,7 +181,7 @@ func (c *Client) Close() error {
 }
 
 // encodeOneEntry encodes common parts for UDP and TCP syslog entries into c.sendBuf
-func (c *Client) encodeOneEntry(entry *servicelog.Entry, messageSuffix string) {
+func (c *Client) encodeOneEntry(entry *servicelog.Entry, messageSuffix string, timeBuf []byte) {
 	hostname := c.options.Hostname
 	if hostname == "" {
 		hostname = "-"
@@ -194,10 +194,7 @@ func (c *Client) encodeOneEntry(entry *servicelog.Entry, messageSuffix string) {
 
 	// Message format as per RFC 5424: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 	c.sendBuf.WriteString(priorityAndVersionPrefix)
-
-	timeBuf := make([]byte, 0, len("2006-01-02T15:04:05.999999999Z"))
-	c.sendBuf.Write(entry.Time.AppendFormat(timeBuf, time.RFC3339Nano))
-
+	c.sendBuf.Write(timeBuf)
 	c.sendBuf.WriteByte(' ')
 	c.sendBuf.WriteString(hostname)
 	c.sendBuf.WriteByte(' ')
@@ -218,21 +215,25 @@ func (c *Client) buildSendBufferTCP() {
 		hostname = "-"
 	}
 
+	// Reuse timeBuf and lengthBuf across all entries to avoid allocations
+	timeBuf := make([]byte, 0, len("2006-01-02T15:04:05.123456789Z"))
+	lengthBuf := make([]byte, 0, 8)
+
 	for _, entry := range c.entries {
 		structuredData, ok := c.labels[entry.Service]
 		if !ok {
 			structuredData = "-"
 		}
 
+		timeBuf = entry.Time.AppendFormat(timeBuf[:0], time.RFC3339Nano)
+
 		// TCP: Octet framing as per RFC 5425: <length> <message>
-		// RFC3339Nano time string ("2023-12-31T12:00:00.123456789Z") has length 30
-		frameLength := len(priorityAndVersionPrefix) + 30 + 1 + len(hostname) + 1 +
+		frameLength := len(priorityAndVersionPrefix) + len(timeBuf) + 1 + len(hostname) + 1 +
 			len(entry.Service) + 5 + len(structuredData) + 1 + len(entry.Message)
-		lengthBuf := make([]byte, 0, 8)
-		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
+		lengthBuf = strconv.AppendInt(lengthBuf[:0], int64(frameLength), 10)
 		c.sendBuf.Write(lengthBuf)
 		c.sendBuf.WriteByte(' ')
-		c.encodeOneEntry(&entry, "")
+		c.encodeOneEntry(&entry, "", timeBuf)
 	}
 }
 
@@ -270,6 +271,10 @@ func (c *Client) flushTCP(ctx context.Context) error {
 func (c *Client) flushUDP(ctx context.Context) error {
 	// For UDP, we send each message as a separate datagram (RFC 5426 section 3.1)
 	// UDP connections don't need persistent state, so we create a fresh connection
+
+	// Reuse timeBuf across all entries to avoid allocations
+	timeBuf := make([]byte, 0, len("2006-01-02T15:04:05.123456789Z"))
+
 	for i, entry := range c.entries {
 		c.sendBuf.Reset()
 		err := c.ensureConnected(ctx)
@@ -283,7 +288,9 @@ func (c *Client) flushUDP(ctx context.Context) error {
 			entry.Message = entry.Message[:maxUDPMessageSize-len(messageSuffix)]
 		}
 
-		c.encodeOneEntry(&entry, messageSuffix)
+		timeBuf = entry.Time.AppendFormat(timeBuf[:0], time.RFC3339Nano)
+		c.encodeOneEntry(&entry, messageSuffix, timeBuf)
+
 		_, err = io.Copy(c.conn, &c.sendBuf)
 		if err != nil {
 			// Error occurred, close and reset connection so we reconnect next time around.
