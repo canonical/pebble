@@ -15,16 +15,20 @@
 package identities_test
 
 import (
+	"bytes"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"testing"
 
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
+
+func TestIdentities(t *testing.T) { TestingT(t) }
 
 type identitiesSuite struct{}
 
@@ -243,13 +247,16 @@ func (s *identitiesSuite) TestMarshalState(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	// Marshal entire identities, then pull out just the "identities" key to test that.
+	// Marshal entire state, then pull out just the "identities" key to test that.
 	data, err := json.Marshal(st)
 	c.Assert(err, IsNil)
+
 	var unmarshalled map[string]any
 	err = json.Unmarshal(data, &unmarshalled)
 	c.Assert(err, IsNil)
-	data, err = json.MarshalIndent(unmarshalled["identities"], "", "    ")
+	customData := unmarshalled["data"].(map[string]any)
+
+	data, err = json.MarshalIndent(customData["identities"], "", "    ")
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, `
 {
@@ -269,32 +276,34 @@ func (s *identitiesSuite) TestMarshalState(c *C) {
 }
 
 func (s *identitiesSuite) TestUnmarshalState(c *C) {
-	st := state.New(nil)
+	data := []byte(`
+{
+	"data": {
+		"identities": {
+			"bob": {
+				"access": "read",
+				"local": {
+					"user-id": 42
+				}
+			},
+			"mary": {
+				"access": "admin",
+				"local": {
+					"user-id": 1000
+				}
+			}
+		}
+	}
+}`)
+
+	st, err := state.ReadState(nil, bytes.NewReader(data))
+	c.Assert(err, IsNil)
 	mgr, err := identities.NewManager(st)
 	c.Assert(err, IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
-	data := []byte(`
-{
-    "identities": {
-        "bob": {
-            "access": "read",
-            "local": {
-                "user-id": 42
-            }
-        },
-        "mary": {
-            "access": "admin",
-            "local": {
-                "user-id": 1000
-            }
-        }
-    }
-}`)
-	err = json.Unmarshal(data, &st)
-	c.Assert(err, IsNil)
 	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
@@ -714,7 +723,7 @@ func (s *identitiesSuite) TestIdentities(c *C) {
 	// Ensure the map was cloned (mutations to first map won't affect second).
 	idents2 := mgr.Identities()
 	c.Assert(idents2, DeepEquals, expected)
-	idents2["changed"] = &identities.Identity{}
+	idents["changed"] = &identities.Identity{}
 	c.Assert(idents2, DeepEquals, expected)
 }
 

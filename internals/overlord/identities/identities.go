@@ -116,11 +116,22 @@ type Manager struct {
 
 func NewManager(st *state.State) (*Manager, error) {
 	m := &Manager{
-		state: st,
+		state:      st,
+		identities: make(map[string]*Identity),
 	}
+
+	m.state.Lock()
+	defer m.state.Unlock()
+
+	// Read existing identities from state, if any.
 	err := st.Get(identitiesKey, &m.identities)
 	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return nil, err
+	}
+
+	// TODO: is this the right place to do this? See also commented out stuff above.
+	for name, identity := range m.identities {
+		identity.Name = name
 	}
 	return m, nil
 }
