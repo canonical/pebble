@@ -29,11 +29,9 @@ func (s *apiSuite) TestIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
-	identitiesMgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
 	st.Lock()
-
-	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+	identitiesMgr := s.d.overlord.IdentitiesManager()
+	err := identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
 			Access: identities.ReadAccess,
 			Local:  &identities.LocalIdentity{UserID: 42},
@@ -105,9 +103,8 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 	c.Check(rsp.Status, Equals, http.StatusOK)
 
 	st := s.d.overlord.State()
-	identitiesMgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
 	st.Lock()
+	identitiesMgr := s.d.overlord.IdentitiesManager()
 	idents := identitiesMgr.Identities()
 	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
 		"bob": {
@@ -152,10 +149,9 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
-	identitiesMgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
 	st.Lock()
-	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+	identitiesMgr := s.d.overlord.IdentitiesManager()
+	err := identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
 			Access: identities.ReadAccess,
 			Local:  &identities.LocalIdentity{UserID: 42},
@@ -235,10 +231,9 @@ func (s *apiSuite) TestReplaceIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
-	identitiesMgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
 	st.Lock()
-	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+	identitiesMgr := s.d.overlord.IdentitiesManager()
+	err := identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
 			Access: identities.ReadAccess,
 			Local:  &identities.LocalIdentity{UserID: 42},
@@ -302,10 +297,9 @@ func (s *apiSuite) TestRemoveIdentities(c *C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
-	identitiesMgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
 	st.Lock()
-	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+	identitiesMgr := s.d.overlord.IdentitiesManager()
+	err := identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"bob": {
 			Access: identities.ReadAccess,
 			Local:  &identities.LocalIdentity{UserID: 42},

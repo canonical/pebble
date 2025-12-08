@@ -394,10 +394,9 @@ func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, rem
 	d := s.newDaemon(c)
 
 	// Add some named identities for testing with.
-	identitiesMgr, err := identities.NewManager(d.overlord.State())
-	c.Assert(err, IsNil)
+	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
-	err = identitiesMgr.ReplaceIdentities(map[string]*identities.Identity{
+	err := identitiesMgr.ReplaceIdentities(map[string]*identities.Identity{
 		"adminuser": {
 			Access: identities.AdminAccess,
 			Local:  &identities.LocalIdentity{UserID: 1},
@@ -1891,10 +1890,9 @@ func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
 	d := s.newDaemon(c)
 
 	// Set up a Local identity.
-	identitiesMgr, err := identities.NewManager(d.overlord.State())
-	c.Assert(err, IsNil)
+	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
-	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+	err := identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"localuser": {
 			Access: identities.AdminAccess,
 			Local:  &identities.LocalIdentity{UserID: 1000},
@@ -2045,7 +2043,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
 	hashedPassword, err := crypt.Generate([]byte("test"), nil)
 	c.Assert(err, IsNil)
 
-	identitiesMgr, err := identities.NewManager(d.overlord.State())
+	identitiesMgr := d.overlord.IdentitiesManager()
 	c.Assert(err, IsNil)
 	d.state.Lock()
 	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
@@ -2095,8 +2093,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *C) {
 	hashedPassword, err := crypt.Generate([]byte("test"), nil)
 	c.Assert(err, IsNil)
 
-	identitiesMgr, err := identities.NewManager(d.overlord.State())
-	c.Assert(err, IsNil)
+	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
 	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"basicuser": {
@@ -2156,8 +2153,7 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 	c.Assert(err, IsNil)
 
 	// Set up a Cert identity.
-	identitiesMgr, err := identities.NewManager(d.overlord.State())
-	c.Assert(err, IsNil)
+	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
 	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"certuser1": {
