@@ -15,8 +15,11 @@
 package syslog_test
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,13 +31,36 @@ import (
 
 type suite struct{}
 
-var _ = Suite(&suite{})
+var (
+	_              = Suite(&suite{})
+	exampleEntries = []servicelog.Entry{{
+		Time:    time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
+		Service: "svc1",
+		Message: "message from svc1",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 1, 123456789, time.UTC),
+		Service: "svc2",
+		Message: "msg from svc2",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 2, 123456789, time.UTC),
+		Service: "svc1",
+		Message: "long message from svc1",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 3, 123456789, time.UTC),
+		Service: "svc3",
+		Message: "log of svc3 doesn't have any labels",
+	}, {
+		Time:    time.Date(2023, 12, 31, 12, 0, 4, 123456789, time.UTC),
+		Service: "svc4",
+		Message: "multiline\nline2\nline3",
+	}}
+)
 
 func Test(t *testing.T) {
 	TestingT(t)
 }
 
-func (*suite) TestAddEntries(c *C) {
+func (*suite) TestTCPAddAndFlush(c *C) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	c.Assert(err, IsNil)
 	defer listener.Close()
@@ -82,29 +108,7 @@ func (*suite) TestAddEntries(c *C) {
 	})
 
 	// Add entries from different services
-	entries := []servicelog.Entry{{
-		Time:    time.Date(2023, 12, 31, 12, 0, 0, 123456789, time.UTC),
-		Service: "svc1",
-		Message: "message from svc1",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 1, 123456789, time.UTC),
-		Service: "svc2",
-		Message: "msg from svc2",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 2, 123456789, time.UTC),
-		Service: "svc1",
-		Message: "long message from svc1",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 3, 123456789, time.UTC),
-		Service: "svc3",
-		Message: "log of svc3 doesn't have any labels",
-	}, {
-		Time:    time.Date(2023, 12, 31, 12, 0, 4, 123456789, time.UTC),
-		Service: "svc4",
-		Message: "multiline\nline2\nline3",
-	}}
-
-	for _, entry := range entries {
+	for _, entry := range exampleEntries {
 		err = client.Add(entry)
 		c.Assert(err, IsNil)
 	}
@@ -128,7 +132,7 @@ func (*suite) TestAddEntries(c *C) {
 	case msg := <-msgChan:
 		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
 		c.Check(msg, Equals,
-			`121 <13>1 2023-12-31T12:00:00.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`+
+			`111 <13>1 2023-12-31T12:00:00Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`+
 				`138 <13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - [test-sdid@28978 env="production" owner="team-2" version="1.2.3"] msg from svc2`+
 				`126 <13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] long message from svc1`+
 				`96 <13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`+
@@ -149,7 +153,7 @@ line3`)
 	}
 }
 
-func (*suite) TestFlushCancelContext(c *C) {
+func (*suite) TestTCPFlushCancelContext(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://fake:514",
 	})
@@ -180,9 +184,10 @@ func (*suite) TestFlushCancelContext(c *C) {
 	}
 
 }
+
 func (*suite) TestBufferFull(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
-		Location:          "tcp://fake:514",
+		Location:          "udp://fake:514",
 		MaxRequestEntries: 3,
 	})
 	c.Assert(err, IsNil)
@@ -202,14 +207,14 @@ func (*suite) TestBufferFull(c *C) {
 		for i := range expected {
 			// 'nil' means c.buffer[i] should be zero
 			if expected[i] == nil {
-				c.Assert(buffer[i], DeepEquals, syslog.EntryWithService{},
+				c.Assert(buffer[i], DeepEquals, servicelog.Entry{},
 					Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
 				continue
 			}
 
 			// Otherwise, check buffer message matches string
 			msg := expected[i].(string)
-			c.Assert(syslog.GetMessage(buffer[i]), Equals, msg)
+			c.Assert(buffer[i].Message, Equals, msg)
 		}
 	}
 
@@ -228,9 +233,19 @@ func (*suite) TestBufferFull(c *C) {
 	checkBuffer([]any{nil, nil, nil, "4", "5", "6"})
 	addEntry("7")
 	checkBuffer([]any{"5", "6", "7", nil, nil, nil})
+
+	// Simulate that first 2 messages were sent successfully, but 3rd failed
+	// This is what happens in flushUDP when err != nil at iteration i=2
+	syslog.ResetBufferToIndex(client, 2)
+	checkBuffer([]any{nil, nil, "7", nil, nil, nil})
+	addEntry("8")
+	addEntry("9")
+	checkBuffer([]any{nil, nil, "7", "8", "9", nil})
+	syslog.ResetBufferToIndex(client, 1) // 1st msg ok, but 2nd msg failed
+	checkBuffer([]any{nil, nil, nil, "8", "9", nil})
 }
 
-func (*suite) TestFlushEmpty(c *C) {
+func (*suite) TestTCPFlushEmpty(c *C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://fake:514",
 	})
@@ -246,7 +261,7 @@ func (*suite) TestInvalidLocation(c *C) {
 	_, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "http://example.com:514",
 	})
-	c.Assert(err, ErrorMatches, `invalid syslog server location "http://example.com:514", must be in form "tcp://host:port"`)
+	c.Assert(err, ErrorMatches, `invalid syslog server location "http://example.com:514", must be in form "tcp://host:port" or "udp://host:port"`)
 
 	// Valid schemes should work
 	_, err = syslog.NewClient(&syslog.ClientOptions{
@@ -257,7 +272,7 @@ func (*suite) TestInvalidLocation(c *C) {
 	_, err = syslog.NewClient(&syslog.ClientOptions{
 		Location: "udp://localhost:514",
 	})
-	c.Assert(err, ErrorMatches, `invalid syslog server location "udp://localhost:514", must be in form "tcp://host:port"`)
+	c.Assert(err, IsNil)
 }
 
 type testSyslogServer struct {
@@ -286,4 +301,88 @@ func (s *testSyslogServer) run() error {
 	}
 
 	return nil
+}
+
+func (*suite) TestUDPAddAndFlush(c *C) {
+	conn, err := net.ListenPacket("udp", "localhost:0")
+	c.Assert(err, IsNil)
+	defer conn.Close()
+
+	msgChan := make(chan string, 1)
+	go func() {
+		for {
+			buf := make([]byte, 8192)
+			n, _, err := conn.ReadFrom(buf)
+			if err != nil {
+				c.Assert(errors.Is(err, net.ErrClosed), Equals, true)
+				break
+			}
+			if n > 0 {
+				msgChan <- string(buf[:n])
+			}
+		}
+		close(msgChan)
+	}()
+
+	client, err := syslog.NewClient(&syslog.ClientOptions{
+		Location: "udp://" + conn.LocalAddr().String(),
+		Hostname: "test-machine",
+		SDID:     "test-sdid",
+	})
+	c.Assert(err, IsNil)
+	defer client.Close()
+
+	client.SetLabels("svc1", map[string]string{
+		"env":     "test",
+		"version": "0.0.1",
+	})
+	for _, entry := range exampleEntries {
+		err = client.Add(entry)
+		c.Assert(err, IsNil)
+	}
+
+	err = client.Flush(context.Background())
+	c.Assert(err, IsNil)
+
+	expectedLogMsg := []string{
+		`<13>1 2023-12-31T12:00:00Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`,
+		`<13>1 2023-12-31T12:00:01.123456789Z test-machine svc2 - - - msg from svc2`,
+		`<13>1 2023-12-31T12:00:02.123456789Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] long message from svc1`,
+		`<13>1 2023-12-31T12:00:03.123456789Z test-machine svc3 - - - log of svc3 doesn't have any labels`,
+		`<13>1 2023-12-31T12:00:04.123456789Z test-machine svc4 - - - multiline
+line2
+line3`,
+	}
+	for _, expected := range expectedLogMsg {
+		select {
+		case msg := <-msgChan:
+			c.Check(msg, Equals, expected)
+		case <-time.After(2 * time.Second):
+			c.Fatal("timed out waiting for UDP message")
+		}
+	}
+
+	// Test message longer than max UDP size is truncated
+	longMsg := bytes.Repeat([]byte("A"), 5000)
+
+	c.Assert(client.Add(servicelog.Entry{
+		Time:    time.Date(2023, 12, 31, 12, 0, 0, 0, time.UTC),
+		Service: "svc2",
+		Message: string(longMsg),
+	}), IsNil)
+	c.Assert(client.Flush(context.Background()), IsNil)
+
+	select {
+	case truncatedMsg := <-msgChan:
+		c.Check(truncatedMsg, Equals, "<13>1 2023-12-31T12:00:00Z test-machine svc2 - - - "+strings.Repeat("A", 4000-3)+"...")
+	case <-time.After(2 * time.Second):
+		c.Fatal("timed out waiting for long UDP message")
+	}
+
+	conn.Close()
+	select {
+	case <-msgChan: // check if msgChan is closed correctly
+	case <-time.After(1 * time.Second):
+		c.Fatal("timed out waiting for UDP server to stop")
+	}
 }
