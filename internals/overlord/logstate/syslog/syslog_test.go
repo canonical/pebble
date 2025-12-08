@@ -214,7 +214,7 @@ func (*suite) TestBufferFull(c *C) {
 
 			// Otherwise, check buffer message matches string
 			msg := expected[i].(string)
-			c.Assert(syslog.GetMessage(buffer[i]), Equals, msg)
+			c.Assert(buffer[i].Message, Equals, msg)
 		}
 	}
 

@@ -20,10 +20,6 @@ func GetBuffer(c *Client) []servicelog.Entry {
 	return c.buffer
 }
 
-func GetMessage(e servicelog.Entry) string {
-	return e.Message
-}
-
 func ResetBufferToIndex(c *Client, index int) {
 	c.resetBufferToIndex(index)
 }
