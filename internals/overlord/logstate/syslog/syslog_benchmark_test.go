@@ -37,24 +37,8 @@ func BenchmarkEncodeEntry(b *testing.B) {
 }
 
 func BenchmarkFlushUDP(b *testing.B) {
-	conn, err := net.ListenPacket("udp", "localhost:0")
-	if err != nil {
-		b.Fatalf("Failed to create UDP listener: %v", err)
-	}
-	defer conn.Close()
-
-	go func() {
-		for {
-			buf := make([]byte, 8192)
-			_, _, err := conn.ReadFrom(buf)
-			if err != nil {
-				break
-			}
-		}
-	}()
-
 	client, err := NewClient(&ClientOptions{
-		Location: "udp://" + conn.LocalAddr().String(),
+		Location: "udp://dummy:1234",
 		Hostname: "test-machine",
 		SDID:     "test-sdid",
 	})
@@ -63,16 +47,12 @@ func BenchmarkFlushUDP(b *testing.B) {
 	}
 	defer client.Close()
 
-	entries := []servicelog.Entry{
-		{
-			Time:    time.Date(2025, 1, 2, 15, 4, 5, 123456789, time.UTC),
-			Service: "redis",
-			Message: "This is a reasonably long log message to benchmark the flushUDP function.",
-		}, {
-			Time:    time.Date(2025, 1, 2, 15, 4, 6, 987654321, time.UTC),
-			Service: "nginx",
-			Message: "Another log message to include in the UDP flush benchmark.",
-		},
+	client.conn = &doNothingConn{}
+
+	entry := servicelog.Entry{
+		Time:    time.Date(2025, 1, 2, 15, 4, 5, 123456789, time.UTC),
+		Service: "redis",
+		Message: "This is a reasonably long log message to benchmark the flushUDP function.",
 	}
 	client.SetLabels("redis", map[string]string{
 		"env":     "test",
@@ -81,12 +61,21 @@ func BenchmarkFlushUDP(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		for _, entry := range entries {
-			client.Add(entry)
-		}
+		client.Add(entry)
 		err = client.Flush(context.Background())
 		if err != nil {
 			b.Fatalf("Failed to flush entries: %v", err)
 		}
 	}
 }
+
+type doNothingConn struct{}
+
+func (d *doNothingConn) Read(b []byte) (n int, err error)   { return 0, nil }
+func (d *doNothingConn) Write(b []byte) (n int, err error)  { return len(b), nil }
+func (d *doNothingConn) Close() error                       { return nil }
+func (d *doNothingConn) LocalAddr() net.Addr                { return nil }
+func (d *doNothingConn) RemoteAddr() net.Addr               { return nil }
+func (d *doNothingConn) SetDeadline(t time.Time) error      { return nil }
+func (d *doNothingConn) SetReadDeadline(t time.Time) error  { return nil }
+func (d *doNothingConn) SetWriteDeadline(t time.Time) error { return nil }
