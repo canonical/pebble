@@ -59,9 +59,9 @@ jobs:
 
   remote-build:
     runs-on: ubuntu-latest
-    # if: github.event_name != 'pull_request' # FIXME don't merge it like this
+    if: github.event_name != 'pull_request'
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
@@ -93,14 +93,13 @@ jobs:
         uses: snapcore/action-build@v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
-          snapcraft-channel: latest/beta
       - name: Rename the logs file, because artifacts can't have colons
         if: always()
         run: cat snapcraft-${{ env.SNAP_NAME }}-*.txt > snapcraft-logs.txt || echo "no log files"
       - uses: actions/upload-artifact@v4
-        if: always()  # FIXME
+        if: always()
         with:
-          name: snapcraft-logs-${{ matrix.arch }}  # FIXME keep this change!
+          name: snapcraft-logs-${{ matrix.arch }}
           path: |
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
