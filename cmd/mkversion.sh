@@ -42,9 +42,9 @@ if [ -z "$v" ]; then
     # Let's try to derive the version from git..
     if command -v git >/dev/null; then
         # Examples:
-        # - directly tagged "v1.99.0-fips" --> "v1.99.0+fips"
-        # - tag in branch history "v1.99.0-fips" --> "v1.99.0+fips+1d21027"
-        v="$(git describe --tags --always --match 'v*-fips' | sed -e 's/-[0-9]-g/-/' -e 's/-/+/g')"
+        # - directly tagged "v1.9.0-fips" --> "v1.9.0-fips"
+        # - in history "v1.9.0-fips" -> describe "v1.9.0-fips-13-g1d21027" -> "v1.9.0-fips-1d21027"
+        v="$(git describe --tags --always --match 'v*-fips' | sed -e 's/-[0-9][0-9]*-g/-/')"
         o=git
     fi
 fi
