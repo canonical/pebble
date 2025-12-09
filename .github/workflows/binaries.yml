@@ -64,9 +64,9 @@ jobs:
     - name: Upload archive to release
       env:
         ARCHIVE_FILE: ${{ steps.build.outputs.ARCHIVE_FILE }}
-        RELEASE_TAG: ${{ github.event.release.tag_name }}
+        PEBBLE_VERSION: ${{ steps.build.outputs.PEBBLE_VERSION }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       if: ${{ github.event_name == 'release' }}
       run: |
-        echo Uploading $ARCHIVE_FILE to release $RELEASE_TAG
-        gh release upload $RELEASE_TAG dist/$ARCHIVE_FILE
+        echo Uploading $ARCHIVE_FILE to release $PEBBLE_VERSION
+        gh release upload $PEBBLE_VERSION dist/$ARCHIVE_FILE
