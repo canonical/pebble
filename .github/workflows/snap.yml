@@ -93,7 +93,7 @@ jobs:
         uses: snapcore/action-build@v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
-      - name: Rename the logs file, because artifacts can't have colons
+      - name: Rename the logs file, for colons are not allowed in the artifact name
         if: always()
         run: cat snapcraft-${{ env.SNAP_NAME }}-*.txt > snapcraft-logs.txt || echo "no log files"
       - uses: actions/upload-artifact@v4
