@@ -5,8 +5,9 @@ on:
     branches: [master]
   push:
     branches: [master]
-  release:
-    types: [published]
+  # dimaqq: temporarily disabled in order to create a fake "base" release
+  #release:
+    #types: [published]
 
 # We don't want this workflow to have multiple runs in parallel because
 # what could happen is that a slow-running and older execution will upload
