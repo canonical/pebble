@@ -63,6 +63,8 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
+        # TODO: temporarily pause ppc64el and s390x builds while builders are broken
+        # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
         arch: ["amd64", "arm64", "armhf", "riscv64"]
     steps:
       - name: Checkout Pebble repo
@@ -149,6 +151,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TODO: temporarily pause ppc64el and s390x builds while builders are broken
+        # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
         arch: ["amd64", "arm64", "armhf", "riscv64"]
     steps:
       - uses: actions/download-artifact@v4
@@ -171,6 +175,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # TODO: temporarily pause ppc64el and s390x builds while builders are broken
+        # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
         arch: ["amd64", "arm64", "armhf", "riscv64"]
     env:
       TO_TRACK: latest
