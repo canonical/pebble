@@ -34,4 +34,4 @@ For `pebble enter exec`, the `--verbose` flag is currently disallowed. However, 
 
 ## XDG_CONFIG_HOME
 
-The [XDG configuration directory](https://specifications.freedesktop.org/basedir-spec/latest/#basics). Certain Pebble CLI commands create or use data files in `$XDG_CONFIG_HOME/pebble`. Defaults to `$HOME/.config` if not specified.
+The [XDG configuration directory](https://specifications.freedesktop.org/basedir/latest/#basics). Certain Pebble CLI commands create or use data files in `$XDG_CONFIG_HOME/pebble`. Defaults to `$HOME/.config` if not specified.
