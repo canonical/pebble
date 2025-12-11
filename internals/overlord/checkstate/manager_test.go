@@ -51,22 +51,35 @@ type ManagerSuite struct {
 
 var _ = Suite(&ManagerSuite{})
 
-var setLoggerOnce sync.Once
+var (
+	setLoggerOnce   sync.Once
+	startReaperOnce sync.Once
+)
 
 func (s *ManagerSuite) SetUpSuite(c *C) {
 	// This can happen in parallel with tests if -test.count=N with N>1 is specified.
 	setLoggerOnce.Do(func() {
 		logger.SetLogger(logger.New(os.Stderr, "[test] "))
 	})
+
+	// Start reaper once for the entire suite to avoid race conditions
+	// when tests run in parallel (e.g., with -race flag).
+	startReaperOnce.Do(func() {
+		err := reaper.Start()
+		c.Assert(err, IsNil)
+	})
+}
+
+func (s *ManagerSuite) TearDownSuite(c *C) {
+	// Stop reaper after all tests in the suite complete.
+	err := reaper.Stop()
+	c.Assert(err, IsNil)
 }
 
 func (s *ManagerSuite) SetUpTest(c *C) {
-	err := reaper.Start()
-	c.Assert(err, IsNil)
-
 	s.overlord = overlord.Fake()
 	layersDir := filepath.Join(c.MkDir(), "layers")
-	err = os.Mkdir(layersDir, 0755)
+	err := os.Mkdir(layersDir, 0755)
 	c.Assert(err, IsNil)
 	s.planMgr, err = planstate.NewManager(layersDir)
 	c.Assert(err, IsNil)
@@ -82,9 +95,6 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 
 func (s *ManagerSuite) TearDownTest(c *C) {
 	s.overlord.Stop()
-
-	err := reaper.Stop()
-	c.Assert(err, IsNil)
 }
 
 func (s *ManagerSuite) TestChecks(c *C) {
