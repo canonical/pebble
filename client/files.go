@@ -575,12 +575,10 @@ func (client *Client) Pull(opts *PullOptions) error {
 	if mediaType != "multipart/form-data" {
 		// If it's not multipart, it's likely an API error, so try parsing it as such.
 		var serverResp response
-		err := decodeInto(resp.Body, &serverResp)
-		if err != nil {
+		if err := decodeInto(resp.Body, &serverResp); err != nil {
 			return fmt.Errorf("expected a multipart response, got %q", mediaType)
 		}
-		err = serverResp.err()
-		if err != nil {
+		if err := serverResp.err(); err != nil {
 			return err
 		}
 		return fmt.Errorf("expected a multipart response, got %q", mediaType)
@@ -595,13 +593,8 @@ func (client *Client) Pull(opts *PullOptions) error {
 
 	// Check if we got "response" first (error case) or "files" (success case)
 	if firstPart.FormName() == "response" {
-		// Error case: only response part present (e.g., file doesn't exist)
 		// Decode and process the response to extract the actual error
 		return processResponsePart(firstPart)
-	}
-
-	if firstPart.FormName() != "files" {
-		return fmt.Errorf("expected first field name to be \"files\" or \"response\", got %q", firstPart.FormName())
 	}
 
 	// Success case: copy file data
@@ -618,7 +611,6 @@ func (client *Client) Pull(opts *PullOptions) error {
 		return fmt.Errorf("expected second field name to be \"response\", got %q", responsePart.FormName())
 	}
 
-	// Process response metadata (see defaultRequester.Do)
 	return processResponsePart(responsePart)
 }
 
@@ -643,10 +635,6 @@ func processResponsePart(part io.Reader) error {
 	var fr []fileResult
 	if err := requestResponse.DecodeResult(&fr); err != nil {
 		return fmt.Errorf("cannot unmarshal result: %w", err)
-	}
-
-	if len(fr) == 0 {
-		return fmt.Errorf("no file data received from API")
 	}
 
 	if len(fr) != 1 {
