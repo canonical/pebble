@@ -274,7 +274,7 @@ func (s *identitiesSuite) TestMarshalState(c *C) {
     }
 }`[1:])
 
-	_, hasLegacyIdentities := unmarshalled["identities"].(any)
+	_, hasLegacyIdentities := unmarshalled["identities"]
 	c.Assert(hasLegacyIdentities, Equals, false)
 }
 
