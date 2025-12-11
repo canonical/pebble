@@ -1,5 +1,6 @@
 # Hacking on Pebble
 
+- [FIPS 140 changes](#fips-140-changes)
 - [Running the daemon](#running-the-daemon)
 - [Using the CLI client](#using-the-cli-client)
 - [Using Curl to hit the API](#using-curl-to-hit-the-api)
@@ -28,6 +29,17 @@ go install ./cmd/pebble
 ```
 
 However, during development it's easiest just to use `go run`, as that will automatically recompile if you've made any changes.
+
+
+## FIPS 140 changes
+
+The `fips` branch contains the changes necessary to run Pebble in FIPS 140-3 mode.
+
+The current approach is to remove any access to cryptographic primitives and is meant to be temporary until Go runtime passes FIPS validation.
+
+- password hashing is removed, and so is the third-party library: users can be created with pre-hashed password identity, but basic authentication will always fail
+- inbound network access: the `--https` flag is not available, Pebble will not listen on the HTTPS protocol
+- outbound network access (Pebble CLI, checks, and log targets): protocol is restricted to HTTP, attempting to make a request to an HTTPS origin will fail and for requests made with HTTP, redirects to HTTPS origins will fail
 
 
 ## Running the daemon
