@@ -40,6 +40,12 @@ func (s *apiSuite) TestIdentities(c *C) {
 			Access: identities.AdminAccess,
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Access: identities.MetricsAccess,
+			Basic: &identities.BasicIdentity{
+				Password: "$6$F9cFSVEKyO4gB1Wh$8S1BSKsNkF.jBAixGc4W7l80OpfCNk65LZBDHBng3NAmbcHuMj4RIm7992rrJ8YA.SJ0hvm.vGk2z483am4Ym1", // "test"
+			},
+		},
 	})
 	c.Assert(err, IsNil)
 	st.Unlock()
@@ -69,6 +75,12 @@ func (s *apiSuite) TestIdentities(c *C) {
         "access": "admin",
         "local": {
             "user-id": 1000
+        }
+    },
+    "nancy": {
+        "access": "metrics",
+        "basic": {
+            "password": "*****"
         }
     }
 }`[1:])
