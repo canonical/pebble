@@ -23,7 +23,7 @@ import (
 
 // Identity holds the configuration of a single identity.
 type Identity struct {
-	Access Access `json:"access" yaml:"access"`
+	Access IdentityAccess `json:"access" yaml:"access"`
 
 	// One or more of the following type-specific configuration fields must be
 	// non-nil.
@@ -32,13 +32,13 @@ type Identity struct {
 	Cert  *CertIdentity  `json:"cert,omitempty" yaml:"cert,omitempty"`
 }
 
-// Access defines the access level for an identity.
-type Access string
+// IdentityAccess defines the access level for an identity.
+type IdentityAccess string
 
 const (
-	AdminAccess     Access = "admin"
-	ReadAccess      Access = "read"
-	UntrustedAccess Access = "untrusted"
+	AdminAccess     IdentityAccess = "admin"
+	ReadAccess      IdentityAccess = "read"
+	UntrustedAccess IdentityAccess = "untrusted"
 )
 
 // LocalIdentity holds identity configuration specific to the "local" type
