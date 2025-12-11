@@ -164,7 +164,7 @@ func (*suite) TestRequest(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, _ := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:  server.URL,
 		UserAgent: "pebble/1.23.0",
 		ScopeName: "pebble",
@@ -179,6 +179,15 @@ func (*suite) TestRequest(c *C) {
 	c.Assert(numRequests, Equals, 1)
 }
 
+func (*suite) TestHTTPSIsRejected(c *C) {
+	_, err := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location:  "https://test.example",
+		UserAgent: "pebble/1.23.0",
+		ScopeName: "pebble",
+	})
+	c.Assert(err, ErrorMatches, "only HTTP .*")
+}
+
 func (*suite) TestFlushCancelContext(c *C) {
 	serverCtx, killServer := context.WithCancel(context.Background())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +200,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	defer server.Close()
 	defer killServer()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
+	client, _ := opentelemetry.NewClient(&opentelemetry.ClientOptions{Location: server.URL})
 	err := client.Add(servicelog.Entry{
 		Time:    time.Now(),
 		Service: "svc1",
@@ -226,7 +235,7 @@ func (*suite) TestServerTimeout(c *C) {
 	defer server.Close()
 	defer close(stopRequest)
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, _ := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:       server.URL,
 		RequestTimeout: 1 * time.Microsecond,
 	})
@@ -242,9 +251,9 @@ func (*suite) TestServerTimeout(c *C) {
 }
 
 func (*suite) TestBufferFull(c *C) {
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, _ := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		TargetName:        "tgt1",
-		Location:          "fake",
+		Location:          "http://test.example",
 		MaxRequestEntries: 3,
 	})
 
@@ -303,7 +312,7 @@ func (*suite) TestLabels(c *C) {
 	}))
 	defer server.Close()
 
-	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+	client, _ := opentelemetry.NewClient(&opentelemetry.ClientOptions{
 		Location:  server.URL,
 		ScopeName: "pebble",
 	})

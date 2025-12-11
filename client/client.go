@@ -17,11 +17,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"crypto/ed25519"
-	"crypto/sha512"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/base32"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -54,12 +49,6 @@ const (
 	AsyncRequest
 )
 
-const (
-	// expectedServerCertCount is the number of certificates expected from the server
-	// during a TLS handshake: TLS certificate + Identity certificate (root CA).
-	expectedServerCertCount = 2
-)
-
 type RequestOptions struct {
 	Type    RequestType
 	Method  string
@@ -72,12 +61,6 @@ type RequestOptions struct {
 type RequestResponse struct {
 	StatusCode int
 	Headers    http.Header
-	// TLSServerIDCert holds the server identity certificate acting as CA for
-	// the TLS leaf certificate. This certificate can be obtained by doing an
-	// insecure HTTPS query to the server (e.g. health), or pairing with the
-	// server by supplying the server fingerprint. See the client config for
-	// details.
-	TLSServerIDCert *x509.Certificate
 	// ChangeID is typically set when an AsyncRequest type is performed. The
 	// change id allows for introspection and progress tracking of the request.
 	ChangeID string
@@ -150,45 +133,6 @@ type Config struct {
 	// If the protocol prefix is https://, TLS will be used.
 	BaseURL string
 
-	// TLSServerIDCert provides (a previously pinned) server identity
-	// certificate that will be used to validate the incoming server
-	// TLS (leaf) certificate signature.
-	//
-	// If this field is left nil it means that the client is connecting
-	// to a new server of which the identity certificate is still
-	// unknown. Use one of the following two options to verify the
-	// server certificates, and pin the server identity certificate for
-	// future connections using this option.
-	TLSServerIDCert *x509.Certificate
-	// TLSServerFingerprint is an alternative server identity verification
-	// mechanism that should only be used during client server identity
-	// pairing, not for normal HTTPS operations. The mechanism assumes
-	// a different means of obtaining the server identity fingerprint
-	// (e.g. mDNS or a physical display) as part of the pairing procedure.
-	//
-	// See the Fingerprint method in the idkey package for details. Once
-	// the pairing request has been processed by the server, and the
-	// client pinned the server identity certificate, future TLS
-	// connections must supply the TLSServerIDCert field, and leave
-	// TLSServerFingerprint empty.
-	TLSServerFingerprint string
-	// TLSServerInsecure disables verification of the server supplied
-	// certificates, making this client-server connection insecure.
-	//
-	// This option should not be used for normal HTTPS operations, as it
-	// makes the client susceptible to man-in-the-middle attacks. This
-	// option can be used to obtain the server certificates, for example,
-	// by accessing an open endpoint such as the health endpoint.
-	// Server certificate validation must then happen by a manual or
-	// externally controlled process. Once the server identity certificate
-	// is trusted and pinned, future TLS connections must supply the
-	// TLSServerIDCert field, and leave TLSServerFingerprint empty.
-	TLSServerInsecure bool
-	// TLSClientIDCert must hold the client identity certificate when
-	// using a TLS connection to the server. This field must be nil if
-	// a non-TLS based transport is used.
-	TLSClientIDCert *tls.Certificate
-
 	// Optional HTTP Basic Authentication details. If supplied this will
 	// add an HTTP basic authentication header entry.
 	// RFC 7617 (HTTP Authentication: Basic and Digest) support a user without
@@ -235,21 +179,6 @@ func New(config *Config) (*Client, error) {
 	// Let's not mutate the input config.
 	localConfig := Config{}
 	if config != nil {
-		// Only one TLS server option is allowed.
-		tlsOptions := 0
-		if config.TLSServerFingerprint != "" {
-			tlsOptions += 1
-		}
-		if config.TLSServerIDCert != nil {
-			tlsOptions += 1
-		}
-		if config.TLSServerInsecure {
-			tlsOptions += 1
-		}
-		if tlsOptions > 1 {
-			return nil, fmt.Errorf("only one TLS server validation option allowed, but %d were provided", tlsOptions)
-		}
-
 		localConfig = *config
 	}
 
@@ -394,20 +323,12 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 		return nil, err
 	}
 
-	var idCert *x509.Certificate
-	// If this is a TLS connection, extract the server identity certificate
-	// which is placed after the TLS certificate.
-	if httpResp.TLS != nil && len(httpResp.TLS.PeerCertificates) == expectedServerCertCount {
-		idCert = httpResp.TLS.PeerCertificates[1]
-	}
-
 	// Is the result expecting a caller-managed raw body?
 	if opts.Type == RawRequest {
 		return &RequestResponse{
-			StatusCode:      httpResp.StatusCode,
-			Headers:         httpResp.Header,
-			TLSServerIDCert: idCert,
-			Body:            httpResp.Body,
+			StatusCode: httpResp.StatusCode,
+			Headers:    httpResp.Header,
+			Body:       httpResp.Body,
 		}, nil
 	}
 
@@ -460,11 +381,10 @@ func (rq *defaultRequester) Do(ctx context.Context, opts *RequestOptions) (*Requ
 
 	// Common response
 	return &RequestResponse{
-		StatusCode:      serverResp.StatusCode,
-		Headers:         httpResp.Header,
-		TLSServerIDCert: idCert,
-		ChangeID:        serverResp.Change,
-		Result:          serverResp.Result,
+		StatusCode: serverResp.StatusCode,
+		Headers:    httpResp.Header,
+		ChangeID:   serverResp.Change,
+		Result:     serverResp.Result,
 	}, nil
 }
 
@@ -666,24 +586,11 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		if err != nil {
 			return nil, fmt.Errorf("cannot parse base URL: %w", err)
 		}
+		if baseURL.Scheme != "http" {
+			return nil, fmt.Errorf("only HTTP URLs are allowed in FIPS builds (got %q)", opts.BaseURL)
+		}
 		transport := &http.Transport{
 			DisableKeepAlives: opts.DisableKeepAlive,
-			TLSClientConfig: &tls.Config{
-				// We disable the internal full X509 metadata based validation logic
-				// since the typical use-case do not have the server as a public URL
-				// baked into the certificate, signed with an external CA. The client
-				// config provides a TLSServerVerify hook that must be used to verify
-				// the server certificate chain.
-				InsecureSkipVerify: true,
-				VerifyConnection: func(state tls.ConnectionState) error {
-					return verifyConnection(state, opts)
-				},
-				// The server is configured to request a certificate from the client
-				// which will result in this hook getting called to retrieve it.
-				GetClientCertificate: func(request *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-					return opts.TLSClientIDCert, nil
-				},
-			},
 		}
 		requester = &defaultRequester{
 			baseURL:       baseURL,
@@ -693,56 +600,23 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		}
 	}
 
-	requester.doer = &http.Client{Transport: requester.transport}
+	requester.doer = &http.Client{
+		Transport: requester.transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Scheme != "http" {
+				return errors.New("only HTTP redirects are allowed in FIPS builds")
+			}
+			// Allow HTTP redirects up to 10 times (Go default)
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			return nil
+		},
+	}
 	requester.userAgent = opts.UserAgent
 	requester.client = client
 
 	return requester, nil
-}
-
-// verifyConnection verifies the incoming server TLS certificate.
-func verifyConnection(state tls.ConnectionState, opts *Config) error {
-	// We always expect two certificates from our server:
-	//
-	// state.PeerCertificates[0] - server TLS certificate
-	// state.PeerCertificates[1] - server Identity certificate (root CA)
-	certCount := len(state.PeerCertificates)
-	if certCount != expectedServerCertCount {
-		return fmt.Errorf("cannot find identity certificate: expected %d certificates, got %d", expectedServerCertCount, certCount)
-	}
-	// Make a local copy of the server identity certificate (root CA).
-	serverIDCert := state.PeerCertificates[1]
-
-	if opts.TLSServerFingerprint != "" {
-		// Client supplied fingerprint must match the server identity.
-		idFingerprint, err := getIdentityFingerprint(serverIDCert)
-		if err != nil {
-			return fmt.Errorf("cannot obtain identity fingerprint: %v", err)
-		}
-		if idFingerprint == opts.TLSServerFingerprint {
-			// Fingerprint verification passed.
-			return nil
-		}
-		return errors.New("server fingerprint mismatch")
-
-	} else if opts.TLSServerIDCert != nil {
-		// Verify the incoming server TLS certificate with the pinned
-		// server identity certificate.
-		roots := x509.NewCertPool()
-		roots.AddCert(opts.TLSServerIDCert)
-		verifyOpts := x509.VerifyOptions{
-			Roots: roots,
-		}
-		incomingTLS := state.PeerCertificates[0]
-		_, err := incomingTLS.Verify(verifyOpts)
-		return err
-
-	} else if opts.TLSServerInsecure {
-		// Insecure server connection. Proceed with care.
-		return nil
-	}
-
-	return errors.New("cannot verify server: see TLS config options")
 }
 
 func (rq *defaultRequester) Transport() *http.Transport {
@@ -757,10 +631,9 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 		HandshakeTimeout: 5 * time.Second,
 	}
 
+	// Only plain WebSockets in FIPS builds.
+	// The library we use doesn't handle redirects, so those need not be filtered.
 	scheme := "ws"
-	if rq.baseURL.Scheme == "https" {
-		scheme = "wss"
-	}
 	url := fmt.Sprintf("%s://%s%s", scheme, rq.baseURL.Host, urlPath)
 
 	r := http.Request{Header: make(http.Header)}
@@ -774,16 +647,4 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 		return conn, parseError(resp)
 	}
 	return conn, err
-}
-
-// getIdentityFingerprint extracts the public key from the certificate and
-// calculates the fingerprint.
-func getIdentityFingerprint(cert *x509.Certificate) (string, error) {
-	pubKey, ok := cert.PublicKey.(ed25519.PublicKey)
-	if !ok {
-		return "", errors.New("certificate must use Ed25519 public key")
-	}
-	hashBytes := sha512.Sum384(pubKey)
-	fingerprint := base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(hashBytes[:])
-	return fingerprint, nil
 }

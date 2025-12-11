@@ -17,8 +17,6 @@ package daemon
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"errors"
 	"fmt"
 	"io"
@@ -46,7 +44,6 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 )
@@ -71,7 +68,6 @@ const (
 	TransportTypeUnknown TransportType = iota // Must be zero value => 0
 	TransportTypeUnixSocket
 	TransportTypeHTTP
-	TransportTypeHTTPS
 )
 
 // RequestTransportType extracts the transport type of the HTTP request. If
@@ -94,8 +90,6 @@ func (t TransportType) String() string {
 		return "http+unix"
 	case TransportTypeHTTP:
 		return "http"
-	case TransportTypeHTTPS:
-		return "https"
 	default:
 		return "unknown"
 	}
@@ -104,17 +98,16 @@ func (t TransportType) String() string {
 // IsValid reports whether the transport type is valid.
 func (t TransportType) IsValid() bool {
 	switch t {
-	case TransportTypeUnixSocket, TransportTypeHTTP, TransportTypeHTTPS:
+	case TransportTypeUnixSocket, TransportTypeHTTP:
 		return true
 	}
 	return false
 }
 
-// IsConcealed returns true if the transport type is either encrypted (HTTPS) or
-// if its local to the device (Unix Domain Socket).
+// IsConcealed returns true if it's local to the device (Unix Domain Socket).
 func (t TransportType) IsConcealed() bool {
 	switch t {
-	case TransportTypeUnixSocket, TransportTypeHTTPS:
+	case TransportTypeUnixSocket:
 		return true
 	}
 	return false
@@ -129,15 +122,6 @@ type Options struct {
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
 
-	// TLSDir is an optional path for where the TLS manager persists PEM files.
-	// Defaults to "tls" inside the pebble directory.
-	TLSDir string
-
-	// IDSigner is a private key representing the identity of a Pebble
-	// instance (machine, container or device), which implements the
-	// tlsstate.IDSigner interface (for digest signing).
-	IDSigner tlsstate.IDSigner
-
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
 	// the pebble directory.
@@ -147,11 +131,6 @@ type Options struct {
 	// ":4000" to listen on any address, port 4000. If not set, the HTTP API
 	// server is not started.
 	HTTPAddress string
-
-	// HTTPSAddress is the address for the HTTPS API server, for example
-	// ":8443" to listen on any address, port 8443. If not set, the HTTPS
-	// API server is not started.
-	HTTPSAddress string
 
 	// ServiceOuput is an optional io.Writer for the service log output, if set, all services
 	// log output will be written to the writer.
@@ -174,7 +153,6 @@ type Daemon struct {
 	state           *state.State
 	generalListener net.Listener
 	httpListener    net.Listener
-	httpsListener   net.Listener
 	connTracker     *connTracker
 	serve           *http.Server
 	tomb            tomb.Tomb
@@ -219,21 +197,8 @@ type Command struct {
 }
 
 func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserState {
-	// Does the connection include a single mTLS client identity
-	// certificate?
-	var clientCert *x509.Certificate
-	if r.TLS != nil && len(r.TLS.PeerCertificates) == 1 {
-		clientCert = r.TLS.PeerCertificates[0]
-	}
-
-	// Does the HTTP header include basic auth credentials? Note that
-	// we explicitly prohibit using basic auth credentials for HTTPS
-	// for now.
-	var username string
-	var password string
-	if RequestTransportType(r) != TransportTypeHTTPS {
-		username, password, _ = r.BasicAuth()
-	}
+	// Does the HTTP header include basic auth credentials?
+	username, password, _ := r.BasicAuth()
 
 	// Is a unix socket peer credential UID available?
 	var userID *uint32
@@ -242,7 +207,7 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserSta
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(userID, username, password, clientCert)
+	identity := st.IdentityFromInputs(userID, username, password)
 	st.Unlock()
 
 	if identity != nil {
@@ -486,16 +451,6 @@ func (d *Daemon) Init() error {
 		logger.Noticef("HTTP API server listening on %q.", d.options.HTTPAddress)
 	}
 
-	if d.options.HTTPSAddress != "" {
-		tlsConf := d.overlord.TLSManager().ListenConfig()
-		listener, err := tls.Listen("tcp", d.options.HTTPSAddress, tlsConf)
-		if err != nil {
-			return fmt.Errorf("cannot TLS listen on %q: %v", d.options.HTTPSAddress, err)
-		}
-		d.httpsListener = listener
-		logger.Noticef("HTTPS API server listening on %q.", d.options.HTTPSAddress)
-	}
-
 	logger.Noticef("Started daemon.")
 	return nil
 }
@@ -597,8 +552,6 @@ func (d *Daemon) Start() error {
 				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnixSocket)
 			case *net.TCPConn:
 				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTP)
-			case *tls.Conn:
-				return context.WithValue(ctx, TransportTypeKey{}, TransportTypeHTTPS)
 			}
 			return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnknown)
 		},
@@ -623,16 +576,6 @@ func (d *Daemon) Start() error {
 		// Start additional HTTP API
 		d.tomb.Go(func() error {
 			err := d.serve.Serve(d.httpListener)
-			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
-				return err
-			}
-			return nil
-		})
-	}
-	if d.httpsListener != nil {
-		// Start additional HTTPS API
-		d.tomb.Go(func() error {
-			err := d.serve.Serve(d.httpsListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 				return err
 			}
@@ -994,13 +937,6 @@ func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
 	return d.overlord.PlanManager().SetServiceArgs(serviceArgs)
 }
 
-// pairingWindowEnabled is a helper function to simplify testing of code
-// dependant on the Pairing Manager.
-func (d *Daemon) pairingWindowEnabled() bool {
-	pairingManager := d.overlord.PairingManager()
-	return pairingManager.PairingEnabled()
-}
-
 func New(opts *Options) (*Daemon, error) {
 	d := &Daemon{
 		options: opts,
@@ -1009,11 +945,9 @@ func New(opts *Options) (*Daemon, error) {
 	ovldOptions := overlord.Options{
 		PebbleDir:      opts.Dir,
 		LayersDir:      opts.LayersDir,
-		TLSDir:         opts.TLSDir,
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
-		IDSigner:       opts.IDSigner,
 		Persist:        opts.Persist,
 	}
 

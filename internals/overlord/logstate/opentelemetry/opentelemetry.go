@@ -18,9 +18,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -126,18 +128,37 @@ type Client struct {
 	resourceAttributes map[string][]keyValue
 }
 
-func NewClient(options *ClientOptions) *Client {
+func NewClient(options *ClientOptions) (*Client, error) {
+	u, err := url.Parse(options.Location)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL %q: %w", options.Location, err)
+	}
+	if u.Scheme != "http" {
+		return nil, fmt.Errorf("only HTTP URLs are allowed in FIPS builds (got %q)", options.Location)
+	}
 	opts := *options
 	fillDefaultOptions(&opts)
 	c := &Client{
-		options:            &opts,
-		httpClient:         &http.Client{Timeout: opts.RequestTimeout},
+		options: &opts,
+		httpClient: &http.Client{
+			Timeout: opts.RequestTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if req.URL.Scheme != "http" {
+					return errors.New("only HTTP redirects are allowed in FIPS builds")
+				}
+				// Allow HTTP redirects up to 10 times (Go default)
+				if len(via) >= 10 {
+					return errors.New("stopped after 10 redirects")
+				}
+				return nil
+			},
+		},
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}
 	// c.entries should be backed by the same array as c.buffer.
 	c.entries = c.buffer[:0]
-	return c
+	return c, nil
 }
 
 // ClientOptions allows overriding default parameters (e.g. for testing).

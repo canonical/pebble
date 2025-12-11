@@ -2,12 +2,11 @@ name: Pebble snap
 
 on:
   pull_request:
-    branches: [master]
+    branches: [fips]
   push:
-    branches: [master]
-  # dimaqq: temporarily disabled in order to create a fake "base" release
-  #release:
-    #types: [published]
+    branches: [fips]
+  release:
+    types: [published]
 
 # We don't want this workflow to have multiple runs in parallel because
 # what could happen is that a slow-running and older execution will upload
@@ -16,7 +15,7 @@ concurrency: ${{ github.workflow }}
 
 env:
   SNAP_NAME: pebble
-  DEFAULT_TRACK: latest
+  DEFAULT_TRACK: fips
   DEFAULT_RISK: edge
 
 jobs:
@@ -95,15 +94,19 @@ jobs:
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
 
+      - name: Rename the logs file, for colons are not allowed in the artifact name
+        if: always()
+        run: cat snapcraft-${{ env.SNAP_NAME }}-*.txt > snapcraft-logs.txt || echo "no log files"
+
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
-          name: snapcraft-logs
+          name: snapcraft-logs-${{ matrix.arch }}
           path: |
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
             ${{ env.SNAP_NAME }}_*.txt
-            snapcraft-${{ env.SNAP_NAME }}-*.txt
+            snapcraft-logs.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@v4
@@ -170,7 +173,7 @@ jobs:
       matrix:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     env:
-      TO_TRACK: latest
+      TO_TRACK: fips
       TO_RISK: candidate
     steps:
       - name: Install Snapcraft
@@ -191,7 +194,7 @@ jobs:
 
       # It would be easier to use `snapcraft promote`, but there's an error when trying
       # to avoid the prompt with the "--yes" option:
-      # > 'latest/edge' is not a valid set value for --from-channel when using --yes.
+      # > 'fips/edge' is not a valid set value for --from-channel when using --yes.
       - name: Promote ${{ env.SNAP_NAME }} snap rev${{ steps.get-snap.outputs.revision }} to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}

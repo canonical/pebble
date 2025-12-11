@@ -20,6 +20,8 @@ const (
 	dialTimeout                = 10 * time.Second
 	canonicalPrivEnterpriseNum = 28978
 	initialSendBufferSize      = 4 * 1024
+	priorityAndVersionPrefix   = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
+	maxUDPMessageSize          = 4000     // Maximum size of a UDP syslog message payload
 )
 
 type ClientOptions struct {
@@ -30,19 +32,13 @@ type ClientOptions struct {
 	DialTimeout       time.Duration
 }
 
-type entryWithService struct {
-	service   string
-	timestamp string
-	message   string
-}
-
 type Client struct {
 	options *ClientOptions
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
 	// sliding window "entries" of size MaxRequestEntries.
-	buffer  []entryWithService
-	entries []entryWithService
+	buffer  []servicelog.Entry
+	entries []servicelog.Entry
 
 	// Store the custom labels (syslog's structured-data) for each service
 	labels map[string]string
@@ -73,14 +69,14 @@ func NewClient(options *ClientOptions) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid syslog server location: %v", err)
 	}
-	if u.Scheme != "tcp" || u.Host == "" { // may support udp later
-		return nil, fmt.Errorf(`invalid syslog server location %q, must be in form "tcp://host:port"`, opts.Location)
+	if (u.Scheme != "tcp" && u.Scheme != "udp") || u.Host == "" {
+		return nil, fmt.Errorf(`invalid syslog server location %q, must be in form "tcp://host:port" or "udp://host:port"`, opts.Location)
 	}
 
 	c := &Client{
 		location: u,
 		options:  &opts,
-		buffer:   make([]entryWithService, 2*opts.MaxRequestEntries),
+		buffer:   make([]servicelog.Entry, 2*opts.MaxRequestEntries),
 		labels:   make(map[string]string),
 	}
 	c.entries = c.buffer[:0]
@@ -115,7 +111,7 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 		fmt.Fprintf(&buf, " %s=\"", key)
 		value := labels[key]
 		// escape the value according to RFC5424 6.3.3
-		for i := 0; i < len(value); i++ {
+		for i := range value {
 			// don't use "for _, c := range value" as we don't want runes
 			c := value[i]
 			if c == '"' || c == '\\' || c == ']' {
@@ -133,7 +129,7 @@ func (c *Client) Add(entry servicelog.Entry) error {
 	if len(c.entries) >= c.options.MaxRequestEntries {
 		// 'entries' is full - remove the first element to make room
 		// Zero the removed element to allow garbage collection
-		c.entries[0] = entryWithService{}
+		c.entries[0] = servicelog.Entry{}
 		c.entries = c.entries[1:]
 	}
 
@@ -146,17 +142,13 @@ func (c *Client) Add(entry servicelog.Entry) error {
 
 		// Zero removed elements to allow garbage collection
 		for i := len(c.entries); i < len(c.buffer); i++ {
-			c.buffer[i] = entryWithService{}
+			c.buffer[i] = servicelog.Entry{}
 		}
 	}
 
 	entry.Message = strings.TrimSuffix(entry.Message, "\n")
 
-	c.entries = append(c.entries, entryWithService{
-		timestamp: entry.Time.Format(time.RFC3339Nano), // Format: 2021-05-26T12:37:01.123456789Z
-		message:   entry.Message,
-		service:   entry.Service,
-	})
+	c.entries = append(c.entries, entry)
 	return nil
 }
 
@@ -188,41 +180,60 @@ func (c *Client) Close() error {
 	return err
 }
 
-func (c *Client) buildSendBuffer() {
+// encodeOneEntry encodes common parts for UDP and TCP syslog entries into c.sendBuf
+func (c *Client) encodeOneEntry(entry *servicelog.Entry, messageSuffix string, timeBuf []byte) {
+	hostname := c.options.Hostname
+	if hostname == "" {
+		hostname = "-"
+	}
+
+	structuredData, ok := c.labels[entry.Service]
+	if !ok {
+		structuredData = "-"
+	}
+
+	// Message format as per RFC 5424: <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
+	c.sendBuf.WriteString(priorityAndVersionPrefix)
+	c.sendBuf.Write(timeBuf)
+	c.sendBuf.WriteByte(' ')
+	c.sendBuf.WriteString(hostname)
+	c.sendBuf.WriteByte(' ')
+	c.sendBuf.WriteString(entry.Service)
+	c.sendBuf.WriteString(" - - ")
+	c.sendBuf.WriteString(structuredData)
+	c.sendBuf.WriteByte(' ')
+	c.sendBuf.WriteString(entry.Message)
+	if messageSuffix != "" {
+		c.sendBuf.WriteString(messageSuffix)
+	}
+}
+
+func (c *Client) buildSendBufferTCP() {
 	c.sendBuf.Reset()
 	hostname := c.options.Hostname
 	if hostname == "" {
 		hostname = "-"
 	}
 
+	// Reuse timeBuf and lengthBuf across all entries to avoid allocations
+	timeBuf := make([]byte, 0, len("2006-01-02T15:04:05.123456789Z"))
+	lengthBuf := make([]byte, 0, 8)
+
 	for _, entry := range c.entries {
-		structuredData, ok := c.labels[entry.service]
+		structuredData, ok := c.labels[entry.Service]
 		if !ok {
 			structuredData = "-"
 		}
 
-		// Format: <length> <PRI>VERSION TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA MSG
-		const prefix = "<13>1 " // priority 13 = 1*8+5 (facility user, priority notice), version 1
-		frameLength := len(prefix) + len(entry.timestamp) + 1 + len(hostname) + 1 +
-			len(entry.service) + 5 + len(structuredData) + 1 + len(entry.message)
+		timeBuf = entry.Time.AppendFormat(timeBuf[:0], time.RFC3339Nano)
 
-		// Octet framing as per RFC 5425: <length> <message>
-		lengthBuf := make([]byte, 0, 8) // fixed-length buffer to avoid allocations
-		lengthBuf = strconv.AppendInt(lengthBuf, int64(frameLength), 10)
+		// TCP: Octet framing as per RFC 5425: <length> <message>
+		frameLength := len(priorityAndVersionPrefix) + len(timeBuf) + 1 + len(hostname) + 1 +
+			len(entry.Service) + 5 + len(structuredData) + 1 + len(entry.Message)
+		lengthBuf = strconv.AppendInt(lengthBuf[:0], int64(frameLength), 10)
 		c.sendBuf.Write(lengthBuf)
 		c.sendBuf.WriteByte(' ')
-
-		// Message format as per RFC 5424
-		c.sendBuf.WriteString(prefix)
-		c.sendBuf.WriteString(entry.timestamp)
-		c.sendBuf.WriteByte(' ')
-		c.sendBuf.WriteString(hostname)
-		c.sendBuf.WriteByte(' ')
-		c.sendBuf.WriteString(entry.service)
-		c.sendBuf.WriteString(" - - ")
-		c.sendBuf.WriteString(structuredData)
-		c.sendBuf.WriteByte(' ')
-		c.sendBuf.WriteString(entry.message)
+		c.encodeOneEntry(&entry, "", timeBuf)
 	}
 }
 
@@ -232,12 +243,19 @@ func (c *Client) Flush(ctx context.Context) error {
 		return nil
 	}
 
+	if c.location.Scheme == "udp" {
+		return c.flushUDP(ctx)
+	}
+	return c.flushTCP(ctx)
+}
+
+func (c *Client) flushTCP(ctx context.Context) error {
 	err := c.ensureConnected(ctx)
 	if err != nil {
 		return err
 	}
 
-	c.buildSendBuffer()
+	c.buildSendBufferTCP()
 	_, err = io.Copy(c.conn, &c.sendBuf)
 	if err != nil {
 		// The connection might be bad. Close and reset it for later reconnection attempt(s).
@@ -250,9 +268,56 @@ func (c *Client) Flush(ctx context.Context) error {
 	return nil
 }
 
+func (c *Client) flushUDP(ctx context.Context) error {
+	// For UDP, we send each message as a separate datagram (RFC 5426 section 3.1)
+	// UDP connections don't need persistent state, so we create a fresh connection
+
+	// Reuse timeBuf across all entries to avoid allocations
+	timeBuf := make([]byte, 0, len("2006-01-02T15:04:05.123456789Z"))
+
+	for i, entry := range c.entries {
+		c.sendBuf.Reset()
+		err := c.ensureConnected(ctx)
+		if err != nil {
+			return err
+		}
+
+		messageSuffix := ""
+		if len(entry.Message) > maxUDPMessageSize {
+			messageSuffix = "..."
+			entry.Message = entry.Message[:maxUDPMessageSize-len(messageSuffix)]
+		}
+
+		timeBuf = entry.Time.AppendFormat(timeBuf[:0], time.RFC3339Nano)
+		c.encodeOneEntry(&entry, messageSuffix, timeBuf)
+
+		_, err = io.Copy(c.conn, &c.sendBuf)
+		if err != nil {
+			// Error occurred, close and reset connection so we reconnect next time around.
+			// Has sent i entries successfully, remove them from the buffer.
+			c.resetBufferToIndex(i)
+			c.conn.Close()
+			c.conn = nil
+			return fmt.Errorf("cannot send syslogs: %w", err)
+		}
+	}
+
+	// resetBuffer has the same effect as resetBufferToIndex(len(c.entries)),
+	// but is more efficient, since it avoids future possible entry copying in `Add`.
+	c.resetBuffer()
+	return nil
+}
+
+func (c *Client) resetBufferToIndex(last int) {
+	for i := range last {
+		c.entries[i] = servicelog.Entry{}
+	}
+	c.entries = c.entries[last:]
+}
+
 func (c *Client) resetBuffer() {
-	for i := 0; i < len(c.entries); i++ {
-		c.entries[i] = entryWithService{}
+	for i := range c.entries {
+		c.entries[i] = servicelog.Entry{}
 	}
 	c.entries = c.buffer[:0]
 }

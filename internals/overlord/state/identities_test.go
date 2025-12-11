@@ -15,10 +15,7 @@
 package state_test
 
 import (
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
-	"fmt"
 
 	. "gopkg.in/check.v1"
 
@@ -28,38 +25,6 @@ import (
 type identitiesSuite struct{}
 
 var _ = Suite(&identitiesSuite{})
-
-// Generated using `openssl req -new -x509 -out cert.pem -days 3650 -subj "/CN=canonical.com"`
-const validPEMX509Cert = `-----BEGIN CERTIFICATE-----
-MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
-A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
-NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
-ffcoJ0jNn9ys8uDFeHnQ6JRxgNFvomDTHqNTMFEwHQYDVR0OBBYEFI/oHjhG1A7F
-3HM7McXP7w7CxtrwMB8GA1UdIwQYMBaAFI/oHjhG1A7F3HM7McXP7w7CxtrwMA8G
-A1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EA40v4eckaV7RBXyRb0sfcCcgCAGYtiCSD
-jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
------END CERTIFICATE-----
-`
-
-const invalidPEMX509Cert = `-----BEGIN CERTIFICATE-----
-MIIBEjCBxQIUbhv2Dwr9CY4ApHMo2ilg6FC/8RMwBQYDK2VwMCwxFDASBgNVBAMM
-C2V4YW1wbGUuY29tMRQwEgYDVQQKDAtFeGFtcGxlIE9yZzAeFw0yNTA5MjYxNTI3
-MDJaFw0yNjA5MjYxNTI3MDJaMCwxFDASBgNVBAMMC2V4YW1wbGUuY29tMRQwEgYD
-VQQKDAtFeGFtcGxlIE9yZzAqMAUGAytlcAMhAIlut+P3huKtFK439Ap+7U4Bv4r2
-DY3fLYnfNEcrXTdLMAUGAytlcANBAEhUiFSTNuCuu2rc4pqGwXYGEtEFqRZDZwYe
-mHLySscsVEgGwncFhL/9UW5iZl/tO/o+WiyVd/K4Vk0Yrp6uggA=
------END CERTIFICATE-----
-`
-
-// Generated using `openssl req -new -newkey ed25519 -out bad-cert.pem -nodes -subj "/CN=canonical.com"`
-// This is a valid PEM block but not a valid X.509 certificate.
-const testPEMPKCS10Req = `-----BEGIN CERTIFICATE REQUEST-----
-MIGXMEsCAQAwGDEWMBQGA1UEAwwNY2Fub25pY2FsLmNvbTAqMAUGAytlcAMhADuu
-TTkzIDS55kZukGFfsWM+kPug1hpJLVx4wKqr5eLNoAAwBQYDK2VwA0EA3QU93q5S
-pV4RrgnD3G7kw2dg8fdJAZ/qn1bXToUzPy89uPMiAZIE+eHXBxzqTJ6GJrVY+2r7
-GV6pXv511MycDg==
------END CERTIFICATE REQUEST-----
-`
 
 // IMPORTANT NOTE: be sure secrets aren't included when adding to this!
 func (s *identitiesSuite) TestMarshalAPI(c *C) {
@@ -79,10 +44,6 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
 		"nancy": {
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
-		},
-		"olivia": {
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -109,20 +70,12 @@ func (s *identitiesSuite) TestMarshalAPI(c *C) {
         "basic": {
             "password": "*****"
         }
-    },
-    "olivia": {
-        "access": "read",
-        "cert": {
-            "pem": "*****"
-        }
     }
 }`[1:])
 }
 
 func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
-	jsonCert, err := json.Marshal(validPEMX509Cert)
-	c.Assert(err, IsNil)
-	data := fmt.Appendf(nil, `
+	data := []byte(`
 {
     "bob": {
         "access": "read",
@@ -141,16 +94,10 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
         "basic": {
             "password": "hash"
         }
-    },
-    "olivia": {
-        "access": "read",
-        "cert": {
-            "pem": %s
-        }
     }
-}`, jsonCert)
+}`)
 	var identities map[string]*state.Identity
-	err = json.Unmarshal(data, &identities)
+	err := json.Unmarshal(data, &identities)
 	c.Assert(err, IsNil)
 	c.Assert(identities, DeepEquals, map[string]*state.Identity{
 		"bob": {
@@ -165,21 +112,10 @@ func (s *identitiesSuite) TestUnmarshalAPI(c *C) {
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
-		"olivia": {
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
-		},
 	})
 }
 
 func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
-	// Marshal a certificate request to test valid PEM but invalid X.509.
-	jsonCertReq, err := json.Marshal(testPEMPKCS10Req)
-	c.Assert(err, IsNil)
-	// Marshal a certificate with extra data after the PEM block.
-	jsonCertExtra, err := json.Marshal(validPEMX509Cert + "42")
-	c.Assert(err, IsNil)
-
 	tests := []struct {
 		data  string
 		error string
@@ -192,18 +128,6 @@ func (s *identitiesSuite) TestUnmarshalAPIErrors(c *C) {
 	}, {
 		data:  `{"invalid-access": {"access": "metrics", "basic": {}}}`,
 		error: `basic identity must specify password \(hashed\)`,
-	}, {
-		data:  `{"invalid-access": {"access": "read", "cert": {}}}`,
-		error: `cert identity must include a PEM-encoded certificate`,
-	}, {
-		data:  `{"invalid-access": {"access": "read", "cert": {"pem": "..."}}}`,
-		error: `cert identity must include a PEM-encoded certificate`,
-	}, {
-		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertReq),
-		error: `cannot parse certificate from cert identity: x509: .*`,
-	}, {
-		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertExtra),
-		error: `cert identity cannot have extra data after the PEM block`,
 	}, {
 		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
 		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
@@ -317,10 +241,6 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
 		},
-		"olivia": {
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
-		},
 	}
 	err := st.AddIdentities(original)
 	c.Assert(err, IsNil)
@@ -342,11 +262,6 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Name:   "nancy",
 			Access: state.MetricsAccess,
 			Basic:  &state.BasicIdentity{Password: "hash"},
-		},
-		"olivia": {
-			Name:   "olivia",
-			Access: state.ReadAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 
@@ -710,67 +625,26 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 				Password: "$6$F9cFSVEKyO4gB1Wh$8S1BSKsNkF.jBAixGc4W7l80OpfCNk65LZBDHBng3NAmbcHuMj4RIm7992rrJ8YA.SJ0hvm.vGk2z483am4Ym1",
 			},
 		},
-		"cert": {
-			Access: state.AdminAccess,
-			Cert:   &state.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
-		},
 	}
 	err := st.AddIdentities(ids)
 	c.Assert(err, IsNil)
-
-	validCert := parseCert(c, validPEMX509Cert)
-	invalidCert := parseCert(c, invalidPEMX509Cert)
 
 	tests := []struct {
 		name           string
 		userID         *uint32
 		basicUser      string
 		basicPass      string
-		cert           *x509.Certificate
 		expectedUser   string
 		expectedAccess state.IdentityAccess
 	}{{
 		name:         "no inputs",
 		expectedUser: "",
 	}, {
-		// Certificate authentication tests (highest priority)
-		name:           "valid cert",
-		cert:           validCert,
-		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
-	}, {
-		name:         "invalid cert",
-		cert:         invalidCert,
-		expectedUser: "",
-	}, {
-		// Cert overrides other auth methods
-		name:           "cert with basic auth ignored",
-		cert:           validCert,
-		basicUser:      "basic",
-		basicPass:      "test",
-		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
-	}, {
-		name:           "cert with uid ignored",
-		cert:           validCert,
-		userID:         ptr(uint32(42)),
-		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
-	}, {
-		name:           "cert with both basic and uid ignored",
-		cert:           validCert,
-		basicUser:      "basic",
-		basicPass:      "test",
-		userID:         ptr(uint32(42)),
-		expectedUser:   "cert",
-		expectedAccess: state.AdminAccess,
-	}, {
 		// Basic authentication tests (medium priority)
-		name:           "valid basic auth",
-		basicUser:      "basic",
-		basicPass:      "test",
-		expectedUser:   "basic",
-		expectedAccess: state.ReadAccess,
+		name:         "valid basic auth",
+		basicUser:    "basic",
+		basicPass:    "test",
+		expectedUser: "", // disabled in FIPS builds
 	}, {
 		name:         "valid user invalid password",
 		basicUser:    "basic",
@@ -803,12 +677,11 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		expectedUser: "",
 	}, {
 		// Basic auth overrides UID
-		name:           "basic auth with uid ignored",
-		basicUser:      "basic",
-		basicPass:      "test",
-		userID:         ptr(uint32(42)),
-		expectedUser:   "basic",
-		expectedAccess: state.ReadAccess,
+		name:         "basic auth with uid ignored",
+		basicUser:    "basic",
+		basicPass:    "test",
+		userID:       ptr(uint32(42)),
+		expectedUser: "", // disabled in FIPS builds
 	}, {
 		name:         "invalid basic auth with valid uid ignored",
 		basicUser:    "basic",
@@ -834,7 +707,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 
 	for _, test := range tests {
 		c.Logf("Running test: %s", test.name)
-		identity := st.IdentityFromInputs(test.userID, test.basicUser, test.basicPass, test.cert)
+		identity := st.IdentityFromInputs(test.userID, test.basicUser, test.basicPass)
 
 		if test.expectedUser != "" {
 			c.Assert(identity, NotNil)
@@ -848,12 +721,4 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 
 func ptr[T any](v T) *T {
 	return &v
-}
-
-func parseCert(c *C, pemBlock string) *x509.Certificate {
-	block, _ := pem.Decode([]byte(pemBlock))
-	c.Assert(block, NotNil)
-	cert, _ := x509.ParseCertificate(block.Bytes)
-	c.Assert(cert, NotNil)
-	return cert
 }

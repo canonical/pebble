@@ -165,7 +165,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 					TargetName:        target.Name,
 					Location:          target.Location,
 					MaxRequestEntries: 5,
-				}), nil
+				})
 			},
 		},
 	)
@@ -237,6 +237,7 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 	target := &plan.LogTarget{
 		Name:     "tgt1",
 		Type:     plan.LokiTarget,
+		Location: "http://test.example",
 		Services: []string{"all"},
 		Labels:   map[string]string{"foo": "bar-$SECRET-$SECRET2", "baz": "foo"},
 	}
