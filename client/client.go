@@ -600,7 +600,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 		}
 	}
 
-	requester.doer = &http.Client{Transport: requester.transport,
+	requester.doer = &http.Client{
+		Transport: requester.transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if req.URL.Scheme != "http" {
 				return errors.New("only HTTP redirects are allowed in FIPS builds")

@@ -140,7 +140,8 @@ func NewClient(options *ClientOptions) (*Client, error) {
 	fillDefaultOptions(&opts)
 	c := &Client{
 		options: &opts,
-		httpClient: &http.Client{Timeout: opts.RequestTimeout,
+		httpClient: &http.Client{
+			Timeout: opts.RequestTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if req.URL.Scheme != "http" {
 					return errors.New("only HTTP redirects are allowed in FIPS builds")
