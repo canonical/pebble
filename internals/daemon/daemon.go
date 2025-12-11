@@ -195,7 +195,7 @@ type Daemon struct {
 
 // UserState represents the state of an authenticated API user.
 type UserState struct {
-	Access   identities.IdentityAccess
+	Access   identities.Access
 	UID      *uint32
 	Username string
 }

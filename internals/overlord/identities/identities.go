@@ -12,6 +12,10 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO: refactor to avoid three types: Identity, apiIdentity, marshalledIdentity
+//       do api stuff in api_identities.go instead?
+// TODO: load from top-level "identities" key in state for migration path
+
 package identities
 
 import (
@@ -71,7 +75,7 @@ func (m *Manager) Ensure() error {
 // Identity holds the configuration of a single identity.
 type Identity struct {
 	Name   string
-	Access IdentityAccess
+	Access Access
 
 	// One or more of the following type-specific configuration fields must be
 	// non-nil.
@@ -80,14 +84,14 @@ type Identity struct {
 	Cert  *CertIdentity
 }
 
-// IdentityAccess defines the access level for an identity.
-type IdentityAccess string
+// Access defines the access level for an identity.
+type Access string
 
 const (
-	AdminAccess     IdentityAccess = "admin"
-	ReadAccess      IdentityAccess = "read"
-	MetricsAccess   IdentityAccess = "metrics"
-	UntrustedAccess IdentityAccess = "untrusted"
+	AdminAccess     Access = "admin"
+	ReadAccess      Access = "read"
+	MetricsAccess   Access = "metrics"
+	UntrustedAccess Access = "untrusted"
 )
 
 // LocalIdentity holds identity configuration specific to the "local" type
@@ -214,7 +218,7 @@ func (d *Identity) UnmarshalJSON(data []byte) error {
 	}
 
 	identity := Identity{
-		Access: IdentityAccess(ai.Access),
+		Access: Access(ai.Access),
 	}
 
 	if ai.Local != nil {

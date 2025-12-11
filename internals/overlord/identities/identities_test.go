@@ -765,7 +765,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		basicPass      string
 		cert           *x509.Certificate
 		expectedUser   string
-		expectedAccess identities.IdentityAccess
+		expectedAccess identities.Access
 	}{{
 		name:         "no inputs",
 		expectedUser: "",

@@ -891,6 +891,6 @@ func addNotice(c *C, st *state.State, userID *uint32, noticeType state.NoticeTyp
 	c.Assert(err, IsNil)
 }
 
-func userState(access identities.IdentityAccess, uid uint32) *UserState {
+func userState(access identities.Access, uid uint32) *UserState {
 	return &UserState{Access: access, UID: &uid}
 }

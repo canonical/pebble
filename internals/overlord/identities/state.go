@@ -55,7 +55,7 @@ func unmarshalIdentities(marshalled map[string]*marshalledIdentity) (map[string]
 	for name, mi := range marshalled {
 		identities[name] = &Identity{
 			Name:   name,
-			Access: IdentityAccess(mi.Access),
+			Access: Access(mi.Access),
 		}
 		if mi.Local != nil {
 			identities[name].Local = &LocalIdentity{UserID: mi.Local.UserID}
