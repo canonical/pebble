@@ -37,7 +37,8 @@ const (
 type Manager struct {
 	state *state.State
 
-	// Keep a local copy to avoid having to deserialize from state each time.
+	// Keep a local copy to avoid having to deserialize from state each time
+	// Get is called.
 	identities map[string]*Identity
 }
 

@@ -324,20 +324,20 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
 func (s *identitiesSuite) TestUnmarshalStateLegacy(c *C) {
 	data := []byte(`
 {
-	"identities": {
-		"bob": {
-			"access": "read",
-			"local": {
-				"user-id": 42
-			}
-		},
-		"mary": {
-			"access": "admin",
-			"local": {
-				"user-id": 1000
-			}
-		}
-	}
+    "identities": {
+        "bob": {
+            "access": "read",
+            "local": {
+                "user-id": 42
+            }
+        },
+        "mary": {
+            "access": "admin",
+            "local": {
+                "user-id": 1000
+            }
+        }
+    }
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
