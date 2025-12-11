@@ -12,79 +12,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-/*
-TODO: from state package -- what to do with these?
-// marshalledIdentity is used specifically for marshalling to the state
-// database file. Unlike apiIdentity, it should include secrets.
-type marshalledIdentity struct {
-	Access string                   `json:"access"`
-	Local  *marshalledLocalIdentity `json:"local,omitempty"`
-	Basic  *marshalledBasicIdentity `json:"basic,omitempty"`
-	Cert   *marshalledCertIdentity  `json:"cert,omitempty"`
-}
-
-type marshalledLocalIdentity struct {
-	UserID uint32 `json:"user-id"`
-}
-
-type marshalledBasicIdentity struct {
-	Password string `json:"password"`
-}
-
-type marshalledCertIdentity struct {
-	PEM string `json:"pem"`
-}
-
-func (s *State) marshalledIdentities() map[string]*marshalledIdentity {
-	marshalled := make(map[string]*marshalledIdentity, len(s.identities))
-	for name, identity := range s.identities {
-		marshalled[name] = &marshalledIdentity{
-			Access: string(identity.Access),
-		}
-		if identity.Local != nil {
-			marshalled[name].Local = &marshalledLocalIdentity{UserID: identity.Local.UserID}
-		}
-		if identity.Basic != nil {
-			marshalled[name].Basic = &marshalledBasicIdentity{Password: identity.Basic.Password}
-		}
-		if identity.Cert != nil {
-			pemBlock := &pem.Block{
-				Type:  "CERTIFICATE",
-				Bytes: identity.Cert.X509.Raw,
-			}
-			marshalled[name].Cert = &marshalledCertIdentity{PEM: string(pem.EncodeToMemory(pemBlock))}
-		}
-	}
-	return marshalled
-}
-
-
-func (s *State) unmarshalIdentities(marshalled map[string]*marshalledIdentity) error {
-	s.identities = make(map[string]*Identity, len(marshalled))
-	for name, mi := range marshalled {
-		s.identities[name] = &Identity{
-			Name:   name,
-			Access: IdentityAccess(mi.Access),
-		}
-		if mi.Local != nil {
-			s.identities[name].Local = &LocalIdentity{UserID: mi.Local.UserID}
-		}
-		if mi.Basic != nil {
-			s.identities[name].Basic = &BasicIdentity{Password: mi.Basic.Password}
-		}
-		if mi.Cert != nil {
-			block, _ := pem.Decode([]byte(mi.Cert.PEM))
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
-			}
-			s.identities[name].Cert = &CertIdentity{X509: cert}
-		}
-	}
-	return nil
-}
-*/
-
 package identities
 
 import (
@@ -124,15 +51,16 @@ func NewManager(st *state.State) (*Manager, error) {
 	defer m.state.Unlock()
 
 	// Read existing identities from state, if any.
-	err := st.Get(identitiesKey, &m.identities)
+	var marshalled map[string]*marshalledIdentity
+	err := st.Get(identitiesKey, &marshalled)
 	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return nil, err
 	}
-
-	// TODO: is this the right place to do this? See also commented out stuff above.
-	for name, identity := range m.identities {
-		identity.Name = name
+	m.identities, err = unmarshalIdentities(marshalled)
+	if err != nil {
+		return nil, err
 	}
+
 	return m, nil
 }
 
@@ -356,7 +284,7 @@ func (m *Manager) AddIdentities(identities map[string]*Identity) error {
 	}
 
 	m.identities = newIdentities
-	m.state.Set(identitiesKey, newIdentities)
+	m.state.Set(identitiesKey, marshalledIdentities(newIdentities))
 	return nil
 }
 
@@ -393,7 +321,7 @@ func (m *Manager) UpdateIdentities(identities map[string]*Identity) error {
 	}
 
 	m.identities = newIdentities
-	m.state.Set(identitiesKey, newIdentities)
+	m.state.Set(identitiesKey, marshalledIdentities(newIdentities))
 	return nil
 }
 
@@ -428,7 +356,7 @@ func (m *Manager) ReplaceIdentities(identities map[string]*Identity) error {
 	}
 
 	m.identities = newIdentities
-	m.state.Set(identitiesKey, newIdentities)
+	m.state.Set(identitiesKey, marshalledIdentities(newIdentities))
 	return nil
 }
 
@@ -452,7 +380,7 @@ func (m *Manager) RemoveIdentities(identities map[string]struct{}) error {
 	for name := range identities {
 		delete(m.identities, name)
 	}
-	m.state.Set(identitiesKey, m.identities)
+	m.state.Set(identitiesKey, marshalledIdentities(m.identities))
 	return nil
 }
 
