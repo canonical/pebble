@@ -14,7 +14,6 @@
 
 // TODO: refactor to avoid three types: Identity, apiIdentity, marshalledIdentity
 //       do api stuff in api_identities.go instead?
-// TODO: load from top-level "identities" key in state for migration path
 
 package identities
 

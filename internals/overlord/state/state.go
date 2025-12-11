@@ -162,6 +162,10 @@ type marshalledState struct {
 	Tasks   map[string]*Task            `json:"tasks"`
 	Notices []*Notice                   `json:"notices,omitempty"`
 
+	// The "identities" key used to be stored directly on state at the top level,
+	// so be sure to read them from old state files.
+	LegacyIdentities json.RawMessage `json:"identities,omitempty"`
+
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
 	LastLaneId   int `json:"last-lane-id"`
@@ -193,6 +197,16 @@ func (s *State) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	s.data = unmarshalled.Data
+
+	// Load legacy identities if new identities are not in Get/Set data.
+	if !s.data.has("identities") && len(unmarshalled.LegacyIdentities) > 0 {
+		logger.Noticef("Loaded legacy identities from state file")
+		if s.data == nil {
+			s.data = make(customData)
+		}
+		s.data["identities"] = &unmarshalled.LegacyIdentities
+	}
+
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
 	s.unflattenNotices(unmarshalled.Notices)
