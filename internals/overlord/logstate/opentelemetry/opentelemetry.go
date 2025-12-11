@@ -150,7 +150,8 @@ func NewClient(options *ClientOptions) (*Client, error) {
 					return errors.New("stopped after 10 redirects")
 				}
 				return nil
-			}},
+			},
+		},
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}

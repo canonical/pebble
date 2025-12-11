@@ -69,7 +69,8 @@ func (c *httpChecker) check(ctx context.Context) error {
 				return errors.New("stopped after 10 redirects")
 			}
 			return nil
-		}}
+		},
+	}
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)

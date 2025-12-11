@@ -610,7 +610,8 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 				return errors.New("stopped after 10 redirects")
 			}
 			return nil
-		}}
+		},
+	}
 	requester.userAgent = opts.UserAgent
 	requester.client = client
 
