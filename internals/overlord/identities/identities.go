@@ -12,9 +12,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// TODO: refactor to avoid three types: Identity, apiIdentity, marshalledIdentity
-//       do api stuff in api_identities.go instead?
-
 package identities
 
 import (
