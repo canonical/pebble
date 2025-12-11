@@ -94,7 +94,7 @@ func (s *spanSuite) TestSave(c *C) {
 
 	// Two timings, with 2 nested measures.
 	var spans []*timing.Span
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		span1 := timing.Start("", "", map[string]string{"task": fmt.Sprint(i)})
 		span1.Tag("change", "12")
 		span2 := span1.StartNested("First level", "...")

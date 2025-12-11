@@ -16,7 +16,7 @@ It helps you orchestrate a set of local processes as an organized set. It resemb
 
 If you need a way to manage one or more services in a container, or as a non-root user on a machine, Pebble might be for you. It handles service logs, service dependencies, and allows you to set up ongoing health checks. Plus, it has an "HTTP over unix socket" API for all operations, with simple UID-based access control.
 
-Pebble is useful for developers who are building {external+operator:ref}`Juju charms on Kubernetes <from-zero-to-hero-write-your-first-kubernetes-charm>`, creating [Rocks](https://documentation.ubuntu.com/rockcraft/stable/explanation/rocks/) or Docker images, or orchestrating services in the virtual machine.
+Pebble is useful for developers who are building {external+operator:ref}`Juju charms on Kubernetes <from-zero-to-hero-write-your-first-kubernetes-charm>`, creating {external+rockcraft:ref}`Rock <explanation-rocks>` or Docker images, or orchestrating services in the virtual machine.
 
 ## In this documentation
 
@@ -58,8 +58,8 @@ Pebble releases are tracked in GitHub. To get notified when there's a new releas
 
 Pebble is free software and released under [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
-The Pebble project is sponsored by [Canonical Ltd](https://www.canonical.com).
+The Pebble project is sponsored by [Canonical Ltd](https://canonical.com).
 
-- [Code of conduct](https://ubuntu.com/community/ethos/code-of-conduct)
+- [Code of conduct](https://ubuntu.com/community/docs/ethos/code-of-conduct)
 - [Contribute to the project](https://github.com/canonical/pebble?tab=readme-ov-file#contributing)
 - [Development](https://github.com/canonical/pebble/blob/master/HACKING.md): information on how to run and hack on the Pebble codebase during development

@@ -981,7 +981,7 @@ func (ss *stateSuite) TestPruneMaxChangesHappy(c *C) {
 
 	// create 10 changes, chg0 is freshest, chg9 is oldest, but
 	// all changes are not old enough for pruneWait
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		chg := st.NewChange(fmt.Sprintf("chg%d", i), "...")
 		t := st.NewTask("foo", "...")
 		chg.AddTask(t)
@@ -1038,7 +1038,7 @@ func (ss *stateSuite) TestPruneMaxChangesSomeNotReady(c *C) {
 	defer st.Unlock()
 
 	// 10 changes, none ready
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		chg := st.NewChange(fmt.Sprintf("chg%d", i), "...")
 		t := st.NewTask("foo", "...")
 		chg.AddTask(t)
@@ -1058,7 +1058,7 @@ func (ss *stateSuite) TestPruneMaxChangesHonored(c *C) {
 	defer st.Unlock()
 
 	// 10 changes, none ready
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		chg := st.NewChange(fmt.Sprintf("chg%d", i), "not-ready")
 		t := st.NewTask("foo", "not-readly")
 		chg.AddTask(t)

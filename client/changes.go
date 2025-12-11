@@ -34,8 +34,8 @@ type Change struct {
 	Ready   bool    `json:"ready"`
 	Err     string  `json:"err,omitempty"`
 
-	SpawnTime time.Time `json:"spawn-time,omitempty"`
-	ReadyTime time.Time `json:"ready-time,omitempty"`
+	SpawnTime time.Time `json:"spawn-time"`
+	ReadyTime time.Time `json:"ready-time"`
 
 	data map[string]*json.RawMessage
 }
@@ -61,8 +61,8 @@ type Task struct {
 	Log      []string     `json:"log,omitempty"`
 	Progress TaskProgress `json:"progress"`
 
-	SpawnTime time.Time `json:"spawn-time,omitempty"`
-	ReadyTime time.Time `json:"ready-time,omitempty"`
+	SpawnTime time.Time `json:"spawn-time"`
+	ReadyTime time.Time `json:"ready-time"`
 
 	Data map[string]*json.RawMessage
 }

@@ -17,6 +17,7 @@ package plan
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -238,24 +239,14 @@ func (s *Service) Copy() *Service {
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
-	if s.Environment != nil {
-		copied.Environment = make(map[string]string)
-		for k, v := range s.Environment {
-			copied.Environment[k] = v
-		}
-	}
+	copied.Environment = maps.Clone(s.Environment)
 	if s.UserID != nil {
 		copied.UserID = copyIntPtr(s.UserID)
 	}
 	if s.GroupID != nil {
 		copied.GroupID = copyIntPtr(s.GroupID)
 	}
-	if s.OnCheckFailure != nil {
-		copied.OnCheckFailure = make(map[string]ServiceAction)
-		for k, v := range s.OnCheckFailure {
-			copied.OnCheckFailure[k] = v
-		}
-	}
+	copied.OnCheckFailure = maps.Clone(s.OnCheckFailure)
 	return &copied
 }
 
@@ -542,12 +533,7 @@ type HTTPCheck struct {
 // Copy returns a deep copy of the HTTP check configuration.
 func (c *HTTPCheck) Copy() *HTTPCheck {
 	copied := *c
-	if c.Headers != nil {
-		copied.Headers = make(map[string]string, len(c.Headers))
-		for k, v := range c.Headers {
-			copied.Headers[k] = v
-		}
-	}
+	copied.Headers = maps.Clone(c.Headers)
 	return &copied
 }
 
@@ -601,12 +587,7 @@ type ExecCheck struct {
 // Copy returns a deep copy of the exec check configuration.
 func (c *ExecCheck) Copy() *ExecCheck {
 	copied := *c
-	if c.Environment != nil {
-		copied.Environment = make(map[string]string, len(c.Environment))
-		for k, v := range c.Environment {
-			copied.Environment[k] = v
-		}
-	}
+	copied.Environment = maps.Clone(c.Environment)
 	if c.UserID != nil {
 		copied.UserID = copyIntPtr(c.UserID)
 	}
@@ -663,6 +644,7 @@ type LogTargetType string
 const (
 	LokiTarget          LogTargetType = "loki"
 	OpenTelemetryTarget LogTargetType = "opentelemetry"
+	SyslogTarget        LogTargetType = "syslog"
 	UnsetLogTarget      LogTargetType = ""
 )
 
@@ -670,12 +652,7 @@ const (
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
-	if t.Labels != nil {
-		copied.Labels = make(map[string]string)
-		for k, v := range t.Labels {
-			copied.Labels[k] = v
-		}
-	}
+	copied.Labels = maps.Clone(t.Labels)
 	return &copied
 }
 
@@ -989,14 +966,14 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		switch target.Type {
-		case LokiTarget, OpenTelemetryTarget:
+		case LokiTarget, OpenTelemetryTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			// will be checked when the layers are combined
 		default:
 			return &FormatError{
-				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
-					name, target.Type, LokiTarget, OpenTelemetryTarget),
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q, %q or %q`,
+					name, target.Type, LokiTarget, OpenTelemetryTarget, SyslogTarget),
 			}
 		}
 	}
@@ -1064,12 +1041,12 @@ func (p *Plan) Validate() error {
 
 	for name, target := range p.LogTargets {
 		switch target.Type {
-		case LokiTarget, OpenTelemetryTarget:
+		case LokiTarget, OpenTelemetryTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			return &FormatError{
-				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
-					LokiTarget, OpenTelemetryTarget, name),
+				Message: fmt.Sprintf(`plan must define "type" (%q, %q or %q) for log target %q`,
+					LokiTarget, OpenTelemetryTarget, SyslogTarget, name),
 			}
 		}
 
@@ -1379,10 +1356,8 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 }
 
 func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {
-	for _, v := range additionalValid {
-		if action == v {
-			return true
-		}
+	if slices.Contains(additionalValid, action) {
+		return true
 	}
 	switch action {
 	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
@@ -1621,9 +1596,7 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 	merged := ContextOptions{
 		Environment: make(map[string]string),
 	}
-	for k, v := range service.Environment {
-		merged.Environment[k] = v
-	}
+	maps.Copy(merged.Environment, service.Environment)
 	if service.UserID != nil {
 		merged.UserID = copyIntPtr(service.UserID)
 	}
@@ -1635,9 +1608,7 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 	merged.WorkingDir = service.WorkingDir
 
 	// Merge in fields from the overrides, if set.
-	for k, v := range overrides.Environment {
-		merged.Environment[k] = v
-	}
+	maps.Copy(merged.Environment, overrides.Environment)
 	if overrides.UserID != nil {
 		merged.UserID = copyIntPtr(overrides.UserID)
 	}

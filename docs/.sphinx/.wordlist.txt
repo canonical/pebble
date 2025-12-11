@@ -255,8 +255,6 @@ Influxdb
 Istio
 Kata
 Keepalived
-KernOS
-KernelFactory
 Keyring
 Keyserver
 Kibana

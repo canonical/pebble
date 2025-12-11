@@ -23,7 +23,7 @@ import (
 func BenchmarkRingBufferWriteSmall(b *testing.B) {
 	payload := []byte("p")
 	rb := servicelog.NewRingBuffer(len(payload) * b.N)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Write(payload)
 	}
 }
@@ -31,7 +31,7 @@ func BenchmarkRingBufferWriteSmall(b *testing.B) {
 func BenchmarkRingBufferWrite(b *testing.B) {
 	payload := []byte("pebblepebblepebblepebble")
 	rb := servicelog.NewRingBuffer(len(payload) * b.N)
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Write(payload)
 	}
 }
@@ -46,7 +46,7 @@ func BenchmarkRingBufferCopy(b *testing.B) {
 	p1, _ := rb.Positions()
 
 	buffer := make([]byte, len(payload))
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		rb.Copy(buffer, p1)
 	}
 }
@@ -68,7 +68,7 @@ func benchmarkConcurrent(b *testing.B, payload []byte) {
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
-		for i := 0; i < n; i++ {
+		for range n {
 			wb.Write(payload)
 		}
 	}()

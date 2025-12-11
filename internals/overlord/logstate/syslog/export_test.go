@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2025 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,15 +12,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package syslog
 
-//go:generate ./mkversion.sh
+import "github.com/canonical/pebble/internals/servicelog"
 
-// Version will be overwritten at build-time via mkversion.sh
-var Version = "v1.26.0"
+func GetBuffer(c *Client) []servicelog.Entry {
+	return c.buffer
+}
 
-func MockVersion(version string) (restore func()) {
-	old := Version
-	Version = version
-	return func() { Version = old }
+func ResetBufferToIndex(c *Client, index int) {
+	c.resetBufferToIndex(index)
 }
