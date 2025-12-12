@@ -2044,7 +2044,6 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
 	c.Assert(err, IsNil)
 
 	identitiesMgr := d.overlord.IdentitiesManager()
-	c.Assert(err, IsNil)
 	d.state.Lock()
 	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"basicuser": {
