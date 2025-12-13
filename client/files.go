@@ -575,10 +575,12 @@ func (client *Client) Pull(opts *PullOptions) error {
 	if mediaType != "multipart/form-data" {
 		// If it's not multipart, it's likely an API error, so try parsing it as such.
 		var serverResp response
-		if err := decodeInto(resp.Body, &serverResp); err != nil {
+		err := decodeInto(resp.Body, &serverResp)
+		if err != nil {
 			return fmt.Errorf("expected a multipart response, got %q", mediaType)
 		}
-		if err := serverResp.err(); err != nil {
+		err = serverResp.err()
+		if err != nil {
 			return err
 		}
 		return fmt.Errorf("expected a multipart response, got %q", mediaType)
@@ -594,10 +596,11 @@ func (client *Client) Pull(opts *PullOptions) error {
 	// Check if we got "response" first (error case) or "files" (success case)
 	if firstPart.FormName() == "response" {
 		// Decode and process the response to extract the actual error
-		return processResponsePart(firstPart)
+		return processPullResponsePart(firstPart)
 	}
-
-	// Success case: copy file data
+	if firstPart.FormName() != "files" {
+	return fmt.Errorf(`expected first field name to be "files" or "response", got %q`, firstPart.FormName())
+	}
 	if _, err := io.Copy(opts.Target, firstPart); err != nil {
 		return fmt.Errorf("cannot write to target: %w", err)
 	}
@@ -608,39 +611,37 @@ func (client *Client) Pull(opts *PullOptions) error {
 	}
 	defer responsePart.Close()
 	if responsePart.FormName() != "response" {
-		return fmt.Errorf("expected second field name to be \"response\", got %q", responsePart.FormName())
+		return fmt.Errorf(`expected second field name to be "response", got %q`, responsePart.FormName())
 	}
 
-	return processResponsePart(responsePart)
+	return processPullResponsePart(responsePart)
 }
 
-// processResponsePart decodes the response part and extracts any errors
-func processResponsePart(part io.Reader) error {
+// processPullResponsePart decodes the response part and extracts any errors
+func processPullResponsePart(part io.Reader) error {
 	var multipartResp response
-	if err := decodeInto(part, &multipartResp); err != nil {
-		return fmt.Errorf("cannot decode response: %w", err)
-	}
-
-	// Check for error in response
-	if err := multipartResp.err(); err != nil {
+	if err := decodeInto(part, &multipartResp)
+	err != nil {
 		return err
 	}
-
+	// Check for error in response
+	if err := multipartResp.err()
+	err != nil {
+		return err
+	}
 	if multipartResp.Type != "sync" {
 		return fmt.Errorf("expected sync response, got %q", multipartResp.Type)
 	}
-
 	// Decode result to check for file-level errors
 	requestResponse := &RequestResponse{Result: multipartResp.Result}
 	var fr []fileResult
-	if err := requestResponse.DecodeResult(&fr); err != nil {
+	if err := requestResponse.DecodeResult(&fr)
+	err != nil {
 		return fmt.Errorf("cannot unmarshal result: %w", err)
 	}
-
 	if len(fr) != 1 {
 		return fmt.Errorf("expected exactly one result from API, got %d", len(fr))
 	}
-
 	if fr[0].Error != nil {
 		return fr[0].Error
 	}
