@@ -788,6 +788,35 @@ func (cs *clientSuite) TestPullFailsWithErrorResponse(c *C) {
 	c.Assert(err, ErrorMatches, "access denied")
 }
 
+func (cs *clientSuite) TestPullFailsWithMultipartErrorResponse(c *C) {
+	// Create multipart response with "response" field containing error
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+
+	// Write the error response as first part
+	responsePart, err := mw.CreateFormField("response")
+	c.Assert(err, IsNil)
+	errorResp := `{"type":"sync","status-code":404,"status":"Not Found","result":[{"error":{"message":"file not found","kind":"not-found"}}]}`
+	_, err = responsePart.Write([]byte(errorResp))
+	c.Assert(err, IsNil)
+
+	err = mw.Close()
+	c.Assert(err, IsNil)
+
+	// Set up mock response
+	cs.header = http.Header{}
+	cs.header.Set("Content-Type", mw.FormDataContentType())
+	cs.rsp = buf.String()
+
+	// Check that Pull returns the error from the response part
+	var targetBuf bytes.Buffer
+	err = cs.cli.Pull(&client.PullOptions{
+		Path:   "/foo/bar.dat",
+		Target: &targetBuf,
+	})
+	c.Assert(err, ErrorMatches, "file not found")
+}
+
 func (cs *clientSuite) TestPullFailsWithInvalidMultipartResponse(c *C) {
 	cs.header = http.Header{}
 	cs.header.Set("Content-Type", "multipart/form-data")
