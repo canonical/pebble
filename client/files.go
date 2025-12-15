@@ -599,7 +599,7 @@ func (client *Client) Pull(opts *PullOptions) error {
 		return processPullResponsePart(firstPart)
 	}
 	if firstPart.FormName() != "files" {
-		return fmt.Errorf(`expected first field name to be "files" or "response", got %q`, firstPart.FormName())
+		return fmt.Errorf(`expected first field name to be "files", got %q`, firstPart.FormName())
 	}
 	if _, err := io.Copy(opts.Target, firstPart); err != nil {
 		return fmt.Errorf("cannot write to target: %w", err)
