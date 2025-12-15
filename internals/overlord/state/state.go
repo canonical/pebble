@@ -198,13 +198,17 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	}
 	s.data = unmarshalled.Data
 
-	// Load legacy identities if new identities are not in Get/Set data.
-	if !s.data.has("identities") && len(unmarshalled.LegacyIdentities) > 0 {
-		logger.Noticef("Loaded legacy identities from state file")
-		if s.data == nil {
-			s.data = make(customData)
+	// Load legacy identities if present (and new identities are not in Get/Set data).
+	if len(unmarshalled.LegacyIdentities) > 0 {
+		if s.data.has("identities") {
+			logger.Noticef("WARNING: both new and legacy identities found in state file, ignoring legacy")
+		} else {
+			logger.Noticef("Loaded legacy identities from state file")
+			if s.data == nil {
+				s.data = make(customData)
+			}
+			s.data["identities"] = &unmarshalled.LegacyIdentities
 		}
-		s.data["identities"] = &unmarshalled.LegacyIdentities
 	}
 
 	s.changes = unmarshalled.Changes

@@ -362,6 +362,48 @@ func (s *identitiesSuite) TestUnmarshalStateLegacy(c *C) {
 	})
 }
 
+func (s *identitiesSuite) TestUnmarshalStateNewAndLegacy(c *C) {
+	// If both new and legacy are present, it should prefer the new
+	// (and emit a warning log, but we don't test for that).
+	data := []byte(`
+{
+	"data": {
+		"identities": {
+			"bob": {
+				"access": "read",
+				"local": {
+					"user-id": 42
+				}
+			}
+		}
+	},
+    "identities": {
+        "mary": {
+            "access": "admin",
+            "local": {
+                "user-id": 1000
+            }
+        }
+    }
+}`)
+
+	st, err := state.ReadState(nil, bytes.NewReader(data))
+	c.Assert(err, IsNil)
+	mgr, err := identities.NewManager(st)
+	c.Assert(err, IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
+		"bob": {
+			Name:   "bob",
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 42},
+		},
+	})
+}
+
 func (s *identitiesSuite) TestAddIdentities(c *C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
