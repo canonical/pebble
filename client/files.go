@@ -587,16 +587,21 @@ func (client *Client) Pull(opts *PullOptions) error {
 	}
 
 	mr := multipart.NewReader(resp.Body, params["boundary"])
-	filesPart, err := mr.NextPart()
+	firstPart, err := mr.NextPart()
 	if err != nil {
 		return fmt.Errorf("cannot decode multipart payload: %w", err)
 	}
-	defer filesPart.Close()
+	defer firstPart.Close()
 
-	if filesPart.FormName() != "files" {
-		return fmt.Errorf(`expected first field name to be "files", got %q`, filesPart.FormName())
+	// Check if we got "response" first (error case) or "files" (success case)
+	if firstPart.FormName() == "response" {
+		// Decode and process the response to extract the actual error
+		return processPullResponsePart(firstPart)
 	}
-	if _, err := io.Copy(opts.Target, filesPart); err != nil {
+	if firstPart.FormName() != "files" {
+		return fmt.Errorf(`expected first field name to be "files", got %q`, firstPart.FormName())
+	}
+	if _, err := io.Copy(opts.Target, firstPart); err != nil {
 		return fmt.Errorf("cannot write to target: %w", err)
 	}
 
@@ -609,21 +614,24 @@ func (client *Client) Pull(opts *PullOptions) error {
 		return fmt.Errorf(`expected second field name to be "response", got %q`, responsePart.FormName())
 	}
 
-	// Process response metadata (see defaultRequester.Do)
+	return processPullResponsePart(responsePart)
+}
+
+// processPullResponsePart decodes the response part and extracts any errors
+func processPullResponsePart(part io.Reader) error {
 	var multipartResp response
-	if err := decodeInto(responsePart, &multipartResp); err != nil {
+	if err := decodeInto(part, &multipartResp); err != nil {
 		return err
 	}
+	// Check for error in response
 	if err := multipartResp.err(); err != nil {
 		return err
 	}
 	if multipartResp.Type != "sync" {
 		return fmt.Errorf("expected sync response, got %q", multipartResp.Type)
 	}
-
+	// Decode result to check for file-level errors
 	requestResponse := &RequestResponse{Result: multipartResp.Result}
-
-	// Decode response result.
 	var fr []fileResult
 	if err := requestResponse.DecodeResult(&fr); err != nil {
 		return fmt.Errorf("cannot unmarshal result: %w", err)
