@@ -620,13 +620,11 @@ func (client *Client) Pull(opts *PullOptions) error {
 // processPullResponsePart decodes the response part and extracts any errors
 func processPullResponsePart(part io.Reader) error {
 	var multipartResp response
-	if err := decodeInto(part, &multipartResp)
-	err != nil {
+	if err := decodeInto(part, &multipartResp); err != nil {
 		return err
 	}
 	// Check for error in response
-	if err := multipartResp.err()
-	err != nil {
+	if err := multipartResp.err(); err != nil {
 		return err
 	}
 	if multipartResp.Type != "sync" {
@@ -635,8 +633,7 @@ func processPullResponsePart(part io.Reader) error {
 	// Decode result to check for file-level errors
 	requestResponse := &RequestResponse{Result: multipartResp.Result}
 	var fr []fileResult
-	if err := requestResponse.DecodeResult(&fr)
-	err != nil {
+	if err := requestResponse.DecodeResult(&fr); err != nil {
 		return fmt.Errorf("cannot unmarshal result: %w", err)
 	}
 	if len(fr) != 1 {
@@ -645,6 +642,5 @@ func processPullResponsePart(part io.Reader) error {
 	if fr[0].Error != nil {
 		return fr[0].Error
 	}
-
 	return nil
 }
