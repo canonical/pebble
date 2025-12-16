@@ -128,7 +128,7 @@ jobs:
       (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
 
       - id: get-snap
         run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
@@ -155,7 +155,7 @@ jobs:
         # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
         arch: ["amd64", "arm64", "armhf", "riscv64"]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
 
       - id: get-snap
         run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ matrix.arch }}*snap/*)" >> $GITHUB_OUTPUT
