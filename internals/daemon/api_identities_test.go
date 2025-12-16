@@ -145,6 +145,12 @@ func (s *apiSuite) TestAddIdentities(c *C) {
                 "user-id": 1000
             }
         },
+        "nancy": {
+            "access": "metrics",
+            "basic": {
+                "password": "$6$F9cFSVEKyO4gB1Wh$8S1BSKsNkF.jBAixGc4W7l80OpfCNk65LZBDHBng3NAmbcHuMj4RIm7992rrJ8YA.SJ0hvm.vGk2z483am4Ym1"
+            }
+        },
         "olivia": {
             "access": "read",
             "cert": {
@@ -172,6 +178,11 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 			Access: identities.AdminAccess,
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
+		"nancy": {
+			Name:   "nancy",
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: "$6$F9cFSVEKyO4gB1Wh$8S1BSKsNkF.jBAixGc4W7l80OpfCNk65LZBDHBng3NAmbcHuMj4RIm7992rrJ8YA.SJ0hvm.vGk2z483am4Ym1"},
+		},
 		"olivia": {
 			Name:   "olivia",
 			Access: identities.ReadAccess,
@@ -182,6 +193,8 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 
 	ensureSecurityLog(c, logBuf.String(), "WARN", "user_created:<unknown>,bob,read", "Creating read user bob")
 	ensureSecurityLog(c, logBuf.String(), "WARN", "user_created:<unknown>,mary,admin", "Creating admin user mary")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_created:<unknown>,nancy,metrics", "Creating metrics user nancy")
+	ensureSecurityLog(c, logBuf.String(), "WARN", "user_created:<unknown>,olivia,read", "Creating read user olivia")
 }
 
 func (s *apiSuite) TestAddIdentitiesNull(c *C) {
