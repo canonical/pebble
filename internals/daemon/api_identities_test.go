@@ -15,7 +15,10 @@
 package daemon
 
 import (
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -24,6 +27,28 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/identities"
 )
+
+// Generated using `openssl req -new -x509 -out cert.pem -days 3650 -subj "/CN=canonical.com"`
+const validPEMX509Cert = `-----BEGIN CERTIFICATE-----
+MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
+A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
+NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
+ffcoJ0jNn9ys8uDFeHnQ6JRxgNFvomDTHqNTMFEwHQYDVR0OBBYEFI/oHjhG1A7F
+3HM7McXP7w7CxtrwMB8GA1UdIwQYMBaAFI/oHjhG1A7F3HM7McXP7w7CxtrwMA8G
+A1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EA40v4eckaV7RBXyRb0sfcCcgCAGYtiCSD
+jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
+-----END CERTIFICATE-----
+`
+
+// Generated using `openssl req -new -newkey ed25519 -out bad-cert.pem -nodes -subj "/CN=canonical.com"`
+// This is a valid PEM block but not a valid X.509 certificate.
+const testPEMPKCS10Req = `-----BEGIN CERTIFICATE REQUEST-----
+MIGXMEsCAQAwGDEWMBQGA1UEAwwNY2Fub25pY2FsLmNvbTAqMAUGAytlcAMhADuu
+TTkzIDS55kZukGFfsWM+kPug1hpJLVx4wKqr5eLNoAAwBQYDK2VwA0EA3QU93q5S
+pV4RrgnD3G7kw2dg8fdJAZ/qn1bXToUzPy89uPMiAZIE+eHXBxzqTJ6GJrVY+2r7
+GV6pXv511MycDg==
+-----END CERTIFICATE REQUEST-----
+`
 
 func (s *apiSuite) TestIdentities(c *C) {
 	s.daemon(c)
@@ -46,6 +71,10 @@ func (s *apiSuite) TestIdentities(c *C) {
 				Password: "$6$F9cFSVEKyO4gB1Wh$8S1BSKsNkF.jBAixGc4W7l80OpfCNk65LZBDHBng3NAmbcHuMj4RIm7992rrJ8YA.SJ0hvm.vGk2z483am4Ym1", // "test"
 			},
 		},
+		"olivia": {
+			Access: identities.ReadAccess,
+			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
+		},
 	})
 	c.Assert(err, IsNil)
 	st.Unlock()
@@ -58,7 +87,7 @@ func (s *apiSuite) TestIdentities(c *C) {
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(rsp.Status, Equals, http.StatusOK)
-	identities, ok := rsp.Result.(map[string]*identities.Identity)
+	identities, ok := rsp.Result.(map[string]*apiIdentity)
 	c.Assert(ok, Equals, true)
 
 	data, err := json.MarshalIndent(identities, "", "    ")
@@ -82,6 +111,12 @@ func (s *apiSuite) TestIdentities(c *C) {
         "basic": {
             "password": "*****"
         }
+    },
+    "olivia": {
+        "access": "read",
+        "cert": {
+            "pem": "*****"
+        }
     }
 }`[1:])
 }
@@ -92,7 +127,9 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 
 	s.daemon(c)
 
-	body := `
+	jsonCert, err := json.Marshal(validPEMX509Cert)
+	c.Assert(err, IsNil)
+	body := fmt.Sprintf(`
 {
     "action": "add",
     "identities": {
@@ -107,9 +144,15 @@ func (s *apiSuite) TestAddIdentities(c *C) {
             "local": {
                 "user-id": 1000
             }
+        },
+        "olivia": {
+            "access": "read",
+            "cert": {
+                "pem": %s
+            }
         }
     }
-}`
+}`, jsonCert)
 	rsp := s.postIdentities(c, body)
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
 	c.Check(rsp.Status, Equals, http.StatusOK)
@@ -128,6 +171,11 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 			Name:   "mary",
 			Access: identities.AdminAccess,
 			Local:  &identities.LocalIdentity{UserID: 1000},
+		},
+		"olivia": {
+			Name:   "olivia",
+			Access: identities.ReadAccess,
+			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
 	st.Unlock()
@@ -388,6 +436,61 @@ func (s *apiSuite) TestPostIdentitiesInvalidAction(c *C) {
 	c.Assert(result.Message, Matches, `invalid action "foobar", must be "add", "update", "replace", or "remove"`)
 }
 
+func (s *apiSuite) TestUnmarshalErrors(c *C) {
+	s.daemon(c)
+
+	// Marshal a certificate request to test valid PEM but invalid X.509.
+	jsonCertReq, err := json.Marshal(testPEMPKCS10Req)
+	c.Assert(err, IsNil)
+	// Marshal a certificate with extra data after the PEM block.
+	jsonCertExtra, err := json.Marshal(validPEMX509Cert + "42")
+	c.Assert(err, IsNil)
+
+	tests := []struct {
+		data  string
+		error string
+	}{{
+		data:  `{"no-type": {"access": "admin"}}`,
+		error: `identity must have at least one type \("local", "basic", or "cert"\)`,
+	}, {
+		data:  `{"invalid-access": {"access": "admin", "local": {}}}`,
+		error: `local identity must specify user-id`,
+	}, {
+		data:  `{"invalid-access": {"access": "metrics", "basic": {}}}`,
+		error: `basic identity must specify password \(hashed\)`,
+	}, {
+		data:  `{"invalid-access": {"access": "read", "cert": {}}}`,
+		error: `cert identity must include a PEM-encoded certificate`,
+	}, {
+		data:  `{"invalid-access": {"access": "read", "cert": {"pem": "..."}}}`,
+		error: `cert identity must include a PEM-encoded certificate`,
+	}, {
+		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertReq),
+		error: `cannot parse certificate from cert identity: x509: .*`,
+	}, {
+		data:  fmt.Sprintf(`{"invalid-access": {"access": "read", "cert": {"pem": %s}}}`, jsonCertExtra),
+		error: `cert identity cannot have extra data after the PEM block`,
+	}, {
+		data:  `{"invalid-access": {"access": "foo", "local": {"user-id": 42}}}`,
+		error: `invalid access value "foo", must be "admin", "read", "metrics", or "untrusted"`,
+	}, {
+		data:  `{"invalid-access": {"local": {"user-id": 42}}}`,
+		error: `access value must be specified \("admin", "read", "metrics", or "untrusted"\)`,
+	}}
+	for _, test := range tests {
+		c.Logf("Input data: %s", test.data)
+
+		body := fmt.Sprintf(`{"action": "foobar", "identities": %s}`, test.data)
+
+		rsp := s.postIdentities(c, body)
+		c.Check(rsp.Type, Equals, ResponseTypeError)
+		c.Check(rsp.Status, Equals, http.StatusBadRequest)
+		result, ok := rsp.Result.(*errorResult)
+		c.Assert(ok, Equals, true)
+		c.Check(result.Message, Matches, ".*: "+test.error)
+	}
+}
+
 func (s *apiSuite) postIdentities(c *C, body string) *resp {
 	req, err := http.NewRequest("POST", "/v1/identities", strings.NewReader(body))
 	c.Assert(err, IsNil)
@@ -395,4 +498,12 @@ func (s *apiSuite) postIdentities(c *C, body string) *resp {
 	rsp, ok := cmd.POST(cmd, req, nil).(*resp)
 	c.Assert(ok, Equals, true)
 	return rsp
+}
+
+func parseCert(c *C, pemBlock string) *x509.Certificate {
+	block, _ := pem.Decode([]byte(pemBlock))
+	c.Assert(block, NotNil)
+	cert, _ := x509.ParseCertificate(block.Bytes)
+	c.Assert(cert, NotNil)
+	return cert
 }

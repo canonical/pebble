@@ -52,14 +52,13 @@ func NewManager(st *state.State) (*Manager, error) {
 	defer m.state.Unlock()
 
 	// Read existing identities from state, if any.
-	var marshalled map[string]*marshalledIdentity
-	err := st.Get(identitiesKey, &marshalled)
+	err := st.Get(identitiesKey, &m.identities)
 	if err != nil && !errors.Is(err, state.ErrNoState) {
 		return nil, err
 	}
-	m.identities, err = unmarshalIdentities(marshalled)
-	if err != nil {
-		return nil, err
+	// Populate the Name field for each identity from the JSON object key.
+	for name, identity := range m.identities {
+		identity.Name = name
 	}
 
 	return m, nil
@@ -70,15 +69,18 @@ func (m *Manager) Ensure() error {
 }
 
 // Identity holds the configuration of a single identity.
+//
+// IMPORTANT: When adding a new identity type, if there's sensitive fields in it
+// (like passwords), be sure to omit it from API marshalling in api_identities.go.
 type Identity struct {
-	Name   string
-	Access Access
+	Name   string `json:"-"`
+	Access Access `json:"access"`
 
 	// One or more of the following type-specific configuration fields must be
 	// non-nil.
-	Local *LocalIdentity
-	Basic *BasicIdentity
-	Cert  *CertIdentity
+	Local *LocalIdentity `json:"local,omitempty"`
+	Basic *BasicIdentity `json:"basic,omitempty"`
+	Cert  *CertIdentity  `json:"cert,omitempty"`
 }
 
 // Access defines the access level for an identity.
@@ -94,14 +96,14 @@ const (
 // LocalIdentity holds identity configuration specific to the "local" type
 // (for ucrednet/UID authentication).
 type LocalIdentity struct {
-	UserID uint32
+	UserID uint32 `json:"user-id"`
 }
 
 // BasicIdentity holds identity configuration specific to the "basic" type
 // (for HTTP basic authentication).
 type BasicIdentity struct {
 	// Password holds the user's sha512-crypt-hashed password.
-	Password string
+	Password string `json:"password"`
 }
 
 // Certificate identity represents the client in an mTLS connection. We
@@ -110,26 +112,47 @@ type CertIdentity struct {
 	X509 *x509.Certificate
 }
 
+type marshalledCertIdentity struct {
+	PEM string `json:"pem"`
+}
+
+func (c *CertIdentity) MarshalJSON() ([]byte, error) {
+	pemBlock := &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: c.X509.Raw,
+	}
+	marshalled := marshalledCertIdentity{
+		PEM: string(pem.EncodeToMemory(pemBlock)),
+	}
+	return json.Marshal(marshalled)
+}
+
+func (c *CertIdentity) UnmarshalJSON(data []byte) error {
+	var unmarshalled marshalledCertIdentity
+	err := json.Unmarshal(data, &unmarshalled)
+	if err != nil {
+		return err
+	}
+	block, _ := pem.Decode([]byte(unmarshalled.PEM))
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
+	}
+	c.X509 = cert
+	return nil
+}
+
 // This is used to ensure we send a well-formed identity Name.
 var identityNameRegexp = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_\-]*$`)
 
-// validate checks that the identity is valid, returning an error if not.
-func (d *Identity) validate(name string) error {
+// Validate checks that the identity's fields (and name) are valid, returning an error if not.
+func (d *Identity) Validate(name string) error {
 	if d == nil {
 		return errors.New("identity must not be nil")
 	}
 
 	if !identityNameRegexp.MatchString(name) {
 		return fmt.Errorf("identity name %q invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen", d.Name)
-	}
-
-	return d.validateAccess()
-}
-
-// validateAccess checks that the identity's access and type are valid, returning an error if not.
-func (d *Identity) validateAccess() error {
-	if d == nil {
-		return errors.New("identity must not be nil")
 	}
 
 	switch d.Access {
@@ -165,93 +188,6 @@ func (d *Identity) validateAccess() error {
 	return nil
 }
 
-// apiIdentity exists so the default JSON marshalling of an Identity (used
-// for API responses) excludes secrets. The marshalledIdentity type is used
-// for saving secrets in state.
-type apiIdentity struct {
-	Access string            `json:"access"`
-	Local  *apiLocalIdentity `json:"local,omitempty"`
-	Basic  *apiBasicIdentity `json:"basic,omitempty"`
-	Cert   *apiCertIdentity  `json:"cert,omitempty"`
-}
-
-type apiLocalIdentity struct {
-	UserID *uint32 `json:"user-id"`
-}
-
-type apiBasicIdentity struct {
-	Password string `json:"password"`
-}
-
-type apiCertIdentity struct {
-	PEM string `json:"pem"`
-}
-
-// IMPORTANT NOTE: be sure to exclude secrets when adding to this!
-func (d *Identity) MarshalJSON() ([]byte, error) {
-	ai := apiIdentity{
-		Access: string(d.Access),
-	}
-	if d.Local != nil {
-		ai.Local = &apiLocalIdentity{UserID: &d.Local.UserID}
-	}
-	if d.Basic != nil {
-		ai.Basic = &apiBasicIdentity{Password: "*****"}
-	}
-	if d.Cert != nil {
-		// This isn't actually secret, it's a public key by design, but we
-		// replace it with ***** for consistency with the password field to
-		// avoid confusion for the user. We can show it in future if needed.
-		ai.Cert = &apiCertIdentity{PEM: "*****"}
-	}
-	return json.Marshal(ai)
-}
-
-func (d *Identity) UnmarshalJSON(data []byte) error {
-	var ai apiIdentity
-	err := json.Unmarshal(data, &ai)
-	if err != nil {
-		return err
-	}
-
-	identity := Identity{
-		Access: Access(ai.Access),
-	}
-
-	if ai.Local != nil {
-		if ai.Local.UserID == nil {
-			return errors.New("local identity must specify user-id")
-		}
-		identity.Local = &LocalIdentity{UserID: *ai.Local.UserID}
-	}
-	if ai.Basic != nil {
-		identity.Basic = &BasicIdentity{Password: ai.Basic.Password}
-	}
-	if ai.Cert != nil {
-		block, rest := pem.Decode([]byte(ai.Cert.PEM))
-		if block == nil {
-			return errors.New("cert identity must include a PEM-encoded certificate")
-		}
-		if len(rest) > 0 {
-			return errors.New("cert identity cannot have extra data after the PEM block")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
-		}
-		identity.Cert = &CertIdentity{X509: cert}
-	}
-
-	// Perform additional validation using the local Identity type.
-	err = identity.validateAccess()
-	if err != nil {
-		return err
-	}
-
-	*d = identity
-	return nil
-}
-
 // AddIdentities adds the given identities to the system. It's an error if any
 // of the named identities already exist.
 //
@@ -263,7 +199,7 @@ func (m *Manager) AddIdentities(identities map[string]*Identity) error {
 		if _, ok := m.identities[name]; ok {
 			existing = append(existing, name)
 		}
-		err := identity.validate(name)
+		err := identity.Validate(name)
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)
 		}
@@ -285,7 +221,7 @@ func (m *Manager) AddIdentities(identities map[string]*Identity) error {
 	}
 
 	m.identities = newIdentities
-	m.state.Set(identitiesKey, marshalledIdentities(newIdentities))
+	m.state.Set(identitiesKey, newIdentities)
 	return nil
 }
 
@@ -300,7 +236,7 @@ func (m *Manager) UpdateIdentities(identities map[string]*Identity) error {
 		if _, ok := m.identities[name]; !ok {
 			missing = append(missing, name)
 		}
-		err := identity.validate(name)
+		err := identity.Validate(name)
 		if err != nil {
 			return fmt.Errorf("identity %q invalid: %w", name, err)
 		}
@@ -322,7 +258,7 @@ func (m *Manager) UpdateIdentities(identities map[string]*Identity) error {
 	}
 
 	m.identities = newIdentities
-	m.state.Set(identitiesKey, marshalledIdentities(newIdentities))
+	m.state.Set(identitiesKey, newIdentities)
 	return nil
 }
 
@@ -334,7 +270,7 @@ func (m *Manager) UpdateIdentities(identities map[string]*Identity) error {
 func (m *Manager) ReplaceIdentities(identities map[string]*Identity) error {
 	for name, identity := range identities {
 		if identity != nil {
-			err := identity.validate(name)
+			err := identity.Validate(name)
 			if err != nil {
 				return fmt.Errorf("identity %q invalid: %w", name, err)
 			}
@@ -357,7 +293,7 @@ func (m *Manager) ReplaceIdentities(identities map[string]*Identity) error {
 	}
 
 	m.identities = newIdentities
-	m.state.Set(identitiesKey, marshalledIdentities(newIdentities))
+	m.state.Set(identitiesKey, newIdentities)
 	return nil
 }
 
@@ -381,7 +317,7 @@ func (m *Manager) RemoveIdentities(identities map[string]struct{}) error {
 	for name := range identities {
 		delete(m.identities, name)
 	}
-	m.state.Set(identitiesKey, marshalledIdentities(m.identities))
+	m.state.Set(identitiesKey, m.identities)
 	return nil
 }
 
