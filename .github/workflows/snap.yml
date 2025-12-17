@@ -132,6 +132,11 @@ jobs:
 
       - id: FIXME-temp-1
         run: |
+          echo debugging FIXME
+          pwd
+          echo $GITHUB_WORKSPACE
+          ls -halt .
+          ls -halt $GITHUB_WORKSPACE
           echo old location
           echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
           ls ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
@@ -142,6 +147,7 @@ jobs:
           ls $GITHUB_WORKSPACE/${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
           echo $GITHUB_WORKSPACE/*snap/ || echo nope
           ls $GITHUB_WORKSPACE/*snap/ || echo nope
+          ls -lR $GITHUB_WORKSPACE
       - id: get-snap
         run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
 
