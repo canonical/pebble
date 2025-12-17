@@ -130,8 +130,20 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
 
+      - id: FIXME-temp-1
+        run: |
+          echo old location
+          echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
+          ls ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
+          echo *snap/ || echo nope
+          ls *snap/ || echo nope
+          echo new location
+          echo $GITHUB_WORKSPACE/${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
+          ls $GITHUB_WORKSPACE/${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
+          echo $GITHUB_WORKSPACE/*snap/ || echo nope
+          ls $GITHUB_WORKSPACE/*snap/ || echo nope
       - id: get-snap
-        run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
 
       - name: Install and test ${{ steps.get-snap.outputs.filename }}
         run: |
