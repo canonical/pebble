@@ -271,12 +271,14 @@ Recommended tone:
 
 To create a new tagged release, go to the [GitHub Releases page](https://github.com/canonical/pebble/releases) and:
 
-- Update `Version` in `cmd/version.go` to the version you're about to publish, for example `v1.9.0`. Push this to master (or open a PR to do so).
+- Update `Version` in `cmd/version.go` to the version you're about to publish, for example `v1.9.0`, open a pull request, have it reviewed and merged into the `master` branch.
+- Open a pull request to merge the `master` branch into the `fips` branch, resolve any conflicts, and have it reviewed and merged.
 - Click ["Draft a new release"](https://github.com/canonical/pebble/releases/new).
-- Enter the version tag (eg: `v1.9.0`) and select "Create new tag: on publish".
+- Enter the version tag (for example `v1.9.0`) and select "Create new tag: on publish".
 - Enter a release title: include the version tag and a short summary of the release.
 - Write release notes: describe new features and bug fixes, and include a link to the full list of commits.
 - Click "Publish release".
+- Likewise, publish a FIPS release (for example `v1.9.0-fips`) targeting the tip of the `fips` branch.
 - Once the release GitHub Actions have finished, and the new [Snap](https://snapcraft.io/pebble) has been successfully built, update `Version` again to `v1.{next}.0-dev` (for example `v1.10.0-dev`).
 - Find the security scan artifact on the 'SBOM and secscan' run corresponding the pushing the release tag, and upload it to the [SSDLC Pebble folder in Drive](https://drive.google.com/drive/folders/11WR629JFPJ8IMPI0kcsNp_qdf39c6no3). Open the artifact and verify that the security scan has not found any vulnerabilities.
 
