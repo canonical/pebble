@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     # PRS usually come from forks, which are not allowed to access repo secrets.
     # So this job builds the snap locally, and not via LP.
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'pull_request'  # FIXME
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@v4
@@ -59,7 +59,7 @@ jobs:
 
   remote-build:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'pull_request'  # FIXME
     strategy:
       fail-fast: true
       matrix:
