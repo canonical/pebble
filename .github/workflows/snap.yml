@@ -130,26 +130,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
 
-      - id: FIXME-temp-1
-        run: |
-          echo debugging FIXME
-          pwd
-          echo $GITHUB_WORKSPACE
-          ls -halt .
-          ls -halt $GITHUB_WORKSPACE
-          echo old location
-          echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
-          ls ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
-          echo *snap/ || echo nope
-          ls *snap/ || echo nope
-          echo new location
-          echo $GITHUB_WORKSPACE/${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
-          ls $GITHUB_WORKSPACE/${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/* || echo nope
-          echo $GITHUB_WORKSPACE/*snap/ || echo nope
-          ls $GITHUB_WORKSPACE/*snap/ || echo nope
-          ls -lR $GITHUB_WORKSPACE
       - id: get-snap
-        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*.snap)" >> $GITHUB_OUTPUT
 
       - name: Install and test ${{ steps.get-snap.outputs.filename }}
         run: |
@@ -176,7 +158,7 @@ jobs:
       - uses: actions/download-artifact@v7
 
       - id: get-snap
-        run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ matrix.arch }}*snap/*)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ matrix.arch }}*.snap)" >> $GITHUB_OUTPUT
 
       - name: Release ${{ steps.get-snap.outputs.filename }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
         uses: snapcore/action-publish@v1
