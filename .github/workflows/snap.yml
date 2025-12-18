@@ -149,9 +149,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     needs: [test]
-    # if: github.event_name != 'pull_request' && needs.test.result == 'success' && always()
-    # FIXME temp
-    if: needs.test.result == 'success' && always()
+    if: github.event_name != 'pull_request' && needs.test.result == 'success' && always()
     strategy:
       fail-fast: false
       matrix:
@@ -163,20 +161,13 @@ jobs:
         with:
           pattern: pebble-snap-${{ matrix.arch }}
 
-      - name: FIXME debug
-        run: |
-          ls -ld *snap
-          ls -l *snap
-
       - id: get-snap
         run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ matrix.arch }}*.snap)" >> $GITHUB_OUTPUT
-
-      - run: ls FIXME-FAIL-HERE
 
       - name: Release ${{ steps.get-snap.outputs.filename }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
         uses: snapcore/action-publish@v1
         env:
-          SNAPCRAFT_STORE_CREDENTIALS: FIXME-FAIL-${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.get-snap.outputs.filename }}
           release: ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
