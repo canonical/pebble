@@ -17,6 +17,6 @@ jobs:
       - name: sbomber
         uses: canonical/sbomber/.github/actions/run@cf7a76e810497ec932e8285b2c9d6b373d225e79  # main -- and sbomber-ref input should match
         with:
-          manifest: '${{ github.workspace }}/.sbomber-manifest-snap.yaml'
+          manifest: '${{ github.workspace }}/.github/.sbomber-manifest-snap.yaml'
           artifact-name: secscan-report-upload-snap
           sbomber-ref: cf7a76e810497ec932e8285b2c9d6b373d225e79

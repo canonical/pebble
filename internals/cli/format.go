@@ -33,6 +33,7 @@ import (
 )
 
 type unicodeMixin struct {
+	//lint:ignore SA5008 "choice" tag is intentionally duplicated
 	Unicode string `long:"unicode" default:"auto" choice:"auto" choice:"never" choice:"always"`
 }
 

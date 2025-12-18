@@ -34,6 +34,7 @@ arguments.
 type cmdChecks struct {
 	client *client.Client
 
+	//lint:ignore SA5008 "choice" tag is intentionally duplicated
 	Level      string `long:"level" choice:"alive" choice:"ready"`
 	Positional struct {
 		Checks []string `positional-arg-name:"<check>"`
