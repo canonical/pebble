@@ -50,6 +50,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	chk := newChecker(config)
 
 	performCheck := func() (shouldExit bool, err error) {
+		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
 		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
 		if !tomb.Alive() {
 			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
@@ -164,6 +165,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	chk := newChecker(config)
 
 	recoverCheck := func() (shouldExit bool, err error) {
+		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
 		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
 		if !tomb.Alive() {
 			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
