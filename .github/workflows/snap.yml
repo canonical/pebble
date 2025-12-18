@@ -54,7 +54,7 @@ jobs:
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ steps.build-snap.outputs.snap }}
+          name: pebble-snap-amd64
           path: ${{ steps.build-snap.outputs.snap }}
 
   remote-build:
@@ -114,7 +114,7 @@ jobs:
         uses: actions/upload-artifact@v6
         if: steps.build-snap.outcome == 'success'
         with:
-          name: ${{ steps.build-snap.outputs.snap }}
+          name: pebble-snap-${{ matrix.arch }}
           path: ${{ steps.build-snap.outputs.snap }}
 
   test:
@@ -129,6 +129,8 @@ jobs:
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
     steps:
       - uses: actions/download-artifact@v7
+        with:
+          pattern: pebble-snap-amd64
 
       - id: get-snap
         run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*.snap)" >> $GITHUB_OUTPUT
@@ -156,6 +158,8 @@ jobs:
         arch: ["amd64", "arm64", "armhf"]
     steps:
       - uses: actions/download-artifact@v7
+        with:
+          pattern: pebble-snap-${{ matrix.arch }}
 
       - id: get-snap
         run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ matrix.arch }}*.snap)" >> $GITHUB_OUTPUT
