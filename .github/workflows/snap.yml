@@ -11,7 +11,7 @@ on:
 # We don't want this workflow to have multiple runs in parallel because
 # what could happen is that a slow-running and older execution will upload
 # an older snap to `edge`, after the newer and latest snap has already been released.
-concurrency: ${{ github.workflow }}
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 env:
   SNAP_NAME: pebble
@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
 
@@ -42,7 +42,7 @@ jobs:
         id: build-snap
         uses: snapcore/action-build@v1.3.0
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: snapcraft-logs
@@ -52,9 +52,9 @@ jobs:
             ${{ env.SNAP_NAME }}_*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: ${{ steps.build-snap.outputs.snap }}
+          name: pebble-snap-amd64
           path: ${{ steps.build-snap.outputs.snap }}
 
   remote-build:
@@ -63,9 +63,9 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        # TODO: temporarily pause ppc64el and s390x builds while builders are broken
+        # TODO: temporarily pause ppc64el, s390x, and riscv64 builds while builders are broken
         # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
-        arch: ["amd64", "arm64", "armhf", "riscv64"]
+        arch: ["amd64", "arm64", "armhf"]
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@v4
@@ -81,7 +81,7 @@ jobs:
           git config --global user.name "pebble-dev"
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
 
@@ -100,7 +100,7 @@ jobs:
         if: always()
         run: cat snapcraft-${{ env.SNAP_NAME }}-*.txt > snapcraft-logs.txt || echo "no log files"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: snapcraft-logs-${{ matrix.arch }}
@@ -111,10 +111,10 @@ jobs:
             snapcraft-logs.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: steps.build-snap.outcome == 'success'
         with:
-          name: ${{ steps.build-snap.outputs.snap }}
+          name: pebble-snap-${{ matrix.arch }}
           path: ${{ steps.build-snap.outputs.snap }}
 
   test:
@@ -128,10 +128,12 @@ jobs:
       (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: pebble-snap-amd64
 
       - id: get-snap
-        run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*snap/*)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*.snap)" >> $GITHUB_OUTPUT
 
       - name: Install and test ${{ steps.get-snap.outputs.filename }}
         run: |
@@ -151,14 +153,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: temporarily pause ppc64el and s390x builds while builders are broken
+        # TODO: temporarily pause ppc64el, s390x, and riscv64 builds while builders are broken
         # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
-        arch: ["amd64", "arm64", "armhf", "riscv64"]
+        arch: ["amd64", "arm64", "armhf"]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: pebble-snap-${{ matrix.arch }}
 
       - id: get-snap
-        run: echo "filename=$(find ${{ env.SNAP_NAME }}*${{ matrix.arch }}*snap/*)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ matrix.arch }}*.snap)" >> $GITHUB_OUTPUT
 
       - name: Release ${{ steps.get-snap.outputs.filename }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
         uses: snapcore/action-publish@v1
@@ -175,9 +179,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: temporarily pause ppc64el and s390x builds while builders are broken
+        # TODO: temporarily pause ppc64el, s390x, and riscv64 builds while builders are broken
         # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
-        arch: ["amd64", "arm64", "armhf", "riscv64"]
+        arch: ["amd64", "arm64", "armhf"]
     env:
       TO_TRACK: fips
       TO_RISK: candidate

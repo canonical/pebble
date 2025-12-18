@@ -47,6 +47,9 @@ parts:
     # If doing a "snapcraft remote-build", ensure you've also run
     # "git add -f ./cmd/VERSION ./cmd/version_generated.go".
     override-build: |
+      which go
+      go version
+      snap info go
       CGO_ENABLED=0 go build -trimpath -ldflags=-w -ldflags=-s -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
 
   pebble-release-data:
