@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 )
@@ -87,8 +88,9 @@ func (c *pairingConfig) Combine(other *pairingConfig) {
 }
 
 type PairingManager struct {
-	state *state.State
-	mu    sync.Mutex
+	state         *state.State
+	identitiesMgr *identities.Manager
+	mu            sync.Mutex
 	// Plan config of the pairing manager.
 	config *pairingConfig
 	// Persisted state of the pairing manager.
@@ -100,9 +102,10 @@ type PairingManager struct {
 	expiry time.Time
 }
 
-func NewManager(st *state.State) (*PairingManager, error) {
+func NewManager(st *state.State, identitiesMgr *identities.Manager) (*PairingManager, error) {
 	m := &PairingManager{
-		state: st,
+		state:         st,
+		identitiesMgr: identitiesMgr,
 		config: &pairingConfig{
 			Mode: ModeUnset,
 		},
@@ -233,7 +236,7 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	m.state.Lock()
 	defer m.state.Unlock()
 
-	existingIdentities := m.state.Identities()
+	existingIdentities := m.identitiesMgr.Identities()
 
 	for _, identity := range existingIdentities {
 		if identity.Cert == nil || identity.Cert.X509 == nil {
@@ -257,12 +260,12 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 		return fmt.Errorf("cannot create new identity username: %w", err)
 	}
 
-	newIdentity := &state.Identity{
-		Access: state.AdminAccess,
-		Cert:   &state.CertIdentity{X509: clientCert},
+	newIdentity := &identities.Identity{
+		Access: identities.AdminAccess,
+		Cert:   &identities.CertIdentity{X509: clientCert},
 	}
 
-	err = m.state.AddIdentities(map[string]*state.Identity{
+	err = m.identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		username: newIdentity,
 	})
 	if err != nil {
@@ -278,7 +281,7 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 // generateUniqueUsername finds the first unique username following the pattern
 // "user-x" where x starts at 1 and monotonically increments. Usernames not
 // following this pattern will simply not be considered.
-func generateUniqueUsername(existingIdentities map[string]*state.Identity) (string, error) {
+func generateUniqueUsername(existingIdentities map[string]*identities.Identity) (string, error) {
 	for i := 1; i <= maxUsernameSuffix; i++ {
 		username := fmt.Sprintf("user-%d", i)
 
