@@ -64,13 +64,26 @@ html_title = project + " documentation"
 copyright = "%s, %s" % (datetime.date.today().year, author)
 
 
-# Documentation website URL and sitemap
-#
-# NOTE: 'html_baseurl' and 'sitemap_url_scheme' are used by the sphinx_sitemap
-#       extension. See https://sphinx-sitemap.readthedocs.io/
+# Use RTD canonical URL to ensure duplicate pages have a specific canonical URL
 
-html_baseurl = "https://documentation.ubuntu.com/pebble/"
-sitemap_url_scheme = "{link}"
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "/")
+
+# sphinx-sitemap uses html_baseurl to generate the full URL for each page:
+
+sitemap_url_scheme = '{link}'
+
+# Include `lastmod` dates in the sitemap:
+
+sitemap_show_lastmod = True
+
+# Exclude generated pages from the sitemap:
+
+sitemap_excludes = [
+    '404/',
+    'genindex/',
+    'search/',
+]
+
 
 # TODO: Update with the official URL of your docs or leave empty if unsure.
 #
