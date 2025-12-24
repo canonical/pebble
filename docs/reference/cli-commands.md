@@ -970,7 +970,7 @@ More ways to run the daemon:
     pebble run --args myservice --verbose --foo "multi str arg"
     ```
 
-* Use args terminator to pass `--hold` to Pebble at the end of the line:
+* Use the argument terminator `;` to pass `--hold` to Pebble:
 
     ```bash
     pebble run --args myservice --verbose \; --hold
