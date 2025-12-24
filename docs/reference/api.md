@@ -77,7 +77,7 @@ Some `GET` requests take optional query parameters for configuring or filterin
 
 All data sent to the API in `POST` bodies and all response data from the API is in JSON format. Requests should have a `Content-Type: application/json` header.
 
-There are two main types of requests: synchronous ("sync"), and asynchronous ("async") for operations that can take some time to execute. Synchronous responses have the following structure:
+There are two main types of requests: synchronous (`sync`), and asynchronous (`async`) for operations that can take some time to execute. Synchronous responses have the following structure:
 
 ```json
 {

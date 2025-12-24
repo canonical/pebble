@@ -52,7 +52,7 @@ Currently the supported authentication types are:
 - `local`: a local user ID determined using peer credentials.
 - `basic`: HTTP basic authentication.
 
-An example admin identity named "bob" with `local` type is shown below:
+An example admin identity named `bob` with `local` type is shown below:
 
 ```yaml
 identities:
@@ -62,7 +62,7 @@ identities:
             user-id: 42
 ```
 
-An example identity named "alice" with `basic` type and `metrics` access level is shown below:
+An example identity named `alice` with `basic` type and `metrics` access level is shown below:
 
 ```yaml
 identities:

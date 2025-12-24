@@ -10,7 +10,7 @@ By default any UID (user ID) connected to the API socket is a `read` user; UID 0
 
 ## Add new identities
 
-To extend access to Pebble's API to additional users, add named identities using the [`add-identities`](#reference_pebble_add-identities_command) command with a YAML file configuring the details. For example, to add a new admin "bob" with UID 42 and a new read user "alice" with UID 2000, prepare this file:
+To extend access to Pebble's API to additional users, add named identities using the [`add-identities`](#reference_pebble_add-identities_command) command with a YAML file configuring the details. For example, to add a new admin `bob` with UID 42 and a new read user `alice` with UID 2000, prepare this file:
 
 ```yaml
 # idents-add.yaml
@@ -37,7 +37,7 @@ Added 2 new identities.
 
 ## Remove identities
 
-To remove existing identities, use [`remove-identities`](#reference_pebble_remove-identities_command) with a YAML file that has a `null` value for each identity you want to remove. For example, to remove "alice", prepare this file:
+To remove existing identities, use [`remove-identities`](#reference_pebble_remove-identities_command) with a YAML file that has a `null` value for each identity you want to remove. For example, to remove `alice`, prepare this file:
 
 ```yaml
 # idents-remove.yaml
@@ -75,7 +75,7 @@ pebble update-identities --from idents-update.yaml
 Updated 1 identity.
 ```
 
-You can use the `--replace` flag to idempotently add or update (or even remove) identities, whether or not they exist. The replace option is useful in automated scripts. For example, to update "bob", add "alice", and remove "mallory" (if it exists), prepare this file:
+You can use the `--replace` flag to idempotently add or update (or even remove) identities, whether or not they exist. The replace option is useful in automated scripts. For example, to update `bob`, add `alice`, and remove `mallory` (if it exists), prepare this file:
 
 ```yaml
 # idents-replace.yaml
