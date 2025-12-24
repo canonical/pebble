@@ -4,6 +4,7 @@ boolean
 Drepper
 idempotently
 liveness
+mkdir
 ns
 runit
 replan
