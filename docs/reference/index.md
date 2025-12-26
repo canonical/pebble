@@ -2,9 +2,9 @@
 
 These guides provide technical information about Pebble.
 
-% COMMENT: This toctree is for the navigation sidebar only
-%          Use an alphabetical listing of pages in the toctree
-%          For each page, make sure there's also a link in a section below
+% COMMENT: This tree is for the navigation sidebar only.
+%          Use an alphabetical listing of pages in the tree.
+%          For each page, make sure there's also a link in a section below.
 
 ```{toctree}
 :hidden:
@@ -24,7 +24,7 @@ Service auto-restart <service-auto-restart>
 ```
 
 
-% COMMENT: The first few pages are presented in a more logical reading order
+% COMMENT: The first few pages are presented in a more logical reading order.
 
 
 ## Layers

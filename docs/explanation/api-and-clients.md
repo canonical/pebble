@@ -1,6 +1,6 @@
 # API and clients
 
-The Pebble daemon exposes an API (HTTP over a unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers to the plan, and so on.
+The Pebble daemon exposes an API (HTTP over a Unix socket) to allow remote clients to interact with the daemon. It can start and stop services, add configuration layers to the plan, and so on.
 
 If `pebble run` is started with the `--http <address>` option, Pebble also exposes open-access HTTP endpoints using the given TCP address (see {ref}`api-access-levels` below).
 
@@ -52,7 +52,7 @@ Currently the supported authentication types are:
 - `local`: a local user ID determined using peer credentials.
 - `basic`: HTTP basic authentication.
 
-An example admin identity named "bob" with `local` type is shown below:
+An example admin identity named `bob` with `local` type is shown below:
 
 ```yaml
 identities:
@@ -62,7 +62,7 @@ identities:
             user-id: 42
 ```
 
-An example identity named "alice" with `basic` type and `metrics` access level is shown below:
+An example identity named `alice` with `basic` type and `metrics` access level is shown below:
 
 ```yaml
 identities:
