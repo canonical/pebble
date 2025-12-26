@@ -218,7 +218,7 @@ pebble exec pg_dump mydb
 ...
 ```
 
-The exec feature uses WebSockets under the hood, and allows you to stream stdin to the process, as well as stream stdout and stderr back. When running `pebble exec`, you can specify the working directory to run in (`-w`), environment variables to set (`--env`), and the user and group to run as (`--uid`/`--user` and `--gid`/`--group`).
+The exec feature uses WebSockets under the hood, and allows you to stream `stdin` to the process, as well as stream `stdout` and `stderr` back. When running `pebble exec`, you can specify the working directory to run in (`-w`), environment variables to set (`--env`), and the user and group to run as (`--uid`/`--user` and `--gid`/`--group`).
 
 You can also apply a timeout with `--timeout`, for example:
 
@@ -361,7 +361,7 @@ The identity command shows details for a single identity in YAML format.
 (reference_pebble_logs_command)=
 ## logs
 
-The Pebble daemon's service manager stores the most recent stdout and stderr from each service, using a 100KB ring buffer per service. Each log line is prefixed with an RFC-3339 timestamp and the `[service-name]` in square brackets.
+The Pebble daemon's service manager stores the most recent `stdout` and `stderr` from each service, using a 100KB ring buffer per service. Each log line is prefixed with an RFC-3339 timestamp and the `[service-name]` in square brackets.
 
 Logs are viewable via the logs API or using `pebble logs`:
 
@@ -419,7 +419,7 @@ pebble logs --format=json
 {"time":"2022-11-14T01:39:13.889Z","service":"srv1","message":"Log 1 from srv1"}
 ```
 
-If you want to also write service logs to Pebble's own stdout, run the daemon with `--verbose`:
+If you want to also write service logs to Pebble's own `stdout`, run the daemon with `--verbose`:
 
 ```{terminal}
 pebble run --verbose
@@ -970,7 +970,7 @@ More ways to run the daemon:
     pebble run --args myservice --verbose --foo "multi str arg"
     ```
 
-* Use args terminator to pass `--hold` to Pebble at the end of the line:
+* Use the argument terminator `;` to pass `--hold` to Pebble:
 
     ```bash
     pebble run --args myservice --verbose \; --hold
