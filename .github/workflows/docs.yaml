@@ -37,6 +37,6 @@ jobs:
       - name: Markdown lint
         id: markdown-step
         if: success() || failure()
-        uses: DavidAnson/markdownlint-cli2-action@v16
+        uses: DavidAnson/markdownlint-cli2-action@v22
         with:
           config: "docs/.sphinx/.markdownlint.json"        
