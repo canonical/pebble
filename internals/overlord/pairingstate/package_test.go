@@ -29,6 +29,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/overlord"
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -38,9 +39,10 @@ import (
 func Test(t *testing.T) { TestingT(t) }
 
 type pairingSuite struct {
-	overlord *overlord.Overlord
-	state    *state.State
-	manager  *pairingstate.PairingManager
+	overlord      *overlord.Overlord
+	state         *state.State
+	manager       *pairingstate.PairingManager
+	identitiesMgr *identities.Manager
 }
 
 var _ = Suite(&pairingSuite{})
@@ -69,7 +71,10 @@ func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingDetails) {
 	}
 
 	var err error
-	ps.manager, err = pairingstate.NewManager(ps.state)
+	ps.identitiesMgr, err = identities.NewManager(ps.state)
+	c.Assert(err, IsNil)
+
+	ps.manager, err = pairingstate.NewManager(ps.state, ps.identitiesMgr)
 	c.Assert(err, IsNil)
 
 	ps.overlord.AddManager(ps.manager)

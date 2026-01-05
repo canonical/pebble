@@ -17,7 +17,7 @@ package daemon
 import (
 	"net/http"
 
-	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/identities"
 )
 
 const (
@@ -52,7 +52,7 @@ func (ac AdminAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) R
 		// Not Unix Domain Socket or HTTPS.
 		return Unauthorized(accessDenied)
 	}
-	if user.Access == state.AdminAccess {
+	if user.Access == identities.AdminAccess {
 		return nil
 	}
 	// An identity explicitly set to "access: read" or "access: untrusted" isn't allowed.
@@ -73,7 +73,7 @@ func (ac UserAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Re
 		return Unauthorized(accessDenied)
 	}
 	switch user.Access {
-	case state.ReadAccess, state.AdminAccess:
+	case identities.ReadAccess, identities.AdminAccess:
 		return nil
 	}
 	// An identity explicitly set to "access: untrusted" isn't allowed.
@@ -95,7 +95,7 @@ func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 	// HTTP access (only basic auth is possible here, so no need to
 	// check with identity type).
 	transport := RequestTransportType(r)
-	if transport == TransportTypeHTTP && user.Access == state.MetricsAccess {
+	if transport == TransportTypeHTTP && user.Access == identities.MetricsAccess {
 		return nil
 	}
 	if !transport.IsConcealed() {
@@ -103,7 +103,7 @@ func (ac MetricsAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 		return Unauthorized(accessDenied)
 	}
 	switch user.Access {
-	case state.MetricsAccess, state.ReadAccess, state.AdminAccess:
+	case identities.MetricsAccess, identities.ReadAccess, identities.AdminAccess:
 		return nil
 	default:
 		// All other access levels, including "access: untrusted", are denied.

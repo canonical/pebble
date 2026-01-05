@@ -20,7 +20,7 @@ import (
 	"net/http"
 
 	"github.com/canonical/pebble/internals/logger"
-	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/identities"
 )
 
 func v1GetIdentities(c *Command, r *http.Request, _ *UserState) Response {
@@ -28,14 +28,15 @@ func v1GetIdentities(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
-	identities := st.Identities()
+	identitiesMgr := c.d.overlord.IdentitiesManager()
+	identities := identitiesMgr.Identities()
 	return SyncResponse(identities)
 }
 
 func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 	var payload struct {
-		Action     string                     `json:"action"`
-		Identities map[string]*state.Identity `json:"identities"`
+		Action     string                          `json:"action"`
+		Identities map[string]*identities.Identity `json:"identities"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&payload); err != nil {
@@ -68,6 +69,8 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
+	identitiesMgr := c.d.overlord.IdentitiesManager()
+
 	var err error
 	switch payload.Action {
 	case "add":
@@ -76,14 +79,14 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
 				fmt.Sprintf("Creating %s user %s", identity.Access, name))
 		}
-		err = st.AddIdentities(payload.Identities)
+		err = identitiesMgr.AddIdentities(payload.Identities)
 	case "update":
 		for name, identity := range payload.Identities {
 			logger.SecurityWarn(logger.SecurityUserUpdated,
 				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
 				fmt.Sprintf("Updating %s user %s", identity.Access, name))
 		}
-		err = st.UpdateIdentities(payload.Identities)
+		err = identitiesMgr.UpdateIdentities(payload.Identities)
 	case "replace":
 		for name, identity := range payload.Identities {
 			if identity == nil {
@@ -96,14 +99,14 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 					fmt.Sprintf("Updating %s user %s", identity.Access, name))
 			}
 		}
-		err = st.ReplaceIdentities(payload.Identities)
+		err = identitiesMgr.ReplaceIdentities(payload.Identities)
 	case "remove":
 		for name := range payload.Identities {
 			logger.SecurityWarn(logger.SecurityUserDeleted,
 				fmt.Sprintf("%s,%s", userString(user), name),
 				fmt.Sprintf("Deleting user %s", name))
 		}
-		err = st.RemoveIdentities(identityNames)
+		err = identitiesMgr.RemoveIdentities(identityNames)
 	}
 	if err != nil {
 		return BadRequest("%v", err)
