@@ -14,7 +14,7 @@ This will only copy the contents if the target directory, `$PEBBLE`, is empty.
 
 ## PEBBLE_DEBUG
 
-If set to "1", debug logs will be printed to stderr.
+If set to "1", debug logs will be printed to `stderr`.
 
 ## PEBBLE_PERSIST
 
@@ -26,7 +26,7 @@ Pebble socket path. Defaults to `$PEBBLE/.pebble.socket` if not specified, or `/
 
 ## PEBBLE_VERBOSE
 
-If set to "1", the Pebble daemon writes service logs to stdout.
+If set to "1", the Pebble daemon writes service logs to `stdout`.
 
 For `pebble run`, either `PEBBLE_VERBOSE=1` or the `--verbose` flag turns on verbose logging, with the command line flag overriding the environment variable.
 

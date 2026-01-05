@@ -17,7 +17,7 @@ package cmd
 //go:generate ./mkversion.sh
 
 // Version will be overwritten at build-time via mkversion.sh
-var Version = "v1.26.0"
+var Version = "v1.27.0"
 
 func MockVersion(version string) (restore func()) {
 	old := Version

@@ -49,4 +49,4 @@ Our intention is that projects that build on Pebble can [override how TLS connec
 
 ### FIPS 140
 
-In the future we hope to have [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble, but the official [`pebble` snap](https://snapcraft.io/pebble) is not yet FIPS 140-compliant.
+This project also distributes [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble: the source code is in the `fips` branch and there's the `fips` track for the official [`pebble` snap](https://snapcraft.io/pebble). Refer to [HACKING.md](https://github.com/canonical/pebble/blob/fips/HACKING.md#fips-140-changes) in the `fips` branch for the list of limitations in the FIPS builds.

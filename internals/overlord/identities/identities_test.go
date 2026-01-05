@@ -149,47 +149,6 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
 	})
 }
 
-func (s *identitiesSuite) TestUnmarshalStateLegacy(c *C) {
-	data := []byte(`
-{
-    "identities": {
-        "bob": {
-            "access": "read",
-            "local": {
-                "user-id": 42
-            }
-        },
-        "mary": {
-            "access": "admin",
-            "local": {
-                "user-id": 1000
-            }
-        }
-    }
-}`)
-
-	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, IsNil)
-	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
-
-	st.Lock()
-	defer st.Unlock()
-
-	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
-		"bob": {
-			Name:   "bob",
-			Access: identities.ReadAccess,
-			Local:  &identities.LocalIdentity{UserID: 42},
-		},
-		"mary": {
-			Name:   "mary",
-			Access: identities.AdminAccess,
-			Local:  &identities.LocalIdentity{UserID: 1000},
-		},
-	})
-}
-
 func (s *identitiesSuite) TestAddIdentities(c *C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
