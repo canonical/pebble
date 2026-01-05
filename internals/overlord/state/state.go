@@ -95,6 +95,8 @@ type State struct {
 	tasks   map[string]*Task
 	notices map[noticeKey]*Notice
 
+	legacyIdentities json.RawMessage
+
 	noticeCond        *sync.Cond
 	latestWarningTime atomic.Pointer[time.Time]
 
@@ -198,22 +200,10 @@ func (s *State) UnmarshalJSON(data []byte) error {
 	}
 	s.data = unmarshalled.Data
 
-	// Load legacy identities if present (and new identities are not in Get/Set data).
-	if len(unmarshalled.LegacyIdentities) > 0 {
-		if s.data.has("identities") {
-			logger.Noticef("WARNING: both new and legacy identities found in state file, ignoring legacy")
-		} else {
-			logger.Noticef("Loaded legacy identities from state file")
-			if s.data == nil {
-				s.data = make(customData)
-			}
-			s.data["identities"] = &unmarshalled.LegacyIdentities
-		}
-	}
-
 	s.changes = unmarshalled.Changes
 	s.tasks = unmarshalled.Tasks
 	s.unflattenNotices(unmarshalled.Notices)
+	s.legacyIdentities = unmarshalled.LegacyIdentities
 	s.lastChangeId = unmarshalled.LastChangeId
 	s.lastTaskId = unmarshalled.LastTaskId
 	s.lastLaneId = unmarshalled.LastLaneId
@@ -227,6 +217,11 @@ func (s *State) UnmarshalJSON(data []byte) error {
 		chg.finishUnmarshal()
 	}
 	return nil
+}
+
+// LegacyIdentities is exported for use in patch2.go to perform the migration.
+func (s *State) LegacyIdentities() json.RawMessage {
+	return s.legacyIdentities
 }
 
 func (s *State) checkpointData() []byte {

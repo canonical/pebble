@@ -25,6 +25,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/identities"
+	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -324,6 +325,7 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
 func (s *identitiesSuite) TestUnmarshalStateLegacy(c *C) {
 	data := []byte(`
 {
+    "data": {},
     "identities": {
         "bob": {
             "access": "read",
@@ -341,6 +343,8 @@ func (s *identitiesSuite) TestUnmarshalStateLegacy(c *C) {
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
+	c.Assert(err, IsNil)
+	err = patch.Apply(st)
 	c.Assert(err, IsNil)
 	mgr, err := identities.NewManager(st)
 	c.Assert(err, IsNil)
@@ -388,6 +392,8 @@ func (s *identitiesSuite) TestUnmarshalStateNewAndLegacy(c *C) {
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
+	c.Assert(err, IsNil)
+	err = patch.Apply(st)
 	c.Assert(err, IsNil)
 	mgr, err := identities.NewManager(st)
 	c.Assert(err, IsNil)
