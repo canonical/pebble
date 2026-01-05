@@ -221,6 +221,7 @@ func (s *State) UnmarshalJSON(data []byte) error {
 
 // LegacyIdentities is exported for use in patch2.go to perform the migration.
 func (s *State) LegacyIdentities() json.RawMessage {
+	s.reading()
 	return s.legacyIdentities
 }
 

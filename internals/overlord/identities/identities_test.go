@@ -25,7 +25,6 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/identities"
-	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -318,94 +317,6 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
 			Name:   "mary",
 			Access: identities.AdminAccess,
 			Local:  &identities.LocalIdentity{UserID: 1000},
-		},
-	})
-}
-
-func (s *identitiesSuite) TestUnmarshalStateLegacy(c *C) {
-	data := []byte(`
-{
-    "data": {},
-    "identities": {
-        "bob": {
-            "access": "read",
-            "local": {
-                "user-id": 42
-            }
-        },
-        "mary": {
-            "access": "admin",
-            "local": {
-                "user-id": 1000
-            }
-        }
-    }
-}`)
-
-	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, IsNil)
-	err = patch.Apply(st)
-	c.Assert(err, IsNil)
-	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
-
-	st.Lock()
-	defer st.Unlock()
-
-	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
-		"bob": {
-			Name:   "bob",
-			Access: identities.ReadAccess,
-			Local:  &identities.LocalIdentity{UserID: 42},
-		},
-		"mary": {
-			Name:   "mary",
-			Access: identities.AdminAccess,
-			Local:  &identities.LocalIdentity{UserID: 1000},
-		},
-	})
-}
-
-func (s *identitiesSuite) TestUnmarshalStateNewAndLegacy(c *C) {
-	// If both new and legacy are present, it should prefer the new
-	// (and emit a warning log, but we don't test for that).
-	data := []byte(`
-{
-	"data": {
-		"identities": {
-			"bob": {
-				"access": "read",
-				"local": {
-					"user-id": 42
-				}
-			}
-		}
-	},
-    "identities": {
-        "mary": {
-            "access": "admin",
-            "local": {
-                "user-id": 1000
-            }
-        }
-    }
-}`)
-
-	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, IsNil)
-	err = patch.Apply(st)
-	c.Assert(err, IsNil)
-	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
-
-	st.Lock()
-	defer st.Unlock()
-
-	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
-		"bob": {
-			Name:   "bob",
-			Access: identities.ReadAccess,
-			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 	})
 }
