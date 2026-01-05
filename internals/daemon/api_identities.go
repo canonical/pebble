@@ -143,28 +143,6 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 		idents[name] = identity
 	}
 
-	var identitiesToRemove map[string]struct{}
-	switch payload.Action {
-	case "add", "update":
-		for name, identity := range idents {
-			if identity == nil {
-				return BadRequest(`identity value for %q must not be null for %s operation`, name, payload.Action)
-			}
-		}
-	case "replace":
-		break
-	case "remove":
-		identitiesToRemove = make(map[string]struct{})
-		for name, identity := range idents {
-			if identity != nil {
-				return BadRequest(`identity value for %q must be null for %s operation`, name, payload.Action)
-			}
-			identitiesToRemove[name] = struct{}{}
-		}
-	default:
-		return BadRequest(`invalid action %q, must be "add", "update", "replace", or "remove"`, payload.Action)
-	}
-
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
@@ -175,12 +153,22 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 	switch payload.Action {
 	case "add":
 		for name, identity := range idents {
+			if identity == nil {
+				return BadRequest(`identity value for %q must not be null for add operation`, name)
+			}
+		}
+		for name, identity := range idents {
 			logger.SecurityWarn(logger.SecurityUserCreated,
 				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
 				fmt.Sprintf("Creating %s user %s", identity.Access, name))
 		}
 		err = identitiesMgr.AddIdentities(idents)
 	case "update":
+		for name, identity := range idents {
+			if identity == nil {
+				return BadRequest(`identity value for %q must not be null for update operation`, name)
+			}
+		}
 		for name, identity := range idents {
 			logger.SecurityWarn(logger.SecurityUserUpdated,
 				fmt.Sprintf("%s,%s,%s", userString(user), name, identity.Access),
@@ -201,12 +189,21 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 		}
 		err = identitiesMgr.ReplaceIdentities(idents)
 	case "remove":
-		for name := range idents {
+		identitiesToRemove := make(map[string]struct{}, len(idents))
+		for name, identity := range idents {
+			if identity != nil {
+				return BadRequest(`identity value for %q must be null for remove operation`, name)
+			}
+			identitiesToRemove[name] = struct{}{}
+		}
+		for name := range identitiesToRemove {
 			logger.SecurityWarn(logger.SecurityUserDeleted,
 				fmt.Sprintf("%s,%s", userString(user), name),
 				fmt.Sprintf("Deleting user %s", name))
 		}
 		err = identitiesMgr.RemoveIdentities(identitiesToRemove)
+	default:
+		return BadRequest(`invalid action %q, must be "add", "update", "replace", or "remove"`, payload.Action)
 	}
 	if err != nil {
 		return BadRequest("%v", err)
