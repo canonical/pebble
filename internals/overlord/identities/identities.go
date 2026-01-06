@@ -134,6 +134,9 @@ func (c *CertIdentity) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	block, _ := pem.Decode([]byte(unmarshalled.PEM))
+	if block == nil {
+		return errors.New("cert identity must include a PEM-encoded certificate")
+	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return fmt.Errorf("cannot parse certificate from cert identity: %w", err)
