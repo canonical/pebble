@@ -41,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
@@ -358,19 +359,20 @@ func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, rem
 	d := s.newDaemon(c)
 
 	// Add some named identities for testing with.
+	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
-	err := d.state.ReplaceIdentities(map[string]*state.Identity{
+	err := identitiesMgr.ReplaceIdentities(map[string]*identities.Identity{
 		"adminuser": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1},
 		},
 		"readuser": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 2},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 2},
 		},
 		"untrusteduser": {
-			Access: state.UntrustedAccess,
-			Local:  &state.LocalIdentity{UserID: 3},
+			Access: identities.UntrustedAccess,
+			Local:  &identities.LocalIdentity{UserID: 3},
 		},
 	})
 	d.state.Unlock()
@@ -562,7 +564,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
 	c.Assert(userSeen, NotNil)
-	c.Check(userSeen.Access, Equals, state.AdminAccess)
+	c.Check(userSeen.Access, Equals, identities.AdminAccess)
 	c.Assert(userSeen.UID, NotNil)
 	c.Check(*userSeen.UID, Equals, uint32(0))
 
@@ -576,7 +578,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
 	c.Assert(userSeen, NotNil)
-	c.Check(userSeen.Access, Equals, state.AdminAccess)
+	c.Check(userSeen.Access, Equals, identities.AdminAccess)
 	c.Assert(userSeen.UID, NotNil)
 	c.Check(*userSeen.UID, Equals, uint32(os.Getuid()))
 
@@ -590,7 +592,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
 	c.Assert(userSeen, NotNil)
-	c.Check(userSeen.Access, Equals, state.ReadAccess)
+	c.Check(userSeen.Access, Equals, identities.ReadAccess)
 	c.Assert(userSeen.UID, NotNil)
 	c.Check(*userSeen.UID, Equals, uint32(os.Getuid()+1))
 }
@@ -1846,11 +1848,12 @@ func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
 	d := s.newDaemon(c)
 
 	// Set up a Local identity.
+	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
-	err := d.state.AddIdentities(map[string]*state.Identity{
+	err := identitiesMgr.AddIdentities(map[string]*identities.Identity{
 		"localuser": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1000},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
 	d.state.Unlock()
@@ -1880,7 +1883,7 @@ func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
 	// Verify UserState for Local identity.
 	c.Assert(capturedUser, NotNil)
 	c.Assert(capturedUser.Username, Equals, "localuser")
-	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser.Access, Equals, identities.AdminAccess)
 	c.Assert(capturedUser.UID, NotNil)
 
 	// This specific expectation is only a temporary workaround to
@@ -1917,7 +1920,7 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnly(c *C) {
 	// Verify UserState for UID-only (no named identity)
 	c.Assert(capturedUser, NotNil)
 	c.Assert(capturedUser.Username, Equals, "")
-	c.Assert(capturedUser.Access, Equals, state.ReadAccess)
+	c.Assert(capturedUser.Access, Equals, identities.ReadAccess)
 	c.Assert(capturedUser.UID, NotNil)
 	c.Assert(*capturedUser.UID, Equals, uint32(5000))
 }
@@ -1950,7 +1953,7 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyRoot(c *C) {
 	// Verify UserState for root UID.
 	c.Assert(capturedUser, NotNil)
 	c.Assert(capturedUser.Username, Equals, "")
-	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser.Access, Equals, identities.AdminAccess)
 	c.Assert(capturedUser.UID, NotNil)
 	c.Assert(*capturedUser.UID, Equals, uint32(0))
 }
@@ -1984,7 +1987,7 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
 	// Verify UserState for daemon UID.
 	c.Assert(capturedUser, NotNil)
 	c.Assert(capturedUser.Username, Equals, "")
-	c.Assert(capturedUser.Access, Equals, state.AdminAccess)
+	c.Assert(capturedUser.Access, Equals, identities.AdminAccess)
 	c.Assert(capturedUser.UID, NotNil)
 	c.Assert(*capturedUser.UID, Equals, daemonUID)
 }

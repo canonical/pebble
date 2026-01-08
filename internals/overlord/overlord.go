@@ -32,6 +32,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/logstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/planstate"
@@ -111,15 +112,16 @@ type Overlord struct {
 	startOfOperationTime time.Time
 
 	// managers
-	inited     bool
-	startedUp  bool
-	runner     *state.TaskRunner
-	restartMgr *restart.RestartManager
-	planMgr    *planstate.PlanManager
-	serviceMgr *servstate.ServiceManager
-	commandMgr *cmdstate.CommandManager
-	checkMgr   *checkstate.CheckManager
-	logMgr     *logstate.LogManager
+	inited        bool
+	startedUp     bool
+	runner        *state.TaskRunner
+	restartMgr    *restart.RestartManager
+	planMgr       *planstate.PlanManager
+	serviceMgr    *servstate.ServiceManager
+	commandMgr    *cmdstate.CommandManager
+	checkMgr      *checkstate.CheckManager
+	logMgr        *logstate.LogManager
+	identitiesMgr *identities.Manager
 
 	extension Extension
 }
@@ -193,6 +195,12 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("cannot create plan manager: %w", err)
 	}
 	o.stateEng.AddManager(o.planMgr)
+
+	o.identitiesMgr, err = identities.NewManager(s)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create identities manager: %w", err)
+	}
+	o.stateEng.AddManager(o.identitiesMgr)
 
 	o.logMgr = logstate.NewLogManager()
 
@@ -619,6 +627,12 @@ func (o *Overlord) CheckManager() *checkstate.CheckManager {
 // system configuration
 func (o *Overlord) PlanManager() *planstate.PlanManager {
 	return o.planMgr
+}
+
+// IdentitiesManager returns the manager responsible for managing client
+// identities.
+func (o *Overlord) IdentitiesManager() *identities.Manager {
+	return o.identitiesMgr
 }
 
 // Fake creates an Overlord without any managers and with a backend

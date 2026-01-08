@@ -28,7 +28,7 @@ import (
 )
 
 // Level is the current implemented patch level of the state format and content.
-var Level = 1
+var Level = 2
 
 // Sublevel is the current implemented sublevel for the Level.
 // Sublevel 0 is the first patch for the new Level, rollback below x.0 is not possible.

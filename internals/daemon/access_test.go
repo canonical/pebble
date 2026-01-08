@@ -22,7 +22,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/daemon"
-	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/identities"
 )
 
 type accessSuite struct{}
@@ -52,7 +52,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
+			user:            &daemon.UserState{Access: identities.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
@@ -60,7 +60,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
+			user:            &daemon.UserState{Access: identities.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
@@ -68,7 +68,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.ReadAccess},
+			user:            &daemon.UserState{Access: identities.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    nil,
@@ -76,7 +76,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.AdminAccess},
+			user:            &daemon.UserState{Access: identities.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   nil,
 			userCheckErr:    nil,
@@ -94,7 +94,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
+			user:            &daemon.UserState{Access: identities.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
@@ -102,7 +102,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
+			user:            &daemon.UserState{Access: identities.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
@@ -110,7 +110,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.ReadAccess},
+			user:            &daemon.UserState{Access: identities.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
@@ -118,7 +118,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		}, {
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.AdminAccess},
+			user:            &daemon.UserState{Access: identities.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
