@@ -26,7 +26,7 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout Pebble repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -68,7 +68,7 @@ jobs:
         arch: ["amd64", "arm64", "armhf"]
     steps:
       - name: Checkout Pebble repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 

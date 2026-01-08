@@ -40,6 +40,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
@@ -172,7 +173,7 @@ type Daemon struct {
 
 // UserState represents the state of an authenticated API user.
 type UserState struct {
-	Access   state.IdentityAccess
+	Access   identities.Access
 	UID      *uint32
 	Username string
 }
@@ -196,7 +197,7 @@ type Command struct {
 	d *Daemon
 }
 
-func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserState {
+func userFromRequest(st *state.State, identitiesMgr *identities.Manager, r *http.Request, ucred *Ucrednet) *UserState {
 	// Does the HTTP header include basic auth credentials?
 	username, password, _ := r.BasicAuth()
 
@@ -207,7 +208,7 @@ func userFromRequest(st *state.State, r *http.Request, ucred *Ucrednet) *UserSta
 	}
 
 	st.Lock()
-	identity := st.IdentityFromInputs(userID, username, password)
+	identity := identitiesMgr.IdentityFromInputs(userID, username, password)
 	st.Unlock()
 
 	if identity != nil {
@@ -286,17 +287,18 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// not good: https://github.com/canonical/pebble/pull/369
 	var user *UserState
 	if _, isOpen := access.(OpenAccess); !isOpen {
-		user = userFromRequest(c.d.state, r, ucred)
+		identitiesMgr := c.d.Overlord().IdentitiesManager()
+		user = userFromRequest(c.d.state, identitiesMgr, r, ucred)
 	}
 
 	// If we don't have a named-identity user, use ucred UID to see if we have a default.
 	if user == nil && ucred != nil {
 		if ucred.Uid == 0 || ucred.Uid == uint32(os.Getuid()) {
 			// Admin if UID is 0 (root) or the UID the daemon is running as.
-			user = &UserState{Access: state.AdminAccess, UID: &ucred.Uid}
+			user = &UserState{Access: identities.AdminAccess, UID: &ucred.Uid}
 		} else {
 			// Regular read access if any other local UID.
-			user = &UserState{Access: state.ReadAccess, UID: &ucred.Uid}
+			user = &UserState{Access: identities.ReadAccess, UID: &ucred.Uid}
 		}
 	}
 
