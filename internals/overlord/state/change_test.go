@@ -755,7 +755,7 @@ func (ts *taskRunnerSuite) TestAbortLanes(c *C) {
 		c.Logf("Expected result: %s", test.result)
 
 		seen = make(map[string]bool)
-		var expected = strings.Fields(test.result)
+		expected := strings.Fields(test.result)
 		var obtained []string
 		for i := 0; i < len(expected); i++ {
 			item := expected[i]
@@ -969,7 +969,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 		c.Logf("Expected result: %s", test.result)
 
 		seen = make(map[string]bool)
-		var expected = strings.Fields(test.result)
+		expected := strings.Fields(test.result)
 		var obtained []string
 		for i := 0; i < len(expected); i++ {
 			item := expected[i]

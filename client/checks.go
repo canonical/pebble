@@ -195,7 +195,7 @@ type RefreshCheckResult struct {
 
 // RefreshCheck runs a specific health check immediately.
 func (client *Client) RefreshCheck(opts *RefreshCheckOptions) (*RefreshCheckResult, error) {
-	var payload = struct {
+	payload := struct {
 		Name string `json:"name"`
 	}{
 		Name: opts.Name,
