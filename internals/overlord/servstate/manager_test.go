@@ -707,7 +707,7 @@ services:
 
 func (s *S) TestStartFastExitCommand(c *C) {
 	s.newServiceManager(c)
-	var layer = `
+	layer := `
 services:
     test4:
         override: replace
@@ -732,7 +732,7 @@ services:
 
 func (s *S) TestStartFastExitCommandOnFailureIgnore(c *C) {
 	s.newServiceManager(c)
-	var layer = `
+	layer := `
 services:
     test1:
         override: replace

@@ -732,8 +732,8 @@ func taskEffectiveStatus(t *Task) Status {
 }
 
 func (c *Change) abortLanes(lanes []int, abortedLanes map[int]bool, seenTasks map[string]bool) {
-	var hasLive = make(map[int]bool)
-	var hasDead = make(map[int]bool)
+	hasLive := make(map[int]bool)
+	hasDead := make(map[int]bool)
 	var laneTasks []*Task
 NextChangeTask:
 	for _, tid := range c.taskIDs {

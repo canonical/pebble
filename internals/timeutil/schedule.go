@@ -608,7 +608,7 @@ func parseWeekday(s string) (week Week, err error) {
 		return week, fmt.Errorf("cannot parse %q: invalid format", s)
 	}
 
-	var day = s
+	day := s
 	var pos uint
 	if l == 4 {
 		day = s[0:3]
