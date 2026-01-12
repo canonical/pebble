@@ -215,8 +215,9 @@ jobs:
 
   sbom-secscan:
     runs-on: [self-hosted, self-hosted-linux-amd64-jammy-private-endpoint-medium]
-    needs: [release]
-    if: github.event_name == 'release' && needs.release.result == 'success' && always()
+    needs: [test]  # FIXME: switch back to [release] before merging
+    if: needs.test.result == 'success' && always()  # FIXME: switch back to version below before merging
+    # if: github.event_name == 'release' && needs.release.result == 'success' && always()
     steps:
       - uses: actions/checkout@v6
         with:
