@@ -61,7 +61,7 @@ var API = []*Command{{
 	POST:        v1PostService,
 }, {
 	Path:       "/v1/plan",
-	ReadAccess: UserAccess{},
+	ReadAccess: AdminAccess{},
 	GET:        v1GetPlan,
 }, {
 	Path:        "/v1/layers",
