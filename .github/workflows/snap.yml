@@ -212,3 +212,8 @@ jobs:
           snapcraft release ${{ env.SNAP_NAME }} \
             ${{ steps.get-snap.outputs.revision }} \
             ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+
+  sbom-secscan:
+    needs: [release]
+    if: github.event_name == 'release' && needs.release.result == 'success' && always()
+    uses: ./.github/workflows/sbom-secscan.yaml
