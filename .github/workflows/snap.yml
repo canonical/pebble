@@ -212,3 +212,18 @@ jobs:
           snapcraft release ${{ env.SNAP_NAME }} \
             ${{ steps.get-snap.outputs.revision }} \
             ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+
+  sbom-secscan:
+    runs-on: [self-hosted, self-hosted-linux-amd64-jammy-private-endpoint-medium]
+    needs: [release]
+    if: github.event_name == 'release' && needs.release.result == 'success' && always()
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: sbomber
+        uses: canonical/sbomber/.github/actions/run@cf7a76e810497ec932e8285b2c9d6b373d225e79  # main -- the sbomber-ref input below should match
+        with:
+          manifest: '${{ github.workspace }}/.github/.sbomber-manifest-snap.yaml'
+          artifact-name: secscan-report-upload-snap
+          sbomber-ref: cf7a76e810497ec932e8285b2c9d6b373d225e79  # should match the ref in 'uses' above
