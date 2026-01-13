@@ -1,8 +1,7 @@
 name: SBOM and secscan
 
 on:
-  push:
-    tags: [v*]  # when publishing a release
+  workflow_call:
   workflow_dispatch:
 
 permissions: {}
@@ -15,8 +14,8 @@ jobs:
         with:
           persist-credentials: false
       - name: sbomber
-        uses: canonical/sbomber/.github/actions/run@cf7a76e810497ec932e8285b2c9d6b373d225e79  # main -- and sbomber-ref input should match
+        uses: canonical/sbomber/.github/actions/run@cf7a76e810497ec932e8285b2c9d6b373d225e79  # main -- the sbomber-ref input below should match
         with:
           manifest: '${{ github.workspace }}/.github/.sbomber-manifest-snap.yaml'
           artifact-name: secscan-report-upload-snap
-          sbomber-ref: cf7a76e810497ec932e8285b2c9d6b373d225e79
+          sbomber-ref: cf7a76e810497ec932e8285b2c9d6b373d225e79  # should match the ref in 'uses' above
