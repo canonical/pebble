@@ -103,6 +103,11 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	st.Lock()
 	defer st.Unlock()
 
+	// Check if the request context has been cancelled (e.g., client timeout/disconnect)
+	if r.Context().Err() != nil {
+		return InternalError("request cancelled: %v", r.Context().Err())
+	}
+
 	var taskSet *state.TaskSet
 	var lanes [][]string
 	var services []string
