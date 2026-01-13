@@ -362,6 +362,46 @@ services:
 	c.Check(tasks, HasLen, 0)
 }
 
+// Regression test for connection leak with cancelled contexts
+// https://github.com/canonical/pebble/issues/784
+func (s *apiSuite) TestServicesCancelledContext(c *C) {
+	writeTestLayer(s.pebbleDir, servicesLayer)
+	s.daemon(c)
+
+	restore := FakeStateEnsureBefore(func(st *state.State, d time.Duration) {})
+	defer restore()
+
+	servicesCmd := apiCmd("/v1/services")
+
+	payload := bytes.NewBufferString(`{"action": "replan"}`)
+
+	// Create a request with an already-cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", "/v1/services", payload)
+	c.Assert(err, IsNil)
+
+	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	// Verify that the handler detected the cancelled context and returned an error
+	c.Check(rec.Code, Equals, 500) // Internal error
+	c.Check(rsp.Status, Equals, 500)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+
+	// Verify the error message mentions the context cancellation
+	var body map[string]any
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Check(err, IsNil)
+	result, ok := body["result"].(map[string]any)
+	c.Assert(ok, Equals, true)
+	message, ok := result["message"].(string)
+	c.Assert(ok, Equals, true)
+	c.Check(message, Matches, ".*request cancelled.*")
+}
+
 // Regression test for 3-lock deadlock issue described in
 // https://github.com/canonical/pebble/issues/314
 func (s *apiSuite) TestDeadlock(c *C) {
