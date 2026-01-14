@@ -111,6 +111,9 @@ func v1PostChecks(c *Command, r *http.Request, user *UserState) Response {
 	st.EnsureBefore(0) // start and stop tasks right away
 
 	sort.Strings(changed)
+	if changed == nil {
+		changed = []string{}
+	}
 	return SyncResponse(responsePayload{Changed: changed})
 }
 

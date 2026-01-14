@@ -233,6 +233,43 @@ func (s *apiSuite) postChecks(c *C, body string) *resp {
 	return rsp
 }
 
+func (s *apiSuite) TestChecksPostNoChange(c *C) {
+	writeTestLayer(s.pebbleDir, `
+checks:
+    chk1:
+        override: replace
+        level: ready
+        startup: disabled
+        http:
+            url: https://example.com/bad
+`)
+	s.daemon(c)
+	s.startOverlord()
+
+	// Wait for system to settle
+	time.Sleep(100 * time.Millisecond)
+
+	// Try to stop a check that's already stopped (disabled)
+	rsp := s.postChecks(c, `{"action": "stop", "checks": ["chk1"]}`)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	// Should return empty list, not nil
+	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{})
+
+	// Try to start the check
+	rsp = s.postChecks(c, `{"action": "start", "checks": ["chk1"]}`)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{"chk1"})
+
+	// Try to start again (already started)
+	rsp = s.postChecks(c, `{"action": "start", "checks": ["chk1"]}`)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	// Should return empty list, not nil
+	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{})
+}
+
 func (s *apiSuite) TestPostChecksRefresh(c *C) {
 	checksYAML := `
 checks:
