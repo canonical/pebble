@@ -246,9 +246,6 @@ checks:
 	s.daemon(c)
 	s.startOverlord()
 
-	// Wait for system to settle
-	time.Sleep(100 * time.Millisecond)
-
 	// Try to stop a check that's already stopped (disabled)
 	rsp := s.postChecks(c, `{"action": "stop", "checks": ["chk1"]}`)
 	c.Check(rsp.Status, Equals, 200)
