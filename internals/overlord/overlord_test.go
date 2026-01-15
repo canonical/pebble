@@ -1130,3 +1130,29 @@ func (s *overlordSuite) TestStartOfOperationSetTime(c *C) {
 	c.Assert(err, IsNil)
 	c.Check(operationTime.Equal(prev), Equals, true)
 }
+
+func executesWithinTimeout(fn func() error, timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		_ = fn()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+func (ovs *overlordSuite) TestOverlordStopDoesNotHang(c *C) {
+	timeout := 4 * time.Second
+
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, IsNil)
+	c.Assert(executesWithinTimeout(o.Stop, timeout), Equals, true, Commentf("Overlord Stop() is hanging for an empty overlord. Call lasted more than timeout: %s", timeout))
+
+	fo := overlord.Fake()
+	c.Assert(executesWithinTimeout(fo.Stop, timeout), Equals, true, Commentf("Overlord Stop() is hanging for fake overlord. Call lasted more than timeout: %s", timeout))
+}
