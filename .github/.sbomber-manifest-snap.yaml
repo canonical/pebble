@@ -9,7 +9,8 @@ clients:
 artifacts:
   - name: 'pebble'
     type: 'snap'
+    channel: 'fips/edge'
     ssdlc_params:
         name: 'pebble'
         version: ''  # auto-detect
-        channel: 'stable'
+        channel: 'edge'
