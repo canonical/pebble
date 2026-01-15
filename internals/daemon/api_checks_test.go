@@ -240,8 +240,8 @@ checks:
         override: replace
         level: ready
         startup: disabled
-        http:
-            url: https://example.com/bad
+        exec:
+            command: sleep 0.1
 `)
 	s.daemon(c)
 	s.startOverlord()
