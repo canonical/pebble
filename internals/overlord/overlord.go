@@ -131,7 +131,6 @@ func New(opts *Options) (*Overlord, error) {
 
 	o := &Overlord{
 		pebbleDir: opts.PebbleDir,
-		loopTomb:  new(tomb.Tomb),
 		inited:    true,
 		extension: opts.Extension,
 	}
@@ -451,6 +450,9 @@ func (o *Overlord) ensureBefore(d time.Duration) {
 // Loop runs a loop in a goroutine to ensure the current state regularly through StateEngine Ensure.
 func (o *Overlord) Loop() {
 	o.ensureTimerSetup()
+	if o.loopTomb == nil {
+		o.loopTomb = new(tomb.Tomb)
+	}
 	o.loopTomb.Go(func() error {
 		for {
 			// TODO: pass a proper context into Ensure
@@ -487,8 +489,11 @@ func (o *Overlord) CanStandby() bool {
 
 // Stop stops the ensure loop and the managers under the StateEngine.
 func (o *Overlord) Stop() error {
-	o.loopTomb.Kill(nil)
-	err := o.loopTomb.Wait()
+	var err error
+	if o.loopTomb != nil {
+		o.loopTomb.Kill(nil)
+		err = o.loopTomb.Wait()
+	}
 	o.stateEng.Stop()
 	return err
 }
@@ -646,8 +651,7 @@ func Fake() *Overlord {
 // testing.
 func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	o := &Overlord{
-		loopTomb: new(tomb.Tomb),
-		inited:   false,
+		inited: false,
 	}
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)

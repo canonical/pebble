@@ -152,7 +152,7 @@ func (cmd cmdHelp) Execute(args []string) error {
 		return nil
 	}
 
-	var subcmd = cmd.parser.Command
+	subcmd := cmd.parser.Command
 	for _, subname := range cmd.Positional.Subs {
 		subcmd = subcmd.Find(subname)
 		if subcmd == nil {
