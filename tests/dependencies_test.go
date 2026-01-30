@@ -19,7 +19,11 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	. "gopkg.in/check.v1"
 )
+
+func Test(t *testing.T) { TestingT(t) }
 
 // packageInfo represents the relevant fields from `go list -json` output
 type packageInfo struct {
