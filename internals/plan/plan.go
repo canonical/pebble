@@ -115,12 +115,6 @@ func UnregisterSectionExtension(field string) {
 	})
 }
 
-// SectionExtensions returns a copy of the currently registered section
-// extensions.
-func SectionExtensions() map[string]SectionExtension {
-	return maps.Clone(sectionExtensions)
-}
-
 type Plan struct {
 	Layers     []*Layer              `yaml:"-"`
 	Services   map[string]*Service   `yaml:"services,omitempty"`

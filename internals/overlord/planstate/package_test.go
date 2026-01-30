@@ -210,60 +210,6 @@ func (t *T) Merge(other *T) {
 	}
 }
 
-var _ plan.ImmutableSection = (*immutableSection)(nil)
-
-type immutableSection struct {
-	Data string `yaml:"data"`
-}
-
-func (s *immutableSection) Immutable()      {}
-func (s *immutableSection) Validate() error { return nil }
-func (s *immutableSection) IsZero() bool    { return s.Data == "" }
-
-func (s *immutableSection) Equals(other plan.Section) bool {
-	o, ok := other.(*immutableSection)
-	if !ok {
-		return false
-	}
-	return s.Data == o.Data
-}
-
-var (
-	_ plan.SectionExtension         = (*immutableSectionExtension)(nil)
-	_ planstate.PlanChangedListener = (*immutableSectionExtension)(nil)
-)
-
-type immutableSectionExtension struct {
-	lastPlan    *plan.Plan
-	changeCount int
-}
-
-func (e *immutableSectionExtension) ParseSection(node yaml.Node) (plan.Section, error) {
-	var s immutableSection
-	if err := node.Decode(&s); err != nil {
-		return nil, err
-	}
-	return &s, nil
-}
-
-func (e *immutableSectionExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
-	combined := &immutableSection{}
-	for _, s := range sections {
-		typed := s.(*immutableSection)
-		if typed.Data != "" {
-			combined.Data = typed.Data
-		}
-	}
-	return combined, nil
-}
-
-func (e *immutableSectionExtension) ValidatePlan(p *plan.Plan) error { return nil }
-
-func (e *immutableSectionExtension) PlanChanged(p *plan.Plan) {
-	e.lastPlan = p
-	e.changeCount++
-}
-
 func makeMapIfNil[K comparable, V any](m map[K]V) map[K]V {
 	if m == nil {
 		m = make(map[K]V)

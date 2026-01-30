@@ -49,11 +49,6 @@ func NewManager(layersDir string) (*PlanManager, error) {
 		layersDir: layersDir,
 		plan:      plan.NewPlan(),
 	}
-	for _, ext := range plan.SectionExtensions() {
-		if l, ok := ext.(PlanChangedListener); ok {
-			manager.AddChangeListener(l.PlanChanged)
-		}
-	}
 	return manager, nil
 }
 

@@ -689,7 +689,7 @@ workloads:
         override: replace
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+	c.Assert(err, ErrorMatches, `cannot change immutable section "workloads"`)
 
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
@@ -720,75 +720,10 @@ workloads:
         override: replace
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+	c.Assert(err, ErrorMatches, `cannot change immutable section "workloads"`)
 
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
 	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
-}
-
-func (ps *planSuite) TestImmutableSections(c *C) {
-	// Register the mock extension.
-	const sectionName = "immutable-test"
-	ext := &immutableSectionExtension{}
-	plan.RegisterSectionExtension(sectionName, ext)
-	defer plan.UnregisterSectionExtension(sectionName)
-
-	var err error
-	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, IsNil)
-
-	// Initial load.
-	ps.writeLayer(c, `
-immutable-test:
-    data: "original-state"
-`)
-	err = ps.planMgr.Load()
-	c.Assert(err, IsNil)
-
-	// Verify listener was called.
-	c.Assert(ext.changeCount, Equals, 1)
-	c.Assert(ext.lastPlan, NotNil)
-	sec := ext.lastPlan.Sections[sectionName].(*immutableSection)
-	c.Assert(sec.Data, Equals, "original-state")
-
-	// Append layer matching existing state (should not trigger immutability violation).
-	layerAllowed := ps.parseLayer(c, 0, "layer-ok", `
-immutable-test:
-    data: "original-state"
-services:
-    svc1:
-        override: replace
-        command: foo
-`)
-	err = ps.planMgr.AppendLayer(layerAllowed, false)
-	c.Assert(err, IsNil)
-
-	// Verify listener fired again (plan changed due to new service)
-	c.Assert(ext.changeCount, Equals, 2)
-	c.Assert(len(ext.lastPlan.Layers), Equals, 2)
-
-	layerServicesOnly := ps.parseLayer(c, 0, "layer-svc", `
-services:
-    svc2:
-        override: replace
-        command: bar
-`)
-	err = ps.planMgr.AppendLayer(layerServicesOnly, false)
-	c.Assert(err, IsNil)
-	c.Assert(ext.changeCount, Equals, 3)
-
-	layerBad := ps.parseLayer(c, 0, "layer-bad", `
-immutable-test:
-    data: "malicious-change"
-`)
-	err = ps.planMgr.AppendLayer(layerBad, false)
-	c.Assert(err, ErrorMatches, `cannot change immutable section "immutable-test"`)
-
-	// Listener must NOT be fired.
-	c.Assert(ext.changeCount, Equals, 3)
-	c.Assert(len(ps.planMgr.Plan().Layers), Equals, 3)
-	currentSec := ps.planMgr.Plan().Sections[sectionName].(*immutableSection)
-	c.Assert(currentSec.Data, Equals, "original-state")
 }
