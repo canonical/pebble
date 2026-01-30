@@ -36,7 +36,7 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 		numChanges.Add(1)
 	})
 	// Load the plan from the <pebble-dir>/layers directory
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
@@ -44,7 +44,7 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	c.Assert(string(out), Equals, "{}\n")
 	// A new, empty plan was created so change listeners must be called
 	c.Assert(numChanges.Load(), Equals, uint32(1))
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	// Plan was already loaded, so no change listeners will be called
 	c.Assert(numChanges.Load(), Equals, uint32(1))
@@ -146,7 +146,7 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 		ps.writeLayer(c, string(reindent(l)))
 	}
 	// Load the plan from the <pebble-dir>/layers directory
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 	plan := ps.planMgr.Plan()
@@ -170,7 +170,7 @@ test-field:
         b: something else
 `[1:])
 	// Attempt to reload should not take effect
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 }
@@ -546,7 +546,7 @@ services:
         override: replace
         command: echo svc1
 `)
-		err = manager.Load()
+		err = manager.Load(nil)
 		c.Assert(err, IsNil)
 
 		layer1 := ps.parseLayer(c, 0, "label1", `
@@ -679,7 +679,7 @@ workloads:
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 
 	// An attempt to mutate layers must fail
@@ -710,7 +710,7 @@ workloads:
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 
 	// An attempt to mutate layers must fail

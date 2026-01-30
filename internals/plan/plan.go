@@ -1543,19 +1543,46 @@ func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, e
 // ReadDir reads the configuration layers from layersDir,
 // and returns the resulting Plan. If layersDir doesn't
 // exist, it returns a valid Plan with no layers.
-func ReadDir(layersDir string) (*Plan, error) {
+// If base is not nil, layers read from the given layersDir
+// will be stacked on top of the given base plan.
+func ReadDir(layersDir string, base *Plan) (*Plan, error) {
+	var layers []*Layer
+
 	_, err := os.Stat(layersDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return NewPlan(), nil
+		if !os.IsNotExist(err) {
+			return nil, err
 		}
-		return nil, err
+		// layersDir does not exist, but a base plan might have been supplied.
+	} else {
+		layers, err = ReadLayersDir(layersDir)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if base == nil && len(layers) == 0 {
+		return NewPlan(), nil
 	}
 
-	layers, err := ReadLayersDir(layersDir)
-	if err != nil {
-		return nil, err
+	if base != nil {
+		baseLayer := &Layer{
+			// XXX: The "000-layer.yaml" file name is forbidden, but there's no
+			// logic preventing us from having a sub-1 order for layers. If we
+			// use order "1", we would be clashing with a subsequent layer that
+			// would logically use this order number. A workaround for this would
+			// be to use order "1" and, before prepending this layer, offset all
+			// other layers' orders by 1000 (which is what PlanManager.AppendLayer)
+			// does internally in order to support layer sub-directories.
+			Order:      0,
+			Label:      "base-layer",
+			Services:   base.Services,
+			Checks:     base.Checks,
+			LogTargets: base.LogTargets,
+			Sections:   base.Sections,
+		}
+		layers = append([]*Layer{baseLayer}, layers...)
 	}
+
 	combined, err := CombineLayers(layers...)
 	if err != nil {
 		return nil, err
