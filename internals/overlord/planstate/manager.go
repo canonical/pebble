@@ -49,6 +49,11 @@ func NewManager(layersDir string) (*PlanManager, error) {
 		layersDir: layersDir,
 		plan:      plan.NewPlan(),
 	}
+	for _, ext := range plan.SectionExtensions() {
+		if l, ok := ext.(PlanChangedListener); ok {
+			manager.AddChangeListener(l.PlanChanged)
+		}
+	}
 	return manager, nil
 }
 
@@ -111,6 +116,12 @@ func (m *PlanManager) Init(p *plan.Plan) (err error) {
 
 // PlanChangedFunc is the function type used by AddChangeListener.
 type PlanChangedFunc func(p *plan.Plan)
+
+// PlanChangedListener is the interface that section extensions can implement
+// to receive notifications when the plan changes.
+type PlanChangedListener interface {
+	PlanChanged(*plan.Plan)
+}
 
 // AddChangeListener adds f to the list of functions that are called whenever
 // a plan change event took place (Load, AppendLayer, CombineLayer). A plan
@@ -294,6 +305,18 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 	if err != nil {
 		return nil, err
 	}
+
+	for name, oldSection := range m.plan.Sections {
+		if immutable, ok := oldSection.(plan.ImmutableSection); ok {
+			newSection := p.Sections[name]
+			if !immutable.Equals(newSection) {
+				return nil, &plan.FormatError{
+					Message: fmt.Sprintf("cannot change immutable section %q", name),
+				}
+			}
+		}
+	}
+
 	m.plan = p
 	return p, nil
 }

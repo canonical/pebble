@@ -59,6 +59,15 @@ type Section interface {
 	IsZero() bool
 }
 
+type ImmutableSection interface {
+	Section
+
+	Immutable()
+
+	// Equals returns false if the section differs from other.
+	Equals(other Section) bool
+}
+
 const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
@@ -104,6 +113,12 @@ func UnregisterSectionExtension(field string) {
 	sectionExtensionsOrder = slices.DeleteFunc(sectionExtensionsOrder, func(n string) bool {
 		return n == field
 	})
+}
+
+// SectionExtensions returns a copy of the currently registered section
+// extensions.
+func SectionExtensions() map[string]SectionExtension {
+	return maps.Clone(sectionExtensions)
 }
 
 type Plan struct {
