@@ -15,7 +15,6 @@
 package planstate
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -39,7 +38,6 @@ type PlanManager struct {
 
 	planLock sync.Mutex
 	plan     *plan.Plan
-	isLoaded bool
 
 	changeListeners []PlanChangedFunc
 }
@@ -60,52 +58,18 @@ func (m *PlanManager) Load(base *plan.Plan) (err error) {
 	m.planLock.Lock()
 
 	var p *plan.Plan
-	wasLoaded := m.isLoaded
 	defer func() {
 		m.planLock.Unlock()
-		if err == nil && !wasLoaded {
+		if err == nil {
 			m.callChangeListeners(p)
 		}
 	}()
-
-	if m.isLoaded {
-		return nil
-	}
 
 	p, err = plan.ReadDir(m.layersDir, base)
 	if err != nil {
 		return err
 	}
 	m.plan = p
-	m.isLoaded = true
-	return nil
-}
-
-// Init loads the plan from an existing instance and announces to
-// change subscribers.
-func (m *PlanManager) Init(p *plan.Plan) (err error) {
-	m.planLock.Lock()
-
-	wasLoaded := m.isLoaded
-	defer func() {
-		m.planLock.Unlock()
-		if err == nil && !wasLoaded {
-			m.callChangeListeners(p)
-		}
-	}()
-
-	if m.isLoaded {
-		return nil
-	}
-	if p == nil {
-		return errors.New("cannot initialize plan manager with a nil plan")
-	}
-
-	if err := p.Validate(); err != nil {
-		return err
-	}
-	m.plan = p
-	m.isLoaded = true
 	return nil
 }
 
