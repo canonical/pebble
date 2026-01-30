@@ -112,12 +112,6 @@ func (m *PlanManager) Init(p *plan.Plan) (err error) {
 // PlanChangedFunc is the function type used by AddChangeListener.
 type PlanChangedFunc func(p *plan.Plan)
 
-// PlanChangedListener is the interface that section extensions can implement
-// to receive notifications when the plan changes.
-type PlanChangedListener interface {
-	PlanChanged(*plan.Plan)
-}
-
 // AddChangeListener adds f to the list of functions that are called whenever
 // a plan change event took place (Load, AppendLayer, CombineLayer). A plan
 // change event does not guarantee that combined plan content has changed.
