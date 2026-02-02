@@ -24,6 +24,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/idkey"
+	"github.com/canonical/pebble/internals/logger"
 )
 
 // TestNoDirectory checks if leaf directory creation works.
@@ -163,6 +164,36 @@ func (ks *keySuite) TestKeySign(c *C) {
 	// Verify signature
 	ok = ed25519.Verify(pubKey, message, signature)
 	c.Assert(ok, Equals, true)
+}
+
+// TestGeneratePersistNever checks that the key is not written to disk
+// when PEBBLE_PERSIST is set to "never".
+func (ks *keySuite) TestGeneratePersistNever(c *C) {
+	const persistVar = "PEBBLE_PERSIST"
+	originalEnv, wasSet := os.LookupEnv(persistVar)
+	os.Setenv(persistVar, "never")
+	defer func() {
+		if wasSet {
+			os.Setenv(persistVar, originalEnv)
+		} else {
+			os.Unsetenv(persistVar)
+		}
+	}()
+
+	logbuf, restoreLog := logger.MockLogger("idkey: ")
+	defer restoreLog()
+
+	keyDir := filepath.Join(c.MkDir(), "identity")
+	keyPath := filepath.Join(keyDir, "key.pem")
+
+	k, err := idkey.Generate(keyDir)
+	c.Assert(err, IsNil)
+	c.Assert(k, NotNil)
+	c.Assert(k.Fingerprint(), Not(Equals), "")
+
+	_, err = os.Stat(keyPath)
+	c.Assert(os.IsNotExist(err), Equals, true)
+	c.Assert(logbuf.String(), Matches, `(?s).*idkey: WARNING: Newly-generated identity key .* will not be saved.*`)
 }
 
 // BenchmarkKeyGeneration prints some performance metrics. To run this test

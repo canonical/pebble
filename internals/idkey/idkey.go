@@ -33,6 +33,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/canonical/pebble/internals/logger"
 )
 
 const identityKeyFile = "key.pem"
@@ -68,17 +70,23 @@ func Get(keyDir string) (*IDKey, error) {
 // This function is equivalent to running:
 //
 //	openssl genpkey -algorithm Ed25519 -out key.pem
-func Generate(keyDir string) (*IDKey, error) {
-	k := &IDKey{
+func Generate(keyDir string) (k *IDKey, err error) {
+	k = &IDKey{
 		keyDir: keyDir,
-	}
-	err := k.createDir()
-	if err != nil {
-		return nil, fmt.Errorf("cannot create identity directory: %w", err)
 	}
 	_, k.key, err = ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("cannot generate identity key: %w", err)
+	}
+
+	if os.Getenv("PEBBLE_PERSIST") == "never" {
+		logger.Noticef("WARNING: Newly-generated identity key at %q will not be saved (PEBBLE_PERSIST=never).", keyDir)
+		return k, nil
+	}
+
+	err = k.createDir()
+	if err != nil {
+		return nil, fmt.Errorf("cannot create identity directory: %w", err)
 	}
 	err = k.save()
 	if err != nil {
