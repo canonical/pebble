@@ -62,6 +62,7 @@ type Section interface {
 type ImmutableSection interface {
 	Section
 
+	// Immutable marks the section as immutable. It must implement no behavior.
 	Immutable()
 
 	// Equals returns false if the section differs from other.
