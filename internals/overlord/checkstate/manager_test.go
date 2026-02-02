@@ -569,7 +569,8 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		checks, err = mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
-			check.ChangeID = "" // clear change ID to avoid comparing it
+			check.ChangeID = ""     // clear change ID to avoid comparing it
+			check.PrevChangeID = "" // clear prev change ID to avoid comparing it
 		}
 		if len(checks) == 0 && len(expected) == 0 || reflect.DeepEqual(checks, expected) {
 			return
