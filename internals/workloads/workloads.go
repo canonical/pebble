@@ -92,7 +92,7 @@ func (ws *WorkloadsSection) IsZero() bool {
 	return len(ws.Entries) == 0
 }
 
-func (ws *WorkloadsSection) Equals(other plan.Section) bool {
+func (ws *WorkloadsSection) Equal(other plan.Section) bool {
 	otherWS, ok := other.(*WorkloadsSection)
 	if !ok {
 		return false

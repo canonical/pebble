@@ -298,7 +298,7 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 	for name, oldSection := range m.plan.Sections {
 		if immutable, ok := oldSection.(plan.ImmutableSection); ok {
 			newSection := p.Sections[name]
-			if !immutable.Equals(newSection) {
+			if !immutable.Equal(newSection) {
 				return nil, &plan.FormatError{
 					Message: fmt.Sprintf("cannot change immutable section %q", name),
 				}

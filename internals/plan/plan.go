@@ -65,8 +65,8 @@ type ImmutableSection interface {
 	// Immutable marks the section as immutable. It must implement no behavior.
 	Immutable()
 
-	// Equals returns false if the section differs from other.
-	Equals(other Section) bool
+	// Equal reports whether this section is equal to other.
+	Equal(other Section) bool
 }
 
 const (
