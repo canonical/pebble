@@ -113,9 +113,18 @@ func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
 	if check.Failures == 0 {
 		return check.ChangeID
 	}
-	log, err := cmd.lastTaskLog(check.ChangeID)
+	// Try current change first, fall back to previous change if no logs.
+	logChangeID := check.ChangeID
+	log, err := cmd.lastTaskLog(logChangeID)
 	if err != nil {
 		return fmt.Sprintf("%s (%v)", check.ChangeID, err)
+	}
+	if log == "" && check.PrevChangeID != "" {
+		logChangeID = check.PrevChangeID
+		log, err = cmd.lastTaskLog(logChangeID)
+		if err != nil {
+			return fmt.Sprintf("%s (%v)", check.ChangeID, err)
+		}
 	}
 	if log == "" {
 		return check.ChangeID
@@ -123,7 +132,7 @@ func (cmd *cmdChecks) changeInfo(check *client.CheckInfo) string {
 	// Truncate to limited number of bytes with ellipsis and "for more" text.
 	const maxError = 70
 	if len(log) > maxError {
-		forMore := fmt.Sprintf(`... run "pebble tasks %s" for more`, check.ChangeID)
+		forMore := fmt.Sprintf(`... run "pebble tasks %s" for more`, logChangeID)
 		log = log[:maxError-len(forMore)] + forMore
 	}
 	return fmt.Sprintf("%s (%s)", check.ChangeID, log)
