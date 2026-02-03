@@ -636,7 +636,7 @@ workloads:
         override: replace
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+	c.Assert(err, ErrorMatches, `cannot change immutable section "workloads"`)
 
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
@@ -667,7 +667,7 @@ workloads:
         override: replace
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+	c.Assert(err, ErrorMatches, `cannot change immutable section "workloads"`)
 
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")

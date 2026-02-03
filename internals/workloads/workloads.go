@@ -80,14 +80,24 @@ func (w *Workload) Equal(other *Workload) bool {
 
 const WorkloadsField = "workloads"
 
-var _ plan.Section = (*WorkloadsSection)(nil)
+var _ plan.ImmutableSection = (*WorkloadsSection)(nil)
 
 type WorkloadsSection struct {
 	Entries map[string]*Workload `yaml:",inline"`
 }
 
+func (ws *WorkloadsSection) Immutable() {}
+
 func (ws *WorkloadsSection) IsZero() bool {
 	return len(ws.Entries) == 0
+}
+
+func (ws *WorkloadsSection) Equal(other plan.Section) bool {
+	otherWS, ok := other.(*WorkloadsSection)
+	if !ok {
+		return false
+	}
+	return reflect.DeepEqual(ws.Entries, otherWS.Entries)
 }
 
 func (ws *WorkloadsSection) Validate() error {
@@ -133,9 +143,7 @@ func (ws *WorkloadsSection) combine(other *WorkloadsSection) error {
 
 var _ plan.SectionExtension = (*WorkloadsSectionExtension)(nil)
 
-type WorkloadsSectionExtension struct {
-	currentPlan *plan.Plan
-}
+type WorkloadsSectionExtension struct{}
 
 func (*WorkloadsSectionExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
 	workloads := &WorkloadsSection{}
@@ -165,9 +173,7 @@ func (*WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section, er
 }
 
 // ValidatePlan validates the services layer against the workloads present
-// in the workloads section. Because workloads are immutable in the plan,
-// it will lock the extension to the validated plan's workloads. Validation
-// will fail if workloads from the plan are different.
+// in the workloads section.
 func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 	// The following will panic if the "ws" section is not a WorkloadsSection
 	ws := p.Sections[WorkloadsField].(*WorkloadsSection)
@@ -198,15 +204,6 @@ func (ext *WorkloadsSectionExtension) ValidatePlan(p *plan.Plan) error {
 			}
 		}
 	}
-	if ext.currentPlan != nil {
-		currentWorkloads := ext.currentPlan.Sections[WorkloadsField].(*WorkloadsSection)
-		if !reflect.DeepEqual(currentWorkloads.Entries, ws.Entries) {
-			return &plan.FormatError{
-				Message: "cannot change workloads once the plan has been loaded",
-			}
-		}
-	}
-	ext.currentPlan = p
 	return nil
 }
 

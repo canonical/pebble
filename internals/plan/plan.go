@@ -59,6 +59,16 @@ type Section interface {
 	IsZero() bool
 }
 
+type ImmutableSection interface {
+	Section
+
+	// Immutable marks the section as immutable. It must implement no behavior.
+	Immutable()
+
+	// Equal reports whether this section is equal to other.
+	Equal(other Section) bool
+}
+
 const (
 	defaultBackoffDelay  = 500 * time.Millisecond
 	defaultBackoffFactor = 2.0
