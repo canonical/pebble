@@ -2406,7 +2406,7 @@ func (s *S) TestReadDirWithBasePlan(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(len(finalPlan.Layers), Equals, 3)
-	c.Assert(finalPlan.Layers[0].Label, Equals, "base-layer")
+	c.Assert(finalPlan.Layers[0].Label, Equals, "pebble-base")
 	c.Assert(finalPlan.Layers[0].Order, Equals, 0)
 	c.Assert(finalPlan.Layers[1].Label, Equals, "override")
 	c.Assert(finalPlan.Layers[2].Label, Equals, "app")
@@ -2445,7 +2445,7 @@ func (s *S) TestReadDirWithBasePlanOnly(c *C) {
 	c.Assert(err, IsNil)
 
 	c.Assert(len(finalPlan.Layers), Equals, 1)
-	c.Assert(finalPlan.Layers[0].Label, Equals, "base-layer")
+	c.Assert(finalPlan.Layers[0].Label, Equals, "pebble-base")
 
 	svc := finalPlan.Services["legacy"]
 	c.Assert(svc, NotNil)

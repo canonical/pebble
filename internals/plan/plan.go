@@ -1566,7 +1566,7 @@ func ReadDir(layersDir string, base *Plan) (*Plan, error) {
 
 	if base != nil {
 		baseLayer := &Layer{
-			// XXX: The "000-layer.yaml" file name is forbidden, but there's no
+			// The "000-layer.yaml" file name is forbidden, but there's no
 			// logic preventing us from having a sub-1 order for layers. If we
 			// use order "1", we would be clashing with a subsequent layer that
 			// would logically use this order number. A workaround for this would
@@ -1574,7 +1574,7 @@ func ReadDir(layersDir string, base *Plan) (*Plan, error) {
 			// other layers' orders by 1000 (which is what PlanManager.AppendLayer)
 			// does internally in order to support layer sub-directories.
 			Order:      0,
-			Label:      "base-layer",
+			Label:      "pebble-base",
 			Services:   base.Services,
 			Checks:     base.Checks,
 			LogTargets: base.LogTargets,
