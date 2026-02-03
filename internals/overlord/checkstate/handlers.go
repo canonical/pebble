@@ -81,8 +81,10 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				logger.Noticef("Check %q threshold %d hit, triggering action and recovering", config.Name, config.Threshold)
 				m.callFailureHandlers(config.Name)
 				// Returning the error means perform-check goes to Error status
-				// and logs the error to the task log.
-				return true, err
+				// and logs the error to the task log. We wrap the error to
+				// include details (such as stderr) since the task runner only
+				// logs err.Error().
+				return true, fmt.Errorf("%s", errorDetails(err))
 			}
 			return false, err
 		}
