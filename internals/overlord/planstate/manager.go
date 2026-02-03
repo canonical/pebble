@@ -15,7 +15,6 @@
 package planstate
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -55,8 +54,8 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // Load reads plan layers from the pebble directory, combines and validates the
 // final plan, and finally notifies registered managers of the plan update. In
 // the case of a non-existent layers directory, or no layers in the layers
-// directory, an empty plan is announced to change subscribers.
-func (m *PlanManager) Load() (err error) {
+// directory, the base plan (or an empty plan) is announced to change subscribers.
+func (m *PlanManager) Load(base *plan.Plan) (err error) {
 	m.planLock.Lock()
 
 	var p *plan.Plan
@@ -72,36 +71,8 @@ func (m *PlanManager) Load() (err error) {
 		return nil
 	}
 
-	p, err = plan.ReadDir(m.layersDir)
+	p, err = plan.ReadDir(m.layersDir, base)
 	if err != nil {
-		return err
-	}
-	m.plan = p
-	m.isLoaded = true
-	return nil
-}
-
-// Init loads the plan from an existing instance and announces to
-// change subscribers.
-func (m *PlanManager) Init(p *plan.Plan) (err error) {
-	m.planLock.Lock()
-
-	wasLoaded := m.isLoaded
-	defer func() {
-		m.planLock.Unlock()
-		if err == nil && !wasLoaded {
-			m.callChangeListeners(p)
-		}
-	}()
-
-	if m.isLoaded {
-		return nil
-	}
-	if p == nil {
-		return errors.New("cannot initialize plan manager with a nil plan")
-	}
-
-	if err := p.Validate(); err != nil {
 		return err
 	}
 	m.plan = p
