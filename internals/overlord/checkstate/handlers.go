@@ -84,7 +84,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				// and logs the error to the task log. We wrap the error to
 				// include details (such as stderr) since the task runner only
 				// logs err.Error().
-				return true, fmt.Errorf("%s", errorDetails(err))
+				return true, errors.New(errorDetails(err))
 			}
 			return false, err
 		}
