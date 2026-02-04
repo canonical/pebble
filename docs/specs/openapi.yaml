@@ -307,7 +307,8 @@ paths:
                       "name": "check1",
                       "status": "up",
                       "threshold": 3,
-                      "change-id": "37"
+                      "change-id": "37",
+                      "prev-change-id": "23"
                     }
                   ]
                 }
@@ -1716,6 +1717,9 @@ components:
         change-id:
           type: string
           description: ID of the change associated with the check.
+        prev-change-id:
+          type: string
+          description: ID of the previous change associated with the check.
     logs:
       type: object
       properties:
