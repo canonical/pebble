@@ -33,6 +33,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
+	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
@@ -193,10 +194,13 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 
-	idPath := filepath.Join(rcmd.pebbleDir, "identity")
-	idSigner, err := idkey.Get(idPath)
-	if err != nil {
-		return err
+	var idSigner tlsstate.IDSigner
+	if rcmd.HTTPS != "" {
+		var err error
+		idPath := filepath.Join(rcmd.pebbleDir, "identity")
+		if idSigner, err = idkey.Get(idPath); err != nil {
+			return err
+		}
 	}
 
 	dopts := daemon.Options{

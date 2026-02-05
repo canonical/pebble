@@ -91,6 +91,7 @@ type Options struct {
 	// IDSigner is a private key representing the identity of a Pebble
 	// instance (machine, container or device), which implements the
 	// tlsstate.IDSigner interface (allowing it to sign digests).
+	// If not set, TLSManager is never created or started.
 	IDSigner tlsstate.IDSigner
 	// Persist specifies whether the state should be persisted to disk.
 	Persist PersistMode
@@ -205,12 +206,14 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.stateEng.AddManager(o.planMgr)
 
-	tlsDir := opts.TLSDir
-	if tlsDir == "" {
-		tlsDir = filepath.Join(opts.PebbleDir, "tls")
+	if opts.IDSigner != nil {
+		tlsDir := opts.TLSDir
+		if tlsDir == "" {
+			tlsDir = filepath.Join(opts.PebbleDir, "tls")
+		}
+		o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
+		o.stateEng.AddManager(o.tlsMgr)
 	}
-	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
-	o.stateEng.AddManager(o.tlsMgr)
 
 	o.identitiesMgr, err = identities.NewManager(s)
 	if err != nil {

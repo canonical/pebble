@@ -136,7 +136,8 @@ type Options struct {
 
 	// IDSigner is a private key representing the identity of a Pebble
 	// instance (machine, container or device), which implements the
-	// tlsstate.IDSigner interface (for digest signing).
+	// tlsstate.IDSigner interface (for digest signing). IDSigner is
+	// required if HTTPSAddress is set.
 	IDSigner tlsstate.IDSigner
 
 	// SocketPath is an optional path for the unix socket used for the client
