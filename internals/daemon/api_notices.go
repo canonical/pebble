@@ -26,6 +26,7 @@ import (
 
 	"github.com/canonical/x-go/strutil"
 
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -54,7 +55,7 @@ func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 
 	query := r.URL.Query()
 	if len(query["user-id"]) > 0 {
-		if user.Access != state.AdminAccess {
+		if user.Access != identities.AdminAccess {
 			return Forbidden(`only admins may use the "user-id" filter`)
 		}
 		var err error
@@ -65,7 +66,7 @@ func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 	}
 
 	if len(query["users"]) > 0 {
-		if user.Access != state.AdminAccess {
+		if user.Access != identities.AdminAccess {
 			return Forbidden(`only admins may use the "users" filter`)
 		}
 		if len(query["user-id"]) > 0 {
@@ -263,7 +264,7 @@ func noticeViewableByUser(notice *state.Notice, user *UserState) bool {
 		// Notice has no UID, so it's viewable by any user (with a UID).
 		return true
 	}
-	if user.Access == state.AdminAccess {
+	if user.Access == identities.AdminAccess {
 		// User is admin, they can view anything.
 		return true
 	}

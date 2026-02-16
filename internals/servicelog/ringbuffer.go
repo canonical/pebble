@@ -99,10 +99,7 @@ func (rb *RingBuffer) Write(p []byte) (written int, err error) {
 		return 0, io.ErrClosedPipe
 	}
 	size := rb.Size()
-	writeLength := len(p)
-	if writeLength > size {
-		writeLength = size
-	}
+	writeLength := min(len(p), size)
 	available := rb.available()
 	if available < writeLength {
 		err := rb.discard(writeLength - available)
@@ -181,10 +178,7 @@ func (rb *RingBuffer) Copy(dest []byte, start RingPos) (next RingPos, n int, err
 	if readPos == rb.writeIndex {
 		return start, 0, io.EOF
 	}
-	copyLength := int(rb.writeIndex - readPos)
-	if copyLength > len(dest) {
-		copyLength = len(dest)
-	}
+	copyLength := min(int(rb.writeIndex-readPos), len(dest))
 	if copyLength == 0 {
 		return start, 0, nil
 	}

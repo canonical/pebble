@@ -16,14 +16,16 @@ For more examples, see [How to use Pebble API](../how-to/use-the-pebble-api).
 To access the API endpoints over the Unix socket, use the `--unix-socket` option of `curl`. For example:
 
 ```{terminal}
-   :input: curl --unix-socket /path/to/.pebble.socket http://_/v1/services --data '{"action": "stop", "services": ["svc1"]}'
+curl --unix-socket /path/to/.pebble.socket http://_/v1/services --data '{"action": "stop", "services": ["svc1"]}'
+
 {"type":"async","status-code":202,"status":"Accepted","change":"42","result":null}
 ```
 
 <br />
 
 ```{terminal}
-   :input: curl --unix-socket /path/to/.pebble.socket http://_/v1/changes/42/wait
+curl --unix-socket /path/to/.pebble.socket http://_/v1/changes/42/wait
+
 {"type":"sync","status-code":200,"status":"OK","result":{...}}
 ```
 
@@ -75,7 +77,7 @@ Some `GET` requests take optional query parameters for configuring or filterin
 
 All data sent to the API in `POST` bodies and all response data from the API is in JSON format. Requests should have a `Content-Type: application/json` header.
 
-There are two main types of requests: synchronous ("sync"), and asynchronous ("async") for operations that can take some time to execute. Synchronous responses have the following structure:
+There are two main types of requests: synchronous (`sync`), and asynchronous (`async`) for operations that can take some time to execute. Synchronous responses have the following structure:
 
 ```json
 {

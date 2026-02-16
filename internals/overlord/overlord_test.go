@@ -31,9 +31,11 @@ import (
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/testutil"
 )
 
@@ -51,7 +53,7 @@ type ticker struct {
 }
 
 func (w *ticker) tick(n int) {
-	for i := 0; i < n; i++ {
+	for range n {
 		w.tickerChannel <- time.Now()
 	}
 }
@@ -69,9 +71,11 @@ func fakePruneTicker() (w *ticker, restore func()) {
 func (ovs *overlordSuite) SetUpTest(c *C) {
 	ovs.dir = c.MkDir()
 	ovs.statePath = filepath.Join(ovs.dir, cmd.StateFile)
+	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 }
 
 func (ovs *overlordSuite) TearDownTest(c *C) {
+	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 func (ovs *overlordSuite) TestNew(c *C) {
@@ -129,15 +133,15 @@ func (ovs *overlordSuite) TestNewInMemoryBackend(c *C) {
 }
 
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{
-		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data"},
+	fakeState := fmt.Appendf(nil, `{
+		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data", "pairing-details": {"paired": false}},
 		"changes": null,
 		"tasks": null,
 		"last-change-id": 0,
 		"last-task-id": 0,
 		"last-lane-id": 0,
 		"last-notice-id": 0
-	}`, patch.Level, patch.Sublevel, cmd.Version))
+	}`, patch.Level, patch.Sublevel, cmd.Version)
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -990,7 +994,7 @@ func (ovs *overlordSuite) TestRequestRestartHandler(c *C) {
 }
 
 func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel)
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1003,7 +1007,7 @@ func (ovs *overlordSuite) TestVerifyRebootNoPendingReboot(c *C) {
 }
 
 func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev"))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev")
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1016,7 +1020,7 @@ func (ovs *overlordSuite) TestVerifyRebootOK(c *C) {
 }
 
 func (ovs *overlordSuite) TestVerifyRebootOKButError(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev"))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-prev")
 	err := os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1033,7 +1037,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissing(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID)
 	err = os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1049,7 +1053,7 @@ func (ovs *overlordSuite) TestVerifyRebootIsMissingError(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","refresh-privacy-key":"0123456789ABCDEF","system-restart-from-boot-id":%q},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID)
 	err = os.WriteFile(ovs.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1125,4 +1129,30 @@ func (s *overlordSuite) TestStartOfOperationSetTime(c *C) {
 	operationTime, err = o.StartOfOperationTime()
 	c.Assert(err, IsNil)
 	c.Check(operationTime.Equal(prev), Equals, true)
+}
+
+func executesWithinTimeout(fn func() error, timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		_ = fn()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+func (ovs *overlordSuite) TestOverlordStopDoesNotHang(c *C) {
+	timeout := 4 * time.Second
+
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, IsNil)
+	c.Assert(executesWithinTimeout(o.Stop, timeout), Equals, true, Commentf("Overlord Stop() is hanging for an empty overlord. Call lasted more than timeout: %s", timeout))
+
+	fo := overlord.Fake()
+	c.Assert(executesWithinTimeout(fo.Stop, timeout), Equals, true, Commentf("Overlord Stop() is hanging for fake overlord. Call lasted more than timeout: %s", timeout))
 }

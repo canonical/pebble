@@ -137,11 +137,21 @@ func (m *TLSManager) ListenConfig() *tls.Config {
 		// not support HTTP2 (it does not yet implement RFC8441). However,
 		// external clients, such as curl, will be able to switch to HTTP2
 		// for non-websocket dependant API calls.
-		NextProtos:     []string{"h2", "http/1.1"},
-		MinVersion:     tls.VersionTLS13,
-		GetCertificate: m.GetCertificate,
+		NextProtos:       []string{"h2", "http/1.1"},
+		MinVersion:       tls.VersionTLS13,
+		GetCertificate:   m.GetCertificate,
+		ClientAuth:       tls.RequestClientCert,
+		VerifyConnection: m.VerifyClientCertificate,
 	}
 	return tlsConf
+}
+
+func (m *TLSManager) VerifyClientCertificate(state tls.ConnectionState) error {
+	numCerts := len(state.PeerCertificates)
+	if numCerts != 1 {
+		return fmt.Errorf("expected one client certificate, received %d", numCerts)
+	}
+	return nil
 }
 
 // GetCertificate returns an identity signed TLS certificate. The certificate chain includes

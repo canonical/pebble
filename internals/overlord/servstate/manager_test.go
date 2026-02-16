@@ -707,7 +707,7 @@ services:
 
 func (s *S) TestStartFastExitCommand(c *C) {
 	s.newServiceManager(c)
-	var layer = `
+	layer := `
 services:
     test4:
         override: replace
@@ -732,7 +732,7 @@ services:
 
 func (s *S) TestStartFastExitCommandOnFailureIgnore(c *C) {
 	s.newServiceManager(c)
-	var layer = `
+	layer := `
 services:
     test1:
         override: replace
@@ -1538,7 +1538,7 @@ func (s *S) TestGetJitter(c *C) {
 	// the values are in range, and that the number of values distributed across
 	// each of 3 buckets is reasonable.
 	var buckets [3]int
-	for i := 0; i < 3000; i++ {
+	for range 3000 {
 		jitter := s.manager.GetJitter(3 * time.Second)
 		c.Assert(jitter >= 0 && jitter < 300*time.Millisecond, Equals, true)
 		switch {
@@ -1552,7 +1552,7 @@ func (s *S) TestGetJitter(c *C) {
 			c.Errorf("jitter %s outside range [0, 300ms)", jitter)
 		}
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if buckets[i] < 800 || buckets[i] > 1200 { // exceedingly unlikely to be outside this range
 			c.Errorf("bucket[%d] has too few or too many values in it (%d)", i, buckets[i])
 		}
@@ -2190,7 +2190,7 @@ func (f writerFunc) Write(p []byte) (int, error) {
 }
 
 func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.ServiceInfo) bool) {
-	for i := 0; i < 310; i++ {
+	for range 310 {
 		svc := s.serviceByName(c, service)
 		if f(svc) {
 			return

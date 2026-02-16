@@ -88,7 +88,9 @@ func recvLoop(w io.Writer, conn MessageReader) {
 	for {
 		mt, r, err := conn.NextReader()
 		if err != nil {
-			logger.Debugf("Cannot get next reader: %v", err)
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseAbnormalClosure) {
+				logger.Debugf("Cannot get next reader: %v", err)
+			}
 			return
 		}
 

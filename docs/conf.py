@@ -64,13 +64,26 @@ html_title = project + " documentation"
 copyright = "%s, %s" % (datetime.date.today().year, author)
 
 
-# Documentation website URL and sitemap
-#
-# NOTE: 'html_baseurl' and 'sitemap_url_scheme' are used by the sphinx_sitemap
-#       extension. See https://sphinx-sitemap.readthedocs.io/
+# Use RTD canonical URL to ensure duplicate pages have a specific canonical URL
 
-html_baseurl = "https://documentation.ubuntu.com/pebble/"
-sitemap_url_scheme = "{link}"
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "/")
+
+# sphinx-sitemap uses html_baseurl to generate the full URL for each page:
+
+sitemap_url_scheme = '{link}'
+
+# Include `lastmod` dates in the sitemap:
+
+sitemap_show_lastmod = True
+
+# Exclude generated pages from the sitemap:
+
+sitemap_excludes = [
+    '404/',
+    'genindex/',
+    'search/',
+]
+
 
 # TODO: Update with the official URL of your docs or leave empty if unsure.
 #
@@ -91,7 +104,7 @@ ogp_site_name = project
 #
 # TODO: To customise the preview image, update as needed.
 
-ogp_image = "https://assets.ubuntu.com/v1/253da317-image-document-ubuntudocs.svg"
+ogp_image = "https://assets.ubuntu.com/v1/cc828679-docs_illustration.svg"
 
 
 # Product favicon; shown in bookmarks, browser tabs, etc.
@@ -240,22 +253,23 @@ linkcheck_retries = 3
 # https://www.sphinx-doc.org/en/master/usage/extensions/index.html
 
 # NOTE: The canonical_sphinx extension is required for the starter pack.
-#       It automatically enables the following extensions:
-#       - custom-rst-roles
-#       - myst_parser
-#       - notfound.extension
-#       - related-links
-#       - sphinx_copybutton
-#       - sphinx_design
-#       - sphinx_reredirects
-#       - sphinx_tabs.tabs
-#       - sphinxcontrib.jquery
-#       - sphinxext.opengraph
-#       - terminal-output
-#       - youtube-links
 
 extensions = [
     "canonical_sphinx",
+    "notfound.extension",
+    "sphinx_design",
+    "sphinx_reredirects",
+    "sphinx_tabs.tabs",
+    "sphinxcontrib.jquery",
+    "sphinxext.opengraph",
+    "sphinx_config_options",
+    "sphinx_contributor_listing",
+    "sphinx_filtered_toctree",
+    "sphinx_related_links",
+    "sphinx_roles",
+    "sphinx_terminal",
+    "sphinx_ubuntu_images",
+    "sphinx_youtube_links",
     "sphinxcontrib.cairosvgconverter",
     "sphinx_last_updated_by_git",
     "sphinx.ext.intersphinx",
@@ -339,4 +353,5 @@ if os.path.exists('./reuse/substitutions.yaml'):
 intersphinx_mapping = {
     "operator": ("https://documentation.ubuntu.com/ops/latest/", None),
     "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
+    "rockcraft": ("https://documentation.ubuntu.com/rockcraft/latest/", None),
 }

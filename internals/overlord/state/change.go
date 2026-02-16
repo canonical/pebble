@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -432,9 +433,7 @@ func (c *Change) addNotice() error {
 	var extraData map[string]string
 	err := c.Get("notice-data", &extraData)
 	if err == nil {
-		for k, v := range extraData {
-			opts.Data[k] = v
-		}
+		maps.Copy(opts.Data, extraData)
 	} else if !errors.Is(err, ErrNoState) {
 		return fmt.Errorf("cannot get notice data from change %s: %w", c.ID(), err)
 	}
@@ -733,8 +732,8 @@ func taskEffectiveStatus(t *Task) Status {
 }
 
 func (c *Change) abortLanes(lanes []int, abortedLanes map[int]bool, seenTasks map[string]bool) {
-	var hasLive = make(map[int]bool)
-	var hasDead = make(map[int]bool)
+	hasLive := make(map[int]bool)
+	hasDead := make(map[int]bool)
 	var laneTasks []*Task
 NextChangeTask:
 	for _, tid := range c.taskIDs {

@@ -227,6 +227,8 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 }
 
 func (s *ManagerSuite) TestFailures(c *C) {
+	const threshold = 10
+
 	var notifies atomic.Int32
 	s.manager.NotifyCheckFailed(func(name string) {
 		notifies.Add(1)
@@ -241,7 +243,7 @@ func (s *ManagerSuite) TestFailures(c *C) {
 				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
-				Threshold: 3,
+				Threshold: threshold,
 				Exec: &plan.ExecCheck{
 					Command: fmt.Sprintf(`/bin/sh -c 'echo details >/dev/stderr; [ ! -f %s ]'`, testPath),
 				},
@@ -249,41 +251,31 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		},
 	})
 
-	// Shouldn't have called failure handler after only 1 failure
+	// Shouldn't have called failure handler after only a couple of failures
 	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 1
+		return check.Failures >= 1 && check.Failures < threshold
 	})
 	originalChangeID := check.ChangeID
-	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Threshold, Equals, threshold)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1; details")
 	c.Assert(notifies.Load(), Equals, int32(0))
 
-	// Shouldn't have called failure handler after only 2 failures
-	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 2
-	})
-	c.Assert(check.Threshold, Equals, 3)
-	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1; details")
-	c.Assert(notifies.Load(), Equals, int32(0))
-	c.Assert(check.ChangeID, Equals, originalChangeID)
-
-	// Should have called failure handler and be unhealthy after 3 failures (threshold)
+	// Should have called failure handler and be unhealthy after 10 failures (threshold)
 	c.Assert(changeData(c, s.overlord.State(), check.ChangeID), DeepEquals, map[string]string{"check-name": "chk1"})
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 3 && check.ChangeID != originalChangeID
+		return check.Failures >= threshold && check.ChangeID != originalChangeID
 	})
-	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Threshold, Equals, threshold)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(notifies.Load(), Equals, int32(1))
 	recoverChangeID := check.ChangeID
 
 	// Should log failures in recover-check mode
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 4
+		return check.Failures > threshold
 	})
-	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Threshold, Equals, threshold)
 	c.Assert(check.Status, Equals, checkstate.CheckStatusDown)
 	c.Assert(notifies.Load(), Equals, int32(1))
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1; details")
@@ -296,13 +288,15 @@ func (s *ManagerSuite) TestFailures(c *C) {
 		return check.Status == checkstate.CheckStatusUp && check.ChangeID != recoverChangeID
 	})
 	c.Assert(check.Failures, Equals, 0)
-	c.Assert(check.Threshold, Equals, 3)
+	c.Assert(check.Threshold, Equals, threshold)
 	c.Assert(notifies.Load(), Equals, int32(1))
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Equals, "")
 	c.Assert(changeData(c, s.overlord.State(), check.ChangeID), DeepEquals, map[string]string{"check-name": "chk1"})
 }
 
 func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
+	const threshold = 10
+
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
@@ -313,7 +307,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
-				Threshold: 3,
+				Threshold: threshold,
 				Exec: &plan.ExecCheck{
 					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
 				},
@@ -321,9 +315,9 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 		},
 	})
 
-	// Wait for 1 failure (below the threshold)
+	// Wait for a failure (below the threshold)
 	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
-		return check.Failures == 1
+		return check.Failures >= 1 && check.Failures < threshold
 	})
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
@@ -335,7 +329,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 		return check.Failures == 0
 	})
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
-	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* INFO succeeded after 1 failure")
+	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, `.* INFO succeeded after \d+ failure.*`)
 }
 
 func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
@@ -575,7 +569,8 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		checks, err = mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
-			check.ChangeID = "" // clear change ID to avoid comparing it
+			check.ChangeID = ""     // clear change ID to avoid comparing it
+			check.PrevChangeID = "" // clear prev change ID to avoid comparing it
 		}
 		if len(checks) == 0 && len(expected) == 0 || reflect.DeepEqual(checks, expected) {
 			return
@@ -1255,4 +1250,43 @@ func (s *ManagerSuite) TestChecksSuccesses(c *C) {
 		c.Assert(chk.Successes, Not(Equals), 0)
 		return chk.Successes >= 2 && chk.Successes < numSuccesses
 	})
+}
+
+func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *C) {
+	testPath := c.MkDir() + "/test"
+	err := os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
+				},
+			},
+		},
+	})
+
+	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusUp && check.Failures >= 1
+	})
+	performChangeID := check.ChangeID
+	c.Assert(check.PrevChangeID, Equals, "")
+
+	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusDown
+	})
+	c.Assert(check.PrevChangeID, Equals, performChangeID)
+	recoverChangeID := check.ChangeID
+
+	err = os.Remove(testPath)
+	c.Assert(err, IsNil)
+	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusUp && check.ChangeID != recoverChangeID
+	})
+	c.Assert(check.PrevChangeID, Equals, recoverChangeID)
 }

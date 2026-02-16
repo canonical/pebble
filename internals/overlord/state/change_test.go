@@ -87,7 +87,7 @@ func (cs *changeSuite) TestReadyTime(c *C) {
 }
 
 func (cs *changeSuite) TestStatusString(c *C) {
-	for s := state.Status(0); s < state.WaitStatus+1; s++ {
+	for s := range state.WaitStatus + 1 {
 		c.Assert(s.String(), Matches, ".+")
 	}
 }
@@ -539,7 +539,7 @@ func (cs *changeSuite) TestAbortKⁿ(c *C) {
 
 	var prev *state.TaskSet
 	N := 22 // ∛10,000
-	for i := 0; i < N; i++ {
+	for range N {
 		ts := make([]*state.Task, N)
 		for j := range ts {
 			name := fmt.Sprintf("task-%d", j)
@@ -552,7 +552,7 @@ func (cs *changeSuite) TestAbortKⁿ(c *C) {
 		prev = t
 		chg.AddAll(t)
 
-		for j := 0; j < N; j++ {
+		for range N {
 			lid := st.NewLane()
 			for k := range ts {
 				name := fmt.Sprintf("task-%d-%d", lid, k)
@@ -739,8 +739,8 @@ func (ts *taskRunnerSuite) TestAbortLanes(c *C) {
 				task.SetStatus(statuses[parts[1]])
 			}
 			if len(parts) > 2 {
-				lanes := strings.Split(parts[2], ",")
-				for _, lane := range lanes {
+				lanes := strings.SplitSeq(parts[2], ",")
+				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
 					c.Assert(err, IsNil)
 					task.JoinLane(n)
@@ -755,7 +755,7 @@ func (ts *taskRunnerSuite) TestAbortLanes(c *C) {
 		c.Logf("Expected result: %s", test.result)
 
 		seen = make(map[string]bool)
-		var expected = strings.Fields(test.result)
+		expected := strings.Fields(test.result)
 		var obtained []string
 		for i := 0; i < len(expected); i++ {
 			item := expected[i]
@@ -917,7 +917,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 		c.Logf("----- %v", i)
 		c.Logf("Testing setup: %s", test.setup)
 
-		for _, wp := range strings.Fields(test.order) {
+		for wp := range strings.FieldsSeq(test.order) {
 			pair := strings.Split(wp, "->")
 			c.Assert(pair, HasLen, 2)
 			// task 2 waits for task 1 is denoted as:
@@ -953,8 +953,8 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 				task.SetStatus(statuses[parts[1]])
 			}
 			if len(parts) > 2 {
-				lanes := strings.Split(parts[2], ",")
-				for _, lane := range lanes {
+				lanes := strings.SplitSeq(parts[2], ",")
+				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
 					c.Assert(err, IsNil)
 					task.JoinLane(n)
@@ -969,7 +969,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 		c.Logf("Expected result: %s", test.result)
 
 		seen = make(map[string]bool)
-		var expected = strings.Fields(test.result)
+		expected := strings.Fields(test.result)
 		var obtained []string
 		for i := 0; i < len(expected); i++ {
 			item := expected[i]
@@ -1117,7 +1117,7 @@ func (ts *taskRunnerSuite) TestCheckTaskDependencies(c *C) {
 		c.Logf("----- %v", i)
 		c.Logf("Testing setup: %s", test.setup)
 
-		for _, wp := range strings.Fields(test.order) {
+		for wp := range strings.FieldsSeq(test.order) {
 			pair := strings.Split(wp, "->")
 			c.Assert(pair, HasLen, 2)
 			// task 2 waits for task 1 is denoted as:

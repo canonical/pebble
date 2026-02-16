@@ -254,17 +254,22 @@ log-targets:
     # - loki: Use the Grafana Loki protocol. A "pebble_service" label is
     #   added automatically, with the name of the Pebble service as its value.
     # - opentelemetry: Use the OpenTelemetry protocol (OTLP). A "service.name"
-    # label is added automatically, with the name of the Pebble service as its
-    # value.
+    #   label is added automatically, with the name of the Pebble service as its
+    #   value.
+    # - syslog: Use the syslog protocol. The syslog SD-ID field is set to "pebble@28978"
+    #   (28978 is Canonical's enterprise number). The syslog APP-NAME field is set to
+    #   the Pebble service name.
     type: loki
 
     # (Required) The URL of the remote log target.
     # For Loki, this needs to be the fully-qualified URL of the push API,
     # including the API endpoint, for example:
-    #     http://<ip-address>:3100/loki/api/v1/push
+    #     http://<host-or-ip>:3100/loki/api/v1/push
     # For OpenTelemetry, this needs to include the TCP port (normally 4318)
     # without the API endpoint, for example:
-    #     http://<ip-address>:4318
+    #     http://<host-or-ip>:4318
+    # For Syslog, this needs to include transport layer protocol as prefix,
+    #     either `tcp://<host-or-ip>:<port>` or `udp://<host-or-ip>:<port>`
     location: <url>
 
     # (Optional) A list of services whose logs will be sent to this target.
@@ -279,4 +284,19 @@ log-targets:
     # be substituted using the environment for the corresponding service.
     labels:
       <label name>: <label value>
+
+# (Optional) HTTPS (using mTLS) communication between the client and server
+# requires both sides to be paired first. Pairing is currently only supported
+# for HTTPS transport (not HTTP or Unix socket).
+pairing:
+
+    # (Optional) Controls the pairing mode of the server. Possible values are:
+    #
+    # - single: only a single client can pair successfully after which all
+    #   subsequent pairing requests will be rejected.
+    # - multiple: multiple clients can pair throughout the lifetime of the
+    #   server.
+    # - disabled (default): no client pairing will be possible and as a result
+    #   incoming HTTPS client connections will always be rejected.
+    mode: single | multiple | disabled
 ```

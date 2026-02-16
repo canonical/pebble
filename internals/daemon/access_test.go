@@ -22,7 +22,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/daemon"
-	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/identities"
 )
 
 type accessSuite struct{}
@@ -39,6 +39,7 @@ func (s *accessSuite) TestAccess(c *C) {
 		adminCheckErr   daemon.Response
 		userCheckErr    daemon.Response
 		metricsCheckErr daemon.Response
+		pairingCheckErr daemon.Response
 	}{
 		// API source: Unix Domain Socket
 		{
@@ -49,38 +50,43 @@ func (s *accessSuite) TestAccess(c *C) {
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
+			user:            &daemon.UserState{Access: identities.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
+			user:            &daemon.UserState{Access: identities.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: nil,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.ReadAccess},
+			user:            &daemon.UserState{Access: identities.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    nil,
 			metricsCheckErr: nil,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeUnixSocket,
-			user:            &daemon.UserState{Access: state.AdminAccess},
+			user:            &daemon.UserState{Access: identities.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   nil,
 			userCheckErr:    nil,
 			metricsCheckErr: nil,
+			pairingCheckErr: errUnauthorized,
 		},
 		// API source: HTTP
 		{
@@ -91,38 +97,43 @@ func (s *accessSuite) TestAccess(c *C) {
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
+			user:            &daemon.UserState{Access: identities.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
+			user:            &daemon.UserState{Access: identities.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: nil,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.ReadAccess},
+			user:            &daemon.UserState{Access: identities.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeHTTP,
-			user:            &daemon.UserState{Access: state.AdminAccess},
+			user:            &daemon.UserState{Access: identities.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		},
 		// API source: HTTPS
 		{
@@ -133,38 +144,43 @@ func (s *accessSuite) TestAccess(c *C) {
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: UntrustedAccess
 			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.UntrustedAccess},
+			user:            &daemon.UserState{Access: identities.UntrustedAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: errUnauthorized,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: MetricsAccess
 			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.MetricsAccess},
+			user:            &daemon.UserState{Access: identities.MetricsAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    errUnauthorized,
 			metricsCheckErr: nil,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: ReadAccess
 			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.ReadAccess},
+			user:            &daemon.UserState{Access: identities.ReadAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   errUnauthorized,
 			userCheckErr:    nil,
 			metricsCheckErr: nil,
+			pairingCheckErr: errUnauthorized,
 		}, {
 			// User access: AdminAccess
 			apiSource:       daemon.TransportTypeHTTPS,
-			user:            &daemon.UserState{Access: state.AdminAccess},
+			user:            &daemon.UserState{Access: identities.AdminAccess},
 			openCheckErr:    nil,
 			adminCheckErr:   nil,
 			userCheckErr:    nil,
 			metricsCheckErr: nil,
+			pairingCheckErr: errUnauthorized,
 		}}
 	for _, t := range tests {
 		// Fake a test request.
@@ -188,5 +204,38 @@ func (s *accessSuite) TestAccess(c *C) {
 		metricsAccess := daemon.MetricsAccess{}
 		err = metricsAccess.CheckAccess(nil, r, t.user)
 		c.Assert(err, DeepEquals, t.metricsCheckErr)
+		// Check PairingAccess
+		pairingAccess := daemon.PairingAccess{}
+		err = pairingAccess.CheckAccess(nil, r, t.user)
+		c.Assert(err, DeepEquals, t.pairingCheckErr)
 	}
+}
+
+// TestPairingAccessWithPairingWindow tests the pairing specific behaviour
+// related to whether the pairing window is open or closed.
+func (s *accessSuite) TestPairingAccessWithPairingWindow(c *C) {
+	pairingAccess := daemon.PairingAccess{}
+
+	r := &http.Request{
+		URL: &url.URL{Path: "/v1/pairing"},
+	}
+	r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, daemon.TransportTypeHTTPS))
+
+	// Test with pairing window disabled
+	restore := daemon.FakePairingWindowEnabled(func(d *daemon.Daemon) bool {
+		return false
+	})
+	defer restore()
+
+	err := pairingAccess.CheckAccess(nil, r, nil)
+	c.Assert(err, DeepEquals, errUnauthorized)
+
+	// Test with pairing window open
+	restore = daemon.FakePairingWindowEnabled(func(d *daemon.Daemon) bool {
+		return true
+	})
+	defer restore()
+
+	err = pairingAccess.CheckAccess(nil, r, nil)
+	c.Assert(err, IsNil)
 }

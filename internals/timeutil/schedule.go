@@ -467,7 +467,7 @@ func parseClockRange(s string) (start, end Clock, err error) {
 func ParseLegacySchedule(scheduleSpec string) ([]*Schedule, error) {
 	var schedule []*Schedule
 
-	for _, s := range strings.Split(scheduleSpec, "/") {
+	for s := range strings.SplitSeq(scheduleSpec, "/") {
 		start, end, err := parseClockRange(s)
 		if err != nil {
 			return nil, err
@@ -515,7 +515,7 @@ func ParseLegacySchedule(scheduleSpec string) ([]*Schedule, error) {
 func ParseSchedule(scheduleSpec string) ([]*Schedule, error) {
 	var schedule []*Schedule
 
-	for _, s := range strings.Split(scheduleSpec, ",,") {
+	for s := range strings.SplitSeq(scheduleSpec, ",,") {
 		// cut the schedule in event sets
 		//     eventlist = eventset *( ",," eventset )
 		sched, err := parseEventSet(s)
@@ -608,7 +608,7 @@ func parseWeekday(s string) (week Week, err error) {
 		return week, fmt.Errorf("cannot parse %q: invalid format", s)
 	}
 
-	var day = s
+	day := s
 	var pos uint
 	if l == 4 {
 		day = s[0:3]

@@ -12,10 +12,10 @@ jobs:
 
     name: Unit tests
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
 
@@ -29,10 +29,10 @@ jobs:
 
     name: Root Tests
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
 
@@ -45,10 +45,10 @@ jobs:
 
     name: Format check
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v6
       with:
         go-version-file: 'go.mod'
 
@@ -66,10 +66,10 @@ jobs:
 
     name: Automated docs check
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.12' 
 

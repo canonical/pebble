@@ -146,7 +146,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 
 	// Start 10 log gatherers
 	logTargets := make(map[string]*plan.LogTarget, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		targetName := fmt.Sprintf("tgt%d", i)
 		logTargets[targetName] = &plan.LogTarget{
 			Name:     targetName,

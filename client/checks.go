@@ -109,6 +109,13 @@ type CheckInfo struct {
 	// The change will be of kind "perform-check" if the check is up, or
 	// "recover-check" if it's down.
 	ChangeID string `json:"change-id"`
+
+	// PrevChangeID is the ID of the previous change. For a "recover-check"
+	// change, this is the "perform-check" change that was running before the
+	// check started failing. For a "perform-check" change, this is the
+	// "recover-check" change that was running before the check recovered, or
+	// empty if the check has never had to recover.
+	PrevChangeID string `json:"prev-change-id"`
 }
 
 // Checks fetches information about specific health checks (or all of them),
@@ -195,7 +202,7 @@ type RefreshCheckResult struct {
 
 // RefreshCheck runs a specific health check immediately.
 func (client *Client) RefreshCheck(opts *RefreshCheckOptions) (*RefreshCheckResult, error) {
-	var payload = struct {
+	payload := struct {
 		Name string `json:"name"`
 	}{
 		Name: opts.Name,

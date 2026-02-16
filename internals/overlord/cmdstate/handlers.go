@@ -76,7 +76,11 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 	st.Unlock()
 	setup, ok := setupObj.(*execSetup)
 	if !ok || setup == nil {
-		return fmt.Errorf("internal error: cannot get exec setup object for task %q", task.ID())
+		// A previously-run task was in Doing status when the daemon was killed,
+		// and the state engine retries it when the daemon is next restarted.
+		// Just ignore so we don't retry exec tasks.
+		logger.Debugf("Cannot get exec setup object for task %q (retried after restart)", task.ID())
+		return nil
 	}
 
 	// Set up the object that will track the execution.
@@ -105,14 +109,14 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 	}
 
 	// Store the execution object on the manager (for Connect).
-	m.executionsMutex.Lock()
+	m.executionsCond.L.Lock()
 	m.executions[task.ID()] = e
-	m.executionsMutex.Unlock()
 	m.executionsCond.Broadcast() // signal that Connects can start happening
+	m.executionsCond.L.Unlock()
 	defer func() {
-		m.executionsMutex.Lock()
+		m.executionsCond.L.Lock()
 		delete(m.executions, task.ID())
-		m.executionsMutex.Unlock()
+		m.executionsCond.L.Unlock()
 	}()
 
 	// Run the command! Killing the tomb will terminate the command.
@@ -133,7 +137,7 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 		return os.ErrNotExist
 	}
 	if conn != nil {
-		return fmt.Errorf("websocket %q already connected", id)
+		return fmt.Errorf("%s websocket already connected", id)
 	}
 
 	// Upgrade the HTTP connection to a websocket connection.
@@ -475,22 +479,19 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 		}
 
 		if err != nil {
-			logger.Debugf("Exec %s: cannot get next websocket reader for PID %d: %v", execID, pid, err)
-			er, ok := err.(*websocket.CloseError)
-			if !ok {
-				break
-			}
-			if er.Code != websocket.CloseAbnormalClosure {
-				break
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				logger.Debugf("Exec %s: cannot get next websocket reader for PID %d: %v", execID, pid, err)
 			}
 
-			// If an abnormal closure occurred, kill the attached process.
-			err := unix.Kill(pid, unix.SIGKILL)
-			if err != nil {
-				logger.Noticef("Exec %s: cannot send SIGKILL to pid %d: %v", execID, pid, err)
-			} else {
-				logger.Debugf("Exec %s: sent SIGKILL to pid %d", execID, pid)
+			if websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
+				err := unix.Kill(pid, unix.SIGKILL)
+				if err != nil {
+					logger.Noticef("Exec %s: cannot send SIGKILL to pid %d: %v", execID, pid, err)
+				} else {
+					logger.Debugf("Exec %s: sent SIGKILL to pid %d", execID, pid)
+				}
 			}
+
 			break
 		}
 

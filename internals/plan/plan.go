@@ -17,6 +17,7 @@ package plan
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -56,6 +57,16 @@ type Section interface {
 
 	// IsZero reports whether the section is empty.
 	IsZero() bool
+}
+
+type ImmutableSection interface {
+	Section
+
+	// Immutable marks the section as immutable. It must implement no behavior.
+	Immutable()
+
+	// Equal reports whether this section is equal to other.
+	Equal(other Section) bool
 }
 
 const (
@@ -116,14 +127,22 @@ type Plan struct {
 
 // NewPlan creates an empty plan which includes empty registered extension
 // fields. In the case of no plan layers, this ensures that plan callback
-// handlers always get a valid extension type to access.
+// handlers always get a valid extension backing type to access.
 func NewPlan() *Plan {
-	var err error
 	p := &Plan{Sections: make(map[string]Section, len(sectionExtensions))}
 	for field := range sectionExtensions {
-		p.Sections[field], err = sectionExtensions[field].ParseSection(yaml.Node{})
+		// Ask the extension for a section instance with a concrete
+		// underlying type.
+		section, err := sectionExtensions[field].ParseSection(yaml.Node{})
 		if err != nil {
-			panic("internal error: ParseSection() of empty node must return a valid section")
+			panic("internal error: ParseSection() of empty node must return a valid section: " + err.Error())
+		}
+
+		// Ask the extension to apply all the post-merge rules
+		// (e.g. defaults) on the section instance.
+		p.Sections[field], err = sectionExtensions[field].CombineSections(section)
+		if err != nil {
+			panic("internal error: CombineSections() of empty node must return a valid section: " + err.Error())
 		}
 	}
 	return p
@@ -230,24 +249,14 @@ func (s *Service) Copy() *Service {
 	copied.After = append([]string(nil), s.After...)
 	copied.Before = append([]string(nil), s.Before...)
 	copied.Requires = append([]string(nil), s.Requires...)
-	if s.Environment != nil {
-		copied.Environment = make(map[string]string)
-		for k, v := range s.Environment {
-			copied.Environment[k] = v
-		}
-	}
+	copied.Environment = maps.Clone(s.Environment)
 	if s.UserID != nil {
 		copied.UserID = copyIntPtr(s.UserID)
 	}
 	if s.GroupID != nil {
 		copied.GroupID = copyIntPtr(s.GroupID)
 	}
-	if s.OnCheckFailure != nil {
-		copied.OnCheckFailure = make(map[string]ServiceAction)
-		for k, v := range s.OnCheckFailure {
-			copied.OnCheckFailure[k] = v
-		}
-	}
+	copied.OnCheckFailure = maps.Clone(s.OnCheckFailure)
 	return &copied
 }
 
@@ -534,12 +543,7 @@ type HTTPCheck struct {
 // Copy returns a deep copy of the HTTP check configuration.
 func (c *HTTPCheck) Copy() *HTTPCheck {
 	copied := *c
-	if c.Headers != nil {
-		copied.Headers = make(map[string]string, len(c.Headers))
-		for k, v := range c.Headers {
-			copied.Headers[k] = v
-		}
-	}
+	copied.Headers = maps.Clone(c.Headers)
 	return &copied
 }
 
@@ -593,12 +597,7 @@ type ExecCheck struct {
 // Copy returns a deep copy of the exec check configuration.
 func (c *ExecCheck) Copy() *ExecCheck {
 	copied := *c
-	if c.Environment != nil {
-		copied.Environment = make(map[string]string, len(c.Environment))
-		for k, v := range c.Environment {
-			copied.Environment[k] = v
-		}
-	}
+	copied.Environment = maps.Clone(c.Environment)
 	if c.UserID != nil {
 		copied.UserID = copyIntPtr(c.UserID)
 	}
@@ -655,6 +654,7 @@ type LogTargetType string
 const (
 	LokiTarget          LogTargetType = "loki"
 	OpenTelemetryTarget LogTargetType = "opentelemetry"
+	SyslogTarget        LogTargetType = "syslog"
 	UnsetLogTarget      LogTargetType = ""
 )
 
@@ -662,12 +662,7 @@ const (
 func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
-	if t.Labels != nil {
-		copied.Labels = make(map[string]string)
-		for k, v := range t.Labels {
-			copied.Labels[k] = v
-		}
-	}
+	copied.Labels = maps.Clone(t.Labels)
 	return &copied
 }
 
@@ -981,14 +976,14 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		switch target.Type {
-		case LokiTarget, OpenTelemetryTarget:
+		case LokiTarget, OpenTelemetryTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			// will be checked when the layers are combined
 		default:
 			return &FormatError{
-				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q or %q`,
-					name, target.Type, LokiTarget, OpenTelemetryTarget),
+				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q, %q or %q`,
+					name, target.Type, LokiTarget, OpenTelemetryTarget, SyslogTarget),
 			}
 		}
 	}
@@ -1056,12 +1051,12 @@ func (p *Plan) Validate() error {
 
 	for name, target := range p.LogTargets {
 		switch target.Type {
-		case LokiTarget, OpenTelemetryTarget:
+		case LokiTarget, OpenTelemetryTarget, SyslogTarget:
 			// valid, continue
 		case UnsetLogTarget:
 			return &FormatError{
-				Message: fmt.Sprintf(`plan must define "type" (%q or %q) for log target %q`,
-					LokiTarget, OpenTelemetryTarget, name),
+				Message: fmt.Sprintf(`plan must define "type" (%q, %q or %q) for log target %q`,
+					LokiTarget, OpenTelemetryTarget, SyslogTarget, name),
 			}
 		}
 
@@ -1371,10 +1366,8 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 }
 
 func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {
-	for _, v := range additionalValid {
-		if action == v {
-			return true
-		}
+	if slices.Contains(additionalValid, action) {
+		return true
 	}
 	switch action {
 	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
@@ -1529,7 +1522,7 @@ func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, e
 		label := match[2]
 		order, err := strconv.Atoi(match[1])
 		if err != nil {
-			panic(fmt.Sprintf("internal error: filename regexp is wrong: %v", err))
+			panic("internal error: filename regexp is wrong: " + err.Error())
 		}
 
 		// Let's make sure no duplicate orders or labels appear.
@@ -1560,19 +1553,46 @@ func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, e
 // ReadDir reads the configuration layers from layersDir,
 // and returns the resulting Plan. If layersDir doesn't
 // exist, it returns a valid Plan with no layers.
-func ReadDir(layersDir string) (*Plan, error) {
+// If base is not nil, layers read from the given layersDir
+// will be stacked on top of the given base plan.
+func ReadDir(layersDir string, base *Plan) (*Plan, error) {
+	var layers []*Layer
+
 	_, err := os.Stat(layersDir)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return NewPlan(), nil
+		if !os.IsNotExist(err) {
+			return nil, err
 		}
-		return nil, err
+		// layersDir does not exist, but a base plan might have been supplied.
+	} else {
+		layers, err = ReadLayersDir(layersDir)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if base == nil && len(layers) == 0 {
+		return NewPlan(), nil
 	}
 
-	layers, err := ReadLayersDir(layersDir)
-	if err != nil {
-		return nil, err
+	if base != nil {
+		baseLayer := &Layer{
+			// The "000-layer.yaml" file name is forbidden, but there's no
+			// logic preventing us from having a sub-1 order for layers. If we
+			// use order "1", we would be clashing with a subsequent layer that
+			// would logically use this order number. A workaround for this would
+			// be to use order "1" and, before prepending this layer, offset all
+			// other layers' orders by 1000 (which is what PlanManager.AppendLayer)
+			// does internally in order to support layer sub-directories.
+			Order:      0,
+			Label:      "pebble-base",
+			Services:   base.Services,
+			Checks:     base.Checks,
+			LogTargets: base.LogTargets,
+			Sections:   base.Sections,
+		}
+		layers = append([]*Layer{baseLayer}, layers...)
 	}
+
 	combined, err := CombineLayers(layers...)
 	if err != nil {
 		return nil, err
@@ -1613,9 +1633,7 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 	merged := ContextOptions{
 		Environment: make(map[string]string),
 	}
-	for k, v := range service.Environment {
-		merged.Environment[k] = v
-	}
+	maps.Copy(merged.Environment, service.Environment)
 	if service.UserID != nil {
 		merged.UserID = copyIntPtr(service.UserID)
 	}
@@ -1627,9 +1645,7 @@ func MergeServiceContext(p *Plan, serviceName string, overrides ContextOptions) 
 	merged.WorkingDir = service.WorkingDir
 
 	// Merge in fields from the overrides, if set.
-	for k, v := range overrides.Environment {
-		merged.Environment[k] = v
-	}
+	maps.Copy(merged.Environment, overrides.Environment)
 	if overrides.UserID != nil {
 		merged.UserID = copyIntPtr(overrides.UserID)
 	}

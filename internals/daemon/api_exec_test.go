@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -31,6 +32,8 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
+	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 )
@@ -47,6 +50,7 @@ func (s *execSuite) SetUpSuite(c *C) {
 }
 
 func (s *execSuite) SetUpTest(c *C) {
+	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -75,6 +79,7 @@ func (s *execSuite) TearDownTest(c *C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
+	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 // Some of these tests use the Go client for simplicity.
@@ -364,7 +369,7 @@ func (s *execSuite) TestStreaming(c *C) {
 	process, err := s.client.Exec(opts)
 	c.Assert(err, IsNil)
 
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		chunk := fmt.Sprintf("chunk %d ", i)
 		select {
 		case stdinCh <- []byte(chunk):
@@ -439,6 +444,44 @@ func (s *execSuite) TestUserGroupError(c *C) {
 	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
 	c.Check(execResp.Type, Equals, "error")
 	c.Check(execResp.Result["message"], Matches, ".*must specify user, not just group.*")
+}
+
+// TestExecChangeReady simulates the scenario where the change is ready before the websocket
+// connection is established, so the connection should fail.
+func (s *execSuite) TestExecChangeReady(c *C) {
+	httpResp, execResp := execRequest(c, &client.ExecOptions{
+		Command: []string{"echo", "foo"},
+	})
+	c.Assert(httpResp.StatusCode, Equals, http.StatusAccepted)
+
+	changeID := execResp.Change
+	c.Assert(changeID, Not(Equals), "")
+
+	st := s.daemon.overlord.State()
+	st.Lock()
+	change := st.Change(changeID)
+	c.Assert(change, NotNil)
+	c.Assert(len(change.Tasks()), Equals, 1)
+	// Set the change as failed and set the error on the task.
+	change.SetStatus(state.ErrorStatus)
+	change.Tasks()[0].Errorf("something went wrong")
+	change.Tasks()[0].SetStatus(state.ErrorStatus)
+	st.Unlock()
+
+	taskID, ok := execResp.Result["task-id"].(string)
+	c.Assert(ok, Equals, true)
+
+	websocketCmd := apiCmd("/v1/tasks/{taskID}/websocket/{websocketID}")
+	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, "control"), nil)
+	c.Assert(err, IsNil)
+	req.SetPathValue("taskID", taskID)
+	req.SetPathValue("websocketID", "control")
+	rsp := v1GetTaskWebsocket(websocketCmd, req, nil).(websocketResponse)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	c.Check(rec.Code, Equals, 500)
+	c.Check(rec.Body.String(), Matches, `.*something went wrong.*`)
 }
 
 type execResponse struct {

@@ -113,6 +113,15 @@ type serviceData struct {
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
+	// Don't restart services that were left in DoingStatus when the daemon terminated.
+	m.state.Lock()
+	var started bool
+	task.Get("started", &started)
+	m.state.Unlock()
+	if started {
+		return fmt.Errorf("service already started, not retrying")
+	}
+
 	m.state.Lock()
 	request, err := TaskServiceRequest(task)
 	m.state.Unlock()
@@ -142,6 +151,10 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	if service == nil {
 		return nil
 	}
+
+	m.state.Lock()
+	task.Set("started", true)
+	m.state.Unlock()
 
 	// Start the service and transition to stateStarting.
 	err = service.start()
@@ -634,10 +647,7 @@ func calculateNextBackoff(config *plan.Service, current time.Duration) time.Dura
 	}
 	// Multiply current time by backoff factor. If it has exceeded the limit, clamp it.
 	nextSeconds := current.Seconds() * config.BackoffFactor.Value
-	next := time.Duration(nextSeconds * float64(time.Second))
-	if next > config.BackoffLimit.Value {
-		next = config.BackoffLimit.Value
-	}
+	next := min(time.Duration(nextSeconds*float64(time.Second)), config.BackoffLimit.Value)
 	return next
 }
 

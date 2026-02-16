@@ -21,8 +21,10 @@ import (
 	"crypto/rand"
 	"crypto/sha512"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base32"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -39,17 +41,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GehirnInc/crypt/sha512_crypt"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord"
+	"github.com/canonical/pebble/internals/overlord/identities"
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
@@ -72,6 +78,7 @@ type daemonSuite struct {
 var _ = Suite(&daemonSuite{})
 
 func (s *daemonSuite) SetUpTest(c *C) {
+	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
@@ -96,6 +103,7 @@ func (s *daemonSuite) TearDownTest(c *C) {
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
+	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 func (s *daemonSuite) newDaemon(c *C) *Daemon {
@@ -389,19 +397,20 @@ func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, rem
 	d := s.newDaemon(c)
 
 	// Add some named identities for testing with.
+	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
-	err := d.state.ReplaceIdentities(map[string]*state.Identity{
+	err := identitiesMgr.ReplaceIdentities(map[string]*identities.Identity{
 		"adminuser": {
-			Access: state.AdminAccess,
-			Local:  &state.LocalIdentity{UserID: 1},
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1},
 		},
 		"readuser": {
-			Access: state.ReadAccess,
-			Local:  &state.LocalIdentity{UserID: 2},
+			Access: identities.ReadAccess,
+			Local:  &identities.LocalIdentity{UserID: 2},
 		},
 		"untrusteduser": {
-			Access: state.UntrustedAccess,
-			Local:  &state.LocalIdentity{UserID: 3},
+			Access: identities.UntrustedAccess,
+			Local:  &identities.LocalIdentity{UserID: 3},
 		},
 	})
 	d.state.Unlock()
@@ -593,7 +602,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
 	c.Assert(userSeen, NotNil)
-	c.Check(userSeen.Access, Equals, state.AdminAccess)
+	c.Check(userSeen.Access, Equals, identities.AdminAccess)
 	c.Assert(userSeen.UID, NotNil)
 	c.Check(*userSeen.UID, Equals, uint32(0))
 
@@ -607,7 +616,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
 	c.Assert(userSeen, NotNil)
-	c.Check(userSeen.Access, Equals, state.AdminAccess)
+	c.Check(userSeen.Access, Equals, identities.AdminAccess)
 	c.Assert(userSeen.UID, NotNil)
 	c.Check(*userSeen.UID, Equals, uint32(os.Getuid()))
 
@@ -621,7 +630,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, Equals, http.StatusOK)
 	c.Assert(userSeen, NotNil)
-	c.Check(userSeen.Access, Equals, state.ReadAccess)
+	c.Check(userSeen.Access, Equals, identities.ReadAccess)
 	c.Assert(userSeen.UID, NotNil)
 	c.Check(*userSeen.UID, Equals, uint32(os.Getuid()+1))
 }
@@ -976,7 +985,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339))
 	err = os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1024,7 +1033,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *C) {
 }
 
 func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339)))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339))
 	err := os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1044,11 +1053,11 @@ func (s *daemonSuite) TestRestartExpectedRebootOK(c *C) {
 }
 
 func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *C) {
-	// we give up trying to restart the system after 3 retry tentatives
+	// we give up trying to restart the system after 3 retry attempts
 	curBootID, err := osutil.BootID()
 	c.Assert(err, IsNil)
 
-	fakeState := []byte(fmt.Sprintf(`{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339)))
+	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339))
 	err = os.WriteFile(s.statePath, fakeState, 0600)
 	c.Assert(err, IsNil)
 
@@ -1082,7 +1091,7 @@ func (s *daemonSuite) TestRestartIntoSocketModeNoNewChanges(c *C) {
 	c.Assert(d.Start(), IsNil)
 
 	// pretend some ensure happened
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		c.Check(d.overlord.StateEngine().Ensure(), IsNil)
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -1117,7 +1126,7 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *C) {
 
 	c.Assert(d.Start(), IsNil)
 	// pretend some ensure happened
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		c.Check(d.overlord.StateEngine().Ensure(), IsNil)
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -1353,63 +1362,6 @@ func (s *daemonSuite) TestHTTPAPI(c *C) {
 	ensureSecurityLog(c, logBuf.String(), "WARN", fmt.Sprintf("sys_shutdown:%d", os.Getuid()), "Shutting down daemon")
 }
 
-func (s *daemonSuite) TestHTTPSAPI(c *C) {
-	s.httpsAddress = ":0" // Go will choose port (use listener.Addr() to find it)
-	d := s.newDaemon(c)
-	d.Init()
-	c.Assert(d.Start(), IsNil)
-
-	cleanupServer := true
-	defer func() {
-		// If we exit early (test failure), clean up.
-		if cleanupServer {
-			d.Stop(nil)
-		}
-	}()
-
-	port := d.httpsListener.Addr().(*net.TCPAddr).Port
-
-	httpsClient := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-	}
-
-	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/health", port), nil)
-	c.Assert(err, IsNil)
-	response, err := httpsClient.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
-	var m map[string]any
-	err = json.NewDecoder(response.Body).Decode(&m)
-	c.Assert(err, IsNil)
-	c.Assert(m, DeepEquals, map[string]any{
-		"type":        "sync",
-		"status-code": float64(http.StatusOK),
-		"status":      "OK",
-		"result": map[string]any{
-			"healthy": true,
-		},
-	})
-
-	request, err = http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
-	c.Assert(err, IsNil)
-	response, err = httpsClient.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
-
-	err = d.Stop(nil)
-	c.Assert(err, IsNil)
-
-	// Daemon already stopped, no need to do it again during defer.
-	cleanupServer = false
-
-	_, err = http.DefaultClient.Do(request)
-	c.Assert(err, ErrorMatches, ".* connection refused")
-}
-
 func (s *daemonSuite) TestStopRunning(c *C) {
 	// Start the daemon.
 	writeTestLayer(s.pebbleDir, `
@@ -1495,7 +1447,7 @@ services:
 	// in the starting state, so here we wait until the service is in the starting
 	// state. We wait up to 25*20=500ms to make sure there is still half a second
 	// left to stop the service before okayDelay.
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		svcInfo, err := d.overlord.ServiceManager().Services([]string{"test1"})
 		c.Assert(err, IsNil)
 		if len(svcInfo) > 0 && svcInfo[0].Current == servstate.StatusActive {
@@ -1686,7 +1638,7 @@ func ensureSecurityLog(c *C, logs, level, event, description string) {
 	}
 
 	gotLog := false
-	for _, line := range strings.Split(logs, "\n") {
+	for line := range strings.SplitSeq(logs, "\n") {
 		// Remove initial datetime prefix
 		fields := strings.SplitN(line, " ", 2)
 		if len(fields) != 2 {
@@ -1914,4 +1866,312 @@ func (t *transportTypeSuite) TestTransportTypeContext(c *C) {
 	c.Assert(transport.IsValid(), Equals, true)
 	c.Assert(transport.IsConcealed(), Equals, true)
 	c.Assert(transport.String(), Equals, "https")
+}
+
+func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
+	d := s.newDaemon(c)
+
+	// Set up a Local identity.
+	identitiesMgr := d.overlord.IdentitiesManager()
+	d.state.Lock()
+	err := identitiesMgr.AddIdentities(map[string]*identities.Identity{
+		"localuser": {
+			Access: identities.AdminAccess,
+			Local:  &identities.LocalIdentity{UserID: 1000},
+		},
+	})
+	d.state.Unlock()
+	c.Assert(err, IsNil)
+
+	// Capture the UserState passed to the response function.
+	var capturedUser *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(c *Command, r *http.Request, user *UserState) Response {
+			capturedUser = user
+			return SyncResponse(true)
+		},
+		ReadAccess: UserAccess{},
+	}
+
+	// Make request with the Local user's UID.
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
+
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+
+	// Verify UserState for Local identity.
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "localuser")
+	c.Assert(capturedUser.Access, Equals, identities.AdminAccess)
+	c.Assert(capturedUser.UID, NotNil)
+
+	// This specific expectation is only a temporary workaround to
+	// support code not yet supporting named identities, such as
+	// notices. UID should really be nil in this case.
+	c.Assert(*capturedUser.UID, Equals, uint32(1000))
+}
+
+func (s *daemonSuite) TestServeHTTPUserStateUIDOnly(c *C) {
+	d := s.newDaemon(c)
+	// Don't set up any named identities, so it falls back to UID-only
+
+	// Capture the UserState passed to the response function.
+	var capturedUser *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(c *Command, r *http.Request, user *UserState) Response {
+			capturedUser = user
+			return SyncResponse(true)
+		},
+		ReadAccess: UserAccess{},
+	}
+
+	// Make request with just a UID (not root, not daemon UID)
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=5000;socket=;"
+
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+
+	// Verify UserState for UID-only (no named identity)
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "")
+	c.Assert(capturedUser.Access, Equals, identities.ReadAccess)
+	c.Assert(capturedUser.UID, NotNil)
+	c.Assert(*capturedUser.UID, Equals, uint32(5000))
+}
+
+func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyRoot(c *C) {
+	d := s.newDaemon(c)
+	// Don't set up any named identities, so it falls back to UID-only
+
+	// Capture the UserState passed to the response function.
+	var capturedUser *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(c *Command, r *http.Request, user *UserState) Response {
+			capturedUser = user
+			return SyncResponse(true)
+		},
+		ReadAccess: UserAccess{},
+	}
+
+	// Make request as root (UID 0).
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "pid=100;uid=0;socket=;"
+
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+
+	// Verify UserState for root UID.
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "")
+	c.Assert(capturedUser.Access, Equals, identities.AdminAccess)
+	c.Assert(capturedUser.UID, NotNil)
+	c.Assert(*capturedUser.UID, Equals, uint32(0))
+}
+
+func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
+	d := s.newDaemon(c)
+	// Don't set up any named identities, so it falls back to UID-only
+
+	// Capture the UserState passed to the response function.
+	var capturedUser *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(c *Command, r *http.Request, user *UserState) Response {
+			capturedUser = user
+			return SyncResponse(true)
+		},
+		ReadAccess: UserAccess{},
+	}
+
+	// Make request as the daemon's UID.
+	daemonUID := uint32(os.Getuid())
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", daemonUID)
+
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+
+	// Verify UserState for daemon UID.
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "")
+	c.Assert(capturedUser.Access, Equals, identities.AdminAccess)
+	c.Assert(capturedUser.UID, NotNil)
+	c.Assert(*capturedUser.UID, Equals, daemonUID)
+}
+
+func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
+	d := s.newDaemon(c)
+
+	// Set up a Basic auth identity with a hashed password.
+	// Generate sha512-crypt hash for password "test".
+	crypt := sha512_crypt.New()
+	hashedPassword, err := crypt.Generate([]byte("test"), nil)
+	c.Assert(err, IsNil)
+
+	identitiesMgr := d.overlord.IdentitiesManager()
+	d.state.Lock()
+	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+		"basicuser": {
+			Access: identities.ReadAccess,
+			Basic:  &identities.BasicIdentity{Password: hashedPassword},
+		},
+	})
+	d.state.Unlock()
+	c.Assert(err, IsNil)
+
+	// Capture the UserState passed to the response function.
+	var capturedUser *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(c *Command, r *http.Request, user *UserState) Response {
+			capturedUser = user
+			return SyncResponse(true)
+		},
+		ReadAccess: UserAccess{},
+	}
+
+	// Make request with Basic auth credentials over Unix Socket.
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("basicuser", "test")
+	req.RemoteAddr = "pid=100;uid=1000;socket=;"
+
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+
+	// Verify UserState for Basic identity over Unix Socket.
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "basicuser")
+	c.Assert(capturedUser.Access, Equals, identities.ReadAccess)
+	c.Assert(capturedUser.UID, IsNil)
+}
+
+func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *C) {
+	d := s.newDaemon(c)
+
+	// Set up a Basic auth identity with a hashed password.
+	// Generate sha512-crypt hash for password "test".
+	crypt := sha512_crypt.New()
+	hashedPassword, err := crypt.Generate([]byte("test"), nil)
+	c.Assert(err, IsNil)
+
+	identitiesMgr := d.overlord.IdentitiesManager()
+	d.state.Lock()
+	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+		"basicuser": {
+			Access: identities.MetricsAccess,
+			Basic:  &identities.BasicIdentity{Password: hashedPassword},
+		},
+	})
+	d.state.Unlock()
+	c.Assert(err, IsNil)
+
+	// Capture the UserState passed to the response function.
+	var capturedUser *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(c *Command, r *http.Request, user *UserState) Response {
+			capturedUser = user
+			return SyncResponse(true)
+		},
+		ReadAccess: MetricsAccess{},
+	}
+
+	// Make request with Basic auth credentials over HTTP (not HTTPS).
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.SetBasicAuth("basicuser", "test")
+	req.RemoteAddr = "192.168.1.100:8888"
+
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+
+	// Verify UserState for Basic identity over HTTP.
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "basicuser")
+	c.Assert(capturedUser.Access, Equals, identities.MetricsAccess)
+	c.Assert(capturedUser.UID, IsNil)
+}
+
+func (s *daemonSuite) TestServeHTTPUserStateCert(c *C) {
+	d := s.newDaemon(c)
+
+	// Create a test certificate.
+	certPEM := `-----BEGIN CERTIFICATE-----
+MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
+A1UEAwwNY2Fub25pY2FsLmNvbTAeFw0yNTA5MDgxNTI2NTJaFw0zNTA5MDYxNTI2
+NTJaMBgxFjAUBgNVBAMMDWNhbm9uaWNhbC5jb20wKjAFBgMrZXADIQDtxRqb9EMe
+ffcoJ0jNn9ys8uDFeHnQ6JRxgNFvomDTHqNTMFEwHQYDVR0OBBYEFI/oHjhG1A7F
+3HM7McXP7w7CxtrwMB8GA1UdIwQYMBaAFI/oHjhG1A7F3HM7McXP7w7CxtrwMA8G
+A1UdEwEB/wQFMAMBAf8wBQYDK2VwA0EA40v4eckaV7RBXyRb0sfcCcgCAGYtiCSD
+jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
+-----END CERTIFICATE-----`
+
+	block, _ := pem.Decode([]byte(certPEM))
+	c.Assert(block, NotNil)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	c.Assert(err, IsNil)
+
+	// Set up a Cert identity.
+	identitiesMgr := d.overlord.IdentitiesManager()
+	d.state.Lock()
+	err = identitiesMgr.AddIdentities(map[string]*identities.Identity{
+		"certuser1": {
+			Access: identities.AdminAccess,
+			Cert:   &identities.CertIdentity{X509: cert},
+		},
+	})
+	d.state.Unlock()
+	c.Assert(err, IsNil)
+
+	// Capture the UserState passed to the response function.
+	var capturedUser *UserState
+	cmd := &Command{
+		d: d,
+		GET: func(c *Command, r *http.Request, user *UserState) Response {
+			capturedUser = user
+			return SyncResponse(true)
+		},
+		ReadAccess: UserAccess{},
+	}
+
+	// Make request with mTLS client certificate.
+	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS)
+	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
+	c.Assert(err, IsNil)
+	req.RemoteAddr = "192.168.1.100:8443"
+	req.TLS = &tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{cert},
+	}
+
+	rec := httptest.NewRecorder()
+	cmd.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+
+	// Verify UserState for Cert identity.
+	c.Assert(capturedUser, NotNil)
+	c.Assert(capturedUser.Username, Equals, "certuser1")
+	c.Assert(capturedUser.Access, Equals, identities.AdminAccess)
+	c.Assert(capturedUser.UID, IsNil)
 }

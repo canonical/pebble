@@ -5,19 +5,19 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-mod-file: 'go.mod'
           cache: false
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+        uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20  # v8
         id: lint
         with:
           version: latest
-          args: '-c .github/.golangci.yml --out-format=colored-line-number'
+          args: '-c .github/.golangci.yml --output.text.print-linter-name --output.text.print-issued-lines --output.text.colors'
           skip-cache: true
 
       - name: Print error message
@@ -32,25 +32,17 @@ jobs:
   staticcheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
-      # NOTE: The latest version of staticcheck was built with go1.24.1, but because of CVE-2025-22874,
-      # we have upgraded to Go 1.24.4. If we install staticcheck from binary, we will get an error
-      # "module requires at least go1.24.4, but Staticcheck was built with go1.24.1 (compile)".
-      # So, we use `go install` for staticcheck.
-      - uses: actions/setup-go@v4
+      - uses: actions/setup-go@v6
         with:
           go-mod-file: 'go.mod'
 
       - name: Install staticcheck
+        # Use @master because of staticcheck tool versioning issues, for example:
+        # "module requires at least go1.24.6, but Staticcheck was built with go1.24.5 (compile)"
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@v0.6.1
-
-      # - name: Install staticcheck
-      #   run: |
-      #     wget -q https://github.com/dominikh/go-tools/releases/download/2025.1.1/staticcheck_linux_amd64.tar.gz
-      #     tar -xzf staticcheck_linux_amd64.tar.gz
-      #     cp staticcheck/staticcheck /usr/local/bin
+          go install honnef.co/go/tools/cmd/staticcheck@master
 
       - name: Run checks
         run: |

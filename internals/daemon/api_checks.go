@@ -28,14 +28,15 @@ import (
 )
 
 type checkInfo struct {
-	Name      string `json:"name"`
-	Level     string `json:"level,omitempty"`
-	Startup   string `json:"startup"`
-	Status    string `json:"status"`
-	Successes int    `json:"successes"`
-	Failures  int    `json:"failures,omitempty"`
-	Threshold int    `json:"threshold"`
-	ChangeID  string `json:"change-id,omitempty"`
+	Name         string `json:"name"`
+	Level        string `json:"level,omitempty"`
+	Startup      string `json:"startup"`
+	Status       string `json:"status"`
+	Successes    int    `json:"successes"`
+	Failures     int    `json:"failures,omitempty"`
+	Threshold    int    `json:"threshold"`
+	ChangeID     string `json:"change-id,omitempty"`
+	PrevChangeID string `json:"prev-change-id,omitempty"`
 }
 
 func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
@@ -110,6 +111,9 @@ func v1PostChecks(c *Command, r *http.Request, user *UserState) Response {
 	st := c.d.overlord.State()
 	st.EnsureBefore(0) // start and stop tasks right away
 
+	if changed == nil {
+		changed = []string{} // send JSON "[]" instead of "null" if nothing's changed
+	}
 	sort.Strings(changed)
 	return SyncResponse(responsePayload{Changed: changed})
 }
@@ -155,13 +159,14 @@ type responsePayload struct {
 
 func checkInfoFromInternal(check *checkstate.CheckInfo) checkInfo {
 	return checkInfo{
-		Name:      check.Name,
-		Level:     string(check.Level),
-		Startup:   string(check.Startup),
-		Status:    string(check.Status),
-		Successes: check.Successes,
-		Failures:  check.Failures,
-		Threshold: check.Threshold,
-		ChangeID:  check.ChangeID,
+		Name:         check.Name,
+		Level:        string(check.Level),
+		Startup:      string(check.Startup),
+		Status:       string(check.Status),
+		Successes:    check.Successes,
+		Failures:     check.Failures,
+		Threshold:    check.Threshold,
+		ChangeID:     check.ChangeID,
+		PrevChangeID: check.PrevChangeID,
 	}
 }

@@ -81,7 +81,7 @@ func (ps *planSuite) planYAML(c *C) string {
 func reindent(in string) []byte {
 	var buf bytes.Buffer
 	var trim string
-	for _, line := range strings.Split(in, "\n") {
+	for line := range strings.SplitSeq(in, "\n") {
 		if trim == "" {
 			trimmed := strings.TrimLeft(line, "\t")
 			if trimmed == "" {

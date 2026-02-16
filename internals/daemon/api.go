@@ -59,7 +59,7 @@ var API = []*Command{{
 	POST:        v1PostService,
 }, {
 	Path:       "/v1/plan",
-	ReadAccess: UserAccess{},
+	ReadAccess: AdminAccess{},
 	GET:        v1GetPlan,
 }, {
 	Path:        "/v1/layers",
@@ -113,6 +113,10 @@ var API = []*Command{{
 	WriteAccess: AdminAccess{},
 	GET:         v1GetIdentities,
 	POST:        v1PostIdentities,
+}, {
+	Path:        "/v1/pairing",
+	WriteAccess: PairingAccess{},
+	POST:        v1PostPairing,
 }, {
 	Path:       "/v1/metrics",
 	ReadAccess: MetricsAccess{},

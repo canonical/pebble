@@ -21,6 +21,7 @@ package osutil
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -52,7 +53,7 @@ func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		if a[i] != b[i] {
 			return false
 		}
@@ -248,10 +249,5 @@ func (e *MountEntry) OptStr(name string) (string, bool) {
 
 // OptBool returns true if a given mount option is present.
 func (e *MountEntry) OptBool(name string) bool {
-	for _, opt := range e.Options {
-		if opt == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(e.Options, name)
 }

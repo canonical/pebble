@@ -17,7 +17,6 @@ package servicelog
 import (
 	"bytes"
 	"fmt"
-	"time"
 
 	. "gopkg.in/check.v1"
 )
@@ -56,19 +55,4 @@ func (s *formatterSuite) TestFormatSingleWrite(c *C) {
 %[1]s \[test\] second
 %[1]s \[test\] third
 `[1:], timeFormatRegex))
-}
-
-func (s *formatterSuite) TestAppendTimestamp(c *C) {
-	now := time.Now()
-	c.Assert(string(appendTimestamp(nil, now)), Equals,
-		now.UTC().Format("2006-01-02T15:04:05.000Z"))
-
-	c.Assert(string(appendTimestamp(nil, time.Time{})), Equals,
-		"0001-01-01T00:00:00.000Z")
-	c.Assert(string(appendTimestamp(nil, time.Date(2042, 12, 31, 23, 59, 48, 123_456_789, time.UTC))), Equals,
-		"2042-12-31T23:59:48.123Z")
-	c.Assert(string(appendTimestamp(nil, time.Date(2025, 8, 9, 1, 2, 3, 4_000_000, time.UTC))), Equals,
-		"2025-08-09T01:02:03.004Z")
-	c.Assert(string(appendTimestamp(nil, time.Date(2025, 8, 9, 1, 2, 3, 4_999_999, time.UTC))), Equals,
-		"2025-08-09T01:02:03.004Z") // time.Format truncates (not rounds) milliseconds too
 }

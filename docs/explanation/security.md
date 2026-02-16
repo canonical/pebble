@@ -19,7 +19,7 @@ By default, Pebble stores its configuration, internal state, and Unix socket in 
 The `$PEBBLE` directory must be readable and writable by the UID of the pebble process. Make sure that no other UIDs can read or write to the $PEBBLE directory. You can do that with `chmod`, for example:
 
 ```{terminal}
-   :input: chmod 700 /var/lib/pebble/default
+chmod 700 /var/lib/pebble/default
 ```
 
 The file `$PEBBLE/.pebble.state` contains the internal state of the Pebble daemon. You shouldn't try to edit this file or change its permissions.
@@ -49,4 +49,4 @@ Our intention is that projects that build on Pebble can [override how TLS connec
 
 ### FIPS 140
 
-In the future we hope to have [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble, but the official [`pebble` snap](https://snapcraft.io/pebble) is not yet FIPS 140-compliant.
+This project also distributes [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble: the source code is in the `fips` branch and there's the `fips` track for the official [`pebble` snap](https://snapcraft.io/pebble). Refer to [HACKING.md](https://github.com/canonical/pebble/blob/fips/HACKING.md#fips-140-changes) in the `fips` branch for the list of limitations in the FIPS builds.

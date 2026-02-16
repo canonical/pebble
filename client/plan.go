@@ -41,7 +41,7 @@ type AddLayerOptions struct {
 
 // AddLayer adds a layer to the plan's configuration layers.
 func (client *Client) AddLayer(opts *AddLayerOptions) error {
-	var payload = struct {
+	payload := struct {
 		Action  string `json:"action"`
 		Combine bool   `json:"combine"`
 		Inner   bool   `json:"inner"`

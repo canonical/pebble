@@ -145,7 +145,7 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 
-	// Standardise the change-id fields before comparison as these can vary.
+	// Standardise the change-id and prev-change-id fields before comparison as these can vary.
 	if results, ok := body["result"].([]any); ok {
 		for i, result := range results {
 			resultMap := result.(map[string]any)
@@ -155,6 +155,8 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 			} else {
 				resultMap["change-id"] = ""
 			}
+			// Remove prev-change-id for comparison (will be empty in most test scenarios).
+			delete(resultMap, "prev-change-id")
 		}
 	}
 
@@ -233,6 +235,40 @@ func (s *apiSuite) postChecks(c *C, body string) *resp {
 	return rsp
 }
 
+func (s *apiSuite) TestChecksPostNoChange(c *C) {
+	writeTestLayer(s.pebbleDir, `
+checks:
+    chk1:
+        override: replace
+        level: ready
+        startup: disabled
+        exec:
+            command: sleep 0.1
+`)
+	s.daemon(c)
+	s.startOverlord()
+
+	// Try to stop a check that's already stopped (disabled)
+	rsp := s.postChecks(c, `{"action": "stop", "checks": ["chk1"]}`)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	// Should return empty list, not nil
+	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{})
+
+	// Try to start the check
+	rsp = s.postChecks(c, `{"action": "start", "checks": ["chk1"]}`)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{"chk1"})
+
+	// Try to start again (already started)
+	rsp = s.postChecks(c, `{"action": "start", "checks": ["chk1"]}`)
+	c.Check(rsp.Status, Equals, 200)
+	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	// Should return empty list, not nil
+	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{})
+}
+
 func (s *apiSuite) TestPostChecksRefresh(c *C) {
 	checksYAML := `
 checks:
@@ -291,14 +327,15 @@ checks:
 	}
 
 	c.Check(info, DeepEquals, checkInfo{
-		Name:      "chk1",
-		Level:     "ready",
-		Startup:   "enabled",
-		Status:    "up",
-		Successes: 1,
-		Failures:  0,
-		Threshold: 3,
-		ChangeID:  "C0",
+		Name:         "chk1",
+		Level:        "ready",
+		Startup:      "enabled",
+		Status:       "up",
+		Successes:    1,
+		Failures:     0,
+		Threshold:    3,
+		ChangeID:     "C0",
+		PrevChangeID: "",
 	})
 	c.Check(rsp.Result.(refreshPayload).Error, Equals, "")
 }

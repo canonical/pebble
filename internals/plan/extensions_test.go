@@ -76,7 +76,9 @@ var extensionTests = []struct {
 		x: &xSection{},
 		y: &ySection{},
 	},
-	resultYaml: "{}\n",
+	resultYaml: string(reindent(`
+		x-field:
+			somepolicy: disabled`)),
 }, {
 	summary: "Load file layers invalid section",
 	extensions: []extension{{
@@ -167,7 +169,9 @@ var extensionTests = []struct {
 		x: &xSection{},
 		y: &ySection{},
 	},
-	resultYaml: "{}\n",
+	resultYaml: string(reindent(`
+		x-field:
+			somepolicy: disabled`)),
 }, {
 	summary: "Load file layers with section validation failure #1",
 	extensions: []extension{{
@@ -272,7 +276,9 @@ var extensionTests = []struct {
 		x: &xSection{},
 		y: &ySection{},
 	},
-	resultYaml: "{}\n",
+	resultYaml: string(reindent(`
+		x-field:
+			somepolicy: disabled`)),
 }, {
 	summary: "Load file layers",
 	extensions: []extension{{
@@ -301,6 +307,8 @@ var extensionTests = []struct {
 		yaml: `
 			summary: y
 			description: desc-y
+			x-field:
+				somepolicy: foo
 			y-field:
 				y1:
 					override: replace
@@ -334,6 +342,7 @@ var extensionTests = []struct {
 	},
 	resultYaml: string(reindent(`
 		x-field:
+			somepolicy: foo
 			x1:
 				override: replace
 				a: a
@@ -390,7 +399,7 @@ nexttest:
 		}
 
 		// Load the plan layer from disk (parse, combine and validate).
-		p, err := plan.ReadDir(layersDir)
+		p, err := plan.ReadDir(layersDir, nil)
 		if testData.error != "" || err != nil {
 			// Expected error.
 			c.Assert(err, ErrorMatches, testData.error)
@@ -446,6 +455,7 @@ func (s *S) TestSectionOrderExt(c *C) {
 				exec:
 					command: ping 8.8.8.8
 		x-field:
+			somepolicy: disabled
 			x1:
 				override: replace
 				a: a
@@ -490,6 +500,7 @@ func (s *S) TestSectionOrderExt(c *C) {
 				services: []
 				override: replace
 		x-field:
+			somepolicy: disabled
 			x1:
 				override: replace
 				a: a
@@ -542,6 +553,10 @@ func (x xExtension) CombineSections(sections ...plan.Section) (plan.Section, err
 			return nil, err
 		}
 	}
+	// Test post-merge defaults here.
+	if xs.SomePolicy == "" {
+		xs.SomePolicy = "disabled"
+	}
 	return xs, nil
 }
 
@@ -571,7 +586,8 @@ func (x xExtension) ValidatePlan(p *plan.Plan) error {
 
 // xSection is the backing type for xExtension.
 type xSection struct {
-	Entries map[string]*X `yaml:",inline,omitempty"`
+	SomePolicy string
+	Entries    map[string]*X `yaml:",inline,omitempty"`
 }
 
 func (xs *xSection) Validate() error {
@@ -588,13 +604,19 @@ func (xs *xSection) Validate() error {
 }
 
 func (xs *xSection) IsZero() bool {
-	return xs.Entries == nil
+	// We have post-merge default values we always want to show.
+	return false
 }
 
 func (xs *xSection) Combine(other plan.Section) error {
 	otherxSection, ok := other.(*xSection)
 	if !ok {
 		return fmt.Errorf("cannot combine incompatible section type")
+	}
+
+	// Top level field is merge-only.
+	if otherxSection.SomePolicy != "" {
+		xs.SomePolicy = otherxSection.SomePolicy
 	}
 
 	for field, entry := range otherxSection.Entries {

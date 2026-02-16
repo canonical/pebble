@@ -32,7 +32,9 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/logstate"
+	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
@@ -118,16 +120,18 @@ type Overlord struct {
 	startOfOperationTime time.Time
 
 	// managers
-	inited     bool
-	startedUp  bool
-	runner     *state.TaskRunner
-	restartMgr *restart.RestartManager
-	planMgr    *planstate.PlanManager
-	serviceMgr *servstate.ServiceManager
-	commandMgr *cmdstate.CommandManager
-	checkMgr   *checkstate.CheckManager
-	logMgr     *logstate.LogManager
-	tlsMgr     *tlsstate.TLSManager
+	inited        bool
+	startedUp     bool
+	runner        *state.TaskRunner
+	restartMgr    *restart.RestartManager
+	planMgr       *planstate.PlanManager
+	serviceMgr    *servstate.ServiceManager
+	commandMgr    *cmdstate.CommandManager
+	checkMgr      *checkstate.CheckManager
+	logMgr        *logstate.LogManager
+	tlsMgr        *tlsstate.TLSManager
+	identitiesMgr *identities.Manager
+	pairingMgr    *pairingstate.PairingManager
 
 	extension Extension
 }
@@ -137,7 +141,6 @@ func New(opts *Options) (*Overlord, error) {
 
 	o := &Overlord{
 		pebbleDir: opts.PebbleDir,
-		loopTomb:  new(tomb.Tomb),
 		inited:    true,
 		extension: opts.Extension,
 	}
@@ -209,6 +212,19 @@ func New(opts *Options) (*Overlord, error) {
 	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
 	o.stateEng.AddManager(o.tlsMgr)
 
+	o.identitiesMgr, err = identities.NewManager(s)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create identities manager: %w", err)
+	}
+	o.stateEng.AddManager(o.identitiesMgr)
+
+	o.pairingMgr, err = pairingstate.NewManager(s, o.identitiesMgr)
+	if err != nil {
+		return nil, fmt.Errorf("cannot create pairing manager: %w", err)
+	}
+	o.stateEng.AddManager(o.pairingMgr)
+	o.planMgr.AddChangeListener(o.pairingMgr.PlanChanged)
+
 	o.logMgr = logstate.NewLogManager()
 
 	o.serviceMgr, err = servstate.NewManager(
@@ -263,7 +279,7 @@ func New(opts *Options) (*Overlord, error) {
 	// Load the plan from the Pebble layers directory (which may be missing
 	// or have no layers, resulting in an empty plan), and propagate PlanChanged
 	// notifications to all notification subscribers.
-	err = o.planMgr.Load()
+	err = o.planMgr.Load(nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load plan: %w", err)
 	}
@@ -458,6 +474,9 @@ func (o *Overlord) ensureBefore(d time.Duration) {
 // Loop runs a loop in a goroutine to ensure the current state regularly through StateEngine Ensure.
 func (o *Overlord) Loop() {
 	o.ensureTimerSetup()
+	if o.loopTomb == nil {
+		o.loopTomb = new(tomb.Tomb)
+	}
 	o.loopTomb.Go(func() error {
 		for {
 			// TODO: pass a proper context into Ensure
@@ -494,8 +513,11 @@ func (o *Overlord) CanStandby() bool {
 
 // Stop stops the ensure loop and the managers under the StateEngine.
 func (o *Overlord) Stop() error {
-	o.loopTomb.Kill(nil)
-	err := o.loopTomb.Wait()
+	var err error
+	if o.loopTomb != nil {
+		o.loopTomb.Kill(nil)
+		err = o.loopTomb.Wait()
+	}
 	o.stateEng.Stop()
 	return err
 }
@@ -642,6 +664,17 @@ func (o *Overlord) TLSManager() *tlsstate.TLSManager {
 	return o.tlsMgr
 }
 
+// IdentitiesManager returns the manager responsible for managing client
+// identities.
+func (o *Overlord) IdentitiesManager() *identities.Manager {
+	return o.identitiesMgr
+}
+
+// PairingManager returns the manager that handles client pairing.
+func (o *Overlord) PairingManager() *pairingstate.PairingManager {
+	return o.pairingMgr
+}
+
 // Fake creates an Overlord without any managers and with a backend
 // not using disk. Managers can be added with AddManager. For testing.
 func Fake() *Overlord {
@@ -653,8 +686,7 @@ func Fake() *Overlord {
 // testing.
 func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	o := &Overlord{
-		loopTomb: new(tomb.Tomb),
-		inited:   false,
+		inited: false,
 	}
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)

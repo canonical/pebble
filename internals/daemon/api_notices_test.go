@@ -27,6 +27,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -86,7 +87,7 @@ func (s *apiSuite) testNoticesFilter(c *C, makeQuery func(after time.Time) url.V
 	req, err := http.NewRequest("GET", "/v1/notices?"+query.Encode(), nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.AdminAccess, 0)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.AdminAccess, 0)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -135,7 +136,7 @@ func (s *apiSuite) TestNoticesFilterMultipleTypes(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices?types=change-update&types=warning,warning", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -164,7 +165,7 @@ func (s *apiSuite) TestNoticesFilterMultipleKeys(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices?keys=a.b/x&keys=danger", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -192,7 +193,7 @@ func (s *apiSuite) TestNoticesFilterInvalidTypes(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices?types=foo&types=warning&types=bar,baz", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -208,7 +209,7 @@ func (s *apiSuite) TestNoticesFilterInvalidTypes(c *C) {
 	req, err = http.NewRequest("GET", "/v1/notices?types=foo&types=bar,baz", nil)
 	c.Assert(err, IsNil)
 	noticesCmd = apiCmd("/v1/notices")
-	rsp, ok = noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok = noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -240,7 +241,7 @@ func (s *apiSuite) TestNoticesUserIDAdminDefault(c *C) {
 	// Test that admin user sees their own and all public notices if no filter is specified
 	req, err := http.NewRequest("GET", "/v1/notices", nil)
 	c.Assert(err, IsNil)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.AdminAccess, 0)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.AdminAccess, 0)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -282,7 +283,7 @@ func (s *apiSuite) TestNoticesUserIDAdminFilter(c *C) {
 		reqUrl := fmt.Sprintf("/v1/notices?%s", userIDValues.Encode())
 		req, err := http.NewRequest("GET", reqUrl, nil)
 		c.Assert(err, IsNil)
-		rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.AdminAccess, 0)).(*resp)
+		rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.AdminAccess, 0)).(*resp)
 		c.Assert(ok, Equals, true)
 
 		c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -319,7 +320,7 @@ func (s *apiSuite) TestNoticesUserIDNonAdminDefault(c *C) {
 	// Test that non-admin user by default only sees their notices and public notices.
 	req, err := http.NewRequest("GET", "/v1/notices", nil)
 	c.Assert(err, IsNil)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -350,7 +351,7 @@ func (s *apiSuite) TestNoticesUserIDNonAdminFilter(c *C) {
 	reqUrl := "/v1/notices?user-id=1000"
 	req, err := http.NewRequest("GET", reqUrl, nil)
 	c.Assert(err, IsNil)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -382,7 +383,7 @@ func (s *apiSuite) TestNoticesUsersAdminFilter(c *C) {
 	reqUrl := "/v1/notices?users=all"
 	req, err := http.NewRequest("GET", reqUrl, nil)
 	c.Check(err, IsNil)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.AdminAccess, 0)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.AdminAccess, 0)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -419,7 +420,7 @@ func (s *apiSuite) TestNoticesUsersNonAdminFilter(c *C) {
 	reqUrl := "/v2/notices?users=all"
 	req, err := http.NewRequest("GET", reqUrl, nil)
 	c.Check(err, IsNil)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -441,7 +442,7 @@ func (s *apiSuite) TestNoticesUnknownRequestUID(c *C) {
 	// Test that a connection with unknown UID is forbidden from receiving notices
 	req, err := http.NewRequest("GET", "/v1/notices", nil)
 	c.Assert(err, IsNil)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, &UserState{Access: state.ReadAccess}).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, &UserState{Access: identities.ReadAccess}).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -464,7 +465,7 @@ func (s *apiSuite) TestNoticesWait(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices?timeout=1s", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -484,7 +485,7 @@ func (s *apiSuite) TestNoticesTimeout(c *C) {
 	req, err := http.NewRequest("GET", "/v1/notices?timeout=1ms", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -508,7 +509,7 @@ func (s *apiSuite) TestNoticesRequestCancelled(c *C) {
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/notices?timeout=1s", nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -560,7 +561,7 @@ func (s *apiSuite) testNoticesBadRequest(c *C, query, errorMatch string) {
 	req, err := http.NewRequest("GET", "/v1/notices?"+query, nil)
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.AdminAccess, 0)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.AdminAccess, 0)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -584,7 +585,7 @@ func (s *apiSuite) TestAddNotice(c *C) {
 	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.POST(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.POST(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -638,7 +639,7 @@ func (s *apiSuite) TestAddNoticeMinimal(c *C) {
 	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.POST(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.POST(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -680,7 +681,7 @@ func (s *apiSuite) TestAddNoticeInvalidRequestUid(c *C) {
 	req, err := http.NewRequest("POST", "/v1/notices", bytes.NewReader(body))
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.POST(noticesCmd, req, &UserState{Access: state.ReadAccess}).(*resp)
+	rsp, ok := noticesCmd.POST(noticesCmd, req, &UserState{Access: identities.ReadAccess}).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -737,7 +738,7 @@ func (s *apiSuite) testAddNoticeBadRequest(c *C, body, errorMatch string) {
 	req, err := http.NewRequest("POST", "/v1/notices", strings.NewReader(body))
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices")
-	rsp, ok := noticesCmd.POST(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.POST(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -765,7 +766,7 @@ func (s *apiSuite) TestNotice(c *C) {
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	req.SetPathValue("id", noticeIDPublic)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -781,7 +782,7 @@ func (s *apiSuite) TestNotice(c *C) {
 	c.Assert(err, IsNil)
 	noticesCmd = apiCmd("/v1/notices/{id}")
 	req.SetPathValue("id", noticeIDPrivate)
-	rsp, ok = noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok = noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -801,7 +802,7 @@ func (s *apiSuite) TestNoticeNotFound(c *C) {
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	req.SetPathValue("id", "1234")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1000)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1000)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -817,7 +818,7 @@ func (s *apiSuite) TestNoticeUnknownRequestUID(c *C) {
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	req.SetPathValue("id", "1234")
-	rsp, ok := noticesCmd.GET(noticesCmd, req, &UserState{Access: state.ReadAccess}).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, &UserState{Access: identities.ReadAccess}).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -840,7 +841,7 @@ func (s *apiSuite) TestNoticeAdminAllowed(c *C) {
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	req.SetPathValue("id", noticeID)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.AdminAccess, 0)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.AdminAccess, 0)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeSync)
@@ -867,7 +868,7 @@ func (s *apiSuite) TestNoticeNonAdminNotAllowed(c *C) {
 	c.Assert(err, IsNil)
 	noticesCmd := apiCmd("/v1/notices/{id}")
 	req.SetPathValue("id", noticeID)
-	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(state.ReadAccess, 1001)).(*resp)
+	rsp, ok := noticesCmd.GET(noticesCmd, req, userState(identities.ReadAccess, 1001)).(*resp)
 	c.Assert(ok, Equals, true)
 
 	c.Check(rsp.Type, Equals, ResponseTypeError)
@@ -890,6 +891,6 @@ func addNotice(c *C, st *state.State, userID *uint32, noticeType state.NoticeTyp
 	c.Assert(err, IsNil)
 }
 
-func userState(access state.IdentityAccess, uid uint32) *UserState {
+func userState(access identities.Access, uid uint32) *UserState {
 	return &UserState{Access: access, UID: &uid}
 }

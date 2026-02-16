@@ -1,42 +1,39 @@
-#
 name: Docs
 
 on:
   push:
     branches:
-      - main
+      - master
   pull_request:
-  workflow_call:
   workflow_dispatch:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+permissions: {}
 
 jobs:
-  docchecks:
-    name: Checks
-    runs-on: ubuntu-22.04
-    outputs:
-      linkcheck-result: ${{ steps.linkcheck-step.outcome }}
+  docs-spelling:
+    name: Spelling
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
-      - name: Python
-        uses: actions/setup-python@v5
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-      - name: Links
-        id: linkcheck-step
-        if: success() || failure()
-        uses: canonical/documentation-workflows/linkcheck@main
+      - name: Check spelling
+        run: make -C docs spelling
+
+  docs-linkcheck:
+    name: Links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
         with:
-          working-directory: docs
-      - name: Markdown lint
-        id: markdown-step
-        if: success() || failure()
-        uses: DavidAnson/markdownlint-cli2-action@v16
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
         with:
-          config: "docs/.sphinx/.markdownlint.json"        
+          python-version: "3.12"
+      - name: Check links
+        run: make -C docs linkcheck
