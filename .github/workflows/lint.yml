@@ -39,10 +39,9 @@ jobs:
           go-mod-file: 'go.mod'
 
       - name: Install staticcheck
-        # Use @master because of staticcheck tool versioning issues, for example:
-        # "module requires at least go1.24.6, but Staticcheck was built with go1.24.5 (compile)"
+        # Use @<commit> because latest master fails with "requires go >= 1.25.0"
         run: |
-          go install honnef.co/go/tools/cmd/staticcheck@master
+          go install honnef.co/go/tools/cmd/staticcheck@b8ec13ce4d00
 
       - name: Run checks
         run: |

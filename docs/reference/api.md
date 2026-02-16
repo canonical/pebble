@@ -67,7 +67,7 @@ client.stop_services(["mysvc"])  # Python client also waits for change to finish
 For more information, see:
 
 - [Source code of the Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py)
-- {external+operator:ref}`Pebble in the context of Juju charms <run-workloads-with-a-charm-kubernetes>`
+- {external+operator:ref}`Pebble in the context of Juju charms <workload-containers>`
 
 ## Structure of the API
 
