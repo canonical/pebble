@@ -471,15 +471,11 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 	taskID, ok := execResp.Result["task-id"].(string)
 	c.Assert(ok, Equals, true)
 
-	vars := map[string]string{"task-id": taskID, "websocket-id": "control"}
-	restoreMuxVars := FakeMuxVars(func(*http.Request) map[string]string {
-		return vars
-	})
-	defer restoreMuxVars()
-
-	websocketCmd := apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
+	websocketCmd := apiCmd("/v1/tasks/{taskID}/websocket/{websocketID}")
 	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, "control"), nil)
 	c.Assert(err, IsNil)
+	req.SetPathValue("taskID", taskID)
+	req.SetPathValue("websocketID", "control")
 	rsp := v1GetTaskWebsocket(websocketCmd, req, nil).(websocketResponse)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)

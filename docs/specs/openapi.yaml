@@ -243,7 +243,7 @@ paths:
                     "ready-time": "2024-12-27T12:31:27.686371869+08:00"
                   }
                 }
-  /v1/tasks/{task-id}/websocket/{websocket-id}:
+  /v1/tasks/{taskID}/websocket/{websocketID}:
     get:
       summary: Connect to a task's websocket
       tags:
@@ -251,13 +251,13 @@ paths:
       description: Establish a websocket connection to a specific task.
       parameters:
         - in: path
-          name: task-id
+          name: taskID
           schema:
             type: string
           required: true
           description: The ID of the task.
         - in: path
-          name: websocket-id
+          name: websocketID
           schema:
             type: string
           required: true
@@ -402,9 +402,9 @@ paths:
       description: |
         Start a command with the given options and return a value representing the process.
 
-        This API returns a `task-id` (see the response schema and the example below),
-        then you need to call `/v1/tasks/{task-id}/websocket/control` and `/v1/tasks/{task-id}/websocket/stdio`
-        (also `/v1/tasks/{task-id}/websocket/stderr` if `split-stderr` is true) with the returned `task-id`.
+        This API returns a task ID (see the response schema and the example below),
+        then you need to call `/v1/tasks/{taskID}/websocket/control` and `/v1/tasks/{taskID}/websocket/stdio`
+        (also `/v1/tasks/{taskID}/websocket/stderr` if `split-stderr` is true) with the returned task ID.
       requestBody:
         required: true
         content:
