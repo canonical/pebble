@@ -521,6 +521,8 @@ func (d *Daemon) addRoutes() {
 		c.d = d
 		d.router.Handle(c.Path, c)
 	}
+
+	d.router.Handle("/", NotFound("invalid API endpoint requested"))
 }
 
 type connTracker struct {
