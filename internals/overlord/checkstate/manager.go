@@ -169,7 +169,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 			} else {
 				// Check is new and should be inactive - no need to start it,
 				// but we need to add it to the list of existing checks.
-				m.updateCheckData(config, "", 0, 0)
+				m.updateCheckData(config, "", "", 0, 0)
 			}
 		}
 	}
@@ -179,7 +179,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 		if newOrModified[config.Name] {
 			merged := mergeServiceContext(newPlan, config)
 			changeID := performCheckChange(m.state, merged)
-			m.updateCheckData(config, changeID, 0, 0)
+			m.updateCheckData(config, changeID, "", 0, 0)
 			shouldEnsure = true
 		}
 	}
@@ -197,8 +197,9 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 			break
 		}
 		config := m.state.Cached(performConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
+		prevChangeID := change.ID()
 		changeID := recoverCheckChange(m.state, config, details.Successes, details.Failures)
-		m.updateCheckData(config, changeID, details.Successes, details.Failures)
+		m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 		shouldEnsure = true
 
 	case change.Kind() == recoverCheckKind && new == state.DoneStatus:
@@ -207,8 +208,9 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 			break
 		}
 		config := m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
+		prevChangeID := change.ID()
 		changeID := performCheckChange(m.state, config)
-		m.updateCheckData(config, changeID, details.Successes, details.Failures)
+		m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 		shouldEnsure = true
 	}
 
@@ -344,7 +346,7 @@ func (m *CheckManager) ensureCheck(name string) *checkData {
 	return check
 }
 
-func (m *CheckManager) updateCheckData(config *plan.Check, changeID string, successes, failures int) {
+func (m *CheckManager) updateCheckData(config *plan.Check, changeID, prevChangeID string, successes, failures int) {
 	m.checksLock.Lock()
 	defer m.checksLock.Unlock()
 
@@ -367,6 +369,7 @@ func (m *CheckManager) updateCheckData(config *plan.Check, changeID string, succ
 	check.failures = failures
 	check.threshold = config.Threshold
 	check.changeID = changeID
+	check.prevChangeID = prevChangeID
 }
 
 func (m *CheckManager) incSuccessMetric(config *plan.Check) {
@@ -394,14 +397,15 @@ func (m *CheckManager) deleteCheckData(name string) {
 
 // CheckInfo provides status information about a single check.
 type CheckInfo struct {
-	Name      string
-	Level     plan.CheckLevel
-	Startup   plan.CheckStartup
-	Status    CheckStatus
-	Successes int
-	Failures  int
-	Threshold int
-	ChangeID  string
+	Name         string
+	Level        plan.CheckLevel
+	Startup      plan.CheckStartup
+	Status       CheckStatus
+	Successes    int
+	Failures     int
+	Threshold    int
+	ChangeID     string
+	PrevChangeID string
 }
 
 type refreshInfo struct {
@@ -419,6 +423,7 @@ type checkData struct {
 	failures      int
 	threshold     int
 	changeID      string
+	prevChangeID  string
 	successMetric int64
 	failureMetric int64
 	refresh       chan refreshInfo
@@ -549,7 +554,7 @@ func (m *CheckManager) StartChecks(checks []string) (started []string, err error
 			continue
 		}
 		changeID := performCheckChange(m.state, check)
-		m.updateCheckData(check, changeID, 0, 0)
+		m.updateCheckData(check, changeID, "", 0, 0)
 		started = append(started, check.Name)
 	}
 
@@ -600,7 +605,7 @@ func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error)
 		// same, so that people can inspect what the state of the check was when
 		// it was stopped. The status of the check will be "inactive", but the
 		// failure count combined with the threshold will give the full picture.
-		m.updateCheckData(check, "", checkData.successes, checkData.failures)
+		m.updateCheckData(check, "", checkData.prevChangeID, checkData.successes, checkData.failures)
 	}
 
 	return stopped, nil
@@ -632,7 +637,7 @@ func (m *CheckManager) Replan() {
 			continue
 		}
 		changeID := performCheckChange(m.state, check)
-		m.updateCheckData(check, changeID, 0, 0)
+		m.updateCheckData(check, changeID, "", 0, 0)
 	}
 }
 
@@ -683,13 +688,14 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 
 func checkDataToInfo(data *checkData) *CheckInfo {
 	return &CheckInfo{
-		Name:      data.name,
-		Level:     data.level,
-		Startup:   data.startup,
-		Status:    data.status,
-		Successes: data.successes,
-		Failures:  data.failures,
-		Threshold: data.threshold,
-		ChangeID:  data.changeID,
+		Name:         data.name,
+		Level:        data.level,
+		Startup:      data.startup,
+		Status:       data.status,
+		Successes:    data.successes,
+		Failures:     data.failures,
+		Threshold:    data.threshold,
+		ChangeID:     data.changeID,
+		PrevChangeID: data.prevChangeID,
 	}
 }

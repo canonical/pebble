@@ -45,6 +45,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	m.checksLock.Lock()
 	data := m.ensureCheck(config.Name)
 	refresh := data.refresh
+	prevChangeID := data.prevChangeID
 	m.checksLock.Unlock()
 
 	chk := newChecker(config)
@@ -60,7 +61,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			// Record check failure and perform any action if the threshold
 			// is reached (for example, restarting a service).
 			details.Failures++
-			m.updateCheckData(config, changeID, details.Successes, details.Failures)
+			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
 			atThreshold := details.Failures >= config.Threshold
@@ -80,8 +81,10 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				logger.Noticef("Check %q threshold %d hit, triggering action and recovering", config.Name, config.Threshold)
 				m.callFailureHandlers(config.Name)
 				// Returning the error means perform-check goes to Error status
-				// and logs the error to the task log.
-				return true, err
+				// and logs the error to the task log. We wrap the error to
+				// include details (such as stderr) since the task runner only
+				// logs err.Error().
+				return true, errors.New(errorDetails(err))
 			}
 			return false, err
 		}
@@ -91,14 +94,14 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		if details.Failures > 0 {
 			oldFailures := details.Failures
 			details.Failures = 0
-			m.updateCheckData(config, changeID, details.Successes, details.Failures)
+			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
 			task.Logf("succeeded after %s", pluralise(oldFailures, "failure", "failures"))
 			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
 		} else {
-			m.updateCheckData(config, changeID, details.Successes, details.Failures)
+			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
 			task.Set(checkDetailsAttr, &details)
@@ -160,6 +163,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	m.checksLock.Lock()
 	data := m.ensureCheck(config.Name)
 	refresh := data.refresh
+	prevChangeID := data.prevChangeID
 	m.checksLock.Unlock()
 
 	chk := newChecker(config)
@@ -173,7 +177,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		if err != nil {
 			m.incFailureMetric(config)
 			details.Failures++
-			m.updateCheckData(config, changeID, details.Successes, details.Failures)
+			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
 			task.Set(checkDetailsAttr, &details)
@@ -188,7 +192,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		m.incSuccessMetric(config)
 		details.Successes = 1
 		details.Failures = 0
-		m.updateCheckData(config, changeID, details.Successes, details.Failures)
+		m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 		details.Proceed = true
 		m.state.Lock()
 		task.Set(checkDetailsAttr, &details)

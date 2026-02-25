@@ -40,16 +40,17 @@ type cmdCheck struct {
 }
 
 type checkInfo struct {
-	Name      string `yaml:"name"`
-	Level     string `yaml:"level,omitempty"`
-	Startup   string `yaml:"startup"`
-	Status    string `yaml:"status"`
-	Successes *int   `yaml:"successes,omitempty"`
-	Failures  int    `yaml:"failures"`
-	Threshold int    `yaml:"threshold"`
-	ChangeID  string `yaml:"change-id,omitempty"`
-	Error     string `yaml:"error,omitempty"`
-	Logs      string `yaml:"logs,omitempty"`
+	Name         string `yaml:"name"`
+	Level        string `yaml:"level,omitempty"`
+	Startup      string `yaml:"startup"`
+	Status       string `yaml:"status"`
+	Successes    *int   `yaml:"successes,omitempty"`
+	Failures     int    `yaml:"failures"`
+	Threshold    int    `yaml:"threshold"`
+	ChangeID     string `yaml:"change-id,omitempty"`
+	PrevChangeID string `yaml:"prev-change-id,omitempty"`
+	Error        string `yaml:"error,omitempty"`
+	Logs         string `yaml:"logs,omitempty"`
 }
 
 func init() {
@@ -68,14 +69,15 @@ func init() {
 
 func checkInfoFromClient(check client.CheckInfo) checkInfo {
 	return checkInfo{
-		Name:      check.Name,
-		Level:     string(check.Level),
-		Startup:   string(check.Startup),
-		Status:    string(check.Status),
-		Successes: check.Successes,
-		Failures:  check.Failures,
-		Threshold: check.Threshold,
-		ChangeID:  check.ChangeID,
+		Name:         check.Name,
+		Level:        string(check.Level),
+		Startup:      string(check.Startup),
+		Status:       string(check.Status),
+		Successes:    check.Successes,
+		Failures:     check.Failures,
+		Threshold:    check.Threshold,
+		ChangeID:     check.ChangeID,
+		PrevChangeID: check.PrevChangeID,
 	}
 }
 
@@ -115,6 +117,12 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			logs, err := cmd.taskLogs(info.ChangeID)
 			if err != nil {
 				return fmt.Errorf("cannot get task logs for change %s: %w", info.ChangeID, err)
+			}
+			if logs == "" && info.PrevChangeID != "" {
+				logs, err = cmd.taskLogs(info.PrevChangeID)
+				if err != nil {
+					return fmt.Errorf("cannot get task logs for change %s: %w", info.PrevChangeID, err)
+				}
 			}
 			info.Logs = logs
 		}

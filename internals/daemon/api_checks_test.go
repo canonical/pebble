@@ -145,7 +145,7 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
 	c.Check(err, IsNil)
 
-	// Standardise the change-id fields before comparison as these can vary.
+	// Standardise the change-id and prev-change-id fields before comparison as these can vary.
 	if results, ok := body["result"].([]any); ok {
 		for i, result := range results {
 			resultMap := result.(map[string]any)
@@ -155,6 +155,8 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 			} else {
 				resultMap["change-id"] = ""
 			}
+			// Remove prev-change-id for comparison (will be empty in most test scenarios).
+			delete(resultMap, "prev-change-id")
 		}
 	}
 
@@ -325,14 +327,15 @@ checks:
 	}
 
 	c.Check(info, DeepEquals, checkInfo{
-		Name:      "chk1",
-		Level:     "ready",
-		Startup:   "enabled",
-		Status:    "up",
-		Successes: 1,
-		Failures:  0,
-		Threshold: 3,
-		ChangeID:  "C0",
+		Name:         "chk1",
+		Level:        "ready",
+		Startup:      "enabled",
+		Status:       "up",
+		Successes:    1,
+		Failures:     0,
+		Threshold:    3,
+		ChangeID:     "C0",
+		PrevChangeID: "",
 	})
 	c.Check(rsp.Result.(refreshPayload).Error, Equals, "")
 }

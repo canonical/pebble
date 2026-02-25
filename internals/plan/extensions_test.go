@@ -399,7 +399,7 @@ nexttest:
 		}
 
 		// Load the plan layer from disk (parse, combine and validate).
-		p, err := plan.ReadDir(layersDir)
+		p, err := plan.ReadDir(layersDir, nil)
 		if testData.error != "" || err != nil {
 			// Expected error.
 			c.Assert(err, ErrorMatches, testData.error)
