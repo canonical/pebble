@@ -1595,7 +1595,7 @@ func (s *S) TestReadDir(c *C) {
 			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
 			c.Assert(err, IsNil)
 		}
-		sup, err := plan.ReadDir(layersDir)
+		sup, err := plan.ReadDir(layersDir, nil)
 		if err == nil {
 			var result *plan.Layer
 			result, err = plan.CombineLayers(sup.Layers...)
@@ -1655,7 +1655,7 @@ func (s *S) TestReadDirBadNames(c *C) {
 		fpath := filepath.Join(layersDir, fname)
 		err := os.WriteFile(fpath, []byte("<ignore>"), 0644)
 		c.Assert(err, IsNil)
-		_, err = plan.ReadDir(layersDir)
+		_, err = plan.ReadDir(layersDir, nil)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
 		c.Assert(err, IsNil)
@@ -1679,7 +1679,7 @@ func (s *S) TestReadDirDupNames(c *C) {
 			err := os.WriteFile(fpath, []byte("summary: ignore"), 0644)
 			c.Assert(err, IsNil)
 		}
-		_, err = plan.ReadDir(layersDir)
+		_, err = plan.ReadDir(layersDir, nil)
 		c.Assert(err.Error(), Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
@@ -2357,4 +2357,116 @@ func (s *S) TestReadLayersDir(c *C) {
 			})
 		}
 	}
+}
+
+func (s *S) TestReadDirWithBasePlan(c *C) {
+	// Setup the base plan.
+	basePlan := &plan.Plan{
+		Services: map[string]*plan.Service{
+			"database": {
+				Override: plan.MergeOverride,
+				Name:     "database",
+				Command:  "/usr/bin/db start",
+				Startup:  plan.StartupDisabled,
+				Environment: map[string]string{
+					"DB_HOST": "localhost",
+				},
+			},
+		},
+	}
+	// Setup disk layers.
+	tempDir := c.MkDir()
+	layersDir := filepath.Join(tempDir, "layers")
+	err := os.MkdirAll(layersDir, 0755)
+	c.Assert(err, IsNil)
+	// Override the base service.
+	layer1 := `
+	services:
+		database:
+			override: merge
+			startup: enabled
+			environment:
+				DB_PORT: "5432"
+	`
+	err = os.WriteFile(filepath.Join(layersDir, "001-override.yaml"), reindent(layer1), 0644)
+	c.Assert(err, IsNil)
+
+	// Add a new service that depends on the base service.
+	layer2 := `
+	services:
+		web-app:
+			override: replace
+			command: /usr/bin/app
+			requires: [database]
+	`
+	err = os.WriteFile(filepath.Join(layersDir, "002-app.yaml"), reindent(layer2), 0644)
+	c.Assert(err, IsNil)
+
+	finalPlan, err := plan.ReadDir(layersDir, basePlan)
+	c.Assert(err, IsNil)
+
+	c.Assert(len(finalPlan.Layers), Equals, 3)
+	c.Assert(finalPlan.Layers[0].Label, Equals, "pebble-base")
+	c.Assert(finalPlan.Layers[0].Order, Equals, 0)
+	c.Assert(finalPlan.Layers[1].Label, Equals, "override")
+	c.Assert(finalPlan.Layers[2].Label, Equals, "app")
+
+	// Check Merging Logic on "database"
+	dbSvc := finalPlan.Services["database"]
+	c.Assert(dbSvc, NotNil)
+	c.Assert(dbSvc.Command, Equals, "/usr/bin/db start") // From base
+	c.Assert(dbSvc.Startup, Equals, plan.StartupEnabled) // From disk override
+	c.Assert(dbSvc.Environment, DeepEquals, map[string]string{
+		"DB_HOST": "localhost", // From base
+		"DB_PORT": "5432",      // From disk
+	})
+
+	webSvc := finalPlan.Services["web-app"]
+	c.Assert(webSvc, NotNil)
+	lanes, err := finalPlan.StartOrder([]string{"web-app"})
+	c.Assert(err, IsNil)
+	c.Assert(lanes[0], DeepEquals, []string{"database", "web-app"})
+}
+
+func (s *S) TestReadDirWithBasePlanOnly(c *C) {
+	basePlan := &plan.Plan{
+		Services: map[string]*plan.Service{
+			"legacy": {
+				Override: plan.ReplaceOverride,
+				Name:     "legacy",
+				Command:  "old-cmd",
+			},
+		},
+	}
+
+	nonExistentDir := filepath.Join(c.MkDir(), "does-not-exist")
+
+	finalPlan, err := plan.ReadDir(nonExistentDir, basePlan)
+	c.Assert(err, IsNil)
+
+	c.Assert(len(finalPlan.Layers), Equals, 1)
+	c.Assert(finalPlan.Layers[0].Label, Equals, "pebble-base")
+
+	svc := finalPlan.Services["legacy"]
+	c.Assert(svc, NotNil)
+	c.Assert(svc.Command, Equals, "old-cmd")
+}
+
+func (s *S) TestReadDirBasePlanValidation(c *C) {
+	basePlan := &plan.Plan{
+		Services: map[string]*plan.Service{
+			"broken-svc": {
+				Override: plan.ReplaceOverride,
+				Name:     "broken-svc",
+				// Missing command.
+			},
+		},
+	}
+
+	tempDir := c.MkDir()
+	err := os.WriteFile(filepath.Join(tempDir, "001-empty.yaml"), []byte("{}"), 0644)
+	c.Assert(err, IsNil)
+
+	_, err = plan.ReadDir(tempDir, basePlan)
+	c.Assert(err, ErrorMatches, `plan must define "command" for service "broken-svc"`)
 }

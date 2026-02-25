@@ -217,3 +217,45 @@ func (s *PebbleSuite) TestCheckRefreshNotFound(c *C) {
 	c.Assert(rest, HasLen, 1)
 	c.Check(err, ErrorMatches, "cannot find check .*")
 }
+
+func (s *PebbleSuite) TestCheckPrevChangeLog(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/checks":
+			c.Assert(r.Method, Equals, "GET")
+			c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk1"}})
+			fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [{"name": "chk1", "startup": "enabled", "status": "down", "failures": 3, "threshold": 3, "change-id": "2", "prev-change-id": "1"}]
+}`)
+		case "/v1/changes/2":
+			fmt.Fprint(w, `{
+	"type": "sync",
+	"result": {"id": "2", "kind": "recover-check", "status": "Doing", "tasks": [{"kind": "recover-check", "status": "Doing", "log": []}]}
+}`)
+		case "/v1/changes/1":
+			fmt.Fprint(w, `{
+	"type": "sync",
+	"result": {"id": "1", "kind": "perform-check", "status": "Error", "tasks": [{"kind": "perform-check", "status": "Error", "log": ["2024-04-18T12:16:57Z ERROR connection refused"]}]}
+}`)
+		default:
+			c.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+name: chk1
+startup: enabled
+status: down
+failures: 3
+threshold: 3
+change-id: "2"
+prev-change-id: "1"
+logs: |
+    2024-04-18T12:16:57Z ERROR connection refused
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}

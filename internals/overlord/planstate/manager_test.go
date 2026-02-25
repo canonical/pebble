@@ -36,7 +36,7 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 		numChanges.Add(1)
 	})
 	// Load the plan from the <pebble-dir>/layers directory
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
@@ -44,62 +44,9 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *C) {
 	c.Assert(string(out), Equals, "{}\n")
 	// A new, empty plan was created so change listeners must be called
 	c.Assert(numChanges.Load(), Equals, uint32(1))
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	// Plan was already loaded, so no change listeners will be called
-	c.Assert(numChanges.Load(), Equals, uint32(1))
-}
-
-func (ps *planSuite) TestInitInvalidPlan(c *C) {
-	var err error
-	var numChanges atomic.Uint32
-
-	ps.planMgr, err = planstate.NewManager("/unused/path")
-	c.Assert(err, IsNil)
-	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
-		numChanges.Add(1)
-	})
-	// Attempt to initialize with an nil plan
-	err = ps.planMgr.Init(nil)
-	c.Assert(err, ErrorMatches, "cannot initialize plan manager with a nil plan")
-	c.Assert(numChanges.Load(), Equals, uint32(0))
-	// Attempt to initialize with an invalid plan
-	p := &plan.Plan{
-		Layers: []*plan.Layer{},
-		Services: map[string]*plan.Service{
-			// Test service with no command, which will make p.Validate() fail
-			"test": {Command: ""},
-		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
-	}
-	err = ps.planMgr.Init(p)
-	c.Assert(err, ErrorMatches, `plan must define "command" for service "test"`)
-	c.Assert(numChanges.Load(), Equals, uint32(0))
-}
-
-func (ps *planSuite) TestInitOnce(c *C) {
-	var err error
-	var numChanges atomic.Uint32
-
-	ps.planMgr, err = planstate.NewManager("/unused/path")
-	c.Assert(err, IsNil)
-	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
-		numChanges.Add(1)
-	})
-	// Attempt to initialize with an empty plan
-	err = ps.planMgr.Init(plan.NewPlan())
-	c.Assert(err, IsNil)
-	c.Assert(numChanges.Load(), Equals, uint32(1))
-	// Attempt to re-initialize, which will not take effect
-	err = ps.planMgr.Init(nil)
-	// Init() won't fail because the plan is already loaded
-	c.Assert(err, IsNil)
-	c.Assert(numChanges.Load(), Equals, uint32(1))
-	// Attempt to re-initialize with a valid plan, which will also not take effect
-	err = ps.planMgr.Init(plan.NewPlan())
-	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 }
 
@@ -146,7 +93,7 @@ func (ps *planSuite) TestLoadLayers(c *C) {
 		ps.writeLayer(c, string(reindent(l)))
 	}
 	// Load the plan from the <pebble-dir>/layers directory
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 	plan := ps.planMgr.Plan()
@@ -170,7 +117,7 @@ test-field:
         b: something else
 `[1:])
 	// Attempt to reload should not take effect
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 	c.Assert(numChanges.Load(), Equals, uint32(1))
 }
@@ -546,7 +493,7 @@ services:
         override: replace
         command: echo svc1
 `)
-		err = manager.Load()
+		err = manager.Load(nil)
 		c.Assert(err, IsNil)
 
 		layer1 := ps.parseLayer(c, 0, "label1", `
@@ -679,7 +626,7 @@ workloads:
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 
 	// An attempt to mutate layers must fail
@@ -689,7 +636,7 @@ workloads:
         override: replace
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+	c.Assert(err, ErrorMatches, `cannot change immutable section "workloads"`)
 
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
@@ -710,7 +657,7 @@ workloads:
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
-	err = ps.planMgr.Load()
+	err = ps.planMgr.Load(nil)
 	c.Assert(err, IsNil)
 
 	// An attempt to mutate layers must fail
@@ -720,7 +667,7 @@ workloads:
         override: replace
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, ErrorMatches, "cannot change workloads once the plan has been loaded")
+	c.Assert(err, ErrorMatches, `cannot change immutable section "workloads"`)
 
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")

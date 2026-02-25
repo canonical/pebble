@@ -255,7 +255,7 @@ func New(opts *Options) (*Overlord, error) {
 	// Load the plan from the Pebble layers directory (which may be missing
 	// or have no layers, resulting in an empty plan), and propagate PlanChanged
 	// notifications to all notification subscribers.
-	err = o.planMgr.Load()
+	err = o.planMgr.Load(nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load plan: %w", err)
 	}

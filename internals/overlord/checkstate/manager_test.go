@@ -569,7 +569,8 @@ func waitChecks(c *C, mgr *checkstate.CheckManager, expected []*checkstate.Check
 		checks, err = mgr.Checks()
 		c.Assert(err, IsNil)
 		for _, check := range checks {
-			check.ChangeID = "" // clear change ID to avoid comparing it
+			check.ChangeID = ""     // clear change ID to avoid comparing it
+			check.PrevChangeID = "" // clear prev change ID to avoid comparing it
 		}
 		if len(checks) == 0 && len(expected) == 0 || reflect.DeepEqual(checks, expected) {
 			return
@@ -1249,4 +1250,43 @@ func (s *ManagerSuite) TestChecksSuccesses(c *C) {
 		c.Assert(chk.Successes, Not(Equals), 0)
 		return chk.Successes >= 2 && chk.Successes < numSuccesses
 	})
+}
+
+func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *C) {
+	testPath := c.MkDir() + "/test"
+	err := os.WriteFile(testPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
+				},
+			},
+		},
+	})
+
+	check := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusUp && check.Failures >= 1
+	})
+	performChangeID := check.ChangeID
+	c.Assert(check.PrevChangeID, Equals, "")
+
+	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusDown
+	})
+	c.Assert(check.PrevChangeID, Equals, performChangeID)
+	recoverChangeID := check.ChangeID
+
+	err = os.Remove(testPath)
+	c.Assert(err, IsNil)
+	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusUp && check.ChangeID != recoverChangeID
+	})
+	c.Assert(check.PrevChangeID, Equals, recoverChangeID)
 }

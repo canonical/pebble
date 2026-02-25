@@ -271,7 +271,6 @@ func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
 			c.Assert(ws, DeepEquals, t.combinedSection)
 			c.Assert(layerYAML(c, combined), Equals, strings.TrimSpace(t.combinedYAML))
 		}
-
 	}
 }
 

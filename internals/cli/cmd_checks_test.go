@@ -178,3 +178,71 @@ func (s *PebbleSuite) TestChecksFails(c *check.C) {
 	c.Check(s.Stdout(), check.Equals, "")
 	c.Check(s.Stderr(), check.Equals, "")
 }
+
+func (s *PebbleSuite) TestChecksPrevChangeLog(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		switch r.URL.Path {
+		case "/v1/checks":
+			fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [{"name": "chk1", "startup": "enabled", "status": "down", "successes": 0, "failures": 3, "threshold": 3, "change-id": "2", "prev-change-id": "1"}]
+}`)
+		case "/v1/changes/2":
+			fmt.Fprint(w, `{
+	"type": "sync",
+	"result": {"id": "2", "kind": "recover-check", "status": "Doing", "tasks": [{"kind": "recover-check", "status": "Doing", "log": []}]}
+}`)
+		case "/v1/changes/1":
+			fmt.Fprint(w, `{
+	"type": "sync",
+	"result": {"id": "1", "kind": "perform-check", "status": "Error", "tasks": [{"kind": "perform-check", "status": "Error", "log": ["2024-04-18T12:16:57Z ERROR connection refused"]}]}
+}`)
+		default:
+			c.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+Check  Level  Startup  Status  Successes  Failures  Change
+chk1   -      enabled  down    0          3/3       2 (connection refused)
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChecksPrevChangeLogTruncated(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		switch r.URL.Path {
+		case "/v1/checks":
+			fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [{"name": "chk1", "startup": "enabled", "status": "down", "successes": 0, "failures": 3, "threshold": 3, "change-id": "2", "prev-change-id": "1"}]
+}`)
+		case "/v1/changes/2":
+			fmt.Fprint(w, `{
+	"type": "sync",
+	"result": {"id": "2", "kind": "recover-check", "status": "Doing", "tasks": [{"kind": "recover-check", "status": "Doing", "log": []}]}
+}`)
+		case "/v1/changes/1":
+			fmt.Fprint(w, `{
+	"type": "sync",
+	"result": {"id": "1", "kind": "perform-check", "status": "Error", "tasks": [{"kind": "perform-check", "status": "Error", "log": ["2024-04-18T12:16:57Z ERROR Get \"http://localhost:8000/\": dial tcp 127.0.0.1:8000: connect: connection refused"]}]}
+}`)
+		default:
+			c.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+Check  Level  Startup  Status  Successes  Failures  Change
+chk1   -      enabled  down    0          3/3       2 (Get "http://localhost:8000/": dial tc... run "pebble tasks 1" for more)
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}

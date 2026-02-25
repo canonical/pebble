@@ -301,7 +301,7 @@ Follow these steps:
 
 ### FIPS release (fips branch)
 
-- Open a pull request to merge the `master` branch into the `fips` branch, resolve any conflicts, and have it reviewed and merged.
+- Open a pull request to merge the `master` branch into the `fips` branch, resolve any conflicts, and have it reviewed and merged. **Important:** merge using a true merge commit, rather than a squash-and-merge commit.
 - Open a second PR on the `fips` branch to bump the `Version` in `cmd/version.go` to the FIPS version, for example `v1.27.0-fips`, and have it reviewed and merged.
 - Publish a FIPS GitHub release (for example `v1.27.0-fips`) targeting the tip of the `fips` branch.
 - As with the main release, monitor the release [GitHub Actions](https://github.com/canonical/pebble/actions), check that the FIPS snap is uploaded, and promote it to stable.
