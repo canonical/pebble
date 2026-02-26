@@ -84,9 +84,9 @@ type IDSigner interface {
 
 // Holds configurable options functor for the certificate.
 // The option will receive the certificate to modify
-// as a parameter, and return an error if a failure
-// occured.
-type CertOption func(*x509.Certificate) error
+// as a parameter, as well as a deep copy of the parent
+// certificate and will return an error if a failure occured.
+type CertOption func(cert *x509.Certificate, parentCopy *x509.Certificate) error
 
 type TLSManager struct {
 	// tlsDir is the location of the PEM keypair files.
@@ -134,7 +134,7 @@ func generateSerialNumber() (*big.Int, error) {
 }
 
 func WithDefaultIDTemplate(signer IDSigner) CertOption {
-	return func(c *x509.Certificate) (err error) {
+	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
 		c.SerialNumber, err = generateSerialNumber()
 		if err != nil {
 			return err
@@ -154,7 +154,7 @@ func WithDefaultIDTemplate(signer IDSigner) CertOption {
 }
 
 func WithDefaultTLSTemplate(signer IDSigner) CertOption {
-	return func(c *x509.Certificate) (err error) {
+	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
 		c.SerialNumber, err = generateSerialNumber()
 		if err != nil {
 			return err
@@ -172,7 +172,7 @@ func WithDefaultTLSTemplate(signer IDSigner) CertOption {
 // If an externally supplied TLS certificate template was provided,
 // use it to update the supported fields.
 func WithLegacyTemplate(template *x509.Certificate) CertOption {
-	return func(c *x509.Certificate) error {
+	return func(c *x509.Certificate, parentCopy *x509.Certificate) error {
 		c.Subject = deepCopyName(template.Subject)
 		c.Issuer = deepCopyName(template.Issuer)
 		// Supported SAN (Subject Alternate Name) fields.
@@ -290,10 +290,16 @@ func (m *TLSManager) createTLSCert() error {
 		m.tlsTemplate...,
 	)
 
+	// Create a deep copy.
+	parent, err := x509.ParseCertificate(m.idCert.Raw)
+	if err != nil {
+		return err
+	}
+
 	// Apply options to the template.
 	template := x509.Certificate{}
 	for _, optionFunctor := range options {
-		err := optionFunctor(&template)
+		err := optionFunctor(&template, parent)
 		if err != nil {
 			return err
 		}
@@ -448,7 +454,7 @@ func createIDCert(signer IDSigner, idTemplateOptions []CertOption) (*x509.Certif
 	// Apply options to the template.
 	template := &x509.Certificate{}
 	for _, optionFunctor := range options {
-		err := optionFunctor(template)
+		err := optionFunctor(template, nil)
 		if err != nil {
 			return nil, err
 		}
