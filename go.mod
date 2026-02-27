@@ -6,7 +6,6 @@ require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
 	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8
 	github.com/canonical/x-go v0.0.0-20230522092633-7947a7587f5b
-	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/pkg/term v1.1.0
 	golang.org/x/sys v0.33.0
