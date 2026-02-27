@@ -129,6 +129,9 @@ services:
         # Default is 5 seconds ("5s").
         kill-delay: <duration>
 
+        # (Optional) Signal to send instead of SIGTERM when stopping service.
+        stop-signal: <signal>
+
 # (Optional) A list of health checks managed by this configuration layer.
 checks:
 
