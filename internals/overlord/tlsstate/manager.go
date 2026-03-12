@@ -82,7 +82,7 @@ type IDSigner interface {
 	Fingerprint() string
 }
 
-// Holds configurable options functor for the certificate.
+// A functor to apply options to certificates at creation.
 // The option will receive the certificate to modify
 // as a parameter, as well as a deep copy of the parent
 // certificate and will return an error if a failure occured.
