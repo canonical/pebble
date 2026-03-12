@@ -99,11 +99,11 @@ type TLSManager struct {
 	// The identity key used for signing TLS certificates.
 	signer IDSigner
 
-	// The identity and tls certificate optionally allows a
-	// number of fields to be supplied from externally
-	// supplied X509 templates (see SetX509Templates).
+	// When creating identity and TLS certificates, the following CertOption
+	// functors will be applied to  assign default values to certificate fields.
+	// The collection of functors acts as a template for certificates.
 	// Note: CertOption will be applied in the order encountered
-	// in this array, meaning there is 2 options manipulating the
+	// in those arrays, meaning if there is 2 CertOption manipulating the
 	// same fields, only the last one will be taken in consideration.
 	idTemplate  []CertOption
 	tlsTemplate []CertOption
