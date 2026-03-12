@@ -105,8 +105,8 @@ type TLSManager struct {
 	// Note: CertOption will be applied in the order encountered
 	// in those arrays, meaning if there is 2 CertOption manipulating the
 	// same fields, only the last one will be taken in consideration.
-	idTemplate  []CertOption
-	tlsTemplate []CertOption
+	idCertOptions  []CertOption
+	tlsCertOptions []CertOption
 }
 
 // NewManager creates a new TLS keypair manager. The tlsDir must be a
@@ -192,24 +192,24 @@ func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate)
 	defer m.mu.Unlock()
 
 	if idTemplate != nil {
-		m.idTemplate = append(m.idTemplate, WithLegacyTemplate(idTemplate))
+		m.idCertOptions = append(m.idCertOptions, WithLegacyTemplate(idTemplate))
 	}
 
 	if tlsTemplate != nil {
-		m.tlsTemplate = append(m.tlsTemplate, WithLegacyTemplate(tlsTemplate))
+		m.tlsCertOptions = append(m.tlsCertOptions, WithLegacyTemplate(tlsTemplate))
 	}
 }
 
 func (m *TLSManager) SetX509IDCertificateOptions(opts ...CertOption) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.idTemplate = opts
+	m.idCertOptions = opts
 }
 
 func (m *TLSManager) SetX509TLSCertificateOptions(opts ...CertOption) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.tlsTemplate = opts
+	m.tlsCertOptions = opts
 }
 
 // ListenConfig provides a complete TLS default configuration, which includes the
@@ -287,7 +287,7 @@ func (m *TLSManager) createTLSCert() error {
 
 	options := append(
 		[]CertOption{WithDefaultTLSTemplate(m.signer)},
-		m.tlsTemplate...,
+		m.tlsCertOptions...,
 	)
 
 	// Create a deep copy.
@@ -377,7 +377,7 @@ func (m *TLSManager) ensureIDCert() error {
 
 	// If we get here a new identity certificate must be created.
 	var err error
-	m.idCert, err = createIDCert(m.signer, m.idTemplate)
+	m.idCert, err = createIDCert(m.signer, m.idCertOptions)
 	if err != nil {
 		return err
 	}
