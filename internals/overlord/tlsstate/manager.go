@@ -82,6 +82,12 @@ type IDSigner interface {
 	Fingerprint() string
 }
 
+// A functor to apply options to certificates at creation.
+// The option will receive the certificate to modify
+// as a parameter, as well as a deep copy of the parent
+// certificate and will return an error if a failure occured.
+type CertOption func(cert *x509.Certificate, parentCopy *x509.Certificate) error
+
 type TLSManager struct {
 	// tlsDir is the location of the PEM keypair files.
 	tlsDir string
@@ -93,11 +99,14 @@ type TLSManager struct {
 	// The identity key used for signing TLS certificates.
 	signer IDSigner
 
-	// The identity and tls certificate optionally allows a
-	// select number of fields to be supplied from externally
-	// supplied X509 templates (see SetX509Templates).
-	idTemplate  *x509.Certificate
-	tlsTemplate *x509.Certificate
+	// When creating identity and TLS certificates, the following CertOption
+	// functors will be applied to  assign default values to certificate fields.
+	// The collection of functors acts as a template for certificates.
+	// Note: CertOption will be applied in the order encountered
+	// in those arrays, meaning if there is 2 CertOption manipulating the
+	// same fields, only the last one will be taken in consideration.
+	idCertOptions  []CertOption
+	tlsCertOptions []CertOption
 }
 
 // NewManager creates a new TLS keypair manager. The tlsDir must be a
@@ -114,6 +123,65 @@ func NewManager(tlsDir string, signer IDSigner) *TLSManager {
 	return m
 }
 
+func generateSerialNumber() (*big.Int, error) {
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	return serialNumber, nil
+}
+
+func WithDefaultIDTemplate(signer IDSigner) CertOption {
+	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
+		c.SerialNumber, err = generateSerialNumber()
+		if err != nil {
+			return err
+		}
+		c.Subject = defaultCertSubject(signer.Fingerprint())
+		c.NotBefore = timeNow()
+		c.NotAfter = c.NotBefore.Add(idCertValidity)
+		c.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
+		c.ExtKeyUsage = []x509.ExtKeyUsage{}
+		c.BasicConstraintsValid = true
+		c.IsCA = true
+		// We can only sign leaf certificates with this.
+		c.MaxPathLen = 0
+		c.MaxPathLenZero = true
+		return nil
+	}
+}
+
+func WithDefaultTLSTemplate(signer IDSigner) CertOption {
+	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
+		c.SerialNumber, err = generateSerialNumber()
+		if err != nil {
+			return err
+		}
+		c.Subject = defaultCertSubject(signer.Fingerprint())
+		c.NotBefore = timeNow()
+		c.NotAfter = c.NotBefore.Add(tlsCertValidity)
+		c.KeyUsage = x509.KeyUsageDigitalSignature
+		c.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		c.BasicConstraintsValid = true
+		return nil
+	}
+}
+
+// If an externally supplied TLS certificate template was provided,
+// use it to update the supported fields.
+func WithLegacyTemplate(template *x509.Certificate) CertOption {
+	return func(c *x509.Certificate, parentCopy *x509.Certificate) error {
+		c.Subject = deepCopyName(template.Subject)
+		c.Issuer = deepCopyName(template.Issuer)
+		// Supported SAN (Subject Alternate Name) fields.
+		c.DNSNames = slices.Clone(template.DNSNames)
+		c.EmailAddresses = slices.Clone(template.EmailAddresses)
+		return nil
+	}
+}
+
 // SetX509Templates allows select fields of the certificates to be externally
 // supplied. This function must be called before any call to GetCertificate
 // otherwise templates will not be applied consistently. If this function
@@ -122,8 +190,26 @@ func NewManager(tlsDir string, signer IDSigner) *TLSManager {
 func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.idTemplate = idTemplate
-	m.tlsTemplate = tlsTemplate
+
+	if idTemplate != nil {
+		m.idCertOptions = append(m.idCertOptions, WithLegacyTemplate(idTemplate))
+	}
+
+	if tlsTemplate != nil {
+		m.tlsCertOptions = append(m.tlsCertOptions, WithLegacyTemplate(tlsTemplate))
+	}
+}
+
+func (m *TLSManager) SetX509IDCertificateOptions(opts ...CertOption) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.idCertOptions = opts
+}
+
+func (m *TLSManager) SetX509TLSCertificateOptions(opts ...CertOption) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tlsCertOptions = opts
 }
 
 // ListenConfig provides a complete TLS default configuration, which includes the
@@ -198,30 +284,25 @@ func (m *TLSManager) createTLSCert() error {
 	if err != nil {
 		return err
 	}
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+
+	options := append(
+		[]CertOption{WithDefaultTLSTemplate(m.signer)},
+		m.tlsCertOptions...,
+	)
+
+	// Create a deep copy.
+	parent, err := x509.ParseCertificate(m.idCert.Raw)
 	if err != nil {
 		return err
 	}
-	now := timeNow()
-	template := x509.Certificate{
-		SerialNumber:          serialNumber,
-		Subject:               defaultCertSubject(m.signer.Fingerprint()),
-		NotBefore:             now,
-		NotAfter:              now.Add(tlsCertValidity),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
 
-	// If an externally supplied TLS certificate template was provided,
-	// use it to update the supported fields.
-	if m.tlsTemplate != nil {
-		template.Subject = deepCopyName(m.tlsTemplate.Subject)
-		template.Issuer = deepCopyName(m.tlsTemplate.Issuer)
-		// Supported SAN (Subject Alternate Name) fields.
-		template.DNSNames = slices.Clone(m.tlsTemplate.DNSNames)
-		template.EmailAddresses = slices.Clone(m.tlsTemplate.EmailAddresses)
+	// Apply options to the template.
+	template := x509.Certificate{}
+	for _, optionFunctor := range options {
+		err := optionFunctor(&template, parent)
+		if err != nil {
+			return err
+		}
 	}
 
 	// DER encoded bytes
@@ -296,7 +377,7 @@ func (m *TLSManager) ensureIDCert() error {
 
 	// If we get here a new identity certificate must be created.
 	var err error
-	m.idCert, err = createIDCert(m.signer, m.idTemplate)
+	m.idCert, err = createIDCert(m.signer, m.idCertOptions)
 	if err != nil {
 		return err
 	}
@@ -364,35 +445,19 @@ func saveIDCert(path string, cert *x509.Certificate) (err error) {
 // key. This certificate is included in the TLS certificate chain as the
 // non-leaf certificate, allowing the client to pin this certificate during
 // the client server trust exchange (pairing) procedure.
-func createIDCert(signer IDSigner, idTemplate *x509.Certificate) (*x509.Certificate, error) {
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
-		return nil, err
-	}
-	now := timeNow()
-	template := &x509.Certificate{
-		SerialNumber:          serialNumber,
-		Subject:               defaultCertSubject(signer.Fingerprint()),
-		NotBefore:             now,
-		NotAfter:              now.Add(idCertValidity),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{},
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		// We can only sign leaf certificates with this.
-		MaxPathLen:     0,
-		MaxPathLenZero: true,
-	}
+func createIDCert(signer IDSigner, idTemplateOptions []CertOption) (*x509.Certificate, error) {
+	options := append(
+		[]CertOption{WithDefaultIDTemplate(signer)},
+		idTemplateOptions...,
+	)
 
-	// If an externally supplied TLS certificate template was provided,
-	// use it to update the supported fields.
-	if idTemplate != nil {
-		template.Subject = deepCopyName(idTemplate.Subject)
-		template.Issuer = deepCopyName(idTemplate.Issuer)
-		// Supported SAN (Subject Alternate Name) fields.
-		template.DNSNames = slices.Clone(idTemplate.DNSNames)
-		template.EmailAddresses = slices.Clone(idTemplate.EmailAddresses)
+	// Apply options to the template.
+	template := &x509.Certificate{}
+	for _, optionFunctor := range options {
+		err := optionFunctor(template, nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// The identity CA cert is self-signed, which allows a client to verify the
