@@ -390,6 +390,44 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 	shutdownHTTPSServer()
 }
 
+// TestCertOptionsAppliedInOrder checks that for both identity and TLS certificates,
+// options are applied in the provided order, meaning later options override earlier
+// ones when they modify the same field.
+func (ts *tlsSuite) TestCertOptionsAppliedInOrder(c *C) {
+	tlsDir := filepath.Join(c.MkDir(), "tls")
+	key := newIDKey(c)
+	mgr := tlsstate.NewManager(tlsDir, key)
+
+	opt1 := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
+		cert.DNSNames = []string{"first.local"}
+		return nil
+	})
+	opt2 := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
+		cert.DNSNames = []string{"second.local"}
+		return nil
+	})
+	mgr.SetX509IDCertificateOptions(opt1, opt2)
+	mgr.SetX509TLSCertificateOptions(opt1, opt2)
+
+	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
+	defer shutdownHTTPSServer()
+
+	testTime := getTestTime(2000, 1, 1)
+	restoreTime := tlsstate.FakeTimeNow(testTime)
+	defer restoreTime()
+
+	certs, err := ts.testTLSInsecureClient(c, testTime)
+	c.Assert(err, IsNil)
+
+	// opt2 is applied last, so "second.local" must win over "first.local"
+	// for both the TLS leaf certificate (first in chain) and the identity
+	// certificate (second in chain).
+	tlsCert := certs[0]
+	idCert := certs[1]
+	c.Assert(tlsCert.DNSNames, DeepEquals, []string{"second.local"})
+	c.Assert(idCert.DNSNames, DeepEquals, []string{"second.local"})
+}
+
 // BenchmarkIDTLSCertGen prints some performance metrics related to the worse case
 // startup condition where both the identity certificate and TLS keypair must be
 // generated. To run this test use: go test -check.b
