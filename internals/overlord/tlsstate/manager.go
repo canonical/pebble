@@ -193,11 +193,11 @@ func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate)
 	defer m.mu.Unlock()
 
 	if idTemplate != nil {
-		m.idCertOptions = append(m.idCertOptions, WithLegacyTemplate(idTemplate))
+		m.idCertOptions = []CertOption{WithLegacyTemplate(idTemplate)}
 	}
 
 	if tlsTemplate != nil {
-		m.tlsCertOptions = append(m.tlsCertOptions, WithLegacyTemplate(tlsTemplate))
+		m.tlsCertOptions = []CertOption{WithLegacyTemplate(tlsTemplate)}
 	}
 }
 
