@@ -201,12 +201,22 @@ func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate)
 	}
 }
 
+// SetX509IDCertificateOptions allows select fields of the identity certificate
+// to be externally supplied. This function must be called before any call to
+// GetCertificate otherwise options will not be applied consistently.
+// Calling this function will replace any option previously supplied by a call
+// to SetX509Templates or SetX509IDCertificateOptions itself.
 func (m *TLSManager) SetX509IDCertificateOptions(opts ...CertOption) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.idCertOptions = opts
 }
 
+// SetX509TLSCertificateOptions allows select fields of the TLS certificate to be
+// externally supplied. This function must be called before any call to
+// GetCertificate otherwise options will not be applied consistently.
+// Calling this function will replace any option previously supplied by a call
+// to SetX509Templates or SetX509TLSCertificateOptions itself.
 func (m *TLSManager) SetX509TLSCertificateOptions(opts ...CertOption) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
