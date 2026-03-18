@@ -109,9 +109,9 @@ workloads:
 					"foo": "bar",
 					"bar": "baz",
 				},
-				UserID:  ptr(1337),
+				UserID:  new(1337),
 				User:    "alyssa",
-				GroupID: ptr(1338),
+				GroupID: new(1338),
 				Group:   "hackers",
 			},
 		},
@@ -166,9 +166,9 @@ workloads:
 					"3": "4",
 					"5": "6",
 				},
-				UserID:  ptr(256),
+				UserID:  new(256),
 				User:    "wilson",
-				GroupID: ptr(257),
+				GroupID: new(257),
 				Group:   "users",
 			},
 		},
@@ -227,9 +227,9 @@ workloads:
 					"e": "f",
 					"5": "6",
 				},
-				UserID:  ptr(1001),
+				UserID:  new(1001),
 				User:    "live",
-				GroupID: ptr(1002),
+				GroupID: new(1002),
 				Group:   "users",
 			},
 		},
@@ -290,8 +290,4 @@ func layerYAML(c *C, layer *plan.Layer) string {
 	yml, err := yaml.Marshal(layer)
 	c.Assert(err, IsNil)
 	return strings.TrimSpace(string(yml))
-}
-
-func ptr[T any](v T) *T {
-	return &v
 }

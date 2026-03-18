@@ -47,11 +47,11 @@ func (cs *clientSuite) TestIdentities(c *C) {
 	c.Assert(identities, DeepEquals, map[string]*client.Identity{
 		"bob": {
 			Access: client.ReadAccess,
-			Local:  &client.LocalIdentity{UserID: ptr(uint32(42))},
+			Local:  &client.LocalIdentity{UserID: new(uint32(42))},
 		},
 		"mary": {
 			Access: client.AdminAccess,
-			Local:  &client.LocalIdentity{UserID: ptr(uint32(1000))},
+			Local:  &client.LocalIdentity{UserID: new(uint32(1000))},
 		},
 	})
 }
@@ -109,11 +109,11 @@ func (cs *clientSuite) testPostIdentities(c *C, action string, clientFunc func(m
 	err := clientFunc(map[string]*client.Identity{
 		"bob": {
 			Access: client.ReadAccess,
-			Local:  &client.LocalIdentity{UserID: ptr(uint32(42))},
+			Local:  &client.LocalIdentity{UserID: new(uint32(42))},
 		},
 		"mary": {
 			Access: client.AdminAccess,
-			Local:  &client.LocalIdentity{UserID: ptr(uint32(1000))},
+			Local:  &client.LocalIdentity{UserID: new(uint32(1000))},
 		},
 	})
 	c.Assert(err, IsNil)
@@ -142,8 +142,4 @@ func (cs *clientSuite) testPostIdentities(c *C, action string, clientFunc func(m
 			},
 		},
 	})
-}
-
-func ptr[T any](v T) *T {
-	return &v
 }
