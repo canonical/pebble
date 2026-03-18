@@ -82,10 +82,11 @@ type IDSigner interface {
 	Fingerprint() string
 }
 
-// A functor to apply options to certificates at creation.
+// Apply options to certificates at creation, using a
+// Functional Options pattern.
 // The option will receive the certificate to modify
 // as a parameter, as well as a deep copy of the parent
-// certificate and will return an error if a failure occured.
+// certificate and will return an error if a failure occurred.
 type CertOption func(cert *x509.Certificate, parentCopy *x509.Certificate) error
 
 type TLSManager struct {
@@ -100,10 +101,10 @@ type TLSManager struct {
 	signer IDSigner
 
 	// When creating identity and TLS certificates, the following CertOption
-	// functors will be applied to  assign default values to certificate fields.
+	// functors will be applied to assign default values to certificate fields.
 	// The collection of functors acts as a template for certificates.
 	// Note: CertOption will be applied in the order encountered
-	// in those arrays, meaning if there is 2 CertOption manipulating the
+	// in those arrays, meaning if there are 2 CertOptions manipulating the
 	// same fields, only the last one will be taken in consideration.
 	idCertOptions  []CertOption
 	tlsCertOptions []CertOption
@@ -169,7 +170,7 @@ func WithDefaultTLSTemplate(signer IDSigner) CertOption {
 	}
 }
 
-// If an externally supplied TLS certificate template was provided,
+// If an externally supplied TLS or identity certificate template was provided,
 // use it to update the supported fields.
 func WithLegacyTemplate(template *x509.Certificate) CertOption {
 	return func(c *x509.Certificate, parentCopy *x509.Certificate) error {
