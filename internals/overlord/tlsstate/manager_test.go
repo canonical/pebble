@@ -390,12 +390,14 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 	shutdownHTTPSServer()
 }
 
-// TestCertOptionsAppliedInOrder checks that for both identity and TLS certificates,
-// options are applied in the provided order, meaning later options override earlier
-// ones when they modify the same field. It also verifies that
-// SetX509IDCertificateOptions and SetX509TLSCertificateOptions fully replace any
-// options previously set via SetX509Templates.
-func (ts *tlsSuite) TestCertOptionsAppliedInOrder(c *C) {
+// TestCertOptions checks that for both identity and TLS certificates:
+//   - options are applied in the provided order, meaning later options override
+//     earlier ones when they modify the same field
+//   - SetX509IDCertificateOptions and SetX509TLSCertificateOptions fully replace
+//     any options previously set via SetX509Templates
+//   - identity certificate options receive nil as parentCopy (self-signed)
+//   - TLS certificate options receive a deep copy of the identity certificate
+func (ts *tlsSuite) TestCertOptions(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
@@ -411,14 +413,24 @@ func (ts *tlsSuite) TestCertOptionsAppliedInOrder(c *C) {
 		cert.DNSNames = []string{"first.local"}
 		return nil
 	})
-	opt2 := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
+
+	var idParentCopy *x509.Certificate
+	var tlsParentCopy *x509.Certificate
+
+	opt2ID := tlsstate.CertOption(func(cert *x509.Certificate, parentCopy *x509.Certificate) error {
+		idParentCopy = parentCopy
+		cert.DNSNames = []string{"second.local"}
+		return nil
+	})
+	opt2TLS := tlsstate.CertOption(func(cert *x509.Certificate, parentCopy *x509.Certificate) error {
+		tlsParentCopy = parentCopy
 		cert.DNSNames = []string{"second.local"}
 		return nil
 	})
 
 	// These calls must replace the options set by SetX509Templates above.
-	mgr.SetX509IDCertificateOptions(opt1, opt2)
-	mgr.SetX509TLSCertificateOptions(opt1, opt2)
+	mgr.SetX509IDCertificateOptions(opt1, opt2ID)
+	mgr.SetX509TLSCertificateOptions(opt1, opt2TLS)
 
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
 	defer shutdownHTTPSServer()
@@ -430,13 +442,21 @@ func (ts *tlsSuite) TestCertOptionsAppliedInOrder(c *C) {
 	certs, err := ts.testTLSInsecureClient(c, testTime)
 	c.Assert(err, IsNil)
 
+	tlsCert := certs[0]
+	idCert := certs[1]
+
 	// opt2 is applied last, so "second.local" must win over "first.local" and
 	// "template.local", for both the TLS leaf certificate (first in chain) and
 	// the identity certificate (second in chain).
-	tlsCert := certs[0]
-	idCert := certs[1]
 	c.Assert(tlsCert.DNSNames, DeepEquals, []string{"second.local"})
 	c.Assert(idCert.DNSNames, DeepEquals, []string{"second.local"})
+
+	// Identity cert options receive nil: the cert is self-signed, no parent.
+	c.Assert(idParentCopy, IsNil)
+
+	// TLS cert options receive a deep copy of the identity certificate as parent.
+	c.Assert(tlsParentCopy, NotNil)
+	c.Assert(tlsParentCopy.Equal(idCert), Equals, true)
 }
 
 // BenchmarkIDTLSCertGen prints some performance metrics related to the worse case
