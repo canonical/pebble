@@ -134,7 +134,7 @@ func generateSerialNumber() (*big.Int, error) {
 	return serialNumber, nil
 }
 
-func WithDefaultIDTemplate(signer IDSigner) CertOption {
+func withDefaultIDTemplate(signer IDSigner) CertOption {
 	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
 		c.SerialNumber, err = generateSerialNumber()
 		if err != nil {
@@ -154,7 +154,7 @@ func WithDefaultIDTemplate(signer IDSigner) CertOption {
 	}
 }
 
-func WithDefaultTLSTemplate(signer IDSigner) CertOption {
+func withDefaultTLSTemplate(signer IDSigner) CertOption {
 	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
 		c.SerialNumber, err = generateSerialNumber()
 		if err != nil {
@@ -297,7 +297,7 @@ func (m *TLSManager) createTLSCert() error {
 	}
 
 	options := append(
-		[]CertOption{WithDefaultTLSTemplate(m.signer)},
+		[]CertOption{withDefaultTLSTemplate(m.signer)},
 		m.tlsCertOptions...,
 	)
 
@@ -458,7 +458,7 @@ func saveIDCert(path string, cert *x509.Certificate) (err error) {
 // the client server trust exchange (pairing) procedure.
 func createIDCert(signer IDSigner, idTemplateOptions []CertOption) (*x509.Certificate, error) {
 	options := append(
-		[]CertOption{WithDefaultIDTemplate(signer)},
+		[]CertOption{withDefaultIDTemplate(signer)},
 		idTemplateOptions...,
 	)
 
