@@ -17,6 +17,7 @@ package tlsstate_test
 import (
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -457,6 +458,41 @@ func (ts *tlsSuite) TestCertOptions(c *C) {
 	// TLS cert options receive a deep copy of the identity certificate as parent.
 	c.Assert(tlsParentCopy, NotNil)
 	c.Assert(tlsParentCopy.Equal(idCert), Equals, true)
+}
+
+// TestCertOptionsError checks that errors raised during a certificate option
+// processing is properly forwarded through the caller.
+func (ts *tlsSuite) TestCertOptionsError(c *C) {
+	tlsDir := filepath.Join(c.MkDir(), "tls")
+	key := newIDKey(c)
+	mgr := tlsstate.NewManager(tlsDir, key)
+
+	generateIdError := true
+	optID := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
+		if generateIdError {
+			return fmt.Errorf("Everybody do the flop!")
+		}
+
+		return nil
+	})
+
+	optTLS := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
+		return fmt.Errorf("Hello parking-meter!")
+	})
+
+	// These calls must replace the options set by SetX509Templates above.
+	mgr.SetX509IDCertificateOptions(optID)
+	mgr.SetX509TLSCertificateOptions(optTLS)
+
+	tlsCert, err := mgr.GetCertificate(nil)
+	c.Assert(tlsCert, IsNil)
+	c.Assert(err, ErrorMatches, "cannot get identity certificate: Everybody do the flop!")
+
+	generateIdError = false
+
+	tlsCert, err = mgr.GetCertificate(nil)
+	c.Assert(tlsCert, IsNil)
+	c.Assert(err, ErrorMatches, "cannot create TLS certificate: Hello parking-meter!")
 }
 
 // BenchmarkIDTLSCertGen prints some performance metrics related to the worse case
