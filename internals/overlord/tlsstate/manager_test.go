@@ -392,11 +392,20 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 
 // TestCertOptionsAppliedInOrder checks that for both identity and TLS certificates,
 // options are applied in the provided order, meaning later options override earlier
-// ones when they modify the same field.
+// ones when they modify the same field. It also verifies that
+// SetX509IDCertificateOptions and SetX509TLSCertificateOptions fully replace any
+// options previously set via SetX509Templates.
 func (ts *tlsSuite) TestCertOptionsAppliedInOrder(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(tlsDir, key)
+
+	// Establish a baseline via SetX509Templates. The specific options set here
+	// must be fully replaced by the subsequent SetX509*CertificateOptions calls.
+	mgr.SetX509Templates(
+		&x509.Certificate{DNSNames: []string{"template.local"}},
+		&x509.Certificate{DNSNames: []string{"template.local"}},
+	)
 
 	opt1 := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
 		cert.DNSNames = []string{"first.local"}
@@ -406,6 +415,8 @@ func (ts *tlsSuite) TestCertOptionsAppliedInOrder(c *C) {
 		cert.DNSNames = []string{"second.local"}
 		return nil
 	})
+
+	// These calls must replace the options set by SetX509Templates above.
 	mgr.SetX509IDCertificateOptions(opt1, opt2)
 	mgr.SetX509TLSCertificateOptions(opt1, opt2)
 
@@ -419,9 +430,9 @@ func (ts *tlsSuite) TestCertOptionsAppliedInOrder(c *C) {
 	certs, err := ts.testTLSInsecureClient(c, testTime)
 	c.Assert(err, IsNil)
 
-	// opt2 is applied last, so "second.local" must win over "first.local"
-	// for both the TLS leaf certificate (first in chain) and the identity
-	// certificate (second in chain).
+	// opt2 is applied last, so "second.local" must win over "first.local" and
+	// "template.local", for both the TLS leaf certificate (first in chain) and
+	// the identity certificate (second in chain).
 	tlsCert := certs[0]
 	idCert := certs[1]
 	c.Assert(tlsCert.DNSNames, DeepEquals, []string{"second.local"})
