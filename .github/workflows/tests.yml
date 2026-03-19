@@ -38,7 +38,7 @@ jobs:
 
     - name: Test
       run: |
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H "$(which go)" test ./...
+        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H go test ./...
 
   format:
     runs-on: ubuntu-latest
