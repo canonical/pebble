@@ -318,7 +318,7 @@ var extensionTests = []struct {
 	result: &planResult{
 		x: &xSection{
 			Entries: map[string]*X{
-				"x1": &X{
+				"x1": {
 					Name:     "x1",
 					Override: plan.ReplaceOverride,
 					A:        "a",
@@ -331,7 +331,7 @@ var extensionTests = []struct {
 		},
 		y: &ySection{
 			Entries: map[string]*Y{
-				"y1": &Y{
+				"y1": {
 					Name:     "y1",
 					Override: plan.ReplaceOverride,
 					A:        "a",

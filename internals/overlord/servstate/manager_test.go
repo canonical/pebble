@@ -442,7 +442,7 @@ workloads:
 	stops, starts, err := s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 
 	resetWorkloadsSectionExtension()
 	s.planAddLayer(c, `
@@ -461,7 +461,7 @@ workloads:
 	stops, starts, err = s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 
 	resetWorkloadsSectionExtension()
 	s.planAddLayer(c, `
@@ -474,7 +474,7 @@ workloads:
 	stops, starts, err = s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 	s.stopTestServices(c)
 }
 
