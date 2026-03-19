@@ -9,7 +9,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-mod-file: 'go.mod'
+          go-version-file: 'go.mod'
           cache: false
 
       - name: golangci-lint
@@ -36,7 +36,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-mod-file: 'go.mod'
+          go-version-file: 'go.mod'
 
       - name: Install staticcheck
         # Use @<commit> because latest master fails with "requires go >= 1.25.0"
