@@ -19,6 +19,7 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: '.'
+          exit-code: '1'
           trivy-config: .github/trivy.yaml
         env:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
