@@ -1,5 +1,6 @@
-timeout: 20m
+timeout: 30m
 scan:
+  detection-priority: comprehensive
   # This does not impact the database, which is always downloaded, only extra
   # files, and all the Go checks work in offline mode.
   offline-scan: true
