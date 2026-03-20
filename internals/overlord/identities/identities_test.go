@@ -621,7 +621,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 	}, {
 		name:           "cert with uid ignored",
 		cert:           validCert,
-		userID:         ptr(uint32(42)),
+		userID:         new(uint32(42)),
 		expectedUser:   "cert",
 		expectedAccess: identities.AdminAccess,
 	}, {
@@ -629,7 +629,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		cert:           validCert,
 		basicUser:      "basic",
 		basicPass:      "test",
-		userID:         ptr(uint32(42)),
+		userID:         new(uint32(42)),
 		expectedUser:   "cert",
 		expectedAccess: identities.AdminAccess,
 	}, {
@@ -674,24 +674,24 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		name:           "basic auth with uid ignored",
 		basicUser:      "basic",
 		basicPass:      "test",
-		userID:         ptr(uint32(42)),
+		userID:         new(uint32(42)),
 		expectedUser:   "basic",
 		expectedAccess: identities.ReadAccess,
 	}, {
 		name:         "invalid basic auth with valid uid ignored",
 		basicUser:    "basic",
 		basicPass:    "wrong",
-		userID:       ptr(uint32(42)),
+		userID:       new(uint32(42)),
 		expectedUser: "",
 	}, {
 		// Local/UID authentication tests (lowest priority)
 		name:           "valid uid",
-		userID:         ptr(uint32(42)),
+		userID:         new(uint32(42)),
 		expectedUser:   "uid",
 		expectedAccess: identities.MetricsAccess,
 	}, {
 		name:         "invalid uid",
-		userID:       ptr(uint32(100)),
+		userID:       new(uint32(100)),
 		expectedUser: "",
 	}, {
 		// Edge cases
@@ -712,10 +712,6 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 			c.Assert(identity, IsNil)
 		}
 	}
-}
-
-func ptr[T any](v T) *T {
-	return &v
 }
 
 func parseCert(c *C, pemBlock string) *x509.Certificate {
