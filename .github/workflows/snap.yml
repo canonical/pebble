@@ -42,7 +42,7 @@ jobs:
         id: build-snap
         uses: snapcore/action-build@v1.3.0
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: snapcraft-logs
@@ -52,7 +52,7 @@ jobs:
             ${{ env.SNAP_NAME }}_*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: pebble-snap-amd64
           path: ${{ steps.build-snap.outputs.snap }}
@@ -100,7 +100,7 @@ jobs:
         if: always()
         run: cat snapcraft-${{ env.SNAP_NAME }}-*.txt > snapcraft-logs.txt || echo "no log files"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: snapcraft-logs-${{ matrix.arch }}
@@ -111,7 +111,7 @@ jobs:
             snapcraft-logs.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: steps.build-snap.outcome == 'success'
         with:
           name: pebble-snap-${{ matrix.arch }}
