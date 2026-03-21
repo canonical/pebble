@@ -8,6 +8,8 @@ on:
   release:
     types: [published]
 
+permissions: {}
+
 # We don't want this workflow to have multiple runs in parallel because
 # what could happen is that a slow-running and older execution will upload
 # an older snap to `edge`, after the newer and latest snap has already been released.
@@ -28,6 +30,7 @@ jobs:
       - name: Checkout Pebble repo
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Go
@@ -40,7 +43,7 @@ jobs:
 
       - name: Build ${{ env.SNAP_NAME }} Snap
         id: build-snap
-        uses: snapcore/action-build@v1.3.0
+        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
 
       - uses: actions/upload-artifact@v6
         if: failure()
@@ -70,14 +73,18 @@ jobs:
       - name: Checkout Pebble repo
         uses: actions/checkout@v6
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Set LP credentials for remote build
+        env:
+          LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
+          PEBBLE_DEV_MAILING_LIST: ${{ secrets.PEBBLE_DEV_MAILING_LIST }}
         run: |
           lp_creds_path="$HOME/.local/share/snapcraft/"
           mkdir -p $lp_creds_path
-          echo '${{ secrets.LP_CREDENTIALS }}' > ${lp_creds_path}/launchpad-credentials
-          git config --global user.email "${{ secrets.PEBBLE_DEV_MAILING_LIST}}"
+          echo "$LP_CREDENTIALS" > ${lp_creds_path}/launchpad-credentials
+          git config --global user.email "$PEBBLE_DEV_MAILING_LIST"
           git config --global user.name "pebble-dev"
 
       - name: Set up Go
@@ -92,7 +99,7 @@ jobs:
 
       - name: Build ${{ env.SNAP_NAME }} Snap for ${{ matrix.arch }}
         id: build-snap
-        uses: snapcore/action-build@v1.3.0
+        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
 
@@ -133,12 +140,14 @@ jobs:
           pattern: pebble-snap-amd64
 
       - id: get-snap
-        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ env.TEST_ON }}*.snap)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo ${SNAP_NAME}*${TEST_ON}*.snap)" >> $GITHUB_OUTPUT
 
-      - name: Install and test ${{ steps.get-snap.outputs.filename }}
+      - name: Install and test snap
+        env:
+          SNAP_FILENAME: ${{ steps.get-snap.outputs.filename }}
         run: |
           set -ex
-          sudo snap install --dangerous --classic ${{ steps.get-snap.outputs.filename }}
+          sudo snap install --dangerous --classic "$SNAP_FILENAME"
 
           # Make sure it is installed
           pebble version --client
@@ -162,10 +171,12 @@ jobs:
           pattern: pebble-snap-${{ matrix.arch }}
 
       - id: get-snap
-        run: echo "filename=$(echo ${{ env.SNAP_NAME }}*${{ matrix.arch }}*.snap)" >> $GITHUB_OUTPUT
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: echo "filename=$(echo ${SNAP_NAME}*${ARCH}*.snap)" >> $GITHUB_OUTPUT
 
-      - name: Release ${{ steps.get-snap.outputs.filename }} to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
-        uses: snapcore/action-publish@v1
+      - name: Release snap to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
+        uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40  # v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
@@ -205,13 +216,14 @@ jobs:
       # It would be easier to use `snapcraft promote`, but there's an error when trying
       # to avoid the prompt with the "--yes" option:
       # > 'latest/edge' is not a valid set value for --from-channel when using --yes.
-      - name: Promote ${{ env.SNAP_NAME }} snap rev${{ steps.get-snap.outputs.revision }} to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+      - name: Promote ${{ env.SNAP_NAME }} snap to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          REVISION: ${{ steps.get-snap.outputs.revision }}
         run: |
-          snapcraft release ${{ env.SNAP_NAME }} \
-            ${{ steps.get-snap.outputs.revision }} \
-            ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+          snapcraft release "${SNAP_NAME}" \
+            "${REVISION}" \
+            "${TO_TRACK}/${TO_RISK}"
 
   sbom-secscan:
     needs: [release]

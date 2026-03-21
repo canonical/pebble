@@ -6,6 +6,8 @@ on:
   pull_request:
     branches: [master]
 
+permissions: {}
+
 jobs:
   scan:
     name: Scan for known vulnerabilities
@@ -13,9 +15,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Run Github Trivy FS Action
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # master
         with:
           scan-type: 'fs'
           scan-ref: '.'
