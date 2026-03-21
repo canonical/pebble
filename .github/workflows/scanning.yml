@@ -1,10 +1,8 @@
 name: Vulnerability scanning
 
-on:
-  push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+# TODO: Re-enable once trivy-action supply chain compromise is fully resolved.
+# See: https://github.com/aquasecurity/trivy/discussions/10425
+on: []
 
 permissions: {}
 
@@ -19,7 +17,7 @@ jobs:
           persist-credentials: false
 
       - name: Run Github Trivy FS Action
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
