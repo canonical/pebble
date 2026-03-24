@@ -38,6 +38,7 @@ These subcommands are currently supported:
   plan      (1)(2)
   services  (1)(2)
   ls        (1)(2)
+  exec      (1)
   start     (3)
   stop      (3)
 
