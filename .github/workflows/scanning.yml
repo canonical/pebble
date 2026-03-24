@@ -3,6 +3,11 @@ name: Vulnerability scanning
 # TODO: Re-enable once trivy-action supply chain compromise is fully resolved.
 # See: https://github.com/aquasecurity/trivy/discussions/10425
 on: []
+#on:
+#  push:
+#    branches: [master]
+#  pull_request:
+#    branches: [master]
 
 permissions: {}
 
