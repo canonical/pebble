@@ -16,7 +16,6 @@ permissions: {}
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 env:
-  SNAP_NAME: pebble
   DEFAULT_TRACK: latest
   DEFAULT_RISK: edge
 
@@ -41,7 +40,7 @@ jobs:
       # Generate the version for the local snap build.
       - run: go generate ./cmd
 
-      - name: Build ${{ env.SNAP_NAME }} Snap
+      - name: Build Snap
         id: build-snap
         uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
 
@@ -52,7 +51,7 @@ jobs:
           path: |
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
-            ${{ env.SNAP_NAME }}_*.txt
+            pebble_*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@v6
@@ -97,7 +96,7 @@ jobs:
           go generate ./cmd
           git add -f ./cmd/VERSION ./cmd/version_generated.go
 
-      - name: Build ${{ env.SNAP_NAME }} Snap for ${{ matrix.arch }}
+      - name: Build Snap for ${{ matrix.arch }}
         id: build-snap
         uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
         with:
@@ -105,7 +104,7 @@ jobs:
 
       - name: Rename the logs file, for colons are not allowed in the artifact name
         if: always()
-        run: cat snapcraft-${{ env.SNAP_NAME }}-*.txt > snapcraft-logs.txt || echo "no log files"
+        run: cat snapcraft-pebble-*.txt > snapcraft-logs.txt || echo "no log files"
 
       - uses: actions/upload-artifact@v6
         if: always()
@@ -114,7 +113,7 @@ jobs:
           path: |
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
-            ${{ env.SNAP_NAME }}_*.txt
+            pebble_*.txt
             snapcraft-logs.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
@@ -140,7 +139,7 @@ jobs:
           pattern: pebble-snap-amd64
 
       - id: get-snap
-        run: echo "filename=$(echo ${SNAP_NAME}*${TEST_ON}*.snap)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo pebble*${TEST_ON}*.snap)" >> $GITHUB_OUTPUT
 
       - name: Install and test snap
         env:
@@ -173,7 +172,7 @@ jobs:
       - id: get-snap
         env:
           ARCH: ${{ matrix.arch }}
-        run: echo "filename=$(echo ${SNAP_NAME}*${ARCH}*.snap)" >> $GITHUB_OUTPUT
+        run: echo "filename=$(echo pebble*${ARCH}*.snap)" >> $GITHUB_OUTPUT
 
       - name: Release snap to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
         uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40  # v1
@@ -200,12 +199,12 @@ jobs:
       - name: Install Snapcraft
         run: sudo snap install snapcraft --classic
 
-      - name: Get current ${{ matrix.arch }} ${{ env.SNAP_NAME }} snap in ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+      - name: Get current ${{ matrix.arch }} snap in ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
         id: get-snap
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
-          snapcraft status ${{ env.SNAP_NAME }} \
+          snapcraft status pebble \
             --track ${{ env.DEFAULT_TRACK }} --arch ${{ matrix.arch }} \
             | awk 'NR==1 { pos = index($0, "Revision") }  /edge/ { print 0+substr($0, pos) }' \
             > revision.txt
@@ -216,12 +215,12 @@ jobs:
       # It would be easier to use `snapcraft promote`, but there's an error when trying
       # to avoid the prompt with the "--yes" option:
       # > 'latest/edge' is not a valid set value for --from-channel when using --yes.
-      - name: Promote ${{ env.SNAP_NAME }} snap to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+      - name: Promote snap to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           REVISION: ${{ steps.get-snap.outputs.revision }}
         run: |
-          snapcraft release "${SNAP_NAME}" \
+          snapcraft release pebble \
             "${REVISION}" \
             "${TO_TRACK}/${TO_RISK}"
 
