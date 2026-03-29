@@ -156,15 +156,15 @@ func (p *Plan) MarshalYAML() (any, error) {
 	// of top level sections.
 	ordered := []reflect.StructField{{
 		Name: "Services",
-		Type: reflect.TypeOf(p.Services),
+		Type: reflect.TypeFor[map[string]*Service](),
 		Tag:  `yaml:"services,omitempty"`,
 	}, {
 		Name: "Checks",
-		Type: reflect.TypeOf(p.Checks),
+		Type: reflect.TypeFor[map[string]*Check](),
 		Tag:  `yaml:"checks,omitempty"`,
 	}, {
 		Name: "LogTargets",
-		Type: reflect.TypeOf(p.LogTargets),
+		Type: reflect.TypeFor[map[string]*LogTarget](),
 		Tag:  `yaml:"log-targets,omitempty"`,
 	}}
 	for i, field := range sectionExtensionsOrder {

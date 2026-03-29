@@ -2139,8 +2139,7 @@ func (s *S) TestSectionFieldStability(c *C) {
 func structYamlFields(inStruct any) []string {
 	var fields []string
 	inStructType := reflect.TypeOf(inStruct)
-	for i := range inStructType.NumField() {
-		fieldType := inStructType.Field(i)
+	for fieldType := range inStructType.Fields() {
 		yamlTag := fieldType.Tag.Get("yaml")
 		if fieldType.IsExported() && yamlTag != "-" {
 			tag, _, _ := strings.Cut(fieldType.Tag.Get("yaml"), ",")

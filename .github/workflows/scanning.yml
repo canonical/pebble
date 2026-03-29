@@ -1,10 +1,15 @@
 name: Vulnerability scanning
 
-on:
-  push:
-    branches: [fips]
-  pull_request:
-    branches: [fips]
+# TODO: Re-enable once trivy-action supply chain compromise is fully resolved.
+# See: https://github.com/aquasecurity/trivy/discussions/10425
+on: []
+#on:
+#  push:
+#    branches: [fips]
+#  pull_request:
+#    branches: [fips]
+
+permissions: {}
 
 jobs:
   scan:
@@ -13,12 +18,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Run Github Trivy FS Action
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
+          exit-code: '1'
+          ignore-unfixed: true
           trivy-config: .github/trivy.yaml
         env:
           TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db

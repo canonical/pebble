@@ -1,6 +1,6 @@
 module github.com/canonical/pebble
 
-go 1.24.11
+go 1.26.1
 
 require (
 	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8

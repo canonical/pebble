@@ -35,7 +35,7 @@ There are several ways to install Pebble. The easiest way to ensure that you get
 
 ### Basic identity type
 
-For the "basic" [identity](/reference/identities) type, Pebble uses Ulrich Drepper's [SHA-crypt algorithm](https://www.akkadia.org/drepper/SHA-crypt.txt) with SHA-512. Specifically, we use the third party Go library [github.com/GehirnInc/crypt](https://github.com/Gehirninc/crypt) for verifying the password hashes sent in a client's `Authorization` HTTP header.
+For the "basic" [identity](/reference/identities) type, Pebble uses Ulrich Drepper's SHA-crypt algorithm with SHA-512. Specifically, we use the third party Go library [github.com/GehirnInc/crypt](https://github.com/Gehirninc/crypt) for verifying the password hashes sent in a client's `Authorization` HTTP header.
 
 ### TLS
 

@@ -115,9 +115,7 @@ func (s *iteratorSuite) TestMore(c *C) {
 	wg := sync.WaitGroup{}
 	rb := servicelog.NewRingBuffer(10000)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for i := range n {
 			select {
 			case <-sendMore:
@@ -129,12 +127,10 @@ func (s *iteratorSuite) TestMore(c *C) {
 			_, err := fmt.Fprintf(rb, "%d", i)
 			c.Assert(err, IsNil)
 		}
-	}()
+	})
 
 	resultSum := 0
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(sendMore)
 		it := rb.TailIterator()
 		defer it.Close()
@@ -165,7 +161,7 @@ func (s *iteratorSuite) TestMore(c *C) {
 			c.Assert(err, IsNil)
 			resultSum += i
 		}
-	}()
+	})
 
 	wg.Wait()
 

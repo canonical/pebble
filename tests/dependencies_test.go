@@ -143,6 +143,10 @@ func TestNoNewCryptoInThirdPartyDeps(t *testing.T) {
 			continue
 		}
 
+		if strings.HasPrefix(pkg.ImportPath, "crypto/internal/entropy") {
+			continue
+		}
+
 		if strings.HasSuffix(pkg.ImportPath, "_test") {
 			continue
 		}
