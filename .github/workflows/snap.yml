@@ -134,7 +134,7 @@ jobs:
       (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: pebble-snap-amd64
 
@@ -165,7 +165,7 @@ jobs:
         # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
         arch: ["amd64", "arm64", "armhf"]
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: pebble-snap-${{ matrix.arch }}
 
