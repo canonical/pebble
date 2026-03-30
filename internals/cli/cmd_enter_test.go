@@ -189,7 +189,7 @@ func (s *PebbleSuite) TestEnterExecReadServiceOutputFile(c *C) {
 	// stderr is written to stdout buffer because of "combine stderr" mode,
 	// see cmd/pebble/cmd_exec.go:163
 	c.Check(s.Stderr(), Equals, "")
-	c.Check(s.Stdout(), Equals, "foo\ncat: msg2: No such file or directory\n")
+	c.Check(s.Stdout(), Matches, `foo\ncat: msg2: No such file or directory( \(os error 2\))?\n`)
 	c.Check(exitCode, Equals, 1)
 }
 
