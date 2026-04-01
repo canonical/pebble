@@ -61,7 +61,6 @@ jobs:
 
   remote-build:
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: true
       matrix:
