@@ -107,7 +107,8 @@ type Overlord struct {
 	stateEng  *StateEngine
 
 	// ensure loop
-	loopTomb    *tomb.Tomb
+	loopTomb    tomb.Tomb
+	loopProceed chan struct{}
 	ensureLock  sync.Mutex
 	ensureTimer *time.Timer
 	ensureNext  time.Time
@@ -137,10 +138,12 @@ type Overlord struct {
 func New(opts *Options) (*Overlord, error) {
 
 	o := &Overlord{
-		pebbleDir: opts.PebbleDir,
-		inited:    true,
-		extension: opts.Extension,
+		pebbleDir:   opts.PebbleDir,
+		inited:      true,
+		extension:   opts.Extension,
+		loopProceed: make(chan struct{}),
 	}
+	o.loopTomb.Go(o.loop)
 
 	if !filepath.IsAbs(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q must be absolute", o.pebbleDir)
@@ -471,32 +474,38 @@ func (o *Overlord) ensureBefore(d time.Duration) {
 // Loop runs a loop in a goroutine to ensure the current state regularly through StateEngine Ensure.
 func (o *Overlord) Loop() {
 	o.ensureTimerSetup()
-	if o.loopTomb == nil {
-		o.loopTomb = new(tomb.Tomb)
+	// Proceed with the loop.
+	close(o.loopProceed)
+}
+
+func (o *Overlord) loop() error {
+	select {
+	case <-o.loopProceed:
+		// Proceed with the loop.
+	case <-o.loopTomb.Dying():
+		return nil
 	}
-	o.loopTomb.Go(func() error {
-		for {
-			// TODO: pass a proper context into Ensure
-			o.ensureTimerReset()
-			// in case of errors engine logs them,
-			// continue to the next Ensure() try for now
-			o.stateEng.Ensure()
-			o.ensureDidRun()
-			pruneC := pruneTickerC(o.pruneTicker)
-			select {
-			case <-o.loopTomb.Dying():
-				return nil
-			case <-o.ensureTimer.C:
-			case <-pruneC:
-				st := o.State()
-				st.Lock()
-				st.Prune(o.startOfOperationTime, pruneWait, abortWait, pruneMaxChanges, pruneMaxNotices)
-				st.Unlock()
-				serviceMgr := o.ServiceManager()
-				serviceMgr.Prune(pruneWait, pruneMaxInactiveServices)
-			}
+	for {
+		// TODO: pass a proper context into Ensure
+		o.ensureTimerReset()
+		// in case of errors engine logs them,
+		// continue to the next Ensure() try for now
+		o.stateEng.Ensure()
+		o.ensureDidRun()
+		pruneC := pruneTickerC(o.pruneTicker)
+		select {
+		case <-o.loopTomb.Dying():
+			return nil
+		case <-o.ensureTimer.C:
+		case <-pruneC:
+			st := o.State()
+			st.Lock()
+			st.Prune(o.startOfOperationTime, pruneWait, abortWait, pruneMaxChanges, pruneMaxNotices)
+			st.Unlock()
+			serviceMgr := o.ServiceManager()
+			serviceMgr.Prune(pruneWait, pruneMaxInactiveServices)
 		}
-	})
+	}
 }
 
 func (o *Overlord) ensureDidRun() {
@@ -510,11 +519,8 @@ func (o *Overlord) CanStandby() bool {
 
 // Stop stops the ensure loop and the managers under the StateEngine.
 func (o *Overlord) Stop() error {
-	var err error
-	if o.loopTomb != nil {
-		o.loopTomb.Kill(nil)
-		err = o.loopTomb.Wait()
-	}
+	o.loopTomb.Kill(nil)
+	err := o.loopTomb.Wait()
 	o.stateEng.Stop()
 	return err
 }
@@ -683,8 +689,12 @@ func Fake() *Overlord {
 // testing.
 func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	o := &Overlord{
-		inited: false,
+		inited:      false,
+		loopProceed: make(chan struct{}),
 	}
+	// create the loop goroutine
+	o.loopTomb.Go(o.loop)
+
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
 	o.runner = state.NewTaskRunner(s)

@@ -1156,3 +1156,17 @@ func (ovs *overlordSuite) TestOverlordStopDoesNotHang(c *C) {
 	fo := overlord.Fake()
 	c.Assert(executesWithinTimeout(fo.Stop, timeout), Equals, true, Commentf("Overlord Stop() is hanging for fake overlord. Call lasted more than timeout: %s", timeout))
 }
+
+func (ovs *overlordSuite) TestRacingLoopAndStop(c *C) {
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, IsNil)
+
+	go func() {
+		o.Loop()
+	}()
+	errCh := make(chan error)
+	go func() {
+		errCh <- o.Stop()
+	}()
+	c.Assert(<-errCh, IsNil)
+}
