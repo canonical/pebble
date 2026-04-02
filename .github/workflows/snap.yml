@@ -21,6 +21,7 @@ env:
 jobs:
   local-build:
     runs-on: ubuntu-latest
+    environment: snap-build
     # PRS usually come from forks, which are not allowed to access repo secrets.
     # So this job builds the snap locally, and not via LP.
     if: github.event_name == 'pull_request'
