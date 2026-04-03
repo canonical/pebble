@@ -58,10 +58,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		}
 		if err != nil {
 			m.incFailureMetric(config)
-			// Record check failure and perform any action if the threshold
-			// is reached (for example, restarting a service).
 			details.Failures++
-			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
 			atThreshold := details.Failures >= config.Threshold
@@ -75,6 +72,13 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			}
 			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
+
+			// Only update check data if below threshold. At threshold,
+			// changeStatusChanged will handle the full state transition
+			// (status, changeID, prevChangeID) in a single update.
+			if !atThreshold {
+				m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
+			}
 
 			logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
 			if atThreshold {
@@ -192,7 +196,6 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		m.incSuccessMetric(config)
 		details.Successes = 1
 		details.Failures = 0
-		m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 		details.Proceed = true
 		m.state.Lock()
 		task.Set(checkDetailsAttr, &details)
