@@ -183,7 +183,7 @@ func (s *S) TearDownTest(c *C) {
 
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
-
+	s.runner.Stop()
 	err := reaper.Stop()
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
