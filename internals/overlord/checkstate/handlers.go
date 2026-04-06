@@ -73,13 +73,6 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
 
-			// Only update check data if below threshold. At threshold,
-			// changeStatusChanged will handle the full state transition
-			// (status, changeID, prevChangeID) in a single update.
-			if !atThreshold {
-				m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
-			}
-
 			logger.Noticef("Check %q failure %d/%d: %v", config.Name, details.Failures, config.Threshold, err)
 			if atThreshold {
 				logger.Noticef("Check %q threshold %d hit, triggering action and recovering", config.Name, config.Threshold)
@@ -90,6 +83,9 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				// logs err.Error().
 				return true, errors.New(errorDetails(err))
 			}
+			// Only update check data if below threshold. At threshold,
+			// changeStatusChanged will handle the update with the state lock held.
+			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 			return false, err
 		}
 
