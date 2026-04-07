@@ -1260,7 +1260,7 @@ func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *C) {
 				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
 				Timeout:   plan.OptionalDuration{Value: time.Second},
-				Threshold: 10,
+				Threshold: 3,
 				Exec: &plan.ExecCheck{
 					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
 				},
