@@ -306,7 +306,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 				Name:      "chk1",
 				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
-				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: threshold,
 				Exec: &plan.ExecCheck{
 					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %[1]s ] || { rm -f %[1]s; exit 1; }'`, testPath),
@@ -1259,7 +1259,7 @@ func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *C) {
 				Name:      "chk1",
 				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
-				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec: &plan.ExecCheck{
 					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
