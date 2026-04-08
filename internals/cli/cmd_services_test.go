@@ -112,6 +112,69 @@ foo      enabled   inactive  -
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
+func (s *PebbleSuite) TestServicesJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled"},
+		{"name": "svc3", "current": "backoff", "startup": "enabled"}
+	]
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"services":[{"name":"svc1","startup":"enabled","current":"inactive","current-since":"2022-04-28T17:05:23+12:00"},{"name":"svc2","startup":"enabled","current":"inactive","current-since":"0001-01-01T00:00:00Z"},{"name":"svc3","startup":"enabled","current":"backoff","current-since":"0001-01-01T00:00:00Z"}]}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestServicesYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled"},
+		{"name": "svc3", "current": "backoff", "startup": "enabled"}
+	]
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+services:
+    - name: svc1
+      startup: enabled
+      current: inactive
+      current-since: 2022-04-28T17:05:23+12:00
+    - name: svc2
+      startup: enabled
+      current: inactive
+      current-since: 0001-01-01T00:00:00Z
+    - name: svc3
+      startup: enabled
+      current: backoff
+      current-since: 0001-01-01T00:00:00Z
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestServicesInvalidFormat(c *check.C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "foobar"})
+	c.Assert(err, check.ErrorMatches, "invalid output format.*")
+}
+
 func (s *PebbleSuite) TestServicesFail(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")

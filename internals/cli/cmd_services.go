@@ -15,9 +15,11 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/canonical/go-flags"
+	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/client"
 )
@@ -31,6 +33,7 @@ about all services if none are specified.
 type cmdServices struct {
 	client *client.Client
 
+	Format string `long:"format"`
 	timeMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
@@ -42,7 +45,9 @@ func init() {
 		Name:        "services",
 		Summary:     cmdServicesSummary,
 		Description: cmdServicesDescription,
-		ArgsHelp:    timeArgsHelp,
+		ArgsHelp: merge(timeArgsHelp, map[string]string{
+			"--format": `Output format: "text" (default), "json", or "yaml".`,
+		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdServices{client: opts.Client}
 		},
@@ -52,6 +57,18 @@ func init() {
 func (cmd *cmdServices) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
+	}
+
+	var writeOutput func(services []*client.ServiceInfo) error
+	switch cmd.Format {
+	case "", "text":
+		writeOutput = cmd.writeText
+	case "json":
+		writeOutput = cmd.writeJSON
+	case "yaml":
+		writeOutput = cmd.writeYAML
+	default:
+		return fmt.Errorf(`invalid output format (expected "text", "json", or "yaml", not %q)`, cmd.Format)
 	}
 
 	opts := client.ServicesOptions{
@@ -70,6 +87,10 @@ func (cmd *cmdServices) Execute(args []string) error {
 		return nil
 	}
 
+	return writeOutput(services)
+}
+
+func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
 	w := tabWriter()
 	defer w.Flush()
 
@@ -82,5 +103,27 @@ func (cmd *cmdServices) Execute(args []string) error {
 		}
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
 	}
+	return nil
+}
+
+type servicesList struct {
+	Services []*client.ServiceInfo `json:"services" yaml:"services"`
+}
+
+func (cmd *cmdServices) writeJSON(services []*client.ServiceInfo) error {
+	data, err := json.Marshal(servicesList{Services: services})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(Stdout, string(data))
+	return nil
+}
+
+func (cmd *cmdServices) writeYAML(services []*client.ServiceInfo) error {
+	data, err := yaml.Marshal(servicesList{Services: services})
+	if err != nil {
+		return err
+	}
+	fmt.Fprint(Stdout, string(data))
 	return nil
 }
