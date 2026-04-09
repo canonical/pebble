@@ -377,13 +377,16 @@ The logs command fetches buffered logs from the given services (or all services
 if none are specified) and displays them in chronological order.
 
 [logs command options]
-      -f, --follow     Follow (tail) logs for given services until Ctrl-C is
-                       pressed. If no services are specified, show logs from
-                       all services running when the command starts.
-          --format=    Output format: "text" (default) or "json" (JSON lines).
-      -n=              Number of logs to show (before following); defaults to
-                       30.
-                       If 'all', show all buffered logs.
+      -f, --follow             Follow (tail) logs for given services until
+                               Ctrl-C is
+                               pressed. If no services are specified, show logs
+                               from
+                               all services running when the command starts.
+      -n=                      Number of logs to show (before following);
+                               defaults to 30.
+                               If 'all', show all buffered logs.
+          --format=[text|json] Output format: "text" (default) or "json" (JSON
+                               lines). (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR logs -->
 
