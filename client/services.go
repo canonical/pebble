@@ -99,7 +99,7 @@ type ServiceInfo struct {
 	Name         string         `json:"name" yaml:"name"`
 	Startup      ServiceStartup `json:"startup" yaml:"startup"`
 	Current      ServiceStatus  `json:"current" yaml:"current"`
-	CurrentSince time.Time      `json:"current-since" yaml:"current-since"`
+	CurrentSince time.Time      `json:"current-since,omitzero" yaml:"current-since,omitempty"`
 }
 
 // ServiceStartup defines the different startup modes for a service.

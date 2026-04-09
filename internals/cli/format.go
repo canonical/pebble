@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/doc"
 	"io"
@@ -30,6 +31,7 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/term"
+	"gopkg.in/yaml.v3"
 )
 
 type unicodeMixin struct {
@@ -146,6 +148,35 @@ var (
 
 func tabWriter() *tabwriter.Writer {
 	return tabwriter.NewWriter(Stdout, 5, 3, 2, ' ', 0)
+}
+
+type formatMixin struct {
+	//lint:ignore SA5008 "choice" tag is intentionally duplicated
+	Format string `long:"format" default:"text" choice:"text" choice:"json" choice:"yaml"`
+}
+
+var formatArgsHelp = map[string]string{
+	"--format": `Output format: "text" (default), "json", or "yaml".`,
+}
+
+func (mx formatMixin) formatNonText(result any) error {
+	switch mx.Format {
+	case "json":
+		data, err := json.Marshal(result)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(Stdout, string(data))
+		return nil
+	case "yaml":
+		data, err := yaml.Marshal(result)
+		if err != nil {
+			return err
+		}
+		fmt.Fprint(Stdout, string(data))
+		return nil
+	}
+	panic(fmt.Sprintf("internal error: invalid format option %q", mx.Format))
 }
 
 var termSize = termSizeImpl

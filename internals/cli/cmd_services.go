@@ -15,11 +15,9 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/canonical/go-flags"
-	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/client"
 )
@@ -33,7 +31,7 @@ about all services if none are specified.
 type cmdServices struct {
 	client *client.Client
 
-	Format string `long:"format"`
+	formatMixin
 	timeMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
@@ -45,9 +43,7 @@ func init() {
 		Name:        "services",
 		Summary:     cmdServicesSummary,
 		Description: cmdServicesDescription,
-		ArgsHelp: merge(timeArgsHelp, map[string]string{
-			"--format": `Output format: "text" (default), "json", or "yaml".`,
-		}),
+		ArgsHelp:    merge(timeArgsHelp, formatArgsHelp),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdServices{client: opts.Client}
 		},
@@ -59,18 +55,6 @@ func (cmd *cmdServices) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	var writeOutput func(services []*client.ServiceInfo) error
-	switch cmd.Format {
-	case "", "text":
-		writeOutput = cmd.writeText
-	case "json":
-		writeOutput = cmd.writeJSON
-	case "yaml":
-		writeOutput = cmd.writeYAML
-	default:
-		return fmt.Errorf(`invalid output format (expected "text", "json", or "yaml", not %q)`, cmd.Format)
-	}
-
 	opts := client.ServicesOptions{
 		Names: cmd.Positional.Services,
 	}
@@ -78,16 +62,24 @@ func (cmd *cmdServices) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(services) == 0 {
-		if len(cmd.Positional.Services) == 0 {
-			fmt.Fprintln(Stderr, "Plan has no services.")
-		} else {
-			fmt.Fprintln(Stderr, "No matching services.")
+
+	if cmd.Format == "text" {
+		if len(services) == 0 {
+			if len(cmd.Positional.Services) == 0 {
+				fmt.Fprintln(Stderr, "Plan has no services.")
+			} else {
+				fmt.Fprintln(Stderr, "No matching services.")
+			}
+			return nil
 		}
-		return nil
+		return cmd.writeText(services)
 	}
 
-	return writeOutput(services)
+	svcMap := make(map[string]*client.ServiceInfo, len(services))
+	for _, svc := range services {
+		svcMap[svc.Name] = svc
+	}
+	return cmd.formatNonText(servicesMap{Services: svcMap})
 }
 
 func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
@@ -106,24 +98,6 @@ func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
 	return nil
 }
 
-type servicesList struct {
-	Services []*client.ServiceInfo `json:"services" yaml:"services"`
-}
-
-func (cmd *cmdServices) writeJSON(services []*client.ServiceInfo) error {
-	data, err := json.Marshal(servicesList{Services: services})
-	if err != nil {
-		return err
-	}
-	fmt.Fprintln(Stdout, string(data))
-	return nil
-}
-
-func (cmd *cmdServices) writeYAML(services []*client.ServiceInfo) error {
-	data, err := yaml.Marshal(servicesList{Services: services})
-	if err != nil {
-		return err
-	}
-	fmt.Fprint(Stdout, string(data))
-	return nil
+type servicesMap struct {
+	Services map[string]*client.ServiceInfo `json:"services" yaml:"services"`
 }
