@@ -39,7 +39,7 @@ type cmdLogs struct {
 	Follow bool   `short:"f" long:"follow"`
 	N      string `short:"n"`
 	//lint:ignore SA5008 "choice" tag is intentionally duplicated
-	Format string `long:"format" default:"text" choice:"text" choice:"json"`
+	Format     string `long:"format" default:"text" choice:"text" choice:"json"`
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
