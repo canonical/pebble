@@ -30,7 +30,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -82,12 +81,30 @@ type IDSigner interface {
 	Fingerprint() string
 }
 
-// Apply options to certificates at creation, using a
-// Functional Options pattern.
-// The option will receive the certificate to modify
-// as a parameter, as well as a deep copy of the parent
-// certificate and will return an error if a failure occurred.
-type CertOption func(cert *x509.Certificate, parentCopy *x509.Certificate) error
+// ConfigureCertificateFunc is called during certificate creation to allow
+// customisation of the certificate fields. The cert parameter is the
+// certificate being created, and parentCopy is a deep copy of the signing
+// (parent) certificate, or nil when the certificate is self-signed.
+// Returning an error aborts certificate creation.
+type ConfigureCertificateFunc func(cert *x509.Certificate, parentCopy *x509.Certificate) error
+
+// Options holds the configuration for creating a TLSManager.
+type Options struct {
+	// TLSDir is the directory used to persist identity certificate files. It
+	// must be a directory of which only the leaf element, at most, does not
+	// exist. The leaf directory will be created with 0o700 permissions.
+	TLSDir string
+	// Signer is the identity key of the machine, container or device.
+	// It is used to sign TLS keypairs and the identity certificate.
+	Signer IDSigner
+
+	// ConfigureIDCertificate, if non-nil, is called after the default identity
+	// certificate fields are set and may override any of them.
+	ConfigureIDCertificate ConfigureCertificateFunc
+	// ConfigureTLSCertificate, if non-nil, is called after the default TLS
+	// certificate fields are set and may override any of them.
+	ConfigureTLSCertificate ConfigureCertificateFunc
+}
 
 type TLSManager struct {
 	// tlsDir is the location of the PEM keypair files.
@@ -100,28 +117,24 @@ type TLSManager struct {
 	// The identity key used for signing TLS certificates.
 	signer IDSigner
 
-	// When creating identity and TLS certificates, the following CertOption
-	// functors will be applied to assign default values to certificate fields.
-	// The collection of functors acts as a template for certificates.
-	// Note: CertOption will be applied in the order encountered
-	// in those arrays, meaning if there are 2 CertOptions manipulating the
-	// same fields, only the last one will be taken in consideration.
-	idCertOptions  []CertOption
-	tlsCertOptions []CertOption
+	// Optional caller-supplied functions applied after the defaults when
+	// creating the identity and TLS certificates respectively.
+	configureIDCert  ConfigureCertificateFunc
+	configureTLSCert ConfigureCertificateFunc
 }
 
-// NewManager creates a new TLS keypair manager. The tlsDir must be a
-// directory of which only the leaf element, at most, does not exist. The
-// leaf directory will be created with 0o700 permissions. The signer
-// represents the identity key of the machine, container or device. The
-// signer will be used to sign TLS keypairs and the identity certificate.
-// The identity certificate acts as the root CA.
-func NewManager(tlsDir string, signer IDSigner) *TLSManager {
-	m := &TLSManager{
-		tlsDir: tlsDir,
-		signer: signer,
+// NewManager creates a new TLS keypair manager using the provided options.
+// opts.TLSDir must be a directory of which only the leaf element, at most,
+// does not exist; the leaf directory will be created with 0o700 permissions.
+// opts.Signer represents the identity key of the machine, container or device
+// and will be used to sign TLS keypairs and the identity certificate.
+func NewManager(opts *Options) *TLSManager {
+	return &TLSManager{
+		tlsDir:           opts.TLSDir,
+		signer:           opts.Signer,
+		configureIDCert:  opts.ConfigureIDCertificate,
+		configureTLSCert: opts.ConfigureTLSCertificate,
 	}
-	return m
 }
 
 func generateSerialNumber() (*big.Int, error) {
@@ -134,7 +147,7 @@ func generateSerialNumber() (*big.Int, error) {
 	return serialNumber, nil
 }
 
-func withDefaultIDTemplate(signer IDSigner) CertOption {
+func withDefaultIDTemplate(signer IDSigner) ConfigureCertificateFunc {
 	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
 		c.SerialNumber, err = generateSerialNumber()
 		if err != nil {
@@ -154,7 +167,7 @@ func withDefaultIDTemplate(signer IDSigner) CertOption {
 	}
 }
 
-func withDefaultTLSTemplate(signer IDSigner) CertOption {
+func withDefaultTLSTemplate(signer IDSigner) ConfigureCertificateFunc {
 	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
 		c.SerialNumber, err = generateSerialNumber()
 		if err != nil {
@@ -168,59 +181,6 @@ func withDefaultTLSTemplate(signer IDSigner) CertOption {
 		c.BasicConstraintsValid = true
 		return nil
 	}
-}
-
-// If an externally supplied TLS or identity certificate template was provided,
-// use it to update the supported fields.
-func WithLegacyTemplate(template *x509.Certificate) CertOption {
-	return func(c *x509.Certificate, parentCopy *x509.Certificate) error {
-		c.Subject = deepCopyName(template.Subject)
-		c.Issuer = deepCopyName(template.Issuer)
-		// Supported SAN (Subject Alternate Name) fields.
-		c.DNSNames = slices.Clone(template.DNSNames)
-		c.EmailAddresses = slices.Clone(template.EmailAddresses)
-		return nil
-	}
-}
-
-// SetX509Templates allows select fields of the certificates to be externally
-// supplied. This function must be called before any call to GetCertificate
-// otherwise templates will not be applied consistently. If this function
-// is not called during manager creation, the default template will be used,
-// setting only the subject Common Name (see defaultCertSubject).
-func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if idTemplate != nil {
-		m.idCertOptions = []CertOption{WithLegacyTemplate(idTemplate)}
-	}
-
-	if tlsTemplate != nil {
-		m.tlsCertOptions = []CertOption{WithLegacyTemplate(tlsTemplate)}
-	}
-}
-
-// SetX509IDCertificateOptions allows select fields of the identity certificate
-// to be externally supplied. This function must be called before any call to
-// GetCertificate otherwise options will not be applied consistently.
-// Calling this function will replace any option previously supplied by a call
-// to SetX509Templates or SetX509IDCertificateOptions itself.
-func (m *TLSManager) SetX509IDCertificateOptions(opts ...CertOption) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.idCertOptions = opts
-}
-
-// SetX509TLSCertificateOptions allows select fields of the TLS certificate to be
-// externally supplied. This function must be called before any call to
-// GetCertificate otherwise options will not be applied consistently.
-// Calling this function will replace any option previously supplied by a call
-// to SetX509Templates or SetX509TLSCertificateOptions itself.
-func (m *TLSManager) SetX509TLSCertificateOptions(opts ...CertOption) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.tlsCertOptions = opts
 }
 
 // ListenConfig provides a complete TLS default configuration, which includes the
@@ -296,22 +256,19 @@ func (m *TLSManager) createTLSCert() error {
 		return err
 	}
 
-	options := append(
-		[]CertOption{withDefaultTLSTemplate(m.signer)},
-		m.tlsCertOptions...,
-	)
-
-	// Create a deep copy.
+	// Create a deep copy of the parent (identity) certificate.
 	parent, err := x509.ParseCertificate(m.idCert.Raw)
 	if err != nil {
 		return err
 	}
 
-	// Apply options to the template.
+	// Apply defaults then the optional caller-supplied configuration.
 	template := x509.Certificate{}
-	for _, optionFunctor := range options {
-		err := optionFunctor(&template, parent)
-		if err != nil {
+	if err := withDefaultTLSTemplate(m.signer)(&template, parent); err != nil {
+		return err
+	}
+	if m.configureTLSCert != nil {
+		if err := m.configureTLSCert(&template, parent); err != nil {
 			return err
 		}
 	}
@@ -388,7 +345,7 @@ func (m *TLSManager) ensureIDCert() error {
 
 	// If we get here a new identity certificate must be created.
 	var err error
-	m.idCert, err = createIDCert(m.signer, m.idCertOptions)
+	m.idCert, err = createIDCert(m.signer, m.configureIDCert)
 	if err != nil {
 		return err
 	}
@@ -456,17 +413,14 @@ func saveIDCert(path string, cert *x509.Certificate) (err error) {
 // key. This certificate is included in the TLS certificate chain as the
 // non-leaf certificate, allowing the client to pin this certificate during
 // the client server trust exchange (pairing) procedure.
-func createIDCert(signer IDSigner, idTemplateOptions []CertOption) (*x509.Certificate, error) {
-	options := append(
-		[]CertOption{withDefaultIDTemplate(signer)},
-		idTemplateOptions...,
-	)
-
-	// Apply options to the template.
+func createIDCert(signer IDSigner, configure ConfigureCertificateFunc) (*x509.Certificate, error) {
+	// Apply defaults then the optional caller-supplied configuration.
 	template := &x509.Certificate{}
-	for _, optionFunctor := range options {
-		err := optionFunctor(template, nil)
-		if err != nil {
+	if err := withDefaultIDTemplate(signer)(template, nil); err != nil {
+		return nil, err
+	}
+	if configure != nil {
+		if err := configure(template, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -551,14 +505,4 @@ func defaultCertSubject(fingerprint string) pkix.Name {
 		CommonName: cn.String(),
 	}
 	return subject
-}
-
-// deepCopyName supports deep copying some common fields of the
-// pkix.Name structure. The 'Names' and 'ExtraNames' attributes
-// are ignored.
-func deepCopyName(name pkix.Name) pkix.Name {
-	cpy := pkix.Name{}
-	rdnSeq := name.ToRDNSequence()
-	cpy.FillFromRDNSequence(&rdnSeq)
-	return cpy
 }

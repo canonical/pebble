@@ -36,7 +36,7 @@ func (ts *tlsSuite) TestNoDirectory(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 	_, err := mgr.GetCertificate(nil)
 	c.Assert(err, IsNil)
 }
@@ -49,7 +49,7 @@ func (ts *tlsSuite) TestDirectoryInvalidPerm(c *C) {
 	c.Assert(err, IsNil)
 
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 }
@@ -60,7 +60,7 @@ func (ts *tlsSuite) TestKeypairDirNoParent(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "something/tls")
 
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 	_, err := mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, "cannot create TLS directory.*")
 }
@@ -73,7 +73,7 @@ func (ts *tlsSuite) TestInvalidIDCertContent(c *C) {
 	c.Assert(err, IsNil)
 
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Empty the file.
 	f, err := os.OpenFile(filepath.Join(tlsDir, "identity.pem"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
@@ -93,7 +93,7 @@ func (ts *tlsSuite) TestIDCertExtraBytes(c *C) {
 	c.Assert(err, IsNil)
 
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Generate certificates on demand.
 	_, err = mgr.GetCertificate(nil)
@@ -108,7 +108,7 @@ func (ts *tlsSuite) TestIDCertExtraBytes(c *C) {
 	c.Assert(err, IsNil)
 
 	// Simulate a process restart by creating a new manager.
-	mgr = tlsstate.NewManager(tlsDir, key)
+	mgr = tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".*unexpected bytes.*")
 }
@@ -119,7 +119,7 @@ func (ts *tlsSuite) TestInvalidIDCertPerm(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Generate certificates on demand.
 	_, err := mgr.GetCertificate(nil)
@@ -130,7 +130,7 @@ func (ts *tlsSuite) TestInvalidIDCertPerm(c *C) {
 	c.Assert(err, IsNil)
 
 	// Simulate a process restart by creating a new manager.
-	mgr = tlsstate.NewManager(tlsDir, key)
+	mgr = tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".*expected permission.*")
 }
@@ -143,7 +143,7 @@ func (ts *tlsSuite) TestTLSServerClient(c *C) {
 
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Start the HTTPS server.
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
@@ -188,7 +188,7 @@ func (ts *tlsSuite) TestTLSServerClientTLSReuse(c *C) {
 
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Start the HTTPS server.
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
@@ -232,7 +232,7 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *C) {
 
 	key := newIDKey(c)
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Start the HTTPS server.
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
@@ -283,7 +283,7 @@ func (ts *tlsSuite) TestTLSServerClientIDExpires(c *C) {
 
 	key := newIDKey(c)
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Start the HTTPS server.
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
@@ -344,7 +344,7 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 
 	key := newIDKey(c)
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-	mgr := tlsstate.NewManager(tlsDir, key)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Start the HTTPS server.
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
@@ -371,7 +371,7 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 	// This simulates a process restart, after which we should detect
 	// the crypto.Signer no longer gives us the same private key.
 	key = newIDKey(c)
-	mgr = tlsstate.NewManager(tlsDir, key)
+	mgr = tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Start the HTTPS server.
 	shutdownHTTPSServer = ts.testTLSServer(c, mgr.GetCertificate)
@@ -392,46 +392,31 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 }
 
 // TestCertOptions checks that for both identity and TLS certificates:
-//   - options are applied in the provided order, meaning later options override
-//     earlier ones when they modify the same field
-//   - SetX509IDCertificateOptions and SetX509TLSCertificateOptions fully replace
-//     any options previously set via SetX509Templates
-//   - identity certificate options receive nil as parentCopy (self-signed)
-//   - TLS certificate options receive a deep copy of the identity certificate
+//   - ConfigureIDCertificate and ConfigureTLSCertificate are applied after
+//     defaults and may override any field
+//   - ConfigureIDCertificate receives nil as parentCopy (self-signed)
+//   - ConfigureTLSCertificate receives a deep copy of the identity certificate
 func (ts *tlsSuite) TestCertOptions(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
-
-	// Establish a baseline via SetX509Templates. The specific options set here
-	// must be fully replaced by the subsequent SetX509*CertificateOptions calls.
-	mgr.SetX509Templates(
-		&x509.Certificate{DNSNames: []string{"template.local"}},
-		&x509.Certificate{DNSNames: []string{"template.local"}},
-	)
-
-	opt1 := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
-		cert.DNSNames = []string{"first.local"}
-		return nil
-	})
 
 	var idParentCopy *x509.Certificate
 	var tlsParentCopy *x509.Certificate
 
-	opt2ID := tlsstate.CertOption(func(cert *x509.Certificate, parentCopy *x509.Certificate) error {
-		idParentCopy = parentCopy
-		cert.DNSNames = []string{"second.local"}
-		return nil
+	mgr := tlsstate.NewManager(&tlsstate.Options{
+		TLSDir: tlsDir,
+		Signer: key,
+		ConfigureIDCertificate: func(cert *x509.Certificate, parentCopy *x509.Certificate) error {
+			idParentCopy = parentCopy
+			cert.DNSNames = []string{"second.local"}
+			return nil
+		},
+		ConfigureTLSCertificate: func(cert *x509.Certificate, parentCopy *x509.Certificate) error {
+			tlsParentCopy = parentCopy
+			cert.DNSNames = []string{"second.local"}
+			return nil
+		},
 	})
-	opt2TLS := tlsstate.CertOption(func(cert *x509.Certificate, parentCopy *x509.Certificate) error {
-		tlsParentCopy = parentCopy
-		cert.DNSNames = []string{"second.local"}
-		return nil
-	})
-
-	// These calls must replace the options set by SetX509Templates above.
-	mgr.SetX509IDCertificateOptions(opt1, opt2ID)
-	mgr.SetX509TLSCertificateOptions(opt1, opt2TLS)
 
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
 	defer shutdownHTTPSServer()
@@ -446,43 +431,39 @@ func (ts *tlsSuite) TestCertOptions(c *C) {
 	tlsCert := certs[0]
 	idCert := certs[1]
 
-	// opt2 is applied last, so "second.local" must win over "first.local" and
-	// "template.local", for both the TLS leaf certificate (first in chain) and
-	// the identity certificate (second in chain).
+	// ConfigureTLSCertificate result must be present in the TLS leaf certificate.
 	c.Assert(tlsCert.DNSNames, DeepEquals, []string{"second.local"})
+	// ConfigureIDCertificate result must be present in the identity certificate.
 	c.Assert(idCert.DNSNames, DeepEquals, []string{"second.local"})
 
-	// Identity cert options receive nil: the cert is self-signed, no parent.
+	// Identity cert configure func receives nil: the cert is self-signed, no parent.
 	c.Assert(idParentCopy, IsNil)
 
-	// TLS cert options receive a deep copy of the identity certificate as parent.
+	// TLS cert configure func receives a deep copy of the identity certificate as parent.
 	c.Assert(tlsParentCopy, NotNil)
 	c.Assert(tlsParentCopy.Equal(idCert), Equals, true)
 }
 
-// TestCertOptionsError checks that errors raised during a certificate option
-// processing is properly forwarded through the caller.
+// TestCertOptionsError checks that errors raised during certificate configuration
+// are properly forwarded through the caller.
 func (ts *tlsSuite) TestCertOptionsError(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
-	mgr := tlsstate.NewManager(tlsDir, key)
 
 	generateIdError := true
-	optID := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
-		if generateIdError {
-			return fmt.Errorf("Everybody do the flop!")
-		}
-
-		return nil
+	mgr := tlsstate.NewManager(&tlsstate.Options{
+		TLSDir: tlsDir,
+		Signer: key,
+		ConfigureIDCertificate: func(cert *x509.Certificate, _ *x509.Certificate) error {
+			if generateIdError {
+				return fmt.Errorf("Everybody do the flop!")
+			}
+			return nil
+		},
+		ConfigureTLSCertificate: func(cert *x509.Certificate, _ *x509.Certificate) error {
+			return fmt.Errorf("Hello parking-meter!")
+		},
 	})
-
-	optTLS := tlsstate.CertOption(func(cert *x509.Certificate, _ *x509.Certificate) error {
-		return fmt.Errorf("Hello parking-meter!")
-	})
-
-	// These calls must replace the options set by SetX509Templates above.
-	mgr.SetX509IDCertificateOptions(optID)
-	mgr.SetX509TLSCertificateOptions(optTLS)
 
 	tlsCert, err := mgr.GetCertificate(nil)
 	c.Assert(tlsCert, IsNil)
@@ -505,7 +486,7 @@ func (ts *tlsSuite) BenchmarkIDTLSCertGen(c *C) {
 		// New unique temporary directory (so identity cert must be re-created).
 		tlsDir := filepath.Join(c.MkDir(), "tls")
 
-		mgr := tlsstate.NewManager(tlsDir, key)
+		mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 		// Create identity and TLS certificates on demand.
 		_, err := mgr.GetCertificate(nil)
@@ -563,60 +544,60 @@ func (ts *tlsSuite) TestDefaultCertSubject(c *C) {
 }
 
 // TestTLSServerClientCustomTemplates checks that we can provide custom
-// X509 certificate templates for the identity and tls certificates.
+// X509 certificate fields for the identity and TLS certificates via Options.
 func (ts *tlsSuite) TestTLSServerClientCustomTemplates(c *C) {
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(time.Hour)
 	defer restoreTLSCertValidity()
 
 	key := newIDKey(c)
 	tlsDir := filepath.Join(c.MkDir(), "tls")
-	mgr := tlsstate.NewManager(tlsDir, key)
 
-	// For the identity certificate.
-	idTemplate := &x509.Certificate{
-		Subject: pkix.Name{
-			Country:            []string{"ZA"},
-			Organization:       []string{"org"},
-			OrganizationalUnit: []string{"unit"},
-			Locality:           []string{"foo"},
-			Province:           []string{"wc"},
-			StreetAddress:      []string{"foo drive"},
-			PostalCode:         []string{"34f55s"},
-			SerialNumber:       "12345",
-			CommonName:         "commonid",
-		},
-		DNSNames: []string{
-			"id.local",
-			"id2.local",
-		},
-		EmailAddresses: []string{
-			"id@example.com",
-			"id2@example.com",
-		},
+	// Desired identity certificate fields.
+	idSubject := pkix.Name{
+		Country:            []string{"ZA"},
+		Organization:       []string{"org"},
+		OrganizationalUnit: []string{"unit"},
+		Locality:           []string{"foo"},
+		Province:           []string{"wc"},
+		StreetAddress:      []string{"foo drive"},
+		PostalCode:         []string{"34f55s"},
+		SerialNumber:       "12345",
+		CommonName:         "commonid",
 	}
-	// For the tls certificate.
-	tlsTemplate := &x509.Certificate{
-		Subject: pkix.Name{
-			Country:            []string{"ZA"},
-			Organization:       []string{"org"},
-			OrganizationalUnit: []string{"unit"},
-			Locality:           []string{"bar"},
-			Province:           []string{"wc"},
-			StreetAddress:      []string{"bar drive"},
-			PostalCode:         []string{"34f55s"},
-			SerialNumber:       "67890",
-			CommonName:         "commontls",
-		},
-		DNSNames: []string{
-			"tls.local",
-			"tls2.local",
-		},
-		EmailAddresses: []string{
-			"tls@example.com",
-			"tls2@example.com",
-		},
+	idDNSNames := []string{"id.local", "id2.local"}
+	idEmails := []string{"id@example.com", "id2@example.com"}
+
+	// Desired TLS certificate fields.
+	tlsSubject := pkix.Name{
+		Country:            []string{"ZA"},
+		Organization:       []string{"org"},
+		OrganizationalUnit: []string{"unit"},
+		Locality:           []string{"bar"},
+		Province:           []string{"wc"},
+		StreetAddress:      []string{"bar drive"},
+		PostalCode:         []string{"34f55s"},
+		SerialNumber:       "67890",
+		CommonName:         "commontls",
 	}
-	mgr.SetX509Templates(idTemplate, tlsTemplate)
+	tlsDNSNames := []string{"tls.local", "tls2.local"}
+	tlsEmails := []string{"tls@example.com", "tls2@example.com"}
+
+	mgr := tlsstate.NewManager(&tlsstate.Options{
+		TLSDir: tlsDir,
+		Signer: key,
+		ConfigureIDCertificate: func(cert *x509.Certificate, _ *x509.Certificate) error {
+			cert.Subject = idSubject
+			cert.DNSNames = slices.Clone(idDNSNames)
+			cert.EmailAddresses = slices.Clone(idEmails)
+			return nil
+		},
+		ConfigureTLSCertificate: func(cert *x509.Certificate, _ *x509.Certificate) error {
+			cert.Subject = tlsSubject
+			cert.DNSNames = slices.Clone(tlsDNSNames)
+			cert.EmailAddresses = slices.Clone(tlsEmails)
+			return nil
+		},
+	})
 
 	// Start the HTTPS server.
 	shutdownHTTPSServer := ts.testTLSServer(c, mgr.GetCertificate)
@@ -631,19 +612,11 @@ func (ts *tlsSuite) TestTLSServerClientCustomTemplates(c *C) {
 	restoreTime()
 
 	// Check the TLS certificate.
-	c.Assert(tlsCert.Subject.String(), Equals, tlsTemplate.Subject.String())
-	if !slices.Equal(tlsCert.DNSNames, tlsTemplate.DNSNames) {
-		c.Fail()
-	}
-	if !slices.Equal(tlsCert.EmailAddresses, tlsTemplate.EmailAddresses) {
-		c.Fail()
-	}
+	c.Assert(tlsCert.Subject.String(), Equals, tlsSubject.String())
+	c.Assert(slices.Equal(tlsCert.DNSNames, tlsDNSNames), Equals, true)
+	c.Assert(slices.Equal(tlsCert.EmailAddresses, tlsEmails), Equals, true)
 	// Check the Identity certificate.
-	c.Assert(idCert.Subject.String(), Equals, idTemplate.Subject.String())
-	if !slices.Equal(idCert.DNSNames, idTemplate.DNSNames) {
-		c.Fail()
-	}
-	if !slices.Equal(idCert.EmailAddresses, idTemplate.EmailAddresses) {
-		c.Fail()
-	}
+	c.Assert(idCert.Subject.String(), Equals, idSubject.String())
+	c.Assert(slices.Equal(idCert.DNSNames, idDNSNames), Equals, true)
+	c.Assert(slices.Equal(idCert.EmailAddresses, idEmails), Equals, true)
 }

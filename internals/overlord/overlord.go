@@ -209,7 +209,10 @@ func New(opts *Options) (*Overlord, error) {
 	if tlsDir == "" {
 		tlsDir = filepath.Join(opts.PebbleDir, "tls")
 	}
-	o.tlsMgr = tlsstate.NewManager(tlsDir, opts.IDSigner)
+	o.tlsMgr = tlsstate.NewManager(&tlsstate.Options{
+		TLSDir: tlsDir,
+		Signer: opts.IDSigner,
+	})
 	o.stateEng.AddManager(o.tlsMgr)
 
 	o.identitiesMgr, err = identities.NewManager(s)
