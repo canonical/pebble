@@ -543,9 +543,9 @@ func (ts *tlsSuite) TestDefaultCertSubject(c *C) {
 	}
 }
 
-// TestTLSServerClientCustomTemplates checks that we can provide custom
+// TestTLSServerClientCustomCertificates checks that we can provide custom
 // X509 certificate fields for the identity and TLS certificates via Options.
-func (ts *tlsSuite) TestTLSServerClientCustomTemplates(c *C) {
+func (ts *tlsSuite) TestTLSServerClientCustomCertificates(c *C) {
 	restoreTLSCertValidity := tlsstate.FakeTLSCertValidity(time.Hour)
 	defer restoreTLSCertValidity()
 
