@@ -391,12 +391,12 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *C) {
 	shutdownHTTPSServer()
 }
 
-// TestCertOptions checks that for both identity and TLS certificates:
+// TestCertCustomization checks that for both identity and TLS certificates:
 //   - ConfigureIDCertificate and ConfigureTLSCertificate are applied after
 //     defaults and may override any field
 //   - ConfigureIDCertificate receives nil as parentCopy (self-signed)
 //   - ConfigureTLSCertificate receives a deep copy of the identity certificate
-func (ts *tlsSuite) TestCertOptions(c *C) {
+func (ts *tlsSuite) TestCertCustomization(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
 
@@ -444,9 +444,9 @@ func (ts *tlsSuite) TestCertOptions(c *C) {
 	c.Assert(tlsParentCopy.Equal(idCert), Equals, true)
 }
 
-// TestCertOptionsError checks that errors raised during certificate configuration
+// TestCertCustomizationError checks that errors raised during certificate configuration
 // are properly forwarded through the caller.
-func (ts *tlsSuite) TestCertOptionsError(c *C) {
+func (ts *tlsSuite) TestCertCustomizationError(c *C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	key := newIDKey(c)
 
