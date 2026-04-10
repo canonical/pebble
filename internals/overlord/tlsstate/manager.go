@@ -149,10 +149,11 @@ func generateSerialNumber() (*big.Int, error) {
 
 func withDefaultIDTemplate(signer IDSigner) ConfigureCertificateFunc {
 	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
-		c.SerialNumber, err = generateSerialNumber()
+		serialNumber, err := generateSerialNumber()
 		if err != nil {
 			return err
 		}
+		c.SerialNumber = serialNumber
 		c.Subject = defaultCertSubject(signer.Fingerprint())
 		c.NotBefore = timeNow()
 		c.NotAfter = c.NotBefore.Add(idCertValidity)
