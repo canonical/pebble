@@ -147,41 +147,38 @@ func generateSerialNumber() (*big.Int, error) {
 	return serialNumber, nil
 }
 
-func withDefaultIDTemplate(signer IDSigner) ConfigureCertificateFunc {
-	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
-		serialNumber, err := generateSerialNumber()
-		if err != nil {
-			return err
-		}
-		c.SerialNumber = serialNumber
-		c.Subject = defaultCertSubject(signer.Fingerprint())
-		c.NotBefore = timeNow()
-		c.NotAfter = c.NotBefore.Add(idCertValidity)
-		c.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
-		c.ExtKeyUsage = []x509.ExtKeyUsage{}
-		c.BasicConstraintsValid = true
-		c.IsCA = true
-		// We can only sign leaf certificates with this.
-		c.MaxPathLen = 0
-		c.MaxPathLenZero = true
-		return nil
+func setIDCertDefaults(signer IDSigner, c *x509.Certificate) error {
+	serialNumber, err := generateSerialNumber()
+	if err != nil {
+		return err
 	}
+	c.SerialNumber = serialNumber
+	c.Subject = defaultCertSubject(signer.Fingerprint())
+	c.NotBefore = timeNow()
+	c.NotAfter = c.NotBefore.Add(idCertValidity)
+	c.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
+	c.ExtKeyUsage = []x509.ExtKeyUsage{}
+	c.BasicConstraintsValid = true
+	c.IsCA = true
+	// We can only sign leaf certificates with this.
+	c.MaxPathLen = 0
+	c.MaxPathLenZero = true
+	return nil
 }
 
-func withDefaultTLSTemplate(signer IDSigner) ConfigureCertificateFunc {
-	return func(c *x509.Certificate, parentCopy *x509.Certificate) (err error) {
-		c.SerialNumber, err = generateSerialNumber()
-		if err != nil {
-			return err
-		}
-		c.Subject = defaultCertSubject(signer.Fingerprint())
-		c.NotBefore = timeNow()
-		c.NotAfter = c.NotBefore.Add(tlsCertValidity)
-		c.KeyUsage = x509.KeyUsageDigitalSignature
-		c.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
-		c.BasicConstraintsValid = true
-		return nil
+func setTLSCertDefaults(signer IDSigner, c *x509.Certificate) error {
+	serialNumber, err := generateSerialNumber()
+	if err != nil {
+		return err
 	}
+	c.SerialNumber = serialNumber
+	c.Subject = defaultCertSubject(signer.Fingerprint())
+	c.NotBefore = timeNow()
+	c.NotAfter = c.NotBefore.Add(tlsCertValidity)
+	c.KeyUsage = x509.KeyUsageDigitalSignature
+	c.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+	c.BasicConstraintsValid = true
+	return nil
 }
 
 // ListenConfig provides a complete TLS default configuration, which includes the
@@ -265,7 +262,7 @@ func (m *TLSManager) createTLSCert() error {
 
 	// Apply defaults then the optional caller-supplied configuration.
 	template := x509.Certificate{}
-	if err := withDefaultTLSTemplate(m.signer)(&template, parent); err != nil {
+	if err := setTLSCertDefaults(m.signer, &template); err != nil {
 		return err
 	}
 	if m.configureTLSCert != nil {
@@ -417,7 +414,7 @@ func saveIDCert(path string, cert *x509.Certificate) (err error) {
 func createIDCert(signer IDSigner, configure ConfigureCertificateFunc) (*x509.Certificate, error) {
 	// Apply defaults then the optional caller-supplied configuration.
 	template := &x509.Certificate{}
-	if err := withDefaultIDTemplate(signer)(template, nil); err != nil {
+	if err := setIDCertDefaults(signer, template); err != nil {
 		return nil, err
 	}
 	if configure != nil {
