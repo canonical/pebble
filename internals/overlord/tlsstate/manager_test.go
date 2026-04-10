@@ -613,10 +613,10 @@ func (ts *tlsSuite) TestTLSServerClientCustomCertificates(c *C) {
 
 	// Check the TLS certificate.
 	c.Assert(tlsCert.Subject.String(), Equals, tlsSubject.String())
-	c.Assert(slices.Equal(tlsCert.DNSNames, tlsDNSNames), Equals, true)
-	c.Assert(slices.Equal(tlsCert.EmailAddresses, tlsEmails), Equals, true)
+	c.Assert(tlsCert.DNSNames, DeepEquals, tlsDNSNames)
+	c.Assert(tlsCert.EmailAddresses, DeepEquals, tlsEmails)
 	// Check the Identity certificate.
 	c.Assert(idCert.Subject.String(), Equals, idSubject.String())
-	c.Assert(slices.Equal(idCert.DNSNames, idDNSNames), Equals, true)
-	c.Assert(slices.Equal(idCert.EmailAddresses, idEmails), Equals, true)
+	c.Assert(idCert.DNSNames, DeepEquals, idDNSNames)
+	c.Assert(idCert.EmailAddresses, DeepEquals, idEmails)
 }
