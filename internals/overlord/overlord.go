@@ -80,18 +80,15 @@ type Options struct {
 	PebbleDir string
 	// LayersDir is the path to the layers directory. It defaults to "<PebbleDir>/layers" if empty.
 	LayersDir string
-	// TLSDir is the path to the TLS keypairs. It defaults to "<PebbleDir>/tls" if empty.
-	TLSDir string
+	// TLSOptions holds the TLS configuration. TLSOptions.TLSDir defaults to
+	// "<PebbleDir>/tls" if empty.
+	TLSOptions tlsstate.Options
 	// RestartHandler is an optional structure to handle restart requests.
 	RestartHandler restart.Handler
 	// ServiceOutput is an optional output for the logging manager.
 	ServiceOutput io.Writer
 	// Extension allows extending the overlord with externally defined features.
 	Extension Extension
-	// IDSigner is a private key representing the identity of a Pebble
-	// instance (machine, container or device), which implements the
-	// tlsstate.IDSigner interface (allowing it to sign digests).
-	IDSigner tlsstate.IDSigner
 	// Persist specifies whether the state should be persisted to disk.
 	Persist PersistMode
 }
@@ -205,14 +202,11 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.stateEng.AddManager(o.planMgr)
 
-	tlsDir := opts.TLSDir
-	if tlsDir == "" {
-		tlsDir = filepath.Join(opts.PebbleDir, "tls")
+	tlsOpts := opts.TLSOptions
+	if tlsOpts.TLSDir == "" {
+		tlsOpts.TLSDir = filepath.Join(opts.PebbleDir, "tls")
 	}
-	o.tlsMgr = tlsstate.NewManager(&tlsstate.Options{
-		TLSDir: tlsDir,
-		Signer: opts.IDSigner,
-	})
+	o.tlsMgr = tlsstate.NewManager(&tlsOpts)
 	o.stateEng.AddManager(o.tlsMgr)
 
 	o.identitiesMgr, err = identities.NewManager(s)

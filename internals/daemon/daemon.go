@@ -130,14 +130,9 @@ type Options struct {
 	// Defaults to "layers" inside the pebble directory.
 	LayersDir string
 
-	// TLSDir is an optional path for where the TLS manager persists PEM files.
-	// Defaults to "tls" inside the pebble directory.
-	TLSDir string
-
-	// IDSigner is a private key representing the identity of a Pebble
-	// instance (machine, container or device), which implements the
-	// tlsstate.IDSigner interface (for digest signing).
-	IDSigner tlsstate.IDSigner
+	// TLSOptions holds the TLS configuration for the HTTPS server. TLSOptions.TLSDir
+	// defaults to "tls" inside the pebble directory if empty.
+	TLSOptions tlsstate.Options
 
 	// SocketPath is an optional path for the unix socket used for the client
 	// to communicate with the daemon. Defaults to a hidden (dotted) name inside
@@ -1011,11 +1006,10 @@ func New(opts *Options) (*Daemon, error) {
 	ovldOptions := overlord.Options{
 		PebbleDir:      opts.Dir,
 		LayersDir:      opts.LayersDir,
-		TLSDir:         opts.TLSDir,
+		TLSOptions:     opts.TLSOptions,
 		RestartHandler: d,
 		ServiceOutput:  opts.ServiceOutput,
 		Extension:      opts.OverlordExtension,
-		IDSigner:       opts.IDSigner,
 		Persist:        opts.Persist,
 	}
 

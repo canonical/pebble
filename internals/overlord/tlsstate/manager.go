@@ -94,10 +94,10 @@ type Options struct {
 	// must be a directory of which only the leaf element, at most, does not
 	// exist. The leaf directory will be created with 0o700 permissions.
 	TLSDir string
-	// Signer is the identity key of the machine, container or device.
-	// It is used to sign TLS keypairs and the identity certificate.
+	// Signer is a private key representing the identity of a Pebble
+	// instance (machine, container or device), which implements the
+	// tlsstate.Signer interface (allowing it to sign digests).
 	Signer IDSigner
-
 	// ConfigureIDCertificate, if non-nil, is called after the default identity
 	// certificate fields are set and may override any of them.
 	ConfigureIDCertificate ConfigureCertificateFunc
