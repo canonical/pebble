@@ -34,6 +34,7 @@ type cmdChanges struct {
 	client *client.Client
 
 	timeMixin
+	formatMixin
 	Positional struct {
 		Service string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
@@ -49,6 +50,7 @@ type cmdTasks struct {
 	client *client.Client
 
 	timeMixin
+	formatMixin
 	changeIDMixin
 }
 
@@ -57,7 +59,7 @@ func init() {
 		Name:        "changes",
 		Summary:     cmdChangesSummary,
 		Description: cmdChangesDescription,
-		ArgsHelp:    timeArgsHelp,
+		ArgsHelp:    merge(timeArgsHelp, formatArgsHelp),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdChanges{client: opts.Client}
 		},
@@ -66,7 +68,7 @@ func init() {
 		Name:        "tasks",
 		Summary:     cmdTasksSummary,
 		Description: cmdTasksDescription,
-		ArgsHelp:    merge(changeIDMixinArgsHelp, timeArgsHelp),
+		ArgsHelp:    merge(changeIDMixinArgsHelp, timeArgsHelp, formatArgsHelp),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdTasks{client: opts.Client}
 		},
@@ -116,12 +118,26 @@ func (c *cmdChanges) Execute(args []string) error {
 		return err
 	}
 
-	if len(changes) == 0 {
-		return fmt.Errorf("no changes found")
-	}
-
 	sort.Sort(changesByTime(changes))
 
+	if c.Format == "text" {
+		if len(changes) == 0 {
+			return fmt.Errorf("no changes found")
+		}
+		return c.writeText(changes)
+	}
+
+	if changes == nil {
+		changes = []*client.Change{}
+	}
+	return c.formatNonText(changesResult{Changes: changes})
+}
+
+type changesResult struct {
+	Changes []*client.Change `json:"changes" yaml:"changes"`
+}
+
+func (c *cmdChanges) writeText(changes []*client.Change) error {
 	w := tabWriter()
 
 	fmt.Fprintf(w, "ID\tStatus\tSpawn\tReady\tSummary\n")
@@ -152,6 +168,10 @@ func (c *cmdTasks) Execute([]string) error {
 	return c.showChange(chid)
 }
 
+type taskResult struct {
+	Change *client.Change `json:"change" yaml:"change"`
+}
+
 func queryChange(cli *client.Client, chid string) (*client.Change, error) {
 	chg, err := cli.Change(chid)
 	if err != nil {
@@ -169,6 +189,14 @@ func (c *cmdTasks) showChange(chid string) error {
 		return err
 	}
 
+	if c.Format == "text" {
+		return c.writeText(chg)
+	}
+
+	return c.formatNonText(taskResult{Change: chg})
+}
+
+func (c *cmdTasks) writeText(chg *client.Change) error {
 	w := tabWriter()
 
 	fmt.Fprintf(w, "Status\tSpawn\tReady\tSummary\n")

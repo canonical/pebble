@@ -115,17 +115,17 @@ const (
 // and Key, the previous notice is updated appropriately instead of a new one
 // being created.
 type Notice struct {
-	ID            string            `json:"id"`
-	UserID        *uint32           `json:"user-id"`
-	Type          NoticeType        `json:"type"`
-	Key           string            `json:"key"`
-	FirstOccurred time.Time         `json:"first-occurred"`
-	LastOccurred  time.Time         `json:"last-occurred"`
-	LastRepeated  time.Time         `json:"last-repeated"`
-	Occurrences   int               `json:"occurrences"`
-	LastData      map[string]string `json:"last-data,omitempty"`
-	RepeatAfter   time.Duration     `json:"repeat-after,omitempty"`
-	ExpireAfter   time.Duration     `json:"expire-after,omitempty"`
+	ID            string            `json:"id" yaml:"id"`
+	UserID        *uint32           `json:"user-id" yaml:"user-id"`
+	Type          NoticeType        `json:"type" yaml:"type"`
+	Key           string            `json:"key" yaml:"key"`
+	FirstOccurred time.Time         `json:"first-occurred" yaml:"first-occurred"`
+	LastOccurred  time.Time         `json:"last-occurred" yaml:"last-occurred"`
+	LastRepeated  time.Time         `json:"last-repeated" yaml:"last-repeated"`
+	Occurrences   int               `json:"occurrences" yaml:"occurrences"`
+	LastData      map[string]string `json:"last-data,omitempty" yaml:"last-data,omitempty"`
+	RepeatAfter   time.Duration     `json:"repeat-after,omitempty" yaml:"repeat-after,omitempty"`
+	ExpireAfter   time.Duration     `json:"expire-after,omitempty" yaml:"expire-after,omitempty"`
 }
 
 type NoticeType string

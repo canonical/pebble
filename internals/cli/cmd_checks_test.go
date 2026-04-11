@@ -246,3 +246,90 @@ chk1   -      enabled  down    0          3/3       2 (Get "http://localhost:800
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
+
+func (s *PebbleSuite) TestChecksJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "chk1", "startup": "enabled", "status": "up", "successes": 5, "threshold": 3, "change-id": "1"},
+		{"name": "chk2", "startup": "enabled", "level": "alive", "status": "down", "failures": 1, "threshold": 1, "change-id": "2"}
+	]
+}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"checks":[{"name":"chk1","level":"","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1","prev-change-id":""},{"name":"chk2","level":"alive","startup":"enabled","status":"down","successes":null,"failures":1,"threshold":1,"change-id":"2","prev-change-id":""}]}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChecksYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "chk1", "startup": "enabled", "status": "up", "successes": 5, "threshold": 3, "change-id": "1"}
+	]
+}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+checks:
+    - name: chk1
+      level: ""
+      startup: enabled
+      status: up
+      successes: 5
+      failures: 0
+      threshold: 3
+      change-id: "1"
+      prev-change-id: ""
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestNoChecksJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		fmt.Fprint(w, `{"type": "sync", "status-code": 200, "result": []}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"checks":[]}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestNoChecksYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+		fmt.Fprint(w, `{"type": "sync", "status-code": 200, "result": []}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, "checks: []\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChecksInvalidFormat(c *check.C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "foobar"})
+	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+}

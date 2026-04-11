@@ -33,6 +33,7 @@ by unique type and key combination (2-arg variant).
 type cmdNotice struct {
 	client *client.Client
 
+	formatMixin
 	UID *uint32 `long:"uid"`
 
 	Positional struct {
@@ -47,9 +48,9 @@ func init() {
 		Summary:     cmdNoticeSummary,
 		Description: cmdNoticeDescription,
 
-		ArgsHelp: map[string]string{
+		ArgsHelp: merge(formatArgsHelp, map[string]string{
 			"--uid": `Look up notice from user with this UID (admin only; 2-arg variant only)`,
-		},
+		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotice{client: opts.Client}
 		},
@@ -98,9 +99,16 @@ func (cmd *cmdNotice) Execute(args []string) error {
 		}
 	}
 
-	// Notice can be assigned directly to yamlNotice as only the tags are different.
 	yn := yamlNotice(*notice)
 
+	if cmd.Format == "text" {
+		return cmd.writeText(yn)
+	}
+
+	return cmd.formatNonText(yn)
+}
+
+func (cmd *cmdNotice) writeText(yn yamlNotice) error {
 	b, err := yaml.Marshal(yn)
 	if err != nil {
 		return err
@@ -109,17 +117,17 @@ func (cmd *cmdNotice) Execute(args []string) error {
 	return nil
 }
 
-// yamlNotice exists to add "yaml" tags to the Notice fields.
+// yamlNotice exists to add "yaml" and "json" tags to the Notice fields.
 type yamlNotice struct {
-	ID            string            `yaml:"id"`
-	UserID        *uint32           `yaml:"user-id"`
-	Type          client.NoticeType `yaml:"type"`
-	Key           string            `yaml:"key"`
-	FirstOccurred time.Time         `yaml:"first-occurred"`
-	LastOccurred  time.Time         `yaml:"last-occurred"`
-	LastRepeated  time.Time         `yaml:"last-repeated"`
-	Occurrences   int               `yaml:"occurrences"`
-	LastData      map[string]string `yaml:"last-data,omitempty"`
-	RepeatAfter   time.Duration     `yaml:"repeat-after,omitempty"`
-	ExpireAfter   time.Duration     `yaml:"expire-after,omitempty"`
+	ID            string            `json:"id" yaml:"id"`
+	UserID        *uint32           `json:"user-id" yaml:"user-id"`
+	Type          client.NoticeType `json:"type" yaml:"type"`
+	Key           string            `json:"key" yaml:"key"`
+	FirstOccurred time.Time         `json:"first-occurred" yaml:"first-occurred"`
+	LastOccurred  time.Time         `json:"last-occurred" yaml:"last-occurred"`
+	LastRepeated  time.Time         `json:"last-repeated" yaml:"last-repeated"`
+	Occurrences   int               `json:"occurrences" yaml:"occurrences"`
+	LastData      map[string]string `json:"last-data,omitempty" yaml:"last-data,omitempty"`
+	RepeatAfter   time.Duration     `json:"repeat-after,omitempty" yaml:"repeat-after,omitempty"`
+	ExpireAfter   time.Duration     `json:"expire-after,omitempty" yaml:"expire-after,omitempty"`
 }

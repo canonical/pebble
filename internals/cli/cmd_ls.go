@@ -17,8 +17,10 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	pathpkg "path"
 	"strings"
+	"time"
 
 	"github.com/canonical/go-flags"
 	"github.com/canonical/x-go/strutil/quantity"
@@ -36,6 +38,7 @@ type cmdLs struct {
 	client *client.Client
 
 	timeMixin
+	formatMixin
 	Directory  bool `short:"d"`
 	LongFormat bool `short:"l"`
 	Positional struct {
@@ -48,7 +51,7 @@ func init() {
 		Name:        "ls",
 		Summary:     cmdLsSummary,
 		Description: cmdLsDescription,
-		ArgsHelp: merge(timeArgsHelp, map[string]string{
+		ArgsHelp: merge(timeArgsHelp, formatArgsHelp, map[string]string{
 			"-d": "List matching entries themselves, not directory contents",
 			"-l": "Use a long listing format",
 		}),
@@ -56,6 +59,51 @@ func init() {
 			return &cmdLs{client: opts.Client}
 		},
 	})
+}
+
+type fileEntry struct {
+	Path         string `json:"path" yaml:"path"`
+	Name         string `json:"name" yaml:"name"`
+	Type         string `json:"type" yaml:"type"`
+	Size         *int64 `json:"size,omitempty" yaml:"size,omitempty"`
+	Permissions  string `json:"permissions" yaml:"permissions"`
+	LastModified string `json:"last-modified" yaml:"last-modified"`
+	UserID       *int   `json:"user-id" yaml:"user-id"`
+	User         string `json:"user" yaml:"user"`
+	GroupID      *int   `json:"group-id" yaml:"group-id"`
+	Group        string `json:"group" yaml:"group"`
+}
+
+type lsResult struct {
+	Files []fileEntry `json:"files" yaml:"files"`
+}
+
+func fileInfoToEntry(fi *client.FileInfo) fileEntry {
+	entry := fileEntry{
+		Path:         fi.Path(),
+		Name:         fi.Name(),
+		Permissions:  fmt.Sprintf("%03o", fi.Mode().Perm()),
+		LastModified: fi.ModTime().Format(time.RFC3339),
+		User:         fi.User(),
+		Group:        fi.Group(),
+	}
+	switch {
+	case fi.Mode().IsDir():
+		entry.Type = "directory"
+	case fi.Mode()&os.ModeSymlink != 0:
+		entry.Type = "symlink"
+	default:
+		entry.Type = "file"
+		size := fi.Size()
+		entry.Size = &size
+	}
+	if uid := fi.UserID(); uid != nil {
+		entry.UserID = uid
+	}
+	if gid := fi.GroupID(); gid != nil {
+		entry.GroupID = gid
+	}
+	return entry
 }
 
 func (cmd *cmdLs) Execute(args []string) error {
@@ -77,6 +125,18 @@ func (cmd *cmdLs) Execute(args []string) error {
 		return err
 	}
 
+	if cmd.Format == "text" {
+		return cmd.writeText(files)
+	}
+
+	entries := make([]fileEntry, len(files))
+	for i, fi := range files {
+		entries[i] = fileInfoToEntry(fi)
+	}
+	return cmd.formatNonText(lsResult{Files: entries})
+}
+
+func (cmd *cmdLs) writeText(files []*client.FileInfo) error {
 	w := tabWriter()
 	defer w.Flush()
 	for _, fi := range files {
@@ -92,7 +152,6 @@ func (cmd *cmdLs) Execute(args []string) error {
 			fmt.Fprintln(w, fi.Name())
 		}
 	}
-
 	return nil
 }
 
