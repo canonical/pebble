@@ -1156,3 +1156,13 @@ func (ovs *overlordSuite) TestOverlordStopDoesNotHang(c *C) {
 	fo := overlord.Fake()
 	c.Assert(executesWithinTimeout(fo.Stop, timeout), Equals, true, Commentf("Overlord Stop() is hanging for fake overlord. Call lasted more than timeout: %s", timeout))
 }
+
+func (ovs *overlordSuite) TestNewNoTLSManagerWithoutIDSigner(c *C) {
+	opts := &overlord.Options{
+		PebbleDir: ovs.dir,
+		IDSigner:  nil, // No IDSigner means no TLSManager will be created.
+	}
+	o, err := overlord.New(opts)
+	c.Assert(err, IsNil)
+	c.Assert(o.TLSManager(), IsNil)
+}
