@@ -336,8 +336,7 @@ pebble update-identities  Update or replace identities
 pebble remove-identities  Remove identities
 
 [identities command options]
-      --format=[text|json|yaml]   Output format: "text" (default), "json", or
-                                  "yaml". (default: text)
+      --format=[text|json|yaml]   Output format. (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR identities -->
 
@@ -385,8 +384,7 @@ if none are specified) and displays them in chronological order.
       -n=                      Number of logs to show (before following);
                                defaults to 30.
                                If 'all', show all buffered logs.
-          --format=[text|json] Output format: "text" (default) or "json" (JSON
-                               lines). (default: text)
+          --format=[text|json] Output format. (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR logs -->
 
@@ -1003,8 +1001,7 @@ The services command lists status information about the services specified, or
 about all services if none are specified.
 
 [services command options]
-      --format=[text|json|yaml]   Output format: "text" (default), "json", or
-                                  "yaml". (default: text)
+      --format=[text|json|yaml]   Output format. (default: text)
       --abs-time                  Display absolute times (in RFC 3339 format).
                                   Otherwise, display relative times up to 60
                                   days, then YYYY-MM-DD.

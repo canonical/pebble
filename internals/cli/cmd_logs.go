@@ -52,7 +52,7 @@ func init() {
 		Description: cmdLogsDescription,
 		ArgsHelp: map[string]string{
 			"--follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
-			"--format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
+			"--format": "Output format.",
 			"-n":       "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
@@ -94,6 +94,8 @@ func (cmd *cmdLogs) Execute(args []string) error {
 		writeLog = func(entry client.LogEntry) error {
 			return encoder.Encode(&entry)
 		}
+	default:
+		panic(fmt.Sprintf("internal error: invalid format option %q", cmd.Format))
 	}
 
 	opts := client.LogsOptions{
