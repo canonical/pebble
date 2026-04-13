@@ -241,15 +241,13 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 
 		// Start goroutine to mirror PTY output to "stdio" websocket.
 		ioConn := e.getWebsocket(wsStdio)
-		wgOutputSent.Add(1)
-		go func() {
-			defer wgOutputSent.Done()
+		wgOutputSent.Go(func() {
 
 			logger.Debugf("Exec %s: started mirroring websocket", task.ID())
 			defer logger.Debugf("Exec %s: finished mirroring websocket", task.ID())
 
 			wsutil.MirrorToWebsocket(ioConn, master, childDead, int(master.Fd()))
-		}()
+		})
 
 		if e.interactive {
 			// Interactive: start goroutine to receive stdin from "stdio"
@@ -305,12 +303,10 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		beforeClosers = append(beforeClosers, stdoutWriter)
 		stdout = stdoutWriter
 		stderr = stdoutWriter // stderr will be overwritten below if splitStderr true
-		wgOutputSent.Add(1)
-		go func() {
-			defer wgOutputSent.Done()
+		wgOutputSent.Go(func() {
 			<-wsutil.WebsocketSendStream(ioConn, stdoutReader, -1)
 			stdoutReader.Close()
-		}()
+		})
 	}
 
 	if e.splitStderr {
@@ -323,12 +319,10 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		beforeClosers = append(beforeClosers, stderrWriter)
 		stderr = stderrWriter
 		stderrConn := e.getWebsocket(wsStderr)
-		wgOutputSent.Add(1)
-		go func() {
-			defer wgOutputSent.Done()
+		wgOutputSent.Go(func() {
 			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
 			stderrReader.Close()
-		}()
+		})
 	}
 
 	if e.timeout != 0 {

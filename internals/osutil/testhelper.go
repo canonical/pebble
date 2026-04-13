@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2026 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,15 +12,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package osutil
 
-//go:generate ./mkversion.sh
+import (
+	"os"
+	"regexp"
+)
 
-// Version will be overwritten at build-time via mkversion.sh
-var Version = "v1.30.0"
+// Match binary names from both go test and dlv test.
+var goTestExeRe = regexp.MustCompile(`^.*/(.*go-build.*/.*\.test|debug\.test\d+)$`)
 
-func MockVersion(version string) (restore func()) {
-	old := Version
-	Version = version
-	return func() { Version = old }
+// IsTestBinary checks whether the current process is a go test binary.
+func IsTestBinary() bool {
+	return len(os.Args) > 0 && goTestExeRe.MatchString(os.Args[0])
 }

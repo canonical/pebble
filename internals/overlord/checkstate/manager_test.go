@@ -306,10 +306,10 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 				Name:      "chk1",
 				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
-				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: threshold,
 				Exec: &plan.ExecCheck{
-					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),
+					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %[1]s ] || { rm -f %[1]s; exit 1; }'`, testPath),
 				},
 			},
 		},
@@ -322,9 +322,6 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 	c.Assert(check.Status, Equals, checkstate.CheckStatusUp)
 	c.Assert(lastTaskLog(s.overlord.State(), check.ChangeID), Matches, ".* ERROR exit status 1")
 
-	// Should reset number of failures if command then succeeds
-	err = os.Remove(testPath)
-	c.Assert(err, IsNil)
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
 		return check.Failures == 0
 	})
@@ -1262,7 +1259,7 @@ func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *C) {
 				Name:      "chk1",
 				Override:  "replace",
 				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
-				Timeout:   plan.OptionalDuration{Value: 100 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: time.Second},
 				Threshold: 3,
 				Exec: &plan.ExecCheck{
 					Command: fmt.Sprintf(`/bin/sh -c '[ ! -f %s ]'`, testPath),

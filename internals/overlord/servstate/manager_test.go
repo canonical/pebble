@@ -183,7 +183,7 @@ func (s *S) TearDownTest(c *C) {
 
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
-
+	s.runner.Stop()
 	err := reaper.Stop()
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
@@ -442,7 +442,7 @@ workloads:
 	stops, starts, err := s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 
 	resetWorkloadsSectionExtension()
 	s.planAddLayer(c, `
@@ -461,7 +461,7 @@ workloads:
 	stops, starts, err = s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 
 	resetWorkloadsSectionExtension()
 	s.planAddLayer(c, `
@@ -474,7 +474,7 @@ workloads:
 	stops, starts, err = s.manager.Replan()
 	c.Assert(err, IsNil)
 	c.Check(stops, DeepEquals, [][]string{nil})
-	c.Check(starts, DeepEquals, [][]string{[]string{"test1", "test2"}, []string{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 	s.stopTestServices(c)
 }
 
@@ -706,6 +706,9 @@ services:
 }
 
 func (s *S) TestStartFastExitCommand(c *C) {
+	restore := servstate.FakeOkayWait(2 * time.Second)
+	defer restore()
+
 	s.newServiceManager(c)
 	layer := `
 services:
@@ -719,12 +722,20 @@ services:
 	chg := s.startServices(c, [][]string{{"test4"}})
 
 	s.st.Lock()
-	c.Check(chg.Status(), Equals, state.ErrorStatus)
-	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test4" \(service start attempt: exited quickly with code 0, will restart\)`)
-	c.Check(chg.Tasks()[0].Log(), HasLen, 2)
-	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO Most recent service output:\n    too-fast\n    second line`)
-	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR service start attempt: exited quickly with code 0, will restart`)
+	status := chg.Status()
+	err := chg.Err()
+	tasks := chg.Tasks()
+	var logs []string
+	if len(tasks) > 0 {
+		logs = tasks[0].Log()
+	}
 	s.st.Unlock()
+
+	c.Check(status, Equals, state.ErrorStatus)
+	c.Check(err, ErrorMatches, `(?s).*\n- Start service "test4" \(service start attempt: exited quickly with code 0, will restart\)`)
+	c.Assert(logs, HasLen, 2)
+	c.Check(logs[0], Matches, `(?s).* INFO Most recent service output:\n    too-fast\n    second line`)
+	c.Check(logs[1], Matches, `.* ERROR service start attempt: exited quickly with code 0, will restart`)
 
 	svc := s.serviceByName(c, "test4")
 	c.Assert(svc.Current, Equals, servstate.StatusBackoff)
