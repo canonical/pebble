@@ -95,7 +95,7 @@ type Options struct {
 	// exist. The leaf directory will be created with 0o700 permissions.
 	TLSDir string
 	// Signer is a private key representing the identity of a Pebble
-	// instance (machine, container or device), which implements the
+	// instance, which implements the
 	// tlsstate.Signer interface (allowing it to sign digests).
 	Signer IDSigner
 	// ConfigureIDCertificate, if non-nil, is called after the default identity
