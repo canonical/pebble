@@ -156,7 +156,7 @@ type formatMixin struct {
 }
 
 var formatArgsHelp = map[string]string{
-	"--format": `Output format.`,
+	"--format": `Output format`,
 }
 
 func (mx formatMixin) formatNonText(result any) error {
