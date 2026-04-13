@@ -384,7 +384,7 @@ if none are specified) and displays them in chronological order.
       -n=                      Number of logs to show (before following);
                                defaults to 30.
                                If 'all', show all buffered logs.
-          --format=[text|json] Output format. (default: text)
+          --format=[text|json] Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR logs -->
 
