@@ -233,51 +233,6 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 	c.Check(timesCalled, check.Equals, len(expectedWarnings))
 }
 
-func (s *warningSuite) TestWarningsJSON(c *check.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Matches, `\{"warnings":\[.*\]\}\n`)
-}
-
-func (s *warningSuite) TestWarningsYAML(c *check.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Matches, `(?s)warnings:\n    - id: "1"\n.*`)
-}
-
-func (s *warningSuite) TestNoWarningsJSON(c *check.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"warnings":[]}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
-}
-
-func (s *warningSuite) TestNoWarningsYAML(c *check.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
-
-	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "warnings: []\n")
-	c.Check(s.Stderr(), check.Equals, "")
-}
-
-func (s *warningSuite) TestWarningsInvalidFormat(c *check.C) {
-	_, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "foobar"})
-	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
-}
-
 func (s *warningSuite) TestExtraArgs(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)

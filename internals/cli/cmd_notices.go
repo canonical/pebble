@@ -45,7 +45,6 @@ type cmdNotices struct {
 	socketPath string
 
 	timeMixin
-	formatMixin
 	Users   client.NoticesUsers `long:"users"`
 	UID     *uint32             `long:"uid"`
 	Type    []client.NoticeType `long:"type"`
@@ -58,7 +57,7 @@ func init() {
 		Name:        "notices",
 		Summary:     cmdNoticesSummary,
 		Description: cmdNoticesDescription,
-		ArgsHelp: merge(timeArgsHelp, formatArgsHelp, map[string]string{
+		ArgsHelp: merge(timeArgsHelp, map[string]string{
 			"--users":   "The only valid value is 'all', which lists notices with any user ID (admin only; cannot be used with --uid)",
 			"--uid":     "Only list notices with this user ID (admin only; cannot be used with --users)",
 			"--type":    "Only list notices of this type (multiple allowed)",
@@ -103,29 +102,15 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return err
 	}
 
-	if cmd.Format == "text" {
-		if len(notices) == 0 {
-			if cmd.Timeout != 0 {
-				fmt.Fprintf(Stderr, "No matching notices after waiting %s.\n", cmd.Timeout)
-			} else {
-				fmt.Fprintln(Stderr, "No matching notices.")
-			}
-			return nil
+	if len(notices) == 0 {
+		if cmd.Timeout != 0 {
+			fmt.Fprintf(Stderr, "No matching notices after waiting %s.\n", cmd.Timeout)
+		} else {
+			fmt.Fprintln(Stderr, "No matching notices.")
 		}
-		return cmd.writeText(notices, state)
+		return nil
 	}
 
-	if notices == nil {
-		notices = []*client.Notice{}
-	}
-	return cmd.formatNonText(noticesResult{Notices: notices})
-}
-
-type noticesResult struct {
-	Notices []*client.Notice `json:"notices" yaml:"notices"`
-}
-
-func (cmd *cmdNotices) writeText(notices []*client.Notice, state *cliState) error {
 	writer := tabWriter()
 	defer writer.Flush()
 
@@ -152,7 +137,7 @@ func (cmd *cmdNotices) writeText(notices []*client.Notice, state *cliState) erro
 	}
 
 	state.NoticesLastListed = notices[len(notices)-1].LastRepeated
-	err := saveCLIState(cmd.socketPath, state)
+	err = saveCLIState(cmd.socketPath, state)
 	if err != nil {
 		return fmt.Errorf("cannot save CLI state: %w", err)
 	}

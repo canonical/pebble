@@ -31,7 +31,6 @@ The identity command shows details for a single identity in YAML format.
 type cmdIdentity struct {
 	client *client.Client
 
-	formatMixin
 	Positional struct {
 		Name string `positional-arg-name:"<name>" required:"1"`
 	} `positional-args:"yes"`
@@ -42,7 +41,6 @@ func init() {
 		Name:        "identity",
 		Summary:     cmdIdentitySummary,
 		Description: cmdIdentityDescription,
-		ArgsHelp:    formatArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdIdentity{client: opts.Client}
 		},
@@ -62,15 +60,6 @@ func (cmd *cmdIdentity) Execute(args []string) error {
 	if !ok {
 		return fmt.Errorf("cannot find identity %q", cmd.Positional.Name)
 	}
-
-	if cmd.Format == "text" {
-		return cmd.writeText(identity)
-	}
-
-	return cmd.formatNonText(identity)
-}
-
-func (cmd *cmdIdentity) writeText(identity *client.Identity) error {
 	data, err := yaml.Marshal(identity)
 	if err != nil {
 		return err

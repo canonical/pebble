@@ -32,7 +32,6 @@ The check command shows details for a single check in YAML format.
 type cmdCheck struct {
 	client *client.Client
 
-	formatMixin
 	Refresh bool `long:"refresh"`
 
 	Positional struct {
@@ -41,17 +40,17 @@ type cmdCheck struct {
 }
 
 type checkInfo struct {
-	Name         string `json:"name" yaml:"name"`
-	Level        string `json:"level,omitempty" yaml:"level,omitempty"`
-	Startup      string `json:"startup" yaml:"startup"`
-	Status       string `json:"status" yaml:"status"`
-	Successes    *int   `json:"successes,omitempty" yaml:"successes,omitempty"`
-	Failures     int    `json:"failures" yaml:"failures"`
-	Threshold    int    `json:"threshold" yaml:"threshold"`
-	ChangeID     string `json:"change-id,omitempty" yaml:"change-id,omitempty"`
-	PrevChangeID string `json:"prev-change-id,omitempty" yaml:"prev-change-id,omitempty"`
-	Error        string `json:"error,omitempty" yaml:"error,omitempty"`
-	Logs         string `json:"logs,omitempty" yaml:"logs,omitempty"`
+	Name         string `yaml:"name"`
+	Level        string `yaml:"level,omitempty"`
+	Startup      string `yaml:"startup"`
+	Status       string `yaml:"status"`
+	Successes    *int   `yaml:"successes,omitempty"`
+	Failures     int    `yaml:"failures"`
+	Threshold    int    `yaml:"threshold"`
+	ChangeID     string `yaml:"change-id,omitempty"`
+	PrevChangeID string `yaml:"prev-change-id,omitempty"`
+	Error        string `yaml:"error,omitempty"`
+	Logs         string `yaml:"logs,omitempty"`
 }
 
 func init() {
@@ -59,9 +58,9 @@ func init() {
 		Name:        "check",
 		Summary:     cmdCheckSummary,
 		Description: cmdCheckDescription,
-		ArgsHelp: merge(formatArgsHelp, map[string]string{
+		ArgsHelp: map[string]string{
 			"--refresh": "Run the check immediately",
-		}),
+		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdCheck{client: opts.Client}
 		},
@@ -128,15 +127,6 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			info.Logs = logs
 		}
 	}
-
-	if cmd.Format == "text" {
-		return cmd.writeText(info)
-	}
-
-	return cmd.formatNonText(info)
-}
-
-func (cmd *cmdCheck) writeText(info checkInfo) error {
 	data, err := yaml.Marshal(info)
 	if err != nil {
 		return err
