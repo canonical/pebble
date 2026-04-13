@@ -336,7 +336,7 @@ pebble update-identities  Update or replace identities
 pebble remove-identities  Remove identities
 
 [identities command options]
-      --format=   Output format: "text" (default), "json", or "yaml".
+      --format=[text|json|yaml]   Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR identities -->
 
@@ -376,13 +376,15 @@ The logs command fetches buffered logs from the given services (or all services
 if none are specified) and displays them in chronological order.
 
 [logs command options]
-      -f, --follow     Follow (tail) logs for given services until Ctrl-C is
-                       pressed. If no services are specified, show logs from
-                       all services running when the command starts.
-          --format=    Output format: "text" (default) or "json" (JSON lines).
-      -n=              Number of logs to show (before following); defaults to
-                       30.
-                       If 'all', show all buffered logs.
+      -f, --follow             Follow (tail) logs for given services until
+                               Ctrl-C is
+                               pressed. If no services are specified, show logs
+                               from
+                               all services running when the command starts.
+      -n=                      Number of logs to show (before following);
+                               defaults to 30.
+                               If 'all', show all buffered logs.
+          --format=[text|json] Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR logs -->
 
@@ -999,8 +1001,10 @@ The services command lists status information about the services specified, or
 about all services if none are specified.
 
 [services command options]
-      --abs-time     Display absolute times (in RFC 3339 format). Otherwise,
-                     display relative times up to 60 days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
 ```
 <!-- END AUTOMATED OUTPUT FOR services -->
 

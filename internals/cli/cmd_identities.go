@@ -15,13 +15,11 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/canonical/go-flags"
-	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/client"
 )
@@ -42,7 +40,7 @@ subcommand for details):
 type cmdIdentities struct {
 	client *client.Client
 
-	Format string `long:"format"`
+	formatMixin
 }
 
 func init() {
@@ -50,13 +48,15 @@ func init() {
 		Name:        "identities",
 		Summary:     cmdIdentitiesSummary,
 		Description: cmdIdentitiesDescription,
-		ArgsHelp: map[string]string{
-			"--format": `Output format: "text" (default), "json", or "yaml".`,
-		},
+		ArgsHelp:    formatArgsHelp,
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdIdentities{client: opts.Client}
 		},
 	})
+}
+
+type identitiesMap struct {
+	Identities map[string]*client.Identity `json:"identities" yaml:"identities"`
 }
 
 func (cmd *cmdIdentities) Execute(args []string) error {
@@ -64,32 +64,23 @@ func (cmd *cmdIdentities) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
-	var writeOutput func(identities map[string]*client.Identity) error
-	switch cmd.Format {
-	case "", "text":
-		writeOutput = cmd.writeText
-	case "yaml":
-		writeOutput = cmd.writeYAML
-	case "json":
-		writeOutput = cmd.writeJSON
-	default:
-		return fmt.Errorf(`invalid output format (expected "text", "json", or "yaml", not %q)`, cmd.Format)
-	}
-
 	identities, err := cmd.client.Identities(nil)
 	if err != nil {
 		return err
 	}
-	if len(identities) == 0 {
-		fmt.Fprintln(Stderr, "No identities.")
-		return nil
+
+	if cmd.Format == "text" {
+		if len(identities) == 0 {
+			fmt.Fprintln(Stderr, "No identities.")
+			return nil
+		}
+		return cmd.writeText(identities)
 	}
 
-	err = writeOutput(identities)
-	if err != nil {
-		return err
+	if identities == nil {
+		identities = map[string]*client.Identity{}
 	}
-	return nil
+	return cmd.formatNonText(identitiesMap{Identities: identities})
 }
 
 func (cmd *cmdIdentities) writeText(identities map[string]*client.Identity) error {
@@ -122,27 +113,5 @@ func (cmd *cmdIdentities) writeText(identities map[string]*client.Identity) erro
 
 		fmt.Fprintf(writer, "%s\t%s\t%s\n", name, identity.Access, strings.Join(types, ","))
 	}
-	return nil
-}
-
-type identitiesMap struct {
-	Identities map[string]*client.Identity `json:"identities"`
-}
-
-func (cmd *cmdIdentities) writeYAML(identities map[string]*client.Identity) error {
-	data, err := yaml.Marshal(identitiesMap{Identities: identities})
-	if err != nil {
-		return err
-	}
-	fmt.Fprint(Stdout, string(data))
-	return nil
-}
-
-func (cmd *cmdIdentities) writeJSON(identities map[string]*client.Identity) error {
-	data, err := json.Marshal(identitiesMap{Identities: identities})
-	if err != nil {
-		return err
-	}
-	fmt.Fprintln(Stdout, string(data))
 	return nil
 }
