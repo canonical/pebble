@@ -52,7 +52,7 @@ func init() {
 		Description: cmdLogsDescription,
 		ArgsHelp: map[string]string{
 			"--follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
-			"--format": "Output format.",
+			"--format": "Output format",
 			"-n":       "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
