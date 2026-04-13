@@ -56,6 +56,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
@@ -113,7 +114,7 @@ func (s *daemonSuite) newDaemon(c *C) *Daemon {
 		SocketPath:   s.socketPath,
 		HTTPAddress:  s.httpAddress,
 		HTTPSAddress: s.httpsAddress,
-		IDSigner:     newIDKey(c),
+		TLSOptions:   tlsstate.Options{Signer: newIDKey(c)},
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()

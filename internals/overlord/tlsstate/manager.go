@@ -30,7 +30,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -82,6 +81,31 @@ type IDSigner interface {
 	Fingerprint() string
 }
 
+// ConfigureCertificateFunc is called during certificate creation to allow
+// customisation of the certificate fields. The cert parameter is the
+// certificate being created, and parentCopy is a deep copy of the signing
+// (parent) certificate, or nil when the certificate is self-signed.
+// Returning an error aborts certificate creation.
+type ConfigureCertificateFunc func(cert *x509.Certificate, parentCopy *x509.Certificate) error
+
+// Options holds the configuration for creating a TLSManager.
+type Options struct {
+	// TLSDir is the directory used to persist identity certificate files. It
+	// must be a directory of which only the leaf element, at most, does not
+	// exist. The leaf directory will be created with 0o700 permissions.
+	TLSDir string
+	// Signer is a private key representing the identity of a Pebble
+	// instance, which implements the
+	// tlsstate.Signer interface (allowing it to sign digests).
+	Signer IDSigner
+	// ConfigureIDCertificate, if non-nil, is called after the default identity
+	// certificate fields are set and may override any of them.
+	ConfigureIDCertificate ConfigureCertificateFunc
+	// ConfigureTLSCertificate, if non-nil, is called after the default TLS
+	// certificate fields are set and may override any of them.
+	ConfigureTLSCertificate ConfigureCertificateFunc
+}
+
 type TLSManager struct {
 	// tlsDir is the location of the PEM keypair files.
 	tlsDir string
@@ -93,37 +117,68 @@ type TLSManager struct {
 	// The identity key used for signing TLS certificates.
 	signer IDSigner
 
-	// The identity and tls certificate optionally allows a
-	// select number of fields to be supplied from externally
-	// supplied X509 templates (see SetX509Templates).
-	idTemplate  *x509.Certificate
-	tlsTemplate *x509.Certificate
+	// Optional caller-supplied functions applied after the defaults when
+	// creating the identity and TLS certificates respectively.
+	configureIDCert  ConfigureCertificateFunc
+	configureTLSCert ConfigureCertificateFunc
 }
 
-// NewManager creates a new TLS keypair manager. The tlsDir must be a
-// directory of which only the leaf element, at most, does not exist. The
-// leaf directory will be created with 0o700 permissions. The signer
-// represents the identity key of the machine, container or device. The
-// signer will be used to sign TLS keypairs and the identity certificate.
-// The identity certificate acts as the root CA.
-func NewManager(tlsDir string, signer IDSigner) *TLSManager {
-	m := &TLSManager{
-		tlsDir: tlsDir,
-		signer: signer,
+// NewManager creates a new TLS keypair manager using the provided options.
+// opts.TLSDir must be a directory of which only the leaf element, at most,
+// does not exist; the leaf directory will be created with 0o700 permissions.
+// opts.Signer represents the identity key of the machine, container or device
+// and will be used to sign TLS keypairs and the identity certificate.
+func NewManager(opts *Options) *TLSManager {
+	return &TLSManager{
+		tlsDir:           opts.TLSDir,
+		signer:           opts.Signer,
+		configureIDCert:  opts.ConfigureIDCertificate,
+		configureTLSCert: opts.ConfigureTLSCertificate,
 	}
-	return m
 }
 
-// SetX509Templates allows select fields of the certificates to be externally
-// supplied. This function must be called before any call to GetCertificate
-// otherwise templates will not be applied consistently. If this function
-// is not called during manager creation, the default template will be used,
-// setting only the subject Common Name (see defaultCertSubject).
-func (m *TLSManager) SetX509Templates(idTemplate, tlsTemplate *x509.Certificate) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.idTemplate = idTemplate
-	m.tlsTemplate = tlsTemplate
+func generateSerialNumber() (*big.Int, error) {
+	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
+	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+	if err != nil {
+		return nil, err
+	}
+
+	return serialNumber, nil
+}
+
+func setIDCertDefaults(signer IDSigner, c *x509.Certificate) error {
+	serialNumber, err := generateSerialNumber()
+	if err != nil {
+		return err
+	}
+	c.SerialNumber = serialNumber
+	c.Subject = defaultCertSubject(signer.Fingerprint())
+	c.NotBefore = timeNow()
+	c.NotAfter = c.NotBefore.Add(idCertValidity)
+	c.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageCRLSign
+	c.ExtKeyUsage = []x509.ExtKeyUsage{}
+	c.BasicConstraintsValid = true
+	c.IsCA = true
+	// We can only sign leaf certificates with this.
+	c.MaxPathLen = 0
+	c.MaxPathLenZero = true
+	return nil
+}
+
+func setTLSCertDefaults(signer IDSigner, c *x509.Certificate) error {
+	serialNumber, err := generateSerialNumber()
+	if err != nil {
+		return err
+	}
+	c.SerialNumber = serialNumber
+	c.Subject = defaultCertSubject(signer.Fingerprint())
+	c.NotBefore = timeNow()
+	c.NotAfter = c.NotBefore.Add(tlsCertValidity)
+	c.KeyUsage = x509.KeyUsageDigitalSignature
+	c.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+	c.BasicConstraintsValid = true
+	return nil
 }
 
 // ListenConfig provides a complete TLS default configuration, which includes the
@@ -198,30 +253,22 @@ func (m *TLSManager) createTLSCert() error {
 	if err != nil {
 		return err
 	}
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
+
+	// Create a deep copy of the parent (identity) certificate.
+	parent, err := x509.ParseCertificate(m.idCert.Raw)
 	if err != nil {
 		return err
 	}
-	now := timeNow()
-	template := x509.Certificate{
-		SerialNumber:          serialNumber,
-		Subject:               defaultCertSubject(m.signer.Fingerprint()),
-		NotBefore:             now,
-		NotAfter:              now.Add(tlsCertValidity),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
 
-	// If an externally supplied TLS certificate template was provided,
-	// use it to update the supported fields.
-	if m.tlsTemplate != nil {
-		template.Subject = deepCopyName(m.tlsTemplate.Subject)
-		template.Issuer = deepCopyName(m.tlsTemplate.Issuer)
-		// Supported SAN (Subject Alternate Name) fields.
-		template.DNSNames = slices.Clone(m.tlsTemplate.DNSNames)
-		template.EmailAddresses = slices.Clone(m.tlsTemplate.EmailAddresses)
+	// Apply defaults then the optional caller-supplied configuration.
+	template := x509.Certificate{}
+	if err := setTLSCertDefaults(m.signer, &template); err != nil {
+		return err
+	}
+	if m.configureTLSCert != nil {
+		if err := m.configureTLSCert(&template, parent); err != nil {
+			return err
+		}
 	}
 
 	// DER encoded bytes
@@ -296,7 +343,7 @@ func (m *TLSManager) ensureIDCert() error {
 
 	// If we get here a new identity certificate must be created.
 	var err error
-	m.idCert, err = createIDCert(m.signer, m.idTemplate)
+	m.idCert, err = createIDCert(m.signer, m.configureIDCert)
 	if err != nil {
 		return err
 	}
@@ -364,35 +411,16 @@ func saveIDCert(path string, cert *x509.Certificate) (err error) {
 // key. This certificate is included in the TLS certificate chain as the
 // non-leaf certificate, allowing the client to pin this certificate during
 // the client server trust exchange (pairing) procedure.
-func createIDCert(signer IDSigner, idTemplate *x509.Certificate) (*x509.Certificate, error) {
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	if err != nil {
+func createIDCert(signer IDSigner, configure ConfigureCertificateFunc) (*x509.Certificate, error) {
+	// Apply defaults then the optional caller-supplied configuration.
+	template := &x509.Certificate{}
+	if err := setIDCertDefaults(signer, template); err != nil {
 		return nil, err
 	}
-	now := timeNow()
-	template := &x509.Certificate{
-		SerialNumber:          serialNumber,
-		Subject:               defaultCertSubject(signer.Fingerprint()),
-		NotBefore:             now,
-		NotAfter:              now.Add(idCertValidity),
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
-		ExtKeyUsage:           []x509.ExtKeyUsage{},
-		BasicConstraintsValid: true,
-		IsCA:                  true,
-		// We can only sign leaf certificates with this.
-		MaxPathLen:     0,
-		MaxPathLenZero: true,
-	}
-
-	// If an externally supplied TLS certificate template was provided,
-	// use it to update the supported fields.
-	if idTemplate != nil {
-		template.Subject = deepCopyName(idTemplate.Subject)
-		template.Issuer = deepCopyName(idTemplate.Issuer)
-		// Supported SAN (Subject Alternate Name) fields.
-		template.DNSNames = slices.Clone(idTemplate.DNSNames)
-		template.EmailAddresses = slices.Clone(idTemplate.EmailAddresses)
+	if configure != nil {
+		if err := configure(template, nil); err != nil {
+			return nil, err
+		}
 	}
 
 	// The identity CA cert is self-signed, which allows a client to verify the
@@ -475,14 +503,4 @@ func defaultCertSubject(fingerprint string) pkix.Name {
 		CommonName: cn.String(),
 	}
 	return subject
-}
-
-// deepCopyName supports deep copying some common fields of the
-// pkix.Name structure. The 'Names' and 'ExtraNames' attributes
-// are ignored.
-func deepCopyName(name pkix.Name) pkix.Name {
-	cpy := pkix.Name{}
-	rdnSeq := name.ToRDNSequence()
-	cpy.FillFromRDNSequence(&rdnSeq)
-	return cpy
 }
