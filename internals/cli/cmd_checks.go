@@ -34,6 +34,7 @@ arguments.
 type cmdChecks struct {
 	client *client.Client
 
+	formatMixin
 	//lint:ignore SA5008 "choice" tag is intentionally duplicated
 	Level      string `long:"level" choice:"alive" choice:"ready"`
 	Positional struct {
@@ -46,9 +47,9 @@ func init() {
 		Name:        "checks",
 		Summary:     cmdChecksSummary,
 		Description: cmdChecksDescription,
-		ArgsHelp: map[string]string{
+		ArgsHelp: merge(map[string]string{
 			"--level": "Check level to filter for",
-		},
+		}, formatArgsHelp),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdChecks{client: opts.Client}
 		},
@@ -68,15 +69,30 @@ func (cmd *cmdChecks) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(checks) == 0 {
-		if len(cmd.Positional.Checks) == 0 && cmd.Level == "" {
-			fmt.Fprintln(Stderr, "Plan has no health checks.")
-		} else {
-			fmt.Fprintln(Stderr, "No matching health checks.")
+
+	if cmd.Format == "text" {
+		if len(checks) == 0 {
+			if len(cmd.Positional.Checks) == 0 && cmd.Level == "" {
+				fmt.Fprintln(Stderr, "Plan has no health checks.")
+			} else {
+				fmt.Fprintln(Stderr, "No matching health checks.")
+			}
+			return nil
 		}
-		return nil
+		return cmd.writeText(checks)
 	}
 
+	if checks == nil {
+		checks = []*client.CheckInfo{}
+	}
+	return cmd.formatNonText(checksResult{Checks: checks})
+}
+
+type checksResult struct {
+	Checks []*client.CheckInfo `json:"checks" yaml:"checks"`
+}
+
+func (cmd *cmdChecks) writeText(checks []*client.CheckInfo) error {
 	w := tabWriter()
 	defer w.Flush()
 

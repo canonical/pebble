@@ -137,7 +137,8 @@ Usage:
 The check command shows details for a single check in YAML format.
 
 [check command options]
-      --refresh    Run the check immediately
+      --format=[text|json|yaml]   Output format (default: text)
+      --refresh                   Run the check immediately
 ```
 <!-- END AUTOMATED OUTPUT FOR check -->
 
@@ -158,7 +159,8 @@ checks, optionally filtered by level and check names provided as positional
 arguments.
 
 [checks command options]
-      --level=[alive|ready]   Check level to filter for
+      --format=[text|json|yaml]   Output format (default: text)
+      --level=[alive|ready]       Check level to filter for
 ```
 <!-- END AUTOMATED OUTPUT FOR checks -->
 
