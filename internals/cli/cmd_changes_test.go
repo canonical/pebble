@@ -30,6 +30,69 @@ import (
 	"github.com/canonical/pebble/internals/cli"
 )
 
+var fakeChangeJSON = `{"type": "sync", "result": {
+  "id":   "uno",
+  "kind": "foo",
+  "summary": "...",
+  "status": "Do",
+  "ready": false,
+  "spawn-time": "2016-04-21T01:02:03Z",
+  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z"}]
+}}`
+
+var fakeChangesJSON = `{"type": "sync", "result": [
+  {
+    "id":   "four",
+    "kind": "install",
+    "summary": "...",
+    "status": "Do",
+    "ready": false,
+    "spawn-time": "2015-02-21T01:02:03Z",
+    "ready-time": "2015-02-21T01:02:04Z",
+    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2015-02-21T01:02:03Z", "ready-time": "2015-02-21T01:02:04Z"}]
+  },
+  {
+    "id":   "one",
+    "kind": "remove",
+    "summary": "...",
+    "status": "Do",
+    "ready": false,
+    "spawn-time": "2016-03-21T01:02:03Z",
+    "ready-time": "2016-03-21T01:02:04Z",
+    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-03-21T01:02:03Z", "ready-time": "2016-03-21T01:02:04Z"}]
+  },
+  {
+    "id":   "two",
+    "kind": "install",
+    "summary": "...",
+    "status": "Do",
+    "ready": false,
+    "spawn-time": "2016-04-21T01:02:03Z",
+    "ready-time": "2016-04-21T01:02:04Z",
+    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z"}]
+  },
+  {
+    "id":   "three",
+    "kind": "install",
+    "summary": "...",
+    "status": "Do",
+    "ready": false,
+    "spawn-time": "2016-01-21T01:02:03Z",
+    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-01-21T01:02:03Z", "ready-time": "2016-01-21T01:02:04Z"}]
+  }
+]}`
+
+var fakeChangeInProgressJSON = `{"type": "sync", "result": {
+  "id":   "uno",
+  "kind": "foo",
+  "summary": "...",
+  "status": "Do",
+  "ready": false,
+  "spawn-time": "2016-04-21T01:02:03Z",
+  "ready-time": "2016-04-21T01:02:04Z",
+  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Doing", "progress": {"done": 50, "total": 100}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z", "log": ["a", "b", "c"]}]
+}}`
+
 func (s *PebbleSuite) TestChangesExtraArgs(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
@@ -101,6 +164,144 @@ two +Do +2016-04-21 +2016-04-2[12] +...
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
+func (s *PebbleSuite) TestChangesJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+		fmt.Fprintln(w, fakeChangesJSON)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"changes":[{"id":"four","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"}],"ready":false,"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"},{"id":"three","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-01-21T01:02:03Z","ready-time":"2016-01-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-01-21T01:02:03Z"},{"id":"one","kind":"remove","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"},{"id":"two","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}]}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChangesYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+		fmt.Fprintln(w, fakeChangesJSON)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+changes:
+    - id: four
+      kind: install
+      summary: '...'
+      status: Do
+      tasks:
+        - id: ""
+          kind: bar
+          summary: some summary
+          status: Do
+          progress:
+            label: ""
+            done: 0
+            total: 1
+          spawn-time: 2015-02-21T01:02:03Z
+          ready-time: 2015-02-21T01:02:04Z
+      ready: false
+      spawn-time: 2015-02-21T01:02:03Z
+      ready-time: 2015-02-21T01:02:04Z
+    - id: three
+      kind: install
+      summary: '...'
+      status: Do
+      tasks:
+        - id: ""
+          kind: bar
+          summary: some summary
+          status: Do
+          progress:
+            label: ""
+            done: 0
+            total: 1
+          spawn-time: 2016-01-21T01:02:03Z
+          ready-time: 2016-01-21T01:02:04Z
+      ready: false
+      spawn-time: 2016-01-21T01:02:03Z
+    - id: one
+      kind: remove
+      summary: '...'
+      status: Do
+      tasks:
+        - id: ""
+          kind: bar
+          summary: some summary
+          status: Do
+          progress:
+            label: ""
+            done: 0
+            total: 1
+          spawn-time: 2016-03-21T01:02:03Z
+          ready-time: 2016-03-21T01:02:04Z
+      ready: false
+      spawn-time: 2016-03-21T01:02:03Z
+      ready-time: 2016-03-21T01:02:04Z
+    - id: two
+      kind: install
+      summary: '...'
+      status: Do
+      tasks:
+        - id: ""
+          kind: bar
+          summary: some summary
+          status: Do
+          progress:
+            label: ""
+            done: 0
+            total: 1
+          spawn-time: 2016-04-21T01:02:03Z
+          ready-time: 2016-04-21T01:02:04Z
+      ready: false
+      spawn-time: 2016-04-21T01:02:03Z
+      ready-time: 2016-04-21T01:02:04Z
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestNoChangesJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+		fmt.Fprintln(w, `{"type":"sync", "result": []}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"changes":[]}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestNoChangesYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+		fmt.Fprintln(w, `{"type":"sync", "result": []}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, "changes: []\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestChangesInvalidFormat(c *check.C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "foobar"})
+	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+}
+
 func (s *PebbleSuite) TestChangesUnknownMaintenance(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, check.Equals, "GET")
@@ -116,16 +317,6 @@ func (s *PebbleSuite) TestChangesUnknownMaintenance(c *check.C) {
 	c.Check(s.Stdout(), check.Matches, "")
 	c.Check(s.Stderr(), check.Equals, "")
 }
-
-var fakeChangeJSON = `{"type": "sync", "result": {
-  "id":   "uno",
-  "kind": "foo",
-  "summary": "...",
-  "status": "Do",
-  "ready": false,
-  "spawn-time": "2016-04-21T01:02:03Z",
-  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z"}]
-}}`
 
 func (s *PebbleSuite) TestChangeSimple(c *check.C) {
 	n := 0
@@ -195,48 +386,6 @@ func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *check.C) {
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
-var fakeChangesJSON = `{"type": "sync", "result": [
-  {
-    "id":   "four",
-    "kind": "install",
-    "summary": "...",
-    "status": "Do",
-    "ready": false,
-    "spawn-time": "2015-02-21T01:02:03Z",
-    "ready-time": "2015-02-21T01:02:04Z",
-    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2015-02-21T01:02:03Z", "ready-time": "2015-02-21T01:02:04Z"}]
-  },
-  {
-    "id":   "one",
-    "kind": "remove",
-    "summary": "...",
-    "status": "Do",
-    "ready": false,
-    "spawn-time": "2016-03-21T01:02:03Z",
-    "ready-time": "2016-03-21T01:02:04Z",
-    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-03-21T01:02:03Z", "ready-time": "2016-03-21T01:02:04Z"}]
-  },
-  {
-    "id":   "two",
-    "kind": "install",
-    "summary": "...",
-    "status": "Do",
-    "ready": false,
-    "spawn-time": "2016-04-21T01:02:03Z",
-    "ready-time": "2016-04-21T01:02:04Z",
-    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z"}]
-  },
-  {
-    "id":   "three",
-    "kind": "install",
-    "summary": "...",
-    "status": "Do",
-    "ready": false,
-    "spawn-time": "2016-01-21T01:02:03Z",
-    "tasks": [{"kind": "bar", "summary": "some summary", "status": "Do", "progress": {"done": 0, "total": 1}, "spawn-time": "2016-01-21T01:02:03Z", "ready-time": "2016-01-21T01:02:04Z"}]
-  }
-]}`
-
 func (s *PebbleSuite) TestTasksLast(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, check.Equals, "GET")
@@ -304,16 +453,56 @@ func (s *PebbleSuite) TestTasksSyntaxError(c *check.C) {
 	c.Assert(err, check.ErrorMatches, `please provide change ID or type with --last=<type>`)
 }
 
-var fakeChangeInProgressJSON = `{"type": "sync", "result": {
-  "id":   "uno",
-  "kind": "foo",
-  "summary": "...",
-  "status": "Do",
-  "ready": false,
-  "spawn-time": "2016-04-21T01:02:03Z",
-  "ready-time": "2016-04-21T01:02:04Z",
-  "tasks": [{"kind": "bar", "summary": "some summary", "status": "Doing", "progress": {"done": 50, "total": 100}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z", "log": ["a", "b", "c"]}]
-}}`
+func (s *PebbleSuite) TestTasksJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+		fmt.Fprintln(w, fakeChangeJSON)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "json", "42"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"change":{"id":"uno","kind":"foo","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestTasksYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+		fmt.Fprintln(w, fakeChangeJSON)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "yaml", "42"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+change:
+    id: uno
+    kind: foo
+    summary: '...'
+    status: Do
+    tasks:
+        - id: ""
+          kind: bar
+          summary: some summary
+          status: Do
+          progress:
+            label: ""
+            done: 0
+            total: 1
+          spawn-time: 2016-04-21T01:02:03Z
+    ready: false
+    spawn-time: 2016-04-21T01:02:03Z
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestTasksInvalidFormat(c *check.C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "foobar", "42"})
+	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+}
 
 func (s *PebbleSuite) TestChangeProgress(c *check.C) {
 	n := 0

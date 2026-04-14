@@ -26,16 +26,16 @@ import (
 
 // Change is a modification to the system state.
 type Change struct {
-	ID      string  `json:"id"`
-	Kind    string  `json:"kind"`
-	Summary string  `json:"summary"`
-	Status  string  `json:"status"`
-	Tasks   []*Task `json:"tasks,omitempty"`
-	Ready   bool    `json:"ready"`
-	Err     string  `json:"err,omitempty"`
+	ID      string  `json:"id" yaml:"id"`
+	Kind    string  `json:"kind" yaml:"kind"`
+	Summary string  `json:"summary" yaml:"summary"`
+	Status  string  `json:"status" yaml:"status"`
+	Tasks   []*Task `json:"tasks,omitempty" yaml:"tasks,omitempty"`
+	Ready   bool    `json:"ready" yaml:"ready"`
+	Err     string  `json:"err,omitempty" yaml:"err,omitempty"`
 
-	SpawnTime time.Time `json:"spawn-time"`
-	ReadyTime time.Time `json:"ready-time"`
+	SpawnTime time.Time `json:"spawn-time" yaml:"spawn-time"`
+	ReadyTime time.Time `json:"ready-time,omitzero" yaml:"ready-time,omitempty"`
 
 	data map[string]*json.RawMessage
 }
@@ -54,17 +54,17 @@ func (c *Change) Get(key string, value any) error {
 
 // Task represents a single operation done to change the system's state.
 type Task struct {
-	ID       string       `json:"id"`
-	Kind     string       `json:"kind"`
-	Summary  string       `json:"summary"`
-	Status   string       `json:"status"`
-	Log      []string     `json:"log,omitempty"`
-	Progress TaskProgress `json:"progress"`
+	ID       string       `json:"id" yaml:"id"`
+	Kind     string       `json:"kind" yaml:"kind"`
+	Summary  string       `json:"summary" yaml:"summary"`
+	Status   string       `json:"status" yaml:"status"`
+	Log      []string     `json:"log,omitempty" yaml:"log,omitempty"`
+	Progress TaskProgress `json:"progress" yaml:"progress"`
 
-	SpawnTime time.Time `json:"spawn-time"`
-	ReadyTime time.Time `json:"ready-time"`
+	SpawnTime time.Time `json:"spawn-time" yaml:"spawn-time"`
+	ReadyTime time.Time `json:"ready-time,omitzero" yaml:"ready-time,omitempty"`
 
-	Data map[string]*json.RawMessage
+	Data map[string]*json.RawMessage `json:"data,omitempty" yaml:"data,omitempty"`
 }
 
 // Get unmarshals into value the kind-specific data with the provided key.
@@ -78,9 +78,9 @@ func (t *Task) Get(key string, value any) error {
 
 // TaskProgress represents the completion progress of a task.
 type TaskProgress struct {
-	Label string `json:"label"`
-	Done  int    `json:"done"`
-	Total int    `json:"total"`
+	Label string `json:"label" yaml:"label"`
+	Done  int    `json:"done" yaml:"done"`
+	Total int    `json:"total" yaml:"total"`
 }
 
 type changeAndData struct {
