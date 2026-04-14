@@ -454,10 +454,13 @@ pattern
 may be specified for the last path element.
 
 [ls command options]
-          --abs-time  Display absolute times (in RFC 3339 format). Otherwise,
-                      display relative times up to 60 days, then YYYY-MM-DD.
-      -d              List matching entries themselves, not directory contents
-      -l              Use a long listing format
+          --abs-time                Display absolute times (in RFC 3339
+                                    format). Otherwise, display relative times
+                                    up to 60 days, then YYYY-MM-DD.
+          --format=[text|json|yaml] Output format (default: text)
+      -d                            List matching entries themselves, not
+                                    directory contents
+      -l                            Use a long listing format
 ```
 <!-- END AUTOMATED OUTPUT FOR ls -->
 
