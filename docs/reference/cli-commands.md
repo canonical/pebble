@@ -351,9 +351,12 @@ The `identity` command is used to show a single identity.
 pebble identity --help
 
 Usage:
-  pebble identity <name>
+  pebble identity [identity-OPTIONS] <name>
 
 The identity command shows details for a single identity in YAML format.
+
+[identity command options]
+      --format=[text|json|yaml]   Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR identity -->
 
