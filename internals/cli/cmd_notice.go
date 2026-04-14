@@ -16,7 +16,6 @@ package cli
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/canonical/go-flags"
 	"gopkg.in/yaml.v3"
@@ -33,6 +32,7 @@ by unique type and key combination (2-arg variant).
 type cmdNotice struct {
 	client *client.Client
 
+	formatMixin
 	UID *uint32 `long:"uid"`
 
 	Positional struct {
@@ -47,9 +47,9 @@ func init() {
 		Summary:     cmdNoticeSummary,
 		Description: cmdNoticeDescription,
 
-		ArgsHelp: map[string]string{
+		ArgsHelp: merge(formatArgsHelp, map[string]string{
 			"--uid": `Look up notice from user with this UID (admin only; 2-arg variant only)`,
-		},
+		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdNotice{client: opts.Client}
 		},
@@ -98,28 +98,18 @@ func (cmd *cmdNotice) Execute(args []string) error {
 		}
 	}
 
-	// Notice can be assigned directly to yamlNotice as only the tags are different.
-	yn := yamlNotice(*notice)
+	if cmd.Format == "text" {
+		return cmd.writeText(notice)
+	}
 
-	b, err := yaml.Marshal(yn)
+	return cmd.formatNonText(notice)
+}
+
+func (cmd *cmdNotice) writeText(notice *client.Notice) error {
+	b, err := yaml.Marshal(notice)
 	if err != nil {
 		return err
 	}
 	fmt.Fprint(Stdout, string(b)) // yaml.Marshal includes the trailing newline
 	return nil
-}
-
-// yamlNotice exists to add "yaml" tags to the Notice fields.
-type yamlNotice struct {
-	ID            string            `yaml:"id"`
-	UserID        *uint32           `yaml:"user-id"`
-	Type          client.NoticeType `yaml:"type"`
-	Key           string            `yaml:"key"`
-	FirstOccurred time.Time         `yaml:"first-occurred"`
-	LastOccurred  time.Time         `yaml:"last-occurred"`
-	LastRepeated  time.Time         `yaml:"last-repeated"`
-	Occurrences   int               `yaml:"occurrences"`
-	LastData      map[string]string `yaml:"last-data,omitempty"`
-	RepeatAfter   time.Duration     `yaml:"repeat-after,omitempty"`
-	ExpireAfter   time.Duration     `yaml:"expire-after,omitempty"`
 }

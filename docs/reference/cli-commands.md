@@ -508,8 +508,9 @@ The notice command fetches a single notice, either by ID (1-arg variant), or
 by unique type and key combination (2-arg variant).
 
 [notice command options]
-      --uid=            Look up notice from user with this UID (admin only;
-                        2-arg variant only)
+      --format=[text|json|yaml]   Output format (default: text)
+      --uid=                      Look up notice from user with this UID (admin
+                                  only; 2-arg variant only)
 ```
 <!-- END AUTOMATED OUTPUT FOR notice -->
 
@@ -577,15 +578,21 @@ can use --users=all to view notice with any user ID, or --uid=UID to view
 another user's notices.
 
 [notices command options]
-      --abs-time    Display absolute times (in RFC 3339 format). Otherwise,
-                    display relative times up to 60 days, then YYYY-MM-DD.
-      --users=      The only valid value is 'all', which lists notices with any
-                    user ID (admin only; cannot be used with --uid)
-      --uid=        Only list notices with this user ID (admin only; cannot be
-                    used with --users)
-      --type=       Only list notices of this type (multiple allowed)
-      --key=        Only list notices with this key (multiple allowed)
-      --timeout=    Wait up to this duration for matching notices to arrive
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
+      --users=                    The only valid value is 'all', which lists
+                                  notices with any user ID (admin only; cannot
+                                  be used with --uid)
+      --uid=                      Only list notices with this user ID (admin
+                                  only; cannot be used with --users)
+      --type=                     Only list notices of this type (multiple
+                                  allowed)
+      --key=                      Only list notices with this key (multiple
+                                  allowed)
+      --timeout=                  Wait up to this duration for matching notices
+                                  to arrive
 ```
 <!-- END AUTOMATED OUTPUT FOR notices -->
 
@@ -1308,6 +1315,7 @@ Warnings expire automatically, and once expired they are forgotten.
       --abs-time                      Display absolute times (in RFC 3339
                                       format). Otherwise, display relative
                                       times up to 60 days, then YYYY-MM-DD.
+      --format=[text|json|yaml]       Output format (default: text)
       --unicode=[auto|never|always]   Use a little bit of Unicode to improve
                                       legibility. (default: auto)
       --all                           Show all warnings

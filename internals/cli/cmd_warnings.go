@@ -45,6 +45,7 @@ type cmdWarnings struct {
 	socketPath string
 
 	timeMixin
+	formatMixin
 	unicodeMixin
 	All     bool `long:"all"`
 	Verbose bool `long:"verbose"`
@@ -55,7 +56,7 @@ func init() {
 		Name:        "warnings",
 		Summary:     cmdWarningsSummary,
 		Description: cmdWarningsDescription,
-		ArgsHelp: merge(timeArgsHelp, unicodeArgsHelp, map[string]string{
+		ArgsHelp: merge(timeArgsHelp, formatArgsHelp, unicodeArgsHelp, map[string]string{
 			"--all":     "Show all warnings",
 			"--verbose": "Show more information",
 		}),
@@ -90,15 +91,30 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 	if err != nil {
 		return fmt.Errorf("cannot get notices: %w", err)
 	}
-	if len(warnings) == 0 {
-		if cmd.All || state.WarningsLastOkayed.IsZero() {
-			fmt.Fprintln(Stderr, "No warnings.")
-		} else {
-			fmt.Fprintln(Stderr, "No further warnings.")
+
+	if cmd.Format == "text" {
+		if len(warnings) == 0 {
+			if cmd.All || state.WarningsLastOkayed.IsZero() {
+				fmt.Fprintln(Stderr, "No warnings.")
+			} else {
+				fmt.Fprintln(Stderr, "No further warnings.")
+			}
+			return nil
 		}
-		return nil
+		return cmd.writeText(warnings, state)
 	}
 
+	if warnings == nil {
+		warnings = []*client.Notice{}
+	}
+	return cmd.formatNonText(warningsResult{Warnings: warnings})
+}
+
+type warningsResult struct {
+	Warnings []*client.Notice `json:"warnings" yaml:"warnings"`
+}
+
+func (cmd *cmdWarnings) writeText(warnings []*client.Notice, state *cliState) error {
 	termWidth, _ := termSize()
 	if termWidth > 100 {
 		// any wider than this and it gets hard to read
@@ -127,7 +143,7 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 
 	if !cmd.All {
 		state.WarningsLastListed = warnings[len(warnings)-1].LastRepeated
-		err = saveCLIState(cmd.socketPath, state)
+		err := saveCLIState(cmd.socketPath, state)
 		if err != nil {
 			return fmt.Errorf("cannot save CLI state: %w", err)
 		}
