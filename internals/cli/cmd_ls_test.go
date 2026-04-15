@@ -184,7 +184,7 @@ func (s *PebbleSuite) TestLsJSON(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "json", "/"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Matches, `\{"files":\[.*\]\}\n`)
+	c.Check(s.Stdout(), Equals, `{"files":[{"path":"/foo","name":"foo","type":"directory","permissions":"777","last-modified":"2016-04-21T01:02:03Z","user-id":0,"user":"root","group-id":0,"group":"root"},{"path":"/bar","name":"bar","type":"file","size":1024,"permissions":"644","last-modified":"2021-04-21T01:02:03Z","user-id":600,"user":"toor","group-id":600,"group":"toor"}]}`+"\n")
 	c.Check(s.Stderr(), Equals, "")
 }
 
@@ -212,7 +212,18 @@ func (s *PebbleSuite) TestLsYAML(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "yaml", "-d", "/"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Matches, `(?s)files:\n    - path: /\n.*`)
+	c.Check(s.Stdout(), Equals, `
+files:
+- path: /
+	name: /
+	type: directory
+	permissions: "777"
+	last-modified: "2016-04-21T01:02:03Z"
+	user-id: 0
+	user: root
+	group-id: 0
+	group: root
+`)
 	c.Check(s.Stderr(), Equals, "")
 }
 

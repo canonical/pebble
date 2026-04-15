@@ -68,9 +68,9 @@ type fileEntry struct {
 	Size         *int64 `json:"size,omitempty" yaml:"size,omitempty"`
 	Permissions  string `json:"permissions" yaml:"permissions"`
 	LastModified string `json:"last-modified" yaml:"last-modified"`
-	UserID       *int   `json:"user-id" yaml:"user-id"`
+	UserID       *int   `json:"user-id,omitempty" yaml:"user-id,omitempty"`
 	User         string `json:"user" yaml:"user"`
-	GroupID      *int   `json:"group-id" yaml:"group-id"`
+	GroupID      *int   `json:"group-id,omitempty" yaml:"group-id,omitempty"`
 	Group        string `json:"group" yaml:"group"`
 }
 
@@ -78,30 +78,41 @@ type lsResult struct {
 	Files []fileEntry `json:"files" yaml:"files"`
 }
 
+func fileModeToType(mode os.FileMode) string {
+	switch {
+	case mode&os.ModeType == 0:
+		return "file"
+	case mode&os.ModeDir != 0:
+		return "directory"
+	case mode&os.ModeSymlink != 0:
+		return "symlink"
+	case mode&os.ModeSocket != 0:
+		return "socket"
+	case mode&os.ModeNamedPipe != 0:
+		return "named-pipe"
+	case mode&os.ModeDevice != 0:
+		return "device"
+	default:
+		return "unknown"
+	}
+}
+
 func fileInfoToEntry(fi *client.FileInfo) fileEntry {
+	mode := fi.Mode()
 	entry := fileEntry{
 		Path:         fi.Path(),
 		Name:         fi.Name(),
-		Permissions:  fmt.Sprintf("%03o", fi.Mode().Perm()),
+		Type:         fileModeToType(mode),
+		Permissions:  fmt.Sprintf("%03o", mode.Perm()),
 		LastModified: fi.ModTime().Format(time.RFC3339),
+		UserID:       fi.UserID(),
 		User:         fi.User(),
+		GroupID:      fi.GroupID(),
 		Group:        fi.Group(),
 	}
-	switch {
-	case fi.Mode().IsDir():
-		entry.Type = "directory"
-	case fi.Mode()&os.ModeSymlink != 0:
-		entry.Type = "symlink"
-	default:
-		entry.Type = "file"
+	if mode.IsRegular() {
 		size := fi.Size()
 		entry.Size = &size
-	}
-	if uid := fi.UserID(); uid != nil {
-		entry.UserID = uid
-	}
-	if gid := fi.GroupID(); gid != nil {
-		entry.GroupID = gid
 	}
 	return entry
 }
@@ -129,9 +140,9 @@ func (cmd *cmdLs) Execute(args []string) error {
 		return cmd.writeText(files)
 	}
 
-	entries := make([]fileEntry, len(files))
-	for i, fi := range files {
-		entries[i] = fileInfoToEntry(fi)
+	entries := make([]fileEntry, 0, len(files))
+	for _, fi := range files {
+		entries = append(entries, fileInfoToEntry(fi))
 	}
 	return cmd.formatNonText(lsResult{Files: entries})
 }
