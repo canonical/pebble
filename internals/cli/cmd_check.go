@@ -26,7 +26,7 @@ import (
 
 const cmdCheckSummary = "Query the details of a configured health check"
 const cmdCheckDescription = `
-The check command shows details for a single check in YAML format.
+The check command shows details for a single check.
 `
 
 type cmdCheck struct {
@@ -41,17 +41,10 @@ type cmdCheck struct {
 }
 
 type checkInfo struct {
-	Name         string `json:"name" yaml:"name"`
-	Level        string `json:"level,omitempty" yaml:"level,omitempty"`
-	Startup      string `json:"startup" yaml:"startup"`
-	Status       string `json:"status" yaml:"status"`
-	Successes    *int   `json:"successes,omitempty" yaml:"successes,omitempty"`
-	Failures     int    `json:"failures" yaml:"failures"`
-	Threshold    int    `json:"threshold" yaml:"threshold"`
-	ChangeID     string `json:"change-id,omitempty" yaml:"change-id,omitempty"`
-	PrevChangeID string `json:"prev-change-id,omitempty" yaml:"prev-change-id,omitempty"`
-	Error        string `json:"error,omitempty" yaml:"error,omitempty"`
-	Logs         string `json:"logs,omitempty" yaml:"logs,omitempty"`
+	client.CheckInfo `yaml:",inline"`
+
+	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Logs  string `json:"logs,omitempty" yaml:"logs,omitempty"`
 }
 
 func init() {
@@ -66,20 +59,6 @@ func init() {
 			return &cmdCheck{client: opts.Client}
 		},
 	})
-}
-
-func checkInfoFromClient(check client.CheckInfo) checkInfo {
-	return checkInfo{
-		Name:         check.Name,
-		Level:        string(check.Level),
-		Startup:      string(check.Startup),
-		Status:       string(check.Status),
-		Successes:    check.Successes,
-		Failures:     check.Failures,
-		Threshold:    check.Threshold,
-		ChangeID:     check.ChangeID,
-		PrevChangeID: check.PrevChangeID,
-	}
 }
 
 func (cmd *cmdCheck) Execute(args []string) error {
@@ -97,7 +76,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			return err
 		}
 
-		info = checkInfoFromClient(res.Info)
+		info.CheckInfo = res.Info
 		info.Error = res.Error
 	} else {
 		opts := client.ChecksOptions{
@@ -110,7 +89,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 		if len(checks) == 0 {
 			return fmt.Errorf("cannot find check %q", cmd.Positional.Check)
 		}
-		info = checkInfoFromClient(*checks[0])
+		info.CheckInfo = *checks[0]
 	}
 
 	if info.Failures > 0 || info.Error != "" {

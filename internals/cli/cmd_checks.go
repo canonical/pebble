@@ -82,14 +82,15 @@ func (cmd *cmdChecks) Execute(args []string) error {
 		return cmd.writeText(checks)
 	}
 
-	if checks == nil {
-		checks = []*client.CheckInfo{}
+	checkMap := make(map[string]*client.CheckInfo, len(checks))
+	for _, check := range checks {
+		checkMap[check.Name] = check
 	}
-	return cmd.formatNonText(checksResult{Checks: checks})
+	return cmd.formatNonText(checksMap{Checks: checkMap})
 }
 
-type checksResult struct {
-	Checks []*client.CheckInfo `json:"checks" yaml:"checks"`
+type checksMap struct {
+	Checks map[string]*client.CheckInfo `json:"checks" yaml:"checks"`
 }
 
 func (cmd *cmdChecks) writeText(checks []*client.CheckInfo) error {

@@ -265,7 +265,7 @@ func (s *PebbleSuite) TestChecksJSON(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"checks":[{"name":"chk1","level":"","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1","prev-change-id":""},{"name":"chk2","level":"alive","startup":"enabled","status":"down","successes":null,"failures":1,"threshold":1,"change-id":"2","prev-change-id":""}]}`+"\n")
+	c.Check(s.Stdout(), check.Equals, `{"checks":{"chk1":{"name":"chk1","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1"},"chk2":{"name":"chk2","level":"alive","startup":"enabled","status":"down","failures":1,"threshold":1,"change-id":"2"}}}`+"\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
@@ -288,15 +288,14 @@ func (s *PebbleSuite) TestChecksYAML(c *check.C) {
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
 checks:
-    - name: chk1
-      level: ""
-      startup: enabled
-      status: up
-      successes: 5
-      failures: 0
-      threshold: 3
-      change-id: "1"
-      prev-change-id: ""
+    chk1:
+        name: chk1
+        startup: enabled
+        status: up
+        successes: 5
+        failures: 0
+        threshold: 3
+        change-id: "1"
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -311,7 +310,7 @@ func (s *PebbleSuite) TestNoChecksJSON(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"checks":[]}`+"\n")
+	c.Check(s.Stdout(), check.Equals, `{"checks":{}}`+"\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
@@ -325,7 +324,7 @@ func (s *PebbleSuite) TestNoChecksYAML(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "yaml"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "checks: []\n")
+	c.Check(s.Stdout(), check.Equals, "checks: {}\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 

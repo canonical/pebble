@@ -134,7 +134,7 @@ pebble check --help
 Usage:
   pebble check [check-OPTIONS] <check>
 
-The check command shows details for a single check in YAML format.
+The check command shows details for a single check.
 
 [check command options]
       --format=[text|json|yaml]   Output format (default: text)
