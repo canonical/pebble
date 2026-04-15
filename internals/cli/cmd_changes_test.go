@@ -463,7 +463,7 @@ func (s *PebbleSuite) TestTasksJSON(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "json", "42"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"change":{"id":"uno","kind":"foo","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}}`+"\n")
+	c.Check(s.Stdout(), check.Equals, `{"tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}]}`+"\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
@@ -478,23 +478,16 @@ func (s *PebbleSuite) TestTasksYAML(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-change:
-    id: uno
-    kind: foo
-    summary: '...'
-    status: Do
-    tasks:
-        - id: ""
-          kind: bar
-          summary: some summary
-          status: Do
-          progress:
-            label: ""
-            done: 0
-            total: 1
-          spawn-time: 2016-04-21T01:02:03Z
-    ready: false
-    spawn-time: 2016-04-21T01:02:03Z
+tasks:
+    - id: ""
+      kind: bar
+      summary: some summary
+      status: Do
+      progress:
+        label: ""
+        done: 0
+        total: 1
+      spawn-time: 2016-04-21T01:02:03Z
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
