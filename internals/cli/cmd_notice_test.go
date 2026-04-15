@@ -83,7 +83,10 @@ func (s *PebbleSuite) TestNoticeJSON(c *C) {
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
-				"occurrences": 1
+				"occurrences": 1,
+				"last-data": {"k": "v"},
+				"repeat-after": "1h0m0s",
+				"expire-after": "168h0m0s"
 			}
 		}`)
 	})
@@ -91,7 +94,7 @@ func (s *PebbleSuite) TestNoticeJSON(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "--format", "json", "123"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `{"id":"123","user-id":1000,"type":"custom","key":"a.b/c","first-occurred":"2023-09-05T17:18:00Z","last-occurred":"2023-09-05T19:18:00Z","last-repeated":"2023-09-05T18:18:00Z","occurrences":1}`+"\n")
+	c.Check(s.Stdout(), Equals, `{"id":"123","user-id":1000,"type":"custom","key":"a.b/c","first-occurred":"2023-09-05T17:18:00Z","last-occurred":"2023-09-05T19:18:00Z","last-repeated":"2023-09-05T18:18:00Z","occurrences":1,"last-data":{"k":"v"},"repeat-after":"1h0m0s","expire-after":"168h0m0s"}`+"\n")
 	c.Check(s.Stderr(), Equals, "")
 }
 
@@ -110,7 +113,10 @@ func (s *PebbleSuite) TestNoticeYAML(c *C) {
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
-				"occurrences": 1
+				"occurrences": 1,
+				"last-data": {"k": "v"},
+				"repeat-after": "1h0m0s",
+				"expire-after": "168h0m0s"
 			}
 		}`)
 	})
@@ -127,6 +133,10 @@ first-occurred: 2023-09-05T17:18:00Z
 last-occurred: 2023-09-05T19:18:00Z
 last-repeated: 2023-09-05T18:18:00Z
 occurrences: 1
+last-data:
+    k: v
+repeat-after: 1h0m0s
+expire-after: 168h0m0s
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
 }

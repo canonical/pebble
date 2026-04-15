@@ -315,7 +315,10 @@ func (s *PebbleSuite) TestNoticesJSON(c *C) {
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
-				"occurrences": 3
+				"occurrences": 3,
+				"last-data": {"k": "v"},
+				"repeat-after": "1h0m0s",
+				"expire-after": "168h0m0s"
 			}
 		]}`)
 	})
@@ -323,7 +326,7 @@ func (s *PebbleSuite) TestNoticesJSON(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--format", "json"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `{"notices":[{"id":"1","user-id":1000,"type":"custom","key":"a.b/c","first-occurred":"2023-09-05T17:18:00Z","last-occurred":"2023-09-05T19:18:00Z","last-repeated":"2023-09-05T18:18:00Z","occurrences":3}]}`+"\n")
+	c.Check(s.Stdout(), Equals, `{"notices":[{"id":"1","user-id":1000,"type":"custom","key":"a.b/c","first-occurred":"2023-09-05T17:18:00Z","last-occurred":"2023-09-05T19:18:00Z","last-repeated":"2023-09-05T18:18:00Z","occurrences":3,"last-data":{"k":"v"},"repeat-after":"1h0m0s","expire-after":"168h0m0s"}]}`+"\n")
 	c.Check(s.Stderr(), Equals, "")
 }
 
@@ -343,7 +346,10 @@ func (s *PebbleSuite) TestNoticesYAML(c *C) {
 				"first-occurred": "2023-09-05T17:18:00Z",
 				"last-occurred": "2023-09-05T19:18:00Z",
 				"last-repeated": "2023-09-05T18:18:00Z",
-				"occurrences": 3
+				"occurrences": 3,
+				"last-data": {"k": "v"},
+				"repeat-after": "1h0m0s",
+				"expire-after": "168h0m0s"
 			}
 		]}`)
 	})
@@ -351,7 +357,21 @@ func (s *PebbleSuite) TestNoticesYAML(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--format", "yaml"})
 	c.Assert(err, IsNil)
 	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Matches, `(?s)notices:\n    - id: "1"\n.*`)
+	c.Check(s.Stdout(), Equals, `
+notices:
+    - id: "1"
+      user-id: 1000
+      type: custom
+      key: a.b/c
+      first-occurred: 2023-09-05T17:18:00Z
+      last-occurred: 2023-09-05T19:18:00Z
+      last-repeated: 2023-09-05T18:18:00Z
+      occurrences: 3
+      last-data:
+        k: v
+      repeat-after: 1h0m0s
+      expire-after: 168h0m0s
+`[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
 

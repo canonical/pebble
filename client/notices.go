@@ -151,6 +151,23 @@ type jsonNotice struct {
 	ExpireAfter string `json:"expire-after,omitempty"`
 }
 
+// MarshalJSON is needed because the default JSON marshaler encodes time.Duration fields (RepeatAfter, ExpireAfter) as nanoseconds.
+func (n Notice) MarshalJSON() ([]byte, error) {
+	type rawNotice Notice
+	raw := struct {
+		rawNotice
+		RepeatAfter string `json:"repeat-after,omitempty"`
+		ExpireAfter string `json:"expire-after,omitempty"`
+	}{rawNotice: rawNotice(n)}
+	if n.RepeatAfter != 0 {
+		raw.RepeatAfter = n.RepeatAfter.String()
+	}
+	if n.ExpireAfter != 0 {
+		raw.ExpireAfter = n.ExpireAfter.String()
+	}
+	return json.Marshal(raw)
+}
+
 // This is used to ensure we send a well-formed notice ID in the URL path.
 // It's a little more permissive than the currently-valid notice IDs (which
 // are always integers), but it will allow older clients to talk to newer

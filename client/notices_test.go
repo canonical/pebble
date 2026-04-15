@@ -228,3 +228,30 @@ func (cs *clientSuite) TestWaitNoticesTimeout(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(notices, HasLen, 0)
 }
+
+func (cs *clientSuite) TestNoticeMarshalJSON(c *C) {
+	uid := uint32(1000)
+	notice := client.Notice{
+		ID:            "123",
+		UserID:        &uid,
+		Type:          client.CustomNotice,
+		Key:           "a.b/c",
+		FirstOccurred: time.Date(2023, 9, 5, 15, 43, 0, 0, time.UTC),
+		LastOccurred:  time.Date(2023, 9, 5, 17, 43, 0, 0, time.UTC),
+		LastRepeated:  time.Date(2023, 9, 5, 16, 43, 0, 0, time.UTC),
+		Occurrences:   7,
+		LastData:      map[string]string{"k": "v"},
+		RepeatAfter:   time.Hour,
+		ExpireAfter:   7 * 24 * time.Hour,
+	}
+	data, err := json.Marshal(notice)
+	c.Assert(err, IsNil)
+	c.Check(string(data), Equals, `{"id":"123","user-id":1000,"type":"custom","key":"a.b/c","first-occurred":"2023-09-05T15:43:00Z","last-occurred":"2023-09-05T17:43:00Z","last-repeated":"2023-09-05T16:43:00Z","occurrences":7,"last-data":{"k":"v"},"repeat-after":"1h0m0s","expire-after":"168h0m0s"}`)
+
+	notice.RepeatAfter = 0
+	notice.ExpireAfter = 0
+	notice.LastData = nil
+	data, err = json.Marshal(notice)
+	c.Assert(err, IsNil)
+	c.Check(string(data), Equals, `{"id":"123","user-id":1000,"type":"custom","key":"a.b/c","first-occurred":"2023-09-05T15:43:00Z","last-occurred":"2023-09-05T17:43:00Z","last-repeated":"2023-09-05T16:43:00Z","occurrences":7}`)
+}
