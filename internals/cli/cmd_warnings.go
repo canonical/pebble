@@ -92,6 +92,13 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 		return fmt.Errorf("cannot get notices: %w", err)
 	}
 
+	if !cmd.All && len(warnings) > 0 {
+		state.WarningsLastListed = warnings[len(warnings)-1].LastRepeated
+		if err := saveCLIState(cmd.socketPath, state); err != nil {
+			return fmt.Errorf("cannot save CLI state: %w", err)
+		}
+	}
+
 	if cmd.Format == "text" {
 		if len(warnings) == 0 {
 			if cmd.All || state.WarningsLastOkayed.IsZero() {
@@ -101,7 +108,7 @@ func (cmd *cmdWarnings) Execute(args []string) error {
 			}
 			return nil
 		}
-		return cmd.writeText(warnings, state)
+		return cmd.writeText(warnings)
 	}
 
 	if warnings == nil {
@@ -114,7 +121,7 @@ type warningsResult struct {
 	Warnings []*client.Notice `json:"warnings" yaml:"warnings"`
 }
 
-func (cmd *cmdWarnings) writeText(warnings []*client.Notice, state *cliState) error {
+func (cmd *cmdWarnings) writeText(warnings []*client.Notice) error {
 	termWidth, _ := termSize()
 	if termWidth > 100 {
 		// any wider than this and it gets hard to read
@@ -140,15 +147,6 @@ func (cmd *cmdWarnings) writeText(warnings []*client.Notice, state *cliState) er
 		writeWarning(w, warning.Key, termWidth)
 		w.Flush()
 	}
-
-	if !cmd.All {
-		state.WarningsLastListed = warnings[len(warnings)-1].LastRepeated
-		err := saveCLIState(cmd.socketPath, state)
-		if err != nil {
-			return fmt.Errorf("cannot save CLI state: %w", err)
-		}
-	}
-
 	return nil
 }
 

@@ -328,6 +328,12 @@ func (s *PebbleSuite) TestNoticesJSON(c *C) {
 	c.Check(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `{"notices":[{"id":"1","user-id":1000,"type":"custom","key":"a.b/c","first-occurred":"2023-09-05T17:18:00Z","last-occurred":"2023-09-05T19:18:00Z","last-repeated":"2023-09-05T18:18:00Z","occurrences":3,"last-data":{"k":"v"},"repeat-after":"1h0m0s","expire-after":"168h0m0s"}]}`+"\n")
 	c.Check(s.Stderr(), Equals, "")
+
+	cliState := s.readNoticesCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
+		"notices-last-listed": "2023-09-05T18:18:00Z",
+		"notices-last-okayed": "0001-01-01T00:00:00Z",
+	})
 }
 
 func (s *PebbleSuite) TestNoticesYAML(c *C) {
@@ -373,6 +379,12 @@ notices:
       expire-after: 168h0m0s
 `[1:])
 	c.Check(s.Stderr(), Equals, "")
+
+	cliState := s.readNoticesCLIState(c)
+	c.Check(cliState, DeepEquals, map[string]any{
+		"notices-last-listed": "2023-09-05T18:18:00Z",
+		"notices-last-okayed": "0001-01-01T00:00:00Z",
+	})
 }
 
 func (s *PebbleSuite) TestNoNoticesJSON(c *C) {

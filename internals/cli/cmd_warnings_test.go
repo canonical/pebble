@@ -241,6 +241,12 @@ func (s *warningSuite) TestWarningsJSON(c *check.C) {
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stderr(), check.Equals, "")
 	c.Check(s.Stdout(), check.Matches, `\{"warnings":\[.*\]\}\n`)
+
+	cliState := s.readWarningsCLIState(c)
+	c.Check(cliState, check.DeepEquals, map[string]any{
+		"warnings-last-listed": "2018-09-19T12:44:50.680362867Z",
+		"warnings-last-okayed": "0001-01-01T00:00:00Z",
+	})
 }
 
 func (s *warningSuite) TestWarningsYAML(c *check.C) {
@@ -251,6 +257,21 @@ func (s *warningSuite) TestWarningsYAML(c *check.C) {
 	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stderr(), check.Equals, "")
 	c.Check(s.Stdout(), check.Matches, `(?s)warnings:\n    - id: "1"\n.*`)
+
+	cliState := s.readWarningsCLIState(c)
+	c.Check(cliState, check.DeepEquals, map[string]any{
+		"warnings-last-listed": "2018-09-19T12:44:50.680362867Z",
+		"warnings-last-okayed": "0001-01-01T00:00:00Z",
+	})
+}
+
+func (s *warningSuite) readWarningsCLIState(c *check.C) map[string]any {
+	fullCLIState := s.readCLIState(c)
+	cliState := map[string]any{
+		"warnings-last-listed": fullCLIState["warnings-last-listed"],
+		"warnings-last-okayed": fullCLIState["warnings-last-okayed"],
+	}
+	return cliState
 }
 
 func (s *warningSuite) TestNoWarningsJSON(c *check.C) {

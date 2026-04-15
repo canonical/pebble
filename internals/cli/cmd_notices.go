@@ -103,6 +103,13 @@ func (cmd *cmdNotices) Execute(args []string) error {
 		return err
 	}
 
+	if len(notices) > 0 {
+		state.NoticesLastListed = notices[len(notices)-1].LastRepeated
+		if err := saveCLIState(cmd.socketPath, state); err != nil {
+			return fmt.Errorf("cannot save CLI state: %w", err)
+		}
+	}
+
 	if cmd.Format == "text" {
 		if len(notices) == 0 {
 			if cmd.Timeout != 0 {
@@ -112,7 +119,7 @@ func (cmd *cmdNotices) Execute(args []string) error {
 			}
 			return nil
 		}
-		return cmd.writeText(notices, state)
+		return cmd.writeText(notices)
 	}
 
 	if notices == nil {
@@ -125,7 +132,7 @@ type noticesResult struct {
 	Notices []*client.Notice `json:"notices" yaml:"notices"`
 }
 
-func (cmd *cmdNotices) writeText(notices []*client.Notice, state *cliState) error {
+func (cmd *cmdNotices) writeText(notices []*client.Notice) error {
 	writer := tabWriter()
 	defer writer.Flush()
 
@@ -149,12 +156,6 @@ func (cmd *cmdNotices) writeText(notices []*client.Notice, state *cliState) erro
 			cmd.fmtTime(notice.FirstOccurred),
 			cmd.fmtTime(notice.LastRepeated),
 			notice.Occurrences)
-	}
-
-	state.NoticesLastListed = notices[len(notices)-1].LastRepeated
-	err := saveCLIState(cmd.socketPath, state)
-	if err != nil {
-		return fmt.Errorf("cannot save CLI state: %w", err)
 	}
 	return nil
 }
