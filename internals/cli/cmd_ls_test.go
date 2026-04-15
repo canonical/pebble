@@ -214,16 +214,16 @@ func (s *PebbleSuite) TestLsYAML(c *C) {
 	c.Assert(rest, HasLen, 0)
 	c.Check(s.Stdout(), Equals, `
 files:
-- path: /
-	name: /
-	type: directory
-	permissions: "777"
-	last-modified: "2016-04-21T01:02:03Z"
-	user-id: 0
-	user: root
-	group-id: 0
-	group: root
-`)
+    - path: /
+      name: /
+      type: directory
+      permissions: "777"
+      last-modified: "2016-04-21T01:02:03Z"
+      user-id: 0
+      user: root
+      group-id: 0
+      group: root
+`[1:])
 	c.Check(s.Stderr(), Equals, "")
 }
 
