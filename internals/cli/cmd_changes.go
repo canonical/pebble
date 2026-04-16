@@ -122,7 +122,8 @@ func (c *cmdChanges) Execute(args []string) error {
 
 	if c.Format == "text" {
 		if len(changes) == 0 {
-			return fmt.Errorf("no changes found")
+			fmt.Fprintln(Stderr, "no changes found")
+			return nil
 		}
 		return c.writeText(changes)
 	}

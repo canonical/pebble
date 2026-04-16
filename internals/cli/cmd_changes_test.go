@@ -118,10 +118,10 @@ func (s *PebbleSuite) TestNoChanges(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "svc1"})
-	c.Assert(err, check.ErrorMatches, "no changes found")
-	c.Check(rest, check.HasLen, 1)
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), check.Equals, "no changes found\n")
 }
 
 func (s *PebbleSuite) TestGetChangesFails(c *check.C) {
