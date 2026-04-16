@@ -190,14 +190,14 @@ func (c *cmdTasks) showChange(chid string) error {
 	}
 
 	tasks := chg.Tasks
-	if tasks == nil {
-		tasks = []*client.Task{}
-	}
 
 	if c.Format == "text" {
 		return c.writeText(tasks)
 	}
 
+	if tasks == nil {
+		tasks = []*client.Task{}
+	}
 	return c.formatNonText(taskResult{Tasks: tasks})
 }
 
