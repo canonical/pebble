@@ -69,9 +69,9 @@ type fileEntry struct {
 	Permissions  string `json:"permissions" yaml:"permissions"`
 	LastModified string `json:"last-modified" yaml:"last-modified"`
 	UserID       *int   `json:"user-id,omitempty" yaml:"user-id,omitempty"`
-	User         string `json:"user" yaml:"user"`
+	User         string `json:"user,omitempty" yaml:"user,omitempty"`
 	GroupID      *int   `json:"group-id,omitempty" yaml:"group-id,omitempty"`
-	Group        string `json:"group" yaml:"group"`
+	Group        string `json:"group,omitempty" yaml:"group,omitempty"`
 }
 
 type lsResult struct {

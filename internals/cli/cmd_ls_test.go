@@ -176,6 +176,18 @@ func (s *PebbleSuite) TestLsJSON(c *C) {
 			"group-id": 600,
 			"group": "toor",
 			"size": 1024
+		},
+		{
+			"path": "/baz",
+			"name": "baz",
+			"type": "file",
+			"permissions": "600",
+			"last-modified": "2023-01-01T00:00:00Z",
+			"user-id": null,
+			"user": "",
+			"group-id": null,
+			"group": "",
+			"size": 0
 		}
 	]
 }`)
@@ -184,7 +196,7 @@ func (s *PebbleSuite) TestLsJSON(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "json", "/"})
 	c.Assert(err, IsNil)
 	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `{"files":[{"path":"/foo","name":"foo","type":"directory","permissions":"777","last-modified":"2016-04-21T01:02:03Z","user-id":0,"user":"root","group-id":0,"group":"root"},{"path":"/bar","name":"bar","type":"file","size":1024,"permissions":"644","last-modified":"2021-04-21T01:02:03Z","user-id":600,"user":"toor","group-id":600,"group":"toor"}]}`+"\n")
+	c.Check(s.Stdout(), Equals, `{"files":[{"path":"/foo","name":"foo","type":"directory","permissions":"777","last-modified":"2016-04-21T01:02:03Z","user-id":0,"user":"root","group-id":0,"group":"root"},{"path":"/bar","name":"bar","type":"file","size":1024,"permissions":"644","last-modified":"2021-04-21T01:02:03Z","user-id":600,"user":"toor","group-id":600,"group":"toor"},{"path":"/baz","name":"baz","type":"file","size":0,"permissions":"600","last-modified":"2023-01-01T00:00:00Z"}]}`+"\n")
 	c.Check(s.Stderr(), Equals, "")
 }
 
