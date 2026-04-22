@@ -170,7 +170,7 @@ func (c *cmdTasks) Execute([]string) error {
 }
 
 type taskResult struct {
-	Tasks []*client.Task `json:"tasks" yaml:"tasks"`
+	Change *client.Change `json:"change" yaml:"change"`
 }
 
 func queryChange(cli *client.Client, chid string) (*client.Change, error) {
@@ -190,23 +190,18 @@ func (c *cmdTasks) showChange(chid string) error {
 		return err
 	}
 
-	tasks := chg.Tasks
-
 	if c.Format == "text" {
-		return c.writeText(tasks)
+		return c.writeText(chg)
 	}
 
-	if tasks == nil {
-		tasks = []*client.Task{}
-	}
-	return c.formatNonText(taskResult{Tasks: tasks})
+	return c.formatNonText(taskResult{Change: chg})
 }
 
-func (c *cmdTasks) writeText(tasks []*client.Task) error {
+func (c *cmdTasks) writeText(chg *client.Change) error {
 	w := tabWriter()
 
 	fmt.Fprintf(w, "Status\tSpawn\tReady\tSummary\n")
-	for _, t := range tasks {
+	for _, t := range chg.Tasks {
 		spawnTime := c.fmtTime(t.SpawnTime)
 		readyTime := c.fmtTime(t.ReadyTime)
 		if t.ReadyTime.IsZero() {
@@ -221,7 +216,7 @@ func (c *cmdTasks) writeText(tasks []*client.Task) error {
 
 	w.Flush()
 
-	for _, t := range tasks {
+	for _, t := range chg.Tasks {
 		if len(t.Log) == 0 {
 			continue
 		}
