@@ -31,6 +31,7 @@ about all services if none are specified.
 type cmdServices struct {
 	client *client.Client
 
+	formatMixin
 	timeMixin
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
@@ -42,7 +43,7 @@ func init() {
 		Name:        "services",
 		Summary:     cmdServicesSummary,
 		Description: cmdServicesDescription,
-		ArgsHelp:    timeArgsHelp,
+		ArgsHelp:    merge(timeArgsHelp, formatArgsHelp),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdServices{client: opts.Client}
 		},
@@ -61,15 +62,27 @@ func (cmd *cmdServices) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
-	if len(services) == 0 {
-		if len(cmd.Positional.Services) == 0 {
-			fmt.Fprintln(Stderr, "Plan has no services.")
-		} else {
-			fmt.Fprintln(Stderr, "No matching services.")
+
+	if cmd.Format == "text" {
+		if len(services) == 0 {
+			if len(cmd.Positional.Services) == 0 {
+				fmt.Fprintln(Stderr, "Plan has no services.")
+			} else {
+				fmt.Fprintln(Stderr, "No matching services.")
+			}
+			return nil
 		}
-		return nil
+		return cmd.writeText(services)
 	}
 
+	svcMap := make(map[string]*client.ServiceInfo, len(services))
+	for _, svc := range services {
+		svcMap[svc.Name] = svc
+	}
+	return cmd.formatNonText(servicesMap{Services: svcMap})
+}
+
+func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
 	w := tabWriter()
 	defer w.Flush()
 
@@ -83,4 +96,8 @@ func (cmd *cmdServices) Execute(args []string) error {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
 	}
 	return nil
+}
+
+type servicesMap struct {
+	Services map[string]*client.ServiceInfo `json:"services" yaml:"services"`
 }

@@ -73,20 +73,20 @@ const (
 // CheckInfo holds status information for a single health check.
 type CheckInfo struct {
 	// Name is the name of this check, from the layer configuration.
-	Name string `json:"name"`
+	Name string `json:"name" yaml:"name"`
 
 	// Level is this check's level, from the layer configuration.
-	Level CheckLevel `json:"level"`
+	Level CheckLevel `json:"level,omitempty" yaml:"level,omitempty"`
 
 	// Startup is the startup mode for the check. If it is "enabled", the check
 	// will be started in a Pebble replan and when Pebble starts. If it is
 	// "disabled", it must be started manually.
-	Startup CheckStartup `json:"startup"`
+	Startup CheckStartup `json:"startup" yaml:"startup"`
 
 	// Status is the status of this check: "up" if healthy, "down" if the
 	// number of failures has reached the configured threshold, or "inactive" if
 	// the check is inactive.
-	Status CheckStatus `json:"status"`
+	Status CheckStatus `json:"status" yaml:"status"`
 
 	// Successes is the number of times this check has succeeded. It is reset
 	// when the check succeeds again after the check's failure threshold was
@@ -95,27 +95,27 @@ type CheckInfo struct {
 	//
 	// This field will be nil if running against a version of the daemon
 	// before this field was added to the API.
-	Successes *int `json:"successes"`
+	Successes *int `json:"successes,omitempty" yaml:"successes,omitempty"`
 
 	// Failures is the number of times in a row this check has failed. It is
 	// reset to zero as soon as the check succeeds.
-	Failures int `json:"failures"`
+	Failures int `json:"failures" yaml:"failures"`
 
 	// Threshold is this check's failure threshold, from the layer
 	// configuration.
-	Threshold int `json:"threshold"`
+	Threshold int `json:"threshold" yaml:"threshold"`
 
 	// ChangeID is the ID of the change corresponding to this check operation.
 	// The change will be of kind "perform-check" if the check is up, or
 	// "recover-check" if it's down.
-	ChangeID string `json:"change-id"`
+	ChangeID string `json:"change-id,omitempty" yaml:"change-id,omitempty"`
 
 	// PrevChangeID is the ID of the previous change. For a "recover-check"
 	// change, this is the "perform-check" change that was running before the
 	// check started failing. For a "perform-check" change, this is the
 	// "recover-check" change that was running before the check recovered, or
 	// empty if the check has never had to recover.
-	PrevChangeID string `json:"prev-change-id"`
+	PrevChangeID string `json:"prev-change-id,omitempty" yaml:"prev-change-id,omitempty"`
 }
 
 // Checks fetches information about specific health checks (or all of them),
