@@ -1161,12 +1161,19 @@ func (ovs *overlordSuite) TestRacingLoopAndStop(c *C) {
 	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir})
 	c.Assert(err, IsNil)
 
+	// prevent go from yielding the process to early before loop is killed causing a race condition with tests
+	// that are faking global variables accessed by the running overlord in the go routine.
+	loopDone := make(chan struct{})
+
 	go func() {
 		o.Loop()
+		close(loopDone)
 	}()
 	errCh := make(chan error)
 	go func() {
 		errCh <- o.Stop()
 	}()
 	c.Assert(<-errCh, IsNil)
+
+	<-loopDone
 }
