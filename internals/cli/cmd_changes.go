@@ -169,10 +169,6 @@ func (c *cmdTasks) Execute([]string) error {
 	return c.showChange(chid)
 }
 
-type taskResult struct {
-	Change *client.Change `json:"change" yaml:"change"`
-}
-
 func queryChange(cli *client.Client, chid string) (*client.Change, error) {
 	chg, err := cli.Change(chid)
 	if err != nil {
@@ -194,7 +190,7 @@ func (c *cmdTasks) showChange(chid string) error {
 		return c.writeText(chg)
 	}
 
-	return c.formatNonText(taskResult{Change: chg})
+	return c.formatNonText(chg)
 }
 
 func (c *cmdTasks) writeText(chg *client.Change) error {
