@@ -1312,13 +1312,13 @@ listed again unless it happens again, _and_ a cooldown time has passed.
 Warnings expire automatically, and once expired they are forgotten.
 
 [warnings command options]
+      --all                           Show all warnings
       --abs-time                      Display absolute times (in RFC 3339
                                       format). Otherwise, display relative
                                       times up to 60 days, then YYYY-MM-DD.
       --format=[text|json|yaml]       Output format (default: text)
       --unicode=[auto|never|always]   Use a little bit of Unicode to improve
                                       legibility. (default: auto)
-      --all                           Show all warnings
-      --verbose                       Show more information
+      --verbose                       Show more information (text format only)
 ```
 <!-- END AUTOMATED OUTPUT FOR warnings -->

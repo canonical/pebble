@@ -151,7 +151,8 @@ type jsonNotice struct {
 	ExpireAfter string `json:"expire-after,omitempty"`
 }
 
-// MarshalJSON is needed because the default JSON marshaler encodes time.Duration fields (RepeatAfter, ExpireAfter) as nanoseconds.
+// MarshalJSON is needed because the default JSON marshaler encodes
+// time.Duration fields (RepeatAfter, ExpireAfter) as nanoseconds.
 func (n Notice) MarshalJSON() ([]byte, error) {
 	type rawNotice Notice
 	raw := struct {

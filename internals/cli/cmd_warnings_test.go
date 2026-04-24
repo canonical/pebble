@@ -239,8 +239,8 @@ func (s *warningSuite) TestWarningsJSON(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "json"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"warnings":[{"id":"1","user-id":null,"type":"warning","key":"hello world number one","first-occurred":"2018-09-19T12:41:18.505007495Z","last-occurred":"2018-09-19T12:41:18.505007495Z","last-repeated":"2018-09-19T12:41:18.505007495Z","occurrences":0,"repeat-after":"24h0m0s","expire-after":"672h0m0s"},{"id":"2","user-id":null,"type":"warning","key":"hello world number two","first-occurred":"2018-09-19T12:44:19.680362867Z","last-occurred":"2018-09-19T12:44:19.680362867Z","last-repeated":"2018-09-19T12:44:19.680362867Z","occurrences":0,"repeat-after":"24h0m0s","expire-after":"672h0m0s"},{"id":"3","user-id":null,"type":"warning","key":"hello world number three","first-occurred":"2018-09-19T12:44:30.680362867Z","last-occurred":"2018-09-19T12:44:30.680362867Z","last-repeated":"2018-09-19T12:44:50.680362867Z","occurrences":0,"repeat-after":"24h0m0s","expire-after":"672h0m0s"}]}`+"\n")
 	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Matches, `\{"warnings":\[.*\]\}\n`)
 
 	cliState := s.readWarningsCLIState(c)
 	c.Check(cliState, check.DeepEquals, map[string]any{
@@ -255,8 +255,40 @@ func (s *warningSuite) TestWarningsYAML(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "yaml"})
 	c.Assert(err, check.IsNil)
 	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+warnings:
+    - id: "1"
+      user-id: null
+      type: warning
+      key: hello world number one
+      first-occurred: 2018-09-19T12:41:18.505007495Z
+      last-occurred: 2018-09-19T12:41:18.505007495Z
+      last-repeated: 2018-09-19T12:41:18.505007495Z
+      occurrences: 0
+      repeat-after: 24h0m0s
+      expire-after: 672h0m0s
+    - id: "2"
+      user-id: null
+      type: warning
+      key: hello world number two
+      first-occurred: 2018-09-19T12:44:19.680362867Z
+      last-occurred: 2018-09-19T12:44:19.680362867Z
+      last-repeated: 2018-09-19T12:44:19.680362867Z
+      occurrences: 0
+      repeat-after: 24h0m0s
+      expire-after: 672h0m0s
+    - id: "3"
+      user-id: null
+      type: warning
+      key: hello world number three
+      first-occurred: 2018-09-19T12:44:30.680362867Z
+      last-occurred: 2018-09-19T12:44:30.680362867Z
+      last-repeated: 2018-09-19T12:44:50.680362867Z
+      occurrences: 0
+      repeat-after: 24h0m0s
+      expire-after: 672h0m0s
+`[1:])
 	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Matches, `(?s)warnings:\n    - id: "1"\n.*`)
 
 	cliState := s.readWarningsCLIState(c)
 	c.Check(cliState, check.DeepEquals, map[string]any{

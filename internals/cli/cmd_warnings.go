@@ -44,10 +44,10 @@ type cmdWarnings struct {
 
 	socketPath string
 
+	All bool `long:"all"`
 	timeMixin
 	formatMixin
 	unicodeMixin
-	All     bool `long:"all"`
 	Verbose bool `long:"verbose"`
 }
 
@@ -58,7 +58,7 @@ func init() {
 		Description: cmdWarningsDescription,
 		ArgsHelp: merge(timeArgsHelp, formatArgsHelp, unicodeArgsHelp, map[string]string{
 			"--all":     "Show all warnings",
-			"--verbose": "Show more information",
+			"--verbose": "Show more information (text format only)",
 		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdWarnings{
