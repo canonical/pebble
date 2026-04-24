@@ -41,7 +41,7 @@ func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
 	servmgr := overlordServiceManager(c.d.overlord)
 	services, err := servmgr.Services(names)
 	if err != nil {
-		return InternalError("%v", err)
+		return ServerError("%v", err)
 	}
 
 	infos := make([]serviceInfo, 0, len(services))
@@ -83,7 +83,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 		services, err := servmgr.DefaultServiceNames()
 		if err != nil {
-			return InternalError("%v", err)
+			return ServerError("%v", err)
 		}
 		if len(services) == 0 {
 			return SyncResponse(&resp{

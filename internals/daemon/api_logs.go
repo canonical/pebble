@@ -87,7 +87,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if len(services) == 0 {
 		infos, err := r.svcMgr.Services(nil)
 		if err != nil {
-			response := InternalError("cannot fetch services: %v", err)
+			response := ServerError("cannot fetch services: %v", err)
 			response.ServeHTTP(w, req)
 			return
 		}
@@ -99,7 +99,7 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	itsByName, err := r.svcMgr.ServiceLogs(services, numLogs)
 	if err != nil {
-		response := InternalError("cannot fetch log iterators: %v", err)
+		response := ServerError("cannot fetch log iterators: %v", err)
 		response.ServeHTTP(w, req)
 		return
 	}

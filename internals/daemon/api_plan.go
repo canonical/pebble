@@ -35,7 +35,7 @@ func v1GetPlan(c *Command, r *http.Request, _ *UserState) Response {
 	plan := planMgr.Plan()
 	planYAML, err := yaml.Marshal(plan)
 	if err != nil {
-		return InternalError("cannot serialize plan: %v", err)
+		return ServerError("cannot serialize plan: %v", err)
 	}
 	return SyncResponse(string(planYAML))
 }
@@ -83,7 +83,7 @@ func v1PostLayers(c *Command, r *http.Request, user *UserState) Response {
 		if _, ok := err.(*plan.FormatError); ok {
 			return BadRequest("%v", err)
 		}
-		return InternalError("%v", err)
+		return ServerError("%v", err)
 	}
 	return SyncResponse(true)
 }
