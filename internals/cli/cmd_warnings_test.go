@@ -233,6 +233,104 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 	c.Check(timesCalled, check.Equals, len(expectedWarnings))
 }
 
+func (s *warningSuite) TestWarningsJSON(c *check.C) {
+	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"warnings":[{"id":"1","user-id":null,"type":"warning","key":"hello world number one","first-occurred":"2018-09-19T12:41:18.505007495Z","last-occurred":"2018-09-19T12:41:18.505007495Z","last-repeated":"2018-09-19T12:41:18.505007495Z","occurrences":0,"repeat-after":"24h0m0s","expire-after":"672h0m0s"},{"id":"2","user-id":null,"type":"warning","key":"hello world number two","first-occurred":"2018-09-19T12:44:19.680362867Z","last-occurred":"2018-09-19T12:44:19.680362867Z","last-repeated":"2018-09-19T12:44:19.680362867Z","occurrences":0,"repeat-after":"24h0m0s","expire-after":"672h0m0s"},{"id":"3","user-id":null,"type":"warning","key":"hello world number three","first-occurred":"2018-09-19T12:44:30.680362867Z","last-occurred":"2018-09-19T12:44:30.680362867Z","last-repeated":"2018-09-19T12:44:50.680362867Z","occurrences":0,"repeat-after":"24h0m0s","expire-after":"672h0m0s"}]}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+
+	cliState := s.readWarningsCLIState(c)
+	c.Check(cliState, check.DeepEquals, map[string]any{
+		"warnings-last-listed": "2018-09-19T12:44:50.680362867Z",
+		"warnings-last-okayed": "0001-01-01T00:00:00Z",
+	})
+}
+
+func (s *warningSuite) TestWarningsYAML(c *check.C) {
+	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+warnings:
+    - id: "1"
+      user-id: null
+      type: warning
+      key: hello world number one
+      first-occurred: 2018-09-19T12:41:18.505007495Z
+      last-occurred: 2018-09-19T12:41:18.505007495Z
+      last-repeated: 2018-09-19T12:41:18.505007495Z
+      occurrences: 0
+      repeat-after: 24h0m0s
+      expire-after: 672h0m0s
+    - id: "2"
+      user-id: null
+      type: warning
+      key: hello world number two
+      first-occurred: 2018-09-19T12:44:19.680362867Z
+      last-occurred: 2018-09-19T12:44:19.680362867Z
+      last-repeated: 2018-09-19T12:44:19.680362867Z
+      occurrences: 0
+      repeat-after: 24h0m0s
+      expire-after: 672h0m0s
+    - id: "3"
+      user-id: null
+      type: warning
+      key: hello world number three
+      first-occurred: 2018-09-19T12:44:30.680362867Z
+      last-occurred: 2018-09-19T12:44:30.680362867Z
+      last-repeated: 2018-09-19T12:44:50.680362867Z
+      occurrences: 0
+      repeat-after: 24h0m0s
+      expire-after: 672h0m0s
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+
+	cliState := s.readWarningsCLIState(c)
+	c.Check(cliState, check.DeepEquals, map[string]any{
+		"warnings-last-listed": "2018-09-19T12:44:50.680362867Z",
+		"warnings-last-okayed": "0001-01-01T00:00:00Z",
+	})
+}
+
+func (s *warningSuite) readWarningsCLIState(c *check.C) map[string]any {
+	fullCLIState := s.readCLIState(c)
+	cliState := map[string]any{
+		"warnings-last-listed": fullCLIState["warnings-last-listed"],
+		"warnings-last-okayed": fullCLIState["warnings-last-okayed"],
+	}
+	return cliState
+}
+
+func (s *warningSuite) TestNoWarningsJSON(c *check.C) {
+	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"warnings":[]}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *warningSuite) TestNoWarningsYAML(c *check.C) {
+	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Check(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, "warnings: []\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *warningSuite) TestWarningsInvalidFormat(c *check.C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--format", "foobar"})
+	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+}
+
 func (s *warningSuite) TestExtraArgs(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "extra", "args"})
 	c.Assert(err, check.Equals, cli.ErrExtraArgs)
