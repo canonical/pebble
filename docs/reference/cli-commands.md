@@ -103,8 +103,10 @@ Usage:
 The changes command displays a summary of system changes performed recently.
 
 [changes command options]
-      --abs-time     Display absolute times (in RFC 3339 format). Otherwise,
-                     display relative times up to 60 days, then YYYY-MM-DD.
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR changes -->
 
@@ -134,10 +136,11 @@ pebble check --help
 Usage:
   pebble check [check-OPTIONS] <check>
 
-The check command shows details for a single check in YAML format.
+The check command shows details for a single check.
 
 [check command options]
-      --refresh    Run the check immediately
+      --format=[text|json|yaml]   Output format (default: text)
+      --refresh                   Run the check immediately
 ```
 <!-- END AUTOMATED OUTPUT FOR check -->
 
@@ -158,7 +161,8 @@ checks, optionally filtered by level and check names provided as positional
 arguments.
 
 [checks command options]
-      --level=[alive|ready]   Check level to filter for
+      --format=[text|json|yaml]   Output format (default: text)
+      --level=[alive|ready]       Check level to filter for
 ```
 <!-- END AUTOMATED OUTPUT FOR checks -->
 
@@ -351,9 +355,12 @@ The `identity` command is used to show a single identity.
 pebble identity --help
 
 Usage:
-  pebble identity <name>
+  pebble identity [identity-OPTIONS] <name>
 
 The identity command shows details for a single identity in YAML format.
+
+[identity command options]
+      --format=[text|json|yaml]   Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR identity -->
 
@@ -454,10 +461,13 @@ pattern
 may be specified for the last path element.
 
 [ls command options]
-          --abs-time  Display absolute times (in RFC 3339 format). Otherwise,
-                      display relative times up to 60 days, then YYYY-MM-DD.
-      -d              List matching entries themselves, not directory contents
-      -l              Use a long listing format
+          --abs-time                Display absolute times (in RFC 3339
+                                    format). Otherwise, display relative times
+                                    up to 60 days, then YYYY-MM-DD.
+          --format=[text|json|yaml] Output format (default: text)
+      -d                            List matching entries themselves, not
+                                    directory contents
+      -l                            Use a long listing format
 ```
 <!-- END AUTOMATED OUTPUT FOR ls -->
 
@@ -1206,17 +1216,20 @@ The tasks command displays a summary of tasks associated with an individual
 change that happened recently.
 
 [tasks command options]
-      --abs-time       Display absolute times (in RFC 3339 format). Otherwise,
-                       display relative times up to 60 days, then YYYY-MM-DD.
-      --last=          Select last change of given type (install, refresh,
-                       remove, try, auto-refresh, etc.). A question mark at the
-                       end of the type means to do nothing (instead of
-                       returning an error) if no change of the given type is
-                       found. Note the question mark could need protecting from
-                       the shell.
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
+      --last=                     Select last change of given type (install,
+                                  refresh, remove, try, auto-refresh, etc.). A
+                                  question mark at the end of the type means to
+                                  do nothing (instead of returning an error) if
+                                  no change of the given type is found. Note
+                                  the question mark could need protecting from
+                                  the shell.
 
 [tasks command arguments]
-  <change-id>:         Change ID
+  <change-id>:                    Change ID
 ```
 <!-- END AUTOMATED OUTPUT FOR tasks -->
 

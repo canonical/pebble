@@ -26,12 +26,13 @@ import (
 
 const cmdCheckSummary = "Query the details of a configured health check"
 const cmdCheckDescription = `
-The check command shows details for a single check in YAML format.
+The check command shows details for a single check.
 `
 
 type cmdCheck struct {
 	client *client.Client
 
+	formatMixin
 	Refresh bool `long:"refresh"`
 
 	Positional struct {
@@ -40,17 +41,10 @@ type cmdCheck struct {
 }
 
 type checkInfo struct {
-	Name         string `yaml:"name"`
-	Level        string `yaml:"level,omitempty"`
-	Startup      string `yaml:"startup"`
-	Status       string `yaml:"status"`
-	Successes    *int   `yaml:"successes,omitempty"`
-	Failures     int    `yaml:"failures"`
-	Threshold    int    `yaml:"threshold"`
-	ChangeID     string `yaml:"change-id,omitempty"`
-	PrevChangeID string `yaml:"prev-change-id,omitempty"`
-	Error        string `yaml:"error,omitempty"`
-	Logs         string `yaml:"logs,omitempty"`
+	client.CheckInfo `yaml:",inline"`
+
+	Error string `json:"error,omitempty" yaml:"error,omitempty"`
+	Logs  string `json:"logs,omitempty" yaml:"logs,omitempty"`
 }
 
 func init() {
@@ -58,27 +52,13 @@ func init() {
 		Name:        "check",
 		Summary:     cmdCheckSummary,
 		Description: cmdCheckDescription,
-		ArgsHelp: map[string]string{
+		ArgsHelp: merge(formatArgsHelp, map[string]string{
 			"--refresh": "Run the check immediately",
-		},
+		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdCheck{client: opts.Client}
 		},
 	})
-}
-
-func checkInfoFromClient(check client.CheckInfo) checkInfo {
-	return checkInfo{
-		Name:         check.Name,
-		Level:        string(check.Level),
-		Startup:      string(check.Startup),
-		Status:       string(check.Status),
-		Successes:    check.Successes,
-		Failures:     check.Failures,
-		Threshold:    check.Threshold,
-		ChangeID:     check.ChangeID,
-		PrevChangeID: check.PrevChangeID,
-	}
 }
 
 func (cmd *cmdCheck) Execute(args []string) error {
@@ -96,7 +76,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			return err
 		}
 
-		info = checkInfoFromClient(res.Info)
+		info.CheckInfo = res.Info
 		info.Error = res.Error
 	} else {
 		opts := client.ChecksOptions{
@@ -109,7 +89,7 @@ func (cmd *cmdCheck) Execute(args []string) error {
 		if len(checks) == 0 {
 			return fmt.Errorf("cannot find check %q", cmd.Positional.Check)
 		}
-		info = checkInfoFromClient(*checks[0])
+		info.CheckInfo = *checks[0]
 	}
 
 	if info.Failures > 0 || info.Error != "" {
@@ -127,6 +107,15 @@ func (cmd *cmdCheck) Execute(args []string) error {
 			info.Logs = logs
 		}
 	}
+
+	if cmd.Format == "text" {
+		return cmd.writeText(info)
+	}
+
+	return cmd.formatNonText(info)
+}
+
+func (cmd *cmdCheck) writeText(info checkInfo) error {
 	data, err := yaml.Marshal(info)
 	if err != nil {
 		return err
