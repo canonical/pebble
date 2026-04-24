@@ -104,7 +104,7 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 	}
 	task, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
-		return InternalError("cannot call exec: %v", err)
+		return ServerError("cannot call exec: %v", err)
 	}
 
 	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))

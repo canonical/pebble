@@ -124,7 +124,7 @@ func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 		// DeadlineExceeded will occur if timeout elapses; in that case return
 		// an empty list of notices, not an error.
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-			return InternalError("cannot wait for notices: %s", err)
+			return ServerError("cannot wait for notices: %s", err)
 		}
 	} else {
 		// No timeout given, fetch currently-available notices
@@ -234,7 +234,7 @@ func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
 		RepeatAfter: repeatAfter,
 	})
 	if err != nil {
-		return InternalError("%v", err)
+		return ServerError("%v", err)
 	}
 
 	return SyncResponse(addedNotice{ID: noticeId})

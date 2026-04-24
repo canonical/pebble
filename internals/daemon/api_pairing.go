@@ -31,7 +31,7 @@ func v1PostPairing(c *Command, r *http.Request, user *UserState) Response {
 	switch payload.Action {
 	case "pair":
 		if r.TLS == nil {
-			return InternalError("cannot find TLS connection state")
+			return ServerError("cannot find TLS connection state")
 		}
 		// Validate that exactly one peer certificate is provided
 		if len(r.TLS.PeerCertificates) != 1 {

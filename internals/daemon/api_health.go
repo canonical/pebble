@@ -42,7 +42,7 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 	checks, err := getChecks(c.d.overlord)
 	if err != nil {
 		logger.Noticef("Cannot fetch checks: %v", err.Error())
-		return InternalError("internal server error")
+		return ServerError("internal server error")
 	}
 
 	healthy := true

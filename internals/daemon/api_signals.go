@@ -37,7 +37,7 @@ func v1PostSignals(c *Command, req *http.Request, _ *UserState) Response {
 	serviceMgr := c.d.overlord.ServiceManager()
 	err := serviceMgr.SendSignal(payload.Services, payload.Signal)
 	if err != nil {
-		return InternalError("%s", err)
+		return ServerError("%s", err)
 	}
 	return SyncResponse(true)
 }
