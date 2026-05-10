@@ -39,6 +39,11 @@ func (sd *sdNotifyTestSuite) SetUpTest(c *tc.C) {
 	sd.restoreGetenv = systemd.FakeOsGetenv(func(k string) string {
 		return sd.env[k]
 	})
+
+	c.Cleanup(func() {
+		sd.env = nil
+		sd.restoreGetenv = nil
+	})
 }
 
 func (sd *sdNotifyTestSuite) TearDownTest(c *tc.C) {

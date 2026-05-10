@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestIdentity(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -51,7 +51,7 @@ local:
 }
 
 func (s *PebbleSuite) TestIdentityJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -72,7 +72,7 @@ func (s *PebbleSuite) TestIdentityJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestIdentityYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -102,7 +102,7 @@ func (s *PebbleSuite) TestIdentityInvalidFormat(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestIdentityNotFound(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})

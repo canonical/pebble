@@ -47,6 +47,12 @@ func (ps *planSuite) SetUpTest(c *tc.C) {
 
 	//Reset write layer counter
 	ps.writeLayerCounter = 1
+
+	c.Cleanup(func() {
+		ps.layersDir = ""
+		ps.writeLayerCounter = 0
+		ps.planMgr = nil
+	})
 }
 
 func (ps *planSuite) writeLayer(c *tc.C, layer string) {

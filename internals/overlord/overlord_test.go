@@ -72,6 +72,11 @@ func (ovs *overlordSuite) SetUpTest(c *tc.C) {
 	ovs.dir = c.MkDir()
 	ovs.statePath = filepath.Join(ovs.dir, cmd.StateFile)
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
+
+	c.Cleanup(func() {
+		ovs.dir = ""
+		ovs.statePath = ""
+	})
 }
 
 func (ovs *overlordSuite) TearDownTest(c *tc.C) {

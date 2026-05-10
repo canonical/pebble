@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestCheck(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"chk1"}})
@@ -52,7 +52,7 @@ change-id: "1"
 }
 
 func (s *PebbleSuite) TestCheckFailure(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/checks":
 			c.Assert(r.Method, tc.Equals, "GET")
@@ -96,7 +96,7 @@ logs: |
 }
 
 func (s *PebbleSuite) TestCheckNotFound(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"chk2"}})
@@ -113,7 +113,7 @@ func (s *PebbleSuite) TestCheckNotFound(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestCheckRefresh(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "POST")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks/refresh")
 		body := DecodedRequestBody(c, r)
@@ -144,7 +144,7 @@ change-id: "1"
 }
 
 func (s *PebbleSuite) TestCheckRefreshFailure(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/checks/refresh":
 			c.Assert(r.Method, tc.Equals, "POST")
@@ -196,7 +196,7 @@ logs: |
 }
 
 func (s *PebbleSuite) TestCheckRefreshNotFound(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "POST")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks/refresh")
 		body := DecodedRequestBody(c, r)
@@ -219,7 +219,7 @@ func (s *PebbleSuite) TestCheckRefreshNotFound(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestCheckJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"chk1"}})
@@ -237,7 +237,7 @@ func (s *PebbleSuite) TestCheckJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestCheckYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"chk1"}})
@@ -268,7 +268,7 @@ func (s *PebbleSuite) TestCheckInvalidFormat(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestCheckPrevChangeLog(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/v1/checks":
 			c.Assert(r.Method, tc.Equals, "GET")

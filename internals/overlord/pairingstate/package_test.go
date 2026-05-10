@@ -52,6 +52,13 @@ func (ps *pairingSuite) SetUpTest(c *tc.C) {
 	ps.overlord = overlord.Fake()
 	ps.state = ps.overlord.State()
 	ps.overlord.Loop()
+
+	c.Cleanup(func() {
+		ps.overlord = nil
+		ps.state = nil
+		ps.manager = nil
+		ps.identitiesMgr = nil
+	})
 }
 
 func (ps *pairingSuite) TearDownTest(c *tc.C) {

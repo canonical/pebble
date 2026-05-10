@@ -65,10 +65,12 @@ func (s *execSuite) SetUpTest(c *tc.C) {
 			return nil, fmt.Errorf("invalid websocket ID %q", id)
 		}
 	})
-}
 
-func (s *execSuite) TearDownTest(c *tc.C) {
-	s.clientSuite.TearDownTest(c)
+	c.Cleanup(func() {
+		s.stdioWs = nil
+		s.controlWs = nil
+		s.stderrWs = nil
+	})
 }
 
 func (s *execSuite) TestExitZero(c *tc.C) {

@@ -38,6 +38,11 @@ type LogSuite struct {
 
 func (s *LogSuite) SetUpTest(c *tc.C) {
 	s.logbuf, s.restoreLogger = logger.MockLogger("PREFIX: ")
+
+	c.Cleanup(func() {
+		s.logbuf = nil
+		s.restoreLogger = nil
+	})
 }
 
 func (s *LogSuite) TearDownTest(c *tc.C) {

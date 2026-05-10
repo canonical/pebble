@@ -33,7 +33,7 @@ func (s *PebbleSuite) TestLsExtraArgs(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLsDirectory(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"action": {"list"}, "path": {"/"}, "itself": {"true"}})
@@ -62,7 +62,7 @@ func (s *PebbleSuite) TestLsDirectory(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLsLongFormat(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"action": {"list"}, "path": {"/"}})
@@ -110,7 +110,7 @@ func (s *PebbleSuite) TestLsLongFormat(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLsFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"path": {"/"}, "action": {"list"}, "itself": {"true"}})
@@ -124,7 +124,7 @@ func (s *PebbleSuite) TestLsFails(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLsPattern(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"path": {"/foo/"}, "action": {"list"}, "pattern": {"bar.*"}})
@@ -147,7 +147,7 @@ func (s *PebbleSuite) TestLsInvalidPattern(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLsJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"action": {"list"}, "path": {"/"}})
@@ -201,7 +201,7 @@ func (s *PebbleSuite) TestLsJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLsYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"action": {"list"}, "path": {"/"}, "itself": {"true"}})
@@ -240,7 +240,7 @@ files:
 }
 
 func (s *PebbleSuite) TestLsEmptyJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		fmt.Fprintln(w, `{"type":"sync","result":[]}`)
@@ -254,7 +254,7 @@ func (s *PebbleSuite) TestLsEmptyJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLsEmptyYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		fmt.Fprintln(w, `{"type":"sync","result":[]}`)

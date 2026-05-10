@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestNoticeID(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices/123")
 
@@ -69,7 +69,7 @@ expire-after: 168h0m0s
 }
 
 func (s *PebbleSuite) TestNoticeIDNotFound(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices/123")
 
@@ -89,7 +89,7 @@ func (s *PebbleSuite) TestNoticeIDNotFound(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestNoticeTypeKey(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -130,7 +130,7 @@ occurrences: 1
 }
 
 func (s *PebbleSuite) TestNoticeTypeKeyUID(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -172,7 +172,7 @@ occurrences: 1
 }
 
 func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{

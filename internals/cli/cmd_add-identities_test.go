@@ -28,7 +28,7 @@ import (
 )
 
 func (s *PebbleSuite) TestAddIdentitiesSingle(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "add", map[string]any{
 			"bob": map[string]any{
 				"access": "admin",
@@ -62,7 +62,7 @@ identities:
 }
 
 func (s *PebbleSuite) TestAddIdentitiesMultiple(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "add", map[string]any{
 			"bob": map[string]any{
 				"access": "admin",

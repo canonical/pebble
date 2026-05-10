@@ -25,21 +25,15 @@ import (
 
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
-	"github.com/canonical/pebble/internals/testutil"
 )
 
-type userSuite struct {
-	testutil.BaseTest
-}
+type userSuite struct{}
 
 func TestUserSuite(t *testing.T) {
 	tc.Run(t, &userSuite{})
 }
 
 func (s *userSuite) SetUpTest(c *tc.C) {
-}
-
-func (s *userSuite) TearDownTest(c *tc.C) {
 }
 
 func (s *userSuite) TestRealUser(c *tc.C) {

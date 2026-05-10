@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestLogsText(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/logs")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -49,7 +49,7 @@ func (s *PebbleSuite) TestLogsText(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLogsJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/logs")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -78,7 +78,7 @@ func (s *PebbleSuite) TestLogsInvalidFormat(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLogsN(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/logs")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -100,7 +100,7 @@ func (s *PebbleSuite) TestLogsN(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestLogsAll(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/logs")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -130,7 +130,7 @@ func (s *PebbleSuite) TestLogsInvalidNumber(c *tc.C) {
 func (s *PebbleSuite) TestLogsFollow(c *tc.C) {
 	// NOTE: doesn't test actual following behavior -- that's tested in client
 	// tests. This just ensures ?follow=true is passed through.
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/logs")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{

@@ -90,7 +90,7 @@ func mkWarningsFakeHandler(c *tc.C, body string) func(w http.ResponseWriter, r *
 }
 
 func (s *warningSuite) TestNoWarningsEver(c *tc.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
+	s.RedirectClientToTestServer(c, mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
 	c.Assert(err, tc.ErrorIsNil)
@@ -105,7 +105,7 @@ func (s *warningSuite) TestNoFurtherWarnings(c *tc.C) {
 		"warnings-last-okayed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
 	})
 
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
+	s.RedirectClientToTestServer(c, mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
 	c.Assert(err, tc.ErrorIsNil)
@@ -115,7 +115,7 @@ func (s *warningSuite) TestNoFurtherWarnings(c *tc.C) {
 }
 
 func (s *warningSuite) TestWarnings(c *tc.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
+	s.RedirectClientToTestServer(c, mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--unicode=never"})
 	c.Assert(err, tc.ErrorIsNil)
@@ -137,7 +137,7 @@ warning: |
 }
 
 func (s *warningSuite) TestVerboseWarnings(c *tc.C) {
-	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
+	s.RedirectClientToTestServer(c, mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--verbose", "--unicode=never"})
 	c.Assert(err, tc.ErrorIsNil)
@@ -174,7 +174,7 @@ func (s *warningSuite) TestCommandWithWarnings(c *tc.C) {
 	var responseTimestamp time.Time
 
 	timesCalled := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		timesCalled++
 		c.Check(r.URL.Path, tc.Equals, "/v1/system-info")
 		c.Check(r.URL.Query(), tc.HasLen, 0)

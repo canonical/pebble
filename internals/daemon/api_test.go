@@ -57,6 +57,14 @@ func (s *apiSuite) SetUpTest(c *tc.C) {
 
 	s.restoreMuxVars = FakeMuxVars(s.muxVars)
 	s.pebbleDir = c.MkDir()
+
+	c.Cleanup(func() {
+		s.d = nil
+		s.pebbleDir = ""
+		s.vars = nil
+		s.restoreMuxVars = nil
+		s.overlordStarted = false
+	})
 }
 
 func (s *apiSuite) TearDownTest(c *tc.C) {

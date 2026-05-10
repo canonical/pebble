@@ -29,7 +29,7 @@ import (
 )
 
 func (s *PebbleSuite) TestNotices(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -86,7 +86,7 @@ func (s *PebbleSuite) readNoticesCLIState(c *tc.C) map[string]any {
 }
 
 func (s *PebbleSuite) TestNoticesFiltersUsers(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -129,7 +129,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 }
 
 func (s *PebbleSuite) TestNoticesFiltersUID(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -172,7 +172,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 }
 
 func (s *PebbleSuite) TestNoticesAfter(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -217,7 +217,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 }
 
 func (s *PebbleSuite) TestNoticesNoNotices(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -239,7 +239,7 @@ func (s *PebbleSuite) TestNoticesNoNotices(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestNoticesTimeout(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"timeout": {"1s"}})
@@ -278,7 +278,7 @@ ID   User  Type    Key    First                 Repeated              Occurrence
 }
 
 func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"timeout": {"1s"}})

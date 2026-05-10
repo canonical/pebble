@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestHealth(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/health")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -46,7 +46,7 @@ func (s *PebbleSuite) TestHealth(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestHealthLevel(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/health")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"level": {"alive"}})
@@ -67,7 +67,7 @@ func (s *PebbleSuite) TestHealthLevel(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestHealthSpecificChecks(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/health")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{

@@ -92,6 +92,17 @@ func (s *daemonSuite) SetUpTest(c *tc.C) {
 		s.notified = append(s.notified, notif)
 		return nil
 	}
+
+	c.Cleanup(func() {
+		s.pebbleDir = ""
+		s.socketPath = ""
+		s.httpAddress = ""
+		s.httpsAddress = ""
+		s.statePath = ""
+		s.authorized = false
+		s.err = nil
+		s.notified = nil
+	})
 }
 
 func (s *daemonSuite) TearDownTest(c *tc.C) {

@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestServices(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
@@ -52,7 +52,7 @@ svc3     enabled  backoff   -
 }
 
 func (s *PebbleSuite) TestPlanNoServices(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
@@ -70,7 +70,7 @@ func (s *PebbleSuite) TestPlanNoServices(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestPlanNoServicesJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
@@ -88,7 +88,7 @@ func (s *PebbleSuite) TestPlanNoServicesJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestPlanNoServicesYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
@@ -106,7 +106,7 @@ func (s *PebbleSuite) TestPlanNoServicesYAML(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestNoMatchingServices(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"foo,bar"}})
@@ -124,7 +124,7 @@ func (s *PebbleSuite) TestNoMatchingServices(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestServicesNames(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"foo,bar"}})
@@ -149,7 +149,7 @@ foo      enabled   inactive  -
 }
 
 func (s *PebbleSuite) TestServicesJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
@@ -171,7 +171,7 @@ func (s *PebbleSuite) TestServicesJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestServicesYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
@@ -213,7 +213,7 @@ func (s *PebbleSuite) TestServicesInvalidFormat(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestServicesFail(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})

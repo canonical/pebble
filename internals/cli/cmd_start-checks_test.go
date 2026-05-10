@@ -24,7 +24,7 @@ import (
 )
 
 func (s *PebbleSuite) TestStartChecks(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/checks")
 
@@ -49,7 +49,7 @@ func (s *PebbleSuite) TestStartChecks(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestStartChecksFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/checks")
 

@@ -110,7 +110,7 @@ func (s *PebbleSuite) TestChangesAllDigitsSuggestion(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestNoChanges(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
@@ -125,7 +125,7 @@ func (s *PebbleSuite) TestNoChanges(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestGetChangesFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
@@ -140,7 +140,7 @@ func (s *PebbleSuite) TestGetChangesFails(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestChanges(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
@@ -165,7 +165,7 @@ two +Do +2016-04-21 +2016-04-2[12] +...
 }
 
 func (s *PebbleSuite) TestChangesJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
@@ -180,7 +180,7 @@ func (s *PebbleSuite) TestChangesJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestChangesYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
@@ -268,7 +268,7 @@ changes:
 }
 
 func (s *PebbleSuite) TestNoChangesJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
@@ -283,7 +283,7 @@ func (s *PebbleSuite) TestNoChangesJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestNoChangesYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
@@ -303,7 +303,7 @@ func (s *PebbleSuite) TestChangesInvalidFormat(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestChangesUnknownMaintenance(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
@@ -320,7 +320,7 @@ func (s *PebbleSuite) TestChangesUnknownMaintenance(c *tc.C) {
 
 func (s *PebbleSuite) TestChangeSimple(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if n < 2 {
 			c.Check(r.Method, tc.Equals, "GET")
 			c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
@@ -342,7 +342,7 @@ Do +2016-04-21T01:02:03Z +- +some summary
 }
 
 func (s *PebbleSuite) TestChangeSimpleFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "could not bar"}}`)
@@ -357,7 +357,7 @@ func (s *PebbleSuite) TestChangeSimpleFails(c *tc.C) {
 
 func (s *PebbleSuite) TestChangeSimpleRebooting(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if n < 2 {
 			c.Check(r.Method, tc.Equals, "GET")
 			c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
@@ -375,7 +375,7 @@ func (s *PebbleSuite) TestChangeSimpleRebooting(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, strings.Replace(fakeChangeJSON, `"type": "sync"`, `"type": "sync", "maintenance": {"kind": "dachshund", "message": "unknown maintenance reason"}`, 1))
@@ -387,7 +387,7 @@ func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestTasksLast(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		if r.URL.Path == "/v1/changes" {
 			fmt.Fprintln(w, fakeChangesJSON)
@@ -412,7 +412,7 @@ Do +2016-04-21T01:02:03Z +- +some summary
 
 func (s *PebbleSuite) TestTasksLastQuestionmark(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		n++
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/changes")
@@ -454,7 +454,7 @@ func (s *PebbleSuite) TestTasksSyntaxError(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestTasksJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, fakeChangeJSON)
@@ -468,7 +468,7 @@ func (s *PebbleSuite) TestTasksJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestTasksYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, fakeChangeJSON)
@@ -505,7 +505,7 @@ func (s *PebbleSuite) TestTasksInvalidFormat(c *tc.C) {
 
 func (s *PebbleSuite) TestChangeProgress(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		switch n {
 		case 0:
 			c.Check(r.Method, tc.Equals, "GET")

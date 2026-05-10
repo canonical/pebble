@@ -31,7 +31,7 @@ import (
 )
 
 func (s *PebbleSuite) TestPull(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -91,7 +91,7 @@ func (s *PebbleSuite) TestPullFailsExtraArgs(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestPullFailsAPI(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{
@@ -153,7 +153,7 @@ func (s *PebbleSuite) TestPullFailsAPI(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestPullFailsCreateFile(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{

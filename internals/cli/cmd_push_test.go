@@ -47,7 +47,7 @@ type writeFilesItem struct {
 }
 
 func (s *PebbleSuite) TestPush(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.Method, tc.Equals, "POST")
 
@@ -130,7 +130,7 @@ func (s *PebbleSuite) TestPushFailsToOpen(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestPushAPIFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
 		c.Assert(r.Method, tc.Equals, "POST")
 

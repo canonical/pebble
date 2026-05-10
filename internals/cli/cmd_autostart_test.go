@@ -32,7 +32,7 @@ func (s *PebbleSuite) TestAutostartExtraArgs(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestAutostart(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/42" {
 			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{
@@ -75,7 +75,7 @@ func (s *PebbleSuite) TestAutostart(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 		body := DecodedRequestBody(c, r)
@@ -99,7 +99,7 @@ func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestAutostartNoWait(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 		c.Check(r.URL.Path, tc.Not(tc.Equals), "/v1/changes/42")
@@ -125,7 +125,7 @@ func (s *PebbleSuite) TestAutostartNoWait(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestAutostartFailsGetChange(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/42" {
 			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)

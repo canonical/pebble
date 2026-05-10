@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestGetPlan(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/plan")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"format": []string{"yaml"}})
@@ -49,7 +49,7 @@ services:
 }
 
 func (s *PebbleSuite) TestGetPlanFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/plan")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"format": []string{"yaml"}})

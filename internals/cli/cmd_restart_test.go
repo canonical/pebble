@@ -24,7 +24,7 @@ import (
 )
 
 func (s *PebbleSuite) TestRestart(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/44" {
 			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{
@@ -67,7 +67,7 @@ func (s *PebbleSuite) TestRestart(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestRestartFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 
@@ -88,7 +88,7 @@ func (s *PebbleSuite) TestRestartFails(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestRestartNoWait(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 		c.Check(r.URL.Path, tc.Not(tc.Equals), "/v1/changes/44")
@@ -114,7 +114,7 @@ func (s *PebbleSuite) TestRestartNoWait(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestRestartFailsGetChange(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/44" {
 			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not bar"}}`)

@@ -34,7 +34,7 @@ func (s *PebbleSuite) TestMkdirExtraArgs(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestMkdir(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -73,7 +73,7 @@ func (s *PebbleSuite) TestMkdirFailsParsingPermissions(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestMkdirMakeParents(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -104,7 +104,7 @@ func (s *PebbleSuite) TestMkdirMakeParents(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestMkdirPermissions(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -135,7 +135,7 @@ func (s *PebbleSuite) TestMkdirPermissions(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestMkdirOwnerIDs(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -166,7 +166,7 @@ func (s *PebbleSuite) TestMkdirOwnerIDs(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestMkdirOwnerNames(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -197,7 +197,7 @@ func (s *PebbleSuite) TestMkdirOwnerNames(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestMkdirFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -228,7 +228,7 @@ func (s *PebbleSuite) TestMkdirFails(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestMkdirFailsOnDirectory(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 

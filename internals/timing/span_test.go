@@ -24,12 +24,10 @@ import (
 	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/testutil"
 	"github.com/canonical/pebble/internals/timing"
 )
 
 type spanSuite struct {
-	testutil.BaseTest
 	st       *state.State
 	duration time.Duration
 	fakeTime time.Time
@@ -40,17 +38,17 @@ func TestSpanSuite(t *testing.T) {
 }
 
 func (s *spanSuite) SetUpTest(c *tc.C) {
-	s.BaseTest.SetUpTest(c)
-
 	s.st = state.New(nil)
 	s.duration = 0
 
 	s.fakeTimeNow(c)
-	s.fakeMinNestedSpan(0)
-}
+	s.fakeMinNestedSpan(c, 0)
 
-func (s *spanSuite) TearDownTest(c *tc.C) {
-	s.BaseTest.TearDownTest(c)
+	c.Cleanup(func() {
+		s.st = nil
+		s.duration = 0
+		s.fakeTime = time.Time{}
+	})
 }
 
 func (s *spanSuite) fakeTimeNow(c *tc.C) {
@@ -58,19 +56,19 @@ func (s *spanSuite) fakeTimeNow(c *tc.C) {
 	c.Assert(err, tc.ErrorIsNil)
 	s.fakeTime = t
 	// Increase fakeTime by 1 millisecond on each call, and report it as current time
-	s.AddCleanup(timing.FakeTimeNow(func() time.Time {
+	c.Cleanup(timing.FakeTimeNow(func() time.Time {
 		s.fakeTime = s.fakeTime.Add(time.Millisecond)
 		return s.fakeTime
 	}))
 }
 
-func (s *spanSuite) fakeMinNestedSpan(threshold time.Duration) {
+func (s *spanSuite) fakeMinNestedSpan(c *tc.C, threshold time.Duration) {
 	oldThreshold := timing.MinNestedSpan
 	timing.MinNestedSpan = threshold
 	restore := func() {
 		timing.MinNestedSpan = oldThreshold
 	}
-	s.AddCleanup(restore)
+	c.Cleanup(restore)
 }
 
 func encodeDecode(span *timing.Span) any {
@@ -160,7 +158,7 @@ func (s *spanSuite) TestSave(c *tc.C) {
 }
 
 func (s *spanSuite) testDurationThreshold(c *tc.C, threshold time.Duration, expected any) {
-	s.fakeMinNestedSpan(threshold)
+	s.fakeMinNestedSpan(c, threshold)
 
 	span1 := timing.Start("", "", nil)
 	span2 := span1.StartNested("main", "...")

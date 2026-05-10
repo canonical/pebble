@@ -22,12 +22,9 @@ import (
 	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord"
-	"github.com/canonical/pebble/internals/testutil"
 )
 
 type mgrsSuite struct {
-	testutil.BaseTest
-
 	dir string
 
 	o *overlord.Overlord
@@ -38,8 +35,6 @@ func TestMgrsSuite(t *testing.T) {
 }
 
 func (s *mgrsSuite) SetUpTest(c *tc.C) {
-	s.BaseTest.SetUpTest(c)
-
 	s.dir = c.MkDir()
 
 	o, err := overlord.New(&overlord.Options{PebbleDir: s.dir})
@@ -47,4 +42,9 @@ func (s *mgrsSuite) SetUpTest(c *tc.C) {
 	err = o.StartUp()
 	c.Assert(err, tc.ErrorIsNil)
 	s.o = o
+
+	c.Cleanup(func() {
+		s.dir = ""
+		s.o = nil
+	})
 }

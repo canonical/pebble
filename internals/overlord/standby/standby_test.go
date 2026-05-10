@@ -41,6 +41,11 @@ func TestStandbySuite(t *testing.T) {
 
 func (s *standbySuite) SetUpTest(c *tc.C) {
 	s.state = state.New(nil)
+
+	c.Cleanup(func() {
+		s.state = nil
+		s.canStandby = false
+	})
 }
 
 func (s *standbySuite) TestCanStandbyNoChanges(c *tc.C) {

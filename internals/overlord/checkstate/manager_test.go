@@ -76,6 +76,12 @@ func (s *ManagerSuite) SetUpTest(c *tc.C) {
 	err = s.overlord.StartUp()
 	c.Assert(err, tc.ErrorIsNil)
 	s.overlord.Loop()
+
+	c.Cleanup(func() {
+		s.overlord = nil
+		s.manager = nil
+		s.planMgr = nil
+	})
 }
 
 func (s *ManagerSuite) TearDownTest(c *tc.C) {

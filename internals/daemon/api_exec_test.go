@@ -72,6 +72,11 @@ func (s *execSuite) SetUpTest(c *tc.C) {
 
 	s.client, err = client.New(&client.Config{Socket: socketPath})
 	c.Assert(err, tc.ErrorIsNil)
+
+	c.Cleanup(func() {
+		s.daemon = nil
+		s.client = nil
+	})
 }
 
 func (s *execSuite) TearDownTest(c *tc.C) {

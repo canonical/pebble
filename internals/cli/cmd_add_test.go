@@ -35,7 +35,7 @@ services:
     command: cmd
 `[1:]
 
-		s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 			c.Check(r.Method, tc.Equals, "POST")
 			c.Check(r.URL.Path, tc.Equals, "/v1/layers")
 

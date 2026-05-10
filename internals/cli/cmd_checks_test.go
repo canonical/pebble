@@ -25,7 +25,7 @@ import (
 )
 
 func (s *PebbleSuite) TestChecks(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
 		switch r.URL.Path {
@@ -102,7 +102,7 @@ chk6   -      disabled  inactive  -          -         -
 }
 
 func (s *PebbleSuite) TestPlanNoChecks(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -120,7 +120,7 @@ func (s *PebbleSuite) TestPlanNoChecks(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestNoMatchingChecks(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"level": {"alive"}, "names": {"chk1", "chk3"}})
@@ -138,7 +138,7 @@ func (s *PebbleSuite) TestNoMatchingChecks(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestChecksFiltering(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"level": {"alive"}, "names": {"chk1", "chk3"}})
@@ -163,7 +163,7 @@ chk3   alive  enabled  down    16         42/3      -
 }
 
 func (s *PebbleSuite) TestChecksFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -180,7 +180,7 @@ func (s *PebbleSuite) TestChecksFails(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestChecksPrevChangeLog(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		switch r.URL.Path {
 		case "/v1/checks":
@@ -214,7 +214,7 @@ chk1   -      enabled  down    0          3/3       2 (connection refused)
 }
 
 func (s *PebbleSuite) TestChecksPrevChangeLogTruncated(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		switch r.URL.Path {
 		case "/v1/checks":
@@ -248,7 +248,7 @@ chk1   -      enabled  down    0          3/3       2 (Get "http://localhost:800
 }
 
 func (s *PebbleSuite) TestChecksJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -270,7 +270,7 @@ func (s *PebbleSuite) TestChecksJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestChecksYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -301,7 +301,7 @@ checks:
 }
 
 func (s *PebbleSuite) TestNoChecksJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		fmt.Fprint(w, `{"type": "sync", "status-code": 200, "result": []}`)
@@ -315,7 +315,7 @@ func (s *PebbleSuite) TestNoChecksJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestNoChecksYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, tc.Equals, "GET")
 		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		fmt.Fprint(w, `{"type": "sync", "status-code": 200, "result": []}`)

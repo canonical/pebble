@@ -43,7 +43,6 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
-	"github.com/canonical/pebble/internals/testutil"
 	"github.com/canonical/pebble/internals/workloads"
 )
 
@@ -102,8 +101,6 @@ func TestMain(m *testing.M) {
 }
 
 type S struct {
-	testutil.BaseTest
-
 	// Unique tmp directory for each test
 	dir string
 
@@ -140,8 +137,6 @@ func (s *S) SetUpTest(c *tc.C) {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
 
-	s.BaseTest.SetUpTest(c)
-
 	s.dir = c.MkDir()
 	s.st = state.New(nil)
 
@@ -160,15 +155,27 @@ func (s *S) SetUpTest(c *tc.C) {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 
 	restore := servstate.FakeOkayWait(shortOkayDelay)
-	s.AddCleanup(restore)
+	c.Cleanup(restore)
 	restore = servstate.FakeKillFailDelay(shortKillDelay, shortFailDelay)
-	s.AddCleanup(restore)
+	c.Cleanup(restore)
 	restore = func() { plan.UnregisterSectionExtension(workloads.WorkloadsField) }
-	s.AddCleanup(restore)
+	c.Cleanup(restore)
 
 	s.plan = plan.NewPlan()
 	s.planPropagated = false
 	s.manager = nil
+
+	c.Cleanup(func() {
+		s.dir = ""
+		s.logBuffer = bytes.Buffer{}
+		s.logOutput = nil
+		s.st = nil
+		s.manager = nil
+		s.runner = nil
+		s.stopDaemon = nil
+		s.plan = nil
+		s.planPropagated = false
+	})
 }
 
 func (s *S) TearDownTest(c *tc.C) {
@@ -182,7 +189,6 @@ func (s *S) TearDownTest(c *tc.C) {
 	}
 
 	// General test cleanup
-	s.BaseTest.TearDownTest(c)
 	s.runner.Stop()
 	err := reaper.Stop()
 	if err != nil {

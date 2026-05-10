@@ -26,7 +26,7 @@ import (
 )
 
 func (s *PebbleSuite) TestRemoveIdentities(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "remove", map[string]any{
 			"bob": nil,
 		})

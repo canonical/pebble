@@ -17,12 +17,10 @@ import (
 	"github.com/canonical/pebble/internals/cli"
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/plan"
-	"github.com/canonical/pebble/internals/testutil"
 	"github.com/canonical/pebble/internals/workloads"
 )
 
 type BasePebbleSuite struct {
-	testutil.BaseTest
 	stdin        *bytes.Buffer
 	stdout       *bytes.Buffer
 	stderr       *bytes.Buffer
@@ -38,8 +36,6 @@ func (s *BasePebbleSuite) readPassword(fd int) ([]byte, error) {
 }
 
 func (s *BasePebbleSuite) SetUpTest(c *tc.C) {
-	s.BaseTest.SetUpTest(c)
-
 	s.pebbleDir = c.MkDir()
 	os.Setenv("PEBBLE", s.pebbleDir)
 
@@ -53,16 +49,25 @@ func (s *BasePebbleSuite) SetUpTest(c *tc.C) {
 	cli.Stderr = s.stderr
 	cli.ReadPassword = s.readPassword
 
-	s.AddCleanup(cli.FakeIsStdoutTTY(false))
-	s.AddCleanup(cli.FakeIsStdinTTY(false))
+	c.Cleanup(cli.FakeIsStdoutTTY(false))
+	c.Cleanup(cli.FakeIsStdinTTY(false))
 
 	oldConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	s.AddCleanup(func() {
+	c.Cleanup(func() {
 		os.Setenv("XDG_CONFIG_HOME", oldConfigHome)
 	})
 	configHome := c.MkDir()
 	os.Setenv("XDG_CONFIG_HOME", configHome)
 	s.cliStatePath = filepath.Join(configHome, "pebble", "cli.json")
+
+	c.Cleanup(func() {
+		s.pebbleDir = ""
+		s.stdin = nil
+		s.stdout = nil
+		s.stderr = nil
+		s.password = ""
+		s.cliStatePath = ""
+	})
 }
 
 func (s *BasePebbleSuite) TearDownTest(c *tc.C) {
@@ -76,8 +81,6 @@ func (s *BasePebbleSuite) TearDownTest(c *tc.C) {
 
 	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
-
-	s.BaseTest.TearDownTest(c)
 }
 
 func (s *BasePebbleSuite) Stdout() string {
@@ -94,10 +97,10 @@ func (s *BasePebbleSuite) ResetStdStreams() {
 	s.stderr.Reset()
 }
 
-func (s *BasePebbleSuite) RedirectClientToTestServer(handler func(http.ResponseWriter, *http.Request)) {
+func (s *BasePebbleSuite) RedirectClientToTestServer(c *tc.C, handler func(http.ResponseWriter, *http.Request)) {
 	server := httptest.NewServer(http.HandlerFunc(handler))
-	s.BaseTest.AddCleanup(func() { server.Close() })
-	s.BaseTest.AddCleanup(cli.FakeClientConfigBaseURL(server.URL))
+	c.Cleanup(func() { server.Close() })
+	c.Cleanup(cli.FakeClientConfigBaseURL(server.URL))
 }
 
 // DecodedRequestBody returns the JSON-decoded body of the request.
@@ -138,7 +141,7 @@ func TestPebbleSuite(t *testing.T) {
 }
 
 func (s *PebbleSuite) TestErrorResult(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "cannot do something"}}`)
 	})
 

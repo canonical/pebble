@@ -32,9 +32,7 @@ import (
 	"github.com/canonical/pebble/internals/testutil"
 )
 
-type taskRunnerSuite struct {
-	testutil.BaseTest
-}
+type taskRunnerSuite struct{}
 
 func TestTaskRunnerSuite(t *testing.T) {
 	tc.Run(t, &taskRunnerSuite{})
@@ -146,10 +144,6 @@ var sequenceTests = []struct{ setup, result string }{{
 	setup:  "t11:was-done:1 t12:was-done:2 t21:was-done:2 t31:was-done:2 t32:do-error:2",
 	result: "t31:undo t32:do t32:do-error t21:undo",
 }}
-
-func (ts *taskRunnerSuite) SetUpTest(c *tc.C) {
-	ts.BaseTest.SetUpTest(c)
-}
 
 func (ts *taskRunnerSuite) TestSequenceTests(c *tc.C) {
 	sb := &stateBackend{}

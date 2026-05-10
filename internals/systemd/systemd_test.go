@@ -96,6 +96,24 @@ func (s *SystemdTestSuite) SetUpTest(c *tc.C) {
 	s.jfollows = nil
 
 	s.rep = new(testreporter)
+
+	c.Cleanup(func() {
+		s.rootDir = ""
+		s.i = 0
+		s.argses = nil
+		s.errors = nil
+		s.outs = nil
+		s.j = 0
+		s.jns = nil
+		s.jsvcs = nil
+		s.jouts = nil
+		s.jerrs = nil
+		s.jfollows = nil
+		s.rep = nil
+		s.restoreServicesDir = nil
+		s.restoreSystemctl = nil
+		s.restoreJournalctl = nil
+	})
 }
 
 func (s *SystemdTestSuite) TearDownTest(c *tc.C) {

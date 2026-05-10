@@ -52,7 +52,6 @@ type clientSuite struct {
 	status       int
 	tmpDir       string
 	socketPath   string
-	restore      func()
 }
 
 func TestClientSuite(t *testing.T) {
@@ -77,11 +76,22 @@ func (cs *clientSuite) SetUpTest(c *tc.C) {
 	cs.tmpDir = c.MkDir()
 	cs.socketPath = filepath.Join(cs.tmpDir, "pebble.socket")
 
-	cs.restore = client.FakeDoRetry(time.Millisecond, 10*time.Millisecond)
-}
+	c.Cleanup(client.FakeDoRetry(time.Millisecond, 10*time.Millisecond))
 
-func (cs *clientSuite) TearDownTest(c *tc.C) {
-	cs.restore()
+	c.Cleanup(func() {
+		cs.cli = nil
+		cs.req = nil
+		cs.reqs = nil
+		cs.serverIdCert = nil
+		cs.rsp = ""
+		cs.rsps = nil
+		cs.err = nil
+		cs.doCalls = 0
+		cs.header = nil
+		cs.status = 0
+		cs.tmpDir = ""
+		cs.socketPath = ""
+	})
 }
 
 // FakeTLSServer results in the inclusion of TLS certificates in the

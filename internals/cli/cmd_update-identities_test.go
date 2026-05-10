@@ -26,7 +26,7 @@ import (
 )
 
 func (s *PebbleSuite) TestUpdateIdentities(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "update", map[string]any{
 			"bob": map[string]any{
 				"access": "admin",
@@ -60,7 +60,7 @@ identities:
 }
 
 func (s *PebbleSuite) TestReplaceIdentities(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "replace", map[string]any{
 			"bob": map[string]any{
 				"access": "admin",

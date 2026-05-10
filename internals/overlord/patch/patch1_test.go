@@ -48,6 +48,10 @@ func (s *patch1Suite) SetUpTest(c *tc.C) {
 	s.statePath = filepath.Join(c.MkDir(), "state.json")
 	err := os.WriteFile(s.statePath, stateBeforePatch1, 0644)
 	c.Assert(err, tc.ErrorIsNil)
+
+	c.Cleanup(func() {
+		s.statePath = ""
+	})
 }
 
 func (s *patch1Suite) TestPatch1(c *tc.C) {

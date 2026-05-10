@@ -33,7 +33,7 @@ func (s *PebbleSuite) TestRmExtraArgs(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestRm(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -59,7 +59,7 @@ func (s *PebbleSuite) TestRm(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestRmRecursive(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -85,7 +85,7 @@ func (s *PebbleSuite) TestRmRecursive(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestRmFails(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
@@ -111,7 +111,7 @@ func (s *PebbleSuite) TestRmFails(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestRmFailsOnPath(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 

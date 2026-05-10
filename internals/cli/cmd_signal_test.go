@@ -24,7 +24,7 @@ import (
 )
 
 func (s *PebbleSuite) TestSignalShortName(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/signals")
@@ -45,7 +45,7 @@ func (s *PebbleSuite) TestSignalShortName(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestSignalFullName(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/signals")
@@ -66,7 +66,7 @@ func (s *PebbleSuite) TestSignalFullName(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestSignalMultipleServices(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/signals")
@@ -92,7 +92,7 @@ func (s *PebbleSuite) TestSignalErrorLowercase(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestSignalServerError(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
 		c.Check(r.Method, tc.Equals, "POST")
 		c.Check(r.URL.Path, tc.Equals, "/v1/signals")

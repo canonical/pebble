@@ -55,7 +55,7 @@ func (s *PebbleSuite) TestIdentitiesJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) testIdentities(c *tc.C, format string, expected string) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -82,7 +82,7 @@ func (s *PebbleSuite) testIdentities(c *tc.C, format string, expected string) {
 }
 
 func (s *PebbleSuite) TestIdentitiesNoIdentities(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -100,7 +100,7 @@ func (s *PebbleSuite) TestIdentitiesNoIdentities(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestIdentitiesNoIdentitiesJSON(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
@@ -118,7 +118,7 @@ func (s *PebbleSuite) TestIdentitiesNoIdentitiesJSON(c *tc.C) {
 }
 
 func (s *PebbleSuite) TestIdentitiesNoIdentitiesYAML(c *tc.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, tc.Equals, "GET")
 		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
