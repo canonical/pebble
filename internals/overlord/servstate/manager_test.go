@@ -136,13 +136,16 @@ func (s *S) SetUpTest(c *tc.C) {
 	if err != nil {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
+	c.Cleanup(func() {
+		err := reaper.Stop()
+		if err != nil {
+			c.Fatalf("cannot stop reaper: %v", err)
+		}
+	})
 
 	s.dir = c.MkDir()
 	s.st = state.New(nil)
 
-	s.logBufferMut.Lock()
-	s.logBuffer.Reset()
-	s.logBufferMut.Unlock()
 	s.logOutput = writerFunc(func(p []byte) (int, error) {
 		s.logBufferMut.Lock()
 		defer s.logBufferMut.Unlock()
@@ -150,6 +153,7 @@ func (s *S) SetUpTest(c *tc.C) {
 	})
 
 	s.runner = state.NewTaskRunner(s.st)
+	c.Cleanup(s.runner.Stop)
 	s.stopDaemon = make(chan restart.RestartType, 1)
 
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
@@ -167,7 +171,9 @@ func (s *S) SetUpTest(c *tc.C) {
 
 	c.Cleanup(func() {
 		s.dir = ""
-		s.logBuffer = bytes.Buffer{}
+		s.logBufferMut.Lock()
+		s.logBuffer.Reset()
+		s.logBufferMut.Unlock()
 		s.logOutput = nil
 		s.st = nil
 		s.manager = nil
@@ -176,24 +182,6 @@ func (s *S) SetUpTest(c *tc.C) {
 		s.plan = nil
 		s.planPropagated = false
 	})
-}
-
-func (s *S) TearDownTest(c *tc.C) {
-	// tc.Not all tests starts a service manager
-	if s.manager != nil {
-		if s.planPropagated {
-			// Only stop if PlanChanged was ever called on the
-			// service manager.
-			s.stopRunningServices(c)
-		}
-	}
-
-	// General test cleanup
-	s.runner.Stop()
-	err := reaper.Stop()
-	if err != nil {
-		c.Fatalf("cannot stop reaper: %v", err)
-	}
 }
 
 // TestPlanLayer and other plan snippets in this test package use the done
@@ -1992,6 +1980,13 @@ func (s *S) newServiceManager(c *tc.C) {
 	var err error
 	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
 	c.Assert(err, tc.ErrorIsNil)
+	c.Cleanup(func() {
+		if s.planPropagated {
+			// Only stop if PlanChanged was ever called on the
+			// service manager.
+			s.stopRunningServices(c)
+		}
+	})
 }
 
 func (s *S) planChanged(c *tc.C) {
