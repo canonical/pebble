@@ -19,16 +19,16 @@ import (
 	"net/http"
 	"net/url"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestIdentity(c *C) {
+func (s *PebbleSuite) TestIdentity(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -40,21 +40,21 @@ func (s *PebbleSuite) TestIdentity(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "bob"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 access: read
 local:
     user-id: 42
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestIdentityJSON(c *C) {
+func (s *PebbleSuite) TestIdentityJSON(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -65,17 +65,17 @@ func (s *PebbleSuite) TestIdentityJSON(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "json", "bob"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `{"access":"read","local":{"user-id":42}}`+"\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"access":"read","local":{"user-id":42}}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestIdentityYAML(c *C) {
+func (s *PebbleSuite) TestIdentityYAML(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -86,26 +86,26 @@ func (s *PebbleSuite) TestIdentityYAML(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "yaml", "bob"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 access: read
 local:
     user-id: 42
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestIdentityInvalidFormat(c *C) {
+func (s *PebbleSuite) TestIdentityInvalidFormat(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "foobar", "bob"})
-	c.Assert(err, ErrorMatches, "Invalid value.*for option.*--format.*")
+	c.Assert(err, tc.ErrorMatches, "Invalid value.*for option.*--format.*")
 }
 
-func (s *PebbleSuite) TestIdentityNotFound(c *C) {
+func (s *PebbleSuite) TestIdentityNotFound(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -113,5 +113,5 @@ func (s *PebbleSuite) TestIdentityNotFound(c *C) {
 	})
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"identity", "foo"})
-	c.Assert(err, ErrorMatches, `cannot find identity "foo"`)
+	c.Assert(err, tc.ErrorMatches, `cannot find identity "foo"`)
 }

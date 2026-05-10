@@ -20,12 +20,12 @@ import (
 	"net/http/httptest"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
-func (s *apiSuite) TestMetrics(c *C) {
+func (s *apiSuite) TestMetrics(c *tc.C) {
 	writeTestLayer(s.pebbleDir, `
 services:
     test1:
@@ -38,11 +38,11 @@ services:
 	// Start test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 202)
+	c.Check(rec.Result().StatusCode, tc.Equals, 202)
 
 	// Wait for it to be running.
 	serviceMgr := d.overlord.ServiceManager()
@@ -51,7 +51,7 @@ services:
 			c.Fatalf("timed out waiting for service to start")
 		}
 		services, err := serviceMgr.Services([]string{"test1"})
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		if len(services) == 1 && services[0].Current == servstate.StatusActive {
 			break
 		}
@@ -61,11 +61,11 @@ services:
 	// Get metrics.
 	metricsCmd := apiCmd("/v1/metrics")
 	metricsReq, err := http.NewRequest("GET", "/v1/metrics", nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	metricsRec := httptest.NewRecorder()
 	metricsRsp := v1GetMetrics(metricsCmd, metricsReq, nil)
 	metricsRsp.ServeHTTP(metricsRec, metricsReq)
-	c.Check(metricsRec.Code, Equals, 200)
+	c.Check(metricsRec.Code, tc.Equals, 200)
 	expected := `
 # HELP pebble_service_active Whether the service is currently active (1) or not (0)
 # TYPE pebble_service_active gauge
@@ -76,5 +76,5 @@ pebble_service_active{service="test1"} 1
 pebble_service_start_count{service="test1"} 1
 
 `[1:]
-	c.Assert(metricsRec.Body.String(), Equals, expected)
+	c.Assert(metricsRec.Body.String(), tc.Equals, expected)
 }

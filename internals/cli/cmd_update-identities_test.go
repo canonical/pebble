@@ -20,12 +20,12 @@ import (
 	"os"
 	"path/filepath"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestUpdateIdentities(c *C) {
+func (s *PebbleSuite) TestUpdateIdentities(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "update", map[string]any{
 			"bob": map[string]any{
@@ -50,16 +50,16 @@ identities:
         local: {user-id: 42}
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"update-identities", "--from", path})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Updated 1 identity.\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Updated 1 identity.\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestReplaceIdentities(c *C) {
+func (s *PebbleSuite) TestReplaceIdentities(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "replace", map[string]any{
 			"bob": map[string]any{
@@ -86,11 +86,11 @@ identities:
     alice: null
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"update-identities", "--from", path, "--replace"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Replaced 2 identities.\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Replaced 2 identities.\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

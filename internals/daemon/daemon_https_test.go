@@ -27,14 +27,14 @@ import (
 	"net/http"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
-func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
+func (s *daemonSuite) TestHTTPSOpenAccess(c *tc.C) {
 	s.httpsAddress = ":0" // Go will choose port (use listener.Addr() to find it)
 	d := s.newDaemon(c)
 	d.Init()
-	c.Assert(d.Start(), IsNil)
+	c.Assert(d.Start(), tc.IsNil)
 
 	cleanupServer := true
 	defer func() {
@@ -59,14 +59,14 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
 	}
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/health", port), nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	response, err := httpsClient.Do(request)
-	c.Assert(err, IsNil)
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(err, tc.IsNil)
+	c.Assert(response.StatusCode, tc.Equals, http.StatusOK)
 	var m map[string]any
 	err = json.NewDecoder(response.Body).Decode(&m)
-	c.Assert(err, IsNil)
-	c.Assert(m, DeepEquals, map[string]any{
+	c.Assert(err, tc.IsNil)
+	c.Assert(m, tc.DeepEquals, map[string]any{
 		"type":        "sync",
 		"status-code": float64(http.StatusOK),
 		"status":      "OK",
@@ -76,20 +76,20 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
 	})
 
 	err = d.Stop(nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Daemon already stopped, no need to do it again during defer.
 	cleanupServer = false
 
 	_, err = http.DefaultClient.Do(request)
-	c.Assert(err, ErrorMatches, ".* connection refused")
+	c.Assert(err, tc.ErrorMatches, ".* connection refused")
 }
 
-func (s *daemonSuite) TestHTTPSUserAccessFail(c *C) {
+func (s *daemonSuite) TestHTTPSUserAccessFail(c *tc.C) {
 	s.httpsAddress = ":0" // Go will choose port (use listener.Addr() to find it)
 	d := s.newDaemon(c)
 	d.Init()
-	c.Assert(d.Start(), IsNil)
+	c.Assert(d.Start(), tc.IsNil)
 
 	cleanupServer := true
 	defer func() {
@@ -114,24 +114,24 @@ func (s *daemonSuite) TestHTTPSUserAccessFail(c *C) {
 	}
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	response, err := httpsClient.Do(request)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Access fails because the TLS client identity is not known.
-	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
+	c.Assert(response.StatusCode, tc.Equals, http.StatusUnauthorized)
 
 	err = d.Stop(nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Daemon already stopped, no need to do it again during defer.
 	cleanupServer = false
 
 	_, err = http.DefaultClient.Do(request)
-	c.Assert(err, ErrorMatches, ".* connection refused")
+	c.Assert(err, tc.ErrorMatches, ".* connection refused")
 }
 
-func (s *daemonSuite) TestHTTPSUserAccessOK(c *C) {
+func (s *daemonSuite) TestHTTPSUserAccessOK(c *tc.C) {
 	s.httpsAddress = ":0" // Go will choose port (use listener.Addr() to find it)
 
 	// Write pairing configuration layer
@@ -143,7 +143,7 @@ pairing:
 
 	d := s.newDaemon(c)
 	d.Init()
-	c.Assert(d.Start(), IsNil)
+	c.Assert(d.Start(), tc.IsNil)
 
 	cleanupServer := true
 	defer func() {
@@ -170,38 +170,38 @@ pairing:
 	// Enable pairing window
 	pairingMgr := d.overlord.PairingManager()
 	err := pairingMgr.EnablePairing(10 * time.Second)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Pair the client identity by making a POST to v1/pairing API
 	pairingPayload := bytes.NewBufferString(`{"action": "pair"}`)
 	pairingRequest, err := http.NewRequest("POST", fmt.Sprintf("https://localhost:%d/v1/pairing", port), pairingPayload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	pairingResponse, err := httpsClient.Do(pairingRequest)
-	c.Assert(err, IsNil)
-	c.Assert(pairingResponse.StatusCode, Equals, http.StatusOK)
+	c.Assert(err, tc.IsNil)
+	c.Assert(pairingResponse.StatusCode, tc.Equals, http.StatusOK)
 
 	// Now try accessing checks - should succeed
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	response, err := httpsClient.Do(request)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Access succeeds because the TLS client identity is now paired
-	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	c.Assert(response.StatusCode, tc.Equals, http.StatusOK)
 
 	err = d.Stop(nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Daemon already stopped, no need to do it again during defer.
 	cleanupServer = false
 
 	_, err = http.DefaultClient.Do(request)
-	c.Assert(err, ErrorMatches, ".* connection refused")
+	c.Assert(err, tc.ErrorMatches, ".* connection refused")
 }
 
-func createTestClientTLSKeypair(c *C) *tls.Certificate {
+func createTestClientTLSKeypair(c *tc.C) *tls.Certificate {
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
@@ -213,10 +213,10 @@ func createTestClientTLSKeypair(c *C) *tls.Certificate {
 
 	// Self-signed certificate.
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, privateKey.Public(), privateKey)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	cert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	return &tls.Certificate{
 		Certificate: [][]byte{certDER},

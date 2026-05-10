@@ -17,7 +17,9 @@ package overlord_test
 // test the various managers and their operation together through overlord
 
 import (
-	. "gopkg.in/check.v1"
+	"testing"
+
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/testutil"
@@ -31,18 +33,18 @@ type mgrsSuite struct {
 	o *overlord.Overlord
 }
 
-var (
-	_ = Suite(&mgrsSuite{})
-)
+func TestMgrsSuite(t *testing.T) {
+	tc.Run(t, &mgrsSuite{})
+}
 
-func (s *mgrsSuite) SetUpTest(c *C) {
+func (s *mgrsSuite) SetUpTest(c *tc.C) {
 	s.BaseTest.SetUpTest(c)
 
 	s.dir = c.MkDir()
 
 	o, err := overlord.New(&overlord.Options{PebbleDir: s.dir})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = o.StartUp()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	s.o = o
 }

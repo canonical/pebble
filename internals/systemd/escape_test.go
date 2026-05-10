@@ -15,18 +15,18 @@
 package systemd_test
 
 import (
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	. "github.com/canonical/pebble/internals/systemd"
 )
 
-func (s *SystemdTestSuite) TestEscape(c *C) {
-	c.Check(EscapeUnitNamePath("Hallöchen, Meister"), Equals, `Hall\xc3\xb6chen\x2c\x20Meister`)
+func (s *SystemdTestSuite) TestEscape(c *tc.C) {
+	c.Check(EscapeUnitNamePath("Hallöchen, Meister"), tc.Equals, `Hall\xc3\xb6chen\x2c\x20Meister`)
 
-	c.Check(EscapeUnitNamePath("/tmp//waldi/foobar/"), Equals, `tmp-waldi-foobar`)
-	c.Check(EscapeUnitNamePath("/.foo/.bar"), Equals, `\x2efoo-.bar`)
-	c.Check(EscapeUnitNamePath("////"), Equals, `-`)
-	c.Check(EscapeUnitNamePath("."), Equals, `\x2e`)
-	c.Check(EscapeUnitNamePath("/foo/bar-baz"), Equals, `foo-bar\x2dbaz`)
-	c.Check(EscapeUnitNamePath("/foo/bar--baz"), Equals, `foo-bar\x2d\x2dbaz`)
+	c.Check(EscapeUnitNamePath("/tmp//waldi/foobar/"), tc.Equals, `tmp-waldi-foobar`)
+	c.Check(EscapeUnitNamePath("/.foo/.bar"), tc.Equals, `\x2efoo-.bar`)
+	c.Check(EscapeUnitNamePath("////"), tc.Equals, `-`)
+	c.Check(EscapeUnitNamePath("."), tc.Equals, `\x2e`)
+	c.Check(EscapeUnitNamePath("/foo/bar-baz"), tc.Equals, `foo-bar\x2dbaz`)
+	c.Check(EscapeUnitNamePath("/foo/bar--baz"), tc.Equals, `foo-bar\x2d\x2dbaz`)
 }

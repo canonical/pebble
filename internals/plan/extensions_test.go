@@ -21,7 +21,7 @@ import (
 	"slices"
 	"strings"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/plan"
@@ -356,7 +356,7 @@ var extensionTests = []struct {
 				b: b`)),
 }}
 
-func (s *S) TestPlanExtensions(c *C) {
+func (s *S) TestPlanExtensions(c *tc.C) {
 	registeredExtensions := []string{}
 	defer func() {
 		// Remove remaining registered extensions.
@@ -393,7 +393,7 @@ nexttest:
 				return nil
 			}()
 			if err != nil {
-				c.Assert(err, ErrorMatches, testData.error)
+				c.Assert(err, tc.ErrorMatches, testData.error)
 				continue nexttest
 			}
 		}
@@ -402,7 +402,7 @@ nexttest:
 		p, err := plan.ReadDir(layersDir, nil)
 		if testData.error != "" || err != nil {
 			// Expected error.
-			c.Assert(err, ErrorMatches, testData.error)
+			c.Assert(err, tc.ErrorMatches, testData.error)
 			continue nexttest
 		}
 
@@ -411,8 +411,8 @@ nexttest:
 		}) {
 			// Verify "x-field" data.
 			x := p.Sections[xField].(*xSection)
-			c.Assert(err, IsNil)
-			c.Assert(x.Entries, DeepEquals, testData.result.x.Entries)
+			c.Assert(err, tc.IsNil)
+			c.Assert(x.Entries, tc.DeepEquals, testData.result.x.Entries)
 		}
 
 		if slices.ContainsFunc(testData.extensions, func(n extension) bool {
@@ -420,14 +420,14 @@ nexttest:
 		}) {
 			// Verify "y-field" data.
 			y := p.Sections[yField].(*ySection)
-			c.Assert(err, IsNil)
-			c.Assert(y.Entries, DeepEquals, testData.result.y.Entries)
+			c.Assert(err, tc.IsNil)
+			c.Assert(y.Entries, tc.DeepEquals, testData.result.y.Entries)
 		}
 
 		// Verify combined plan YAML.
 		planYAML, err := yaml.Marshal(p)
-		c.Assert(err, IsNil)
-		c.Assert(string(planYAML), Equals, testData.resultYaml)
+		c.Assert(err, tc.IsNil)
+		c.Assert(string(planYAML), tc.Equals, testData.resultYaml)
 	}
 }
 
@@ -435,7 +435,7 @@ nexttest:
 // rules are maintained. Extensions are ordered according to the order of
 // registration and follows the built-in sections which are ordered
 // the same way they are defined in the Plan struct.
-func (s *S) TestSectionOrderExt(c *C) {
+func (s *S) TestSectionOrderExt(c *tc.C) {
 	plan.RegisterSectionExtension("x-field", &xExtension{})
 	plan.RegisterSectionExtension("y-field", &yExtension{})
 	defer func() {
@@ -471,9 +471,9 @@ func (s *S) TestSectionOrderExt(c *C) {
 			srv1:
 				override: replace
 				command: cmd`))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	combined, err := plan.CombineLayers(layer)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	plan := plan.Plan{
 		Services:   combined.Services,
 		Checks:     combined.Checks,
@@ -481,8 +481,8 @@ func (s *S) TestSectionOrderExt(c *C) {
 		Sections:   combined.Sections,
 	}
 	data, err := yaml.Marshal(plan)
-	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, string(reindent(`
+	c.Assert(err, tc.IsNil)
+	c.Assert(string(data), tc.Equals, string(reindent(`
 		services:
 			srv1:
 				override: replace
@@ -515,13 +515,13 @@ func (s *S) TestSectionOrderExt(c *C) {
 }
 
 // writeLayerFiles writes layer files of a test to disk.
-func (s *S) writeLayerFiles(c *C, layersDir string, inputs []*inputLayer) {
+func (s *S) writeLayerFiles(c *tc.C, layersDir string, inputs []*inputLayer) {
 	err := os.MkdirAll(layersDir, 0755)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	for _, input := range inputs {
 		err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-%s.yaml", input.order, input.label)), reindent(input.yaml), 0644)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 	}
 }
 

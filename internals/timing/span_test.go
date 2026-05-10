@@ -21,14 +21,12 @@ import (
 	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/testutil"
 	"github.com/canonical/pebble/internals/timing"
 )
-
-func Test(t *testing.T) { TestingT(t) }
 
 type spanSuite struct {
 	testutil.BaseTest
@@ -37,9 +35,11 @@ type spanSuite struct {
 	fakeTime time.Time
 }
 
-var _ = Suite(&spanSuite{})
+func TestSpanSuite(t *testing.T) {
+	tc.Run(t, &spanSuite{})
+}
 
-func (s *spanSuite) SetUpTest(c *C) {
+func (s *spanSuite) SetUpTest(c *tc.C) {
 	s.BaseTest.SetUpTest(c)
 
 	s.st = state.New(nil)
@@ -49,13 +49,13 @@ func (s *spanSuite) SetUpTest(c *C) {
 	s.fakeMinNestedSpan(0)
 }
 
-func (s *spanSuite) TearDownTest(c *C) {
+func (s *spanSuite) TearDownTest(c *tc.C) {
 	s.BaseTest.TearDownTest(c)
 }
 
-func (s *spanSuite) fakeTimeNow(c *C) {
+func (s *spanSuite) fakeTimeNow(c *tc.C) {
 	t, err := time.Parse(time.RFC3339, "2020-01-01T01:01:00.0Z")
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	s.fakeTime = t
 	// Increase fakeTime by 1 millisecond on each call, and report it as current time
 	s.AddCleanup(timing.FakeTimeNow(func() time.Time {
@@ -88,7 +88,7 @@ func encodeDecode(span *timing.Span) any {
 	return decoded
 }
 
-func (s *spanSuite) TestSave(c *C) {
+func (s *spanSuite) TestSave(c *tc.C) {
 	s.st.Lock()
 	defer s.st.Unlock()
 
@@ -109,7 +109,7 @@ func (s *spanSuite) TestSave(c *C) {
 	decoded0 := encodeDecode(spans[0])
 	decoded1 := encodeDecode(spans[1])
 
-	c.Assert(decoded0, DeepEquals, map[string]any{
+	c.Assert(decoded0, tc.DeepEquals, map[string]any{
 		"tags": map[string]any{
 			"change": "12",
 			"task":   "0",
@@ -133,7 +133,7 @@ func (s *spanSuite) TestSave(c *C) {
 			},
 		},
 	})
-	c.Assert(decoded1, DeepEquals, map[string]any{
+	c.Assert(decoded1, tc.DeepEquals, map[string]any{
 		"tags": map[string]any{
 			"change": "12",
 			"task":   "1",
@@ -159,7 +159,7 @@ func (s *spanSuite) TestSave(c *C) {
 	})
 }
 
-func (s *spanSuite) testDurationThreshold(c *C, threshold time.Duration, expected any) {
+func (s *spanSuite) testDurationThreshold(c *tc.C, threshold time.Duration, expected any) {
 	s.fakeMinNestedSpan(threshold)
 
 	span1 := timing.Start("", "", nil)
@@ -171,10 +171,10 @@ func (s *spanSuite) testDurationThreshold(c *C, threshold time.Duration, expecte
 	span2.Stop()
 	span1.Stop()
 
-	c.Assert(encodeDecode(span1), DeepEquals, expected)
+	c.Assert(encodeDecode(span1), tc.DeepEquals, expected)
 }
 
-func (s *spanSuite) TestDurationThresholdAll(c *C) {
+func (s *spanSuite) TestDurationThresholdAll(c *tc.C) {
 	s.testDurationThreshold(c, 0, map[string]any{
 		"base": json.Number("1577840460"),
 		"b":    json.Number("8000000"),
@@ -204,7 +204,7 @@ func (s *spanSuite) TestDurationThresholdAll(c *C) {
 	})
 }
 
-func (s *spanSuite) TestDurationThreshold(c *C) {
+func (s *spanSuite) TestDurationThreshold(c *tc.C) {
 	s.testDurationThreshold(c, 3000000, map[string]any{
 		"base": json.Number("1577840460"),
 		"b":    json.Number("8000000"),
@@ -227,7 +227,7 @@ func (s *spanSuite) TestDurationThreshold(c *C) {
 	})
 }
 
-func (s *spanSuite) TestDurationThresholdRootOnly(c *C) {
+func (s *spanSuite) TestDurationThresholdRootOnly(c *tc.C) {
 	s.testDurationThreshold(c, 4000000, map[string]any{
 		"base": json.Number("1577840460"),
 		"b":    json.Number("8000000"),

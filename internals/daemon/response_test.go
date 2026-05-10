@@ -21,15 +21,18 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"testing"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type responseSuite struct{}
 
-var _ = check.Suite(&responseSuite{})
+func TestResponseSuite(t *testing.T) {
+	tc.Run(t, &responseSuite{})
+}
 
-func (s *responseSuite) TestRespSetsLocationIfAccepted(c *check.C) {
+func (s *responseSuite) TestRespSetsLocationIfAccepted(c *tc.C) {
 	rec := httptest.NewRecorder()
 
 	rsp := &resp{
@@ -41,10 +44,10 @@ func (s *responseSuite) TestRespSetsLocationIfAccepted(c *check.C) {
 
 	rsp.ServeHTTP(rec, nil)
 	hdr := rec.Result().Header
-	c.Check(hdr.Get("Location"), check.Equals, "foo/bar")
+	c.Check(hdr.Get("Location"), tc.Equals, "foo/bar")
 }
 
-func (s *responseSuite) TestRespSetsLocationIfCreated(c *check.C) {
+func (s *responseSuite) TestRespSetsLocationIfCreated(c *tc.C) {
 	rec := httptest.NewRecorder()
 
 	rsp := &resp{
@@ -56,10 +59,10 @@ func (s *responseSuite) TestRespSetsLocationIfCreated(c *check.C) {
 
 	rsp.ServeHTTP(rec, nil)
 	hdr := rec.Result().Header
-	c.Check(hdr.Get("Location"), check.Equals, "foo/bar")
+	c.Check(hdr.Get("Location"), tc.Equals, "foo/bar")
 }
 
-func (s *responseSuite) TestRespDoesNotSetLocationIfOther(c *check.C) {
+func (s *responseSuite) TestRespDoesNotSetLocationIfOther(c *tc.C) {
 	rec := httptest.NewRecorder()
 
 	rsp := &resp{
@@ -71,63 +74,63 @@ func (s *responseSuite) TestRespDoesNotSetLocationIfOther(c *check.C) {
 
 	rsp.ServeHTTP(rec, nil)
 	hdr := rec.Result().Header
-	c.Check(hdr.Get("Location"), check.Equals, "")
+	c.Check(hdr.Get("Location"), tc.Equals, "")
 }
 
-func (s *responseSuite) TestFileResponseSetsContentDisposition(c *check.C) {
+func (s *responseSuite) TestFileResponseSetsContentDisposition(c *tc.C) {
 	const filename = "icon.png"
 
 	path := filepath.Join(c.MkDir(), filename)
 	err := os.WriteFile(path, nil, os.ModePerm)
-	c.Check(err, check.IsNil)
+	c.Check(err, tc.IsNil)
 
 	rec := httptest.NewRecorder()
 	rsp := fileResponse(path)
 	req, err := http.NewRequest("GET", "", nil)
-	c.Check(err, check.IsNil)
+	c.Check(err, tc.IsNil)
 
 	rsp.ServeHTTP(rec, req)
 
 	hdr := rec.Result().Header
-	c.Check(hdr.Get("Content-Disposition"), check.Equals,
+	c.Check(hdr.Get("Content-Disposition"), tc.Equals,
 		fmt.Sprintf("attachment; filename=%s", filename))
 }
 
 // This diverges from snapd. For historical reasons snapd must send a null result
 // in this case, but there are no old clients to be worried about here.
-func (s *responseSuite) TestRespJSONWithNullResult(c *check.C) {
+func (s *responseSuite) TestRespJSONWithNullResult(c *tc.C) {
 	rj := &respJSON{Result: nil}
 	data, err := json.Marshal(rj)
-	c.Assert(err, check.IsNil)
-	c.Check(string(data), check.Equals, `{"type":"","status-code":0}`)
+	c.Assert(err, tc.IsNil)
+	c.Check(string(data), tc.Equals, `{"type":"","status-code":0}`)
 }
 
-func (s *responseSuite) TestErrorResponderPrintfsWithArgs(c *check.C) {
+func (s *responseSuite) TestErrorResponderPrintfsWithArgs(c *tc.C) {
 	teapot := makeErrorResponder(http.StatusTeapot)
 
 	rec := httptest.NewRecorder()
 	rsp := teapot("system memory below %d%%.", 1)
 	req, err := http.NewRequest("GET", "", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp.ServeHTTP(rec, req)
 
 	var v struct{ Result errorResult }
-	c.Assert(json.NewDecoder(rec.Body).Decode(&v), check.IsNil)
+	c.Assert(json.NewDecoder(rec.Body).Decode(&v), tc.IsNil)
 
-	c.Check(v.Result.Message, check.Equals, "system memory below 1%.")
+	c.Check(v.Result.Message, tc.Equals, "system memory below 1%.")
 }
 
-func (s *responseSuite) TestErrorResponderDoesNotPrintfAlways(c *check.C) {
+func (s *responseSuite) TestErrorResponderDoesNotPrintfAlways(c *tc.C) {
 	teapot := makeErrorResponder(http.StatusTeapot)
 
 	rec := httptest.NewRecorder()
 	rsp := teapot("system memory below 1%.")
 	req, err := http.NewRequest("GET", "", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp.ServeHTTP(rec, req)
 
 	var v struct{ Result errorResult }
-	c.Assert(json.NewDecoder(rec.Body).Decode(&v), check.IsNil)
+	c.Assert(json.NewDecoder(rec.Body).Decode(&v), tc.IsNil)
 
-	c.Check(v.Result.Message, check.Equals, "system memory below 1%.")
+	c.Check(v.Result.Message, tc.Equals, "system memory below 1%.")
 }

@@ -20,10 +20,11 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"testing"
 	"time"
 
+	"github.com/canonical/tc"
 	"github.com/gorilla/websocket"
-	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
 )
@@ -35,11 +36,13 @@ type execSuite struct {
 	stderrWs  *testWebsocket
 }
 
-var _ = Suite(&execSuite{})
+func TestExecSuite(t *testing.T) {
+	tc.Run(t, &execSuite{})
+}
 
 var websocketRegexp = regexp.MustCompile(`^/v1/tasks/T\d+/websocket/(\w+)$`)
 
-func (s *execSuite) SetUpTest(c *C) {
+func (s *execSuite) SetUpTest(c *tc.C) {
 	s.clientSuite.SetUpTest(c)
 
 	s.stdioWs = &testWebsocket{}
@@ -64,52 +67,52 @@ func (s *execSuite) SetUpTest(c *C) {
 	})
 }
 
-func (s *execSuite) TearDownTest(c *C) {
+func (s *execSuite) TearDownTest(c *tc.C) {
 	s.clientSuite.TearDownTest(c)
 }
 
-func (s *execSuite) TestExitZero(c *C) {
+func (s *execSuite) TestExitZero(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"true"},
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"true"},
 	})
 	err := s.wait(c, process)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }
 
-func (s *execSuite) TestExitNonZero(c *C) {
+func (s *execSuite) TestExitNonZero(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"false"},
 	}
 	process, reqBody := s.exec(c, opts, 1)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"false"},
 	})
 	err := s.wait(c, process)
 	exitError, ok := err.(*client.ExitError)
-	c.Assert(ok, Equals, true, Commentf("expected *client.ExitError, got %T", err))
-	c.Assert(exitError.ExitCode(), Equals, 1)
+	c.Assert(ok, tc.Equals, true, tc.Commentf("expected *client.ExitError, got %T", err))
+	c.Assert(exitError.ExitCode(), tc.Equals, 1)
 }
 
-func (s *execSuite) TestTimeout(c *C) {
+func (s *execSuite) TestTimeout(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"sleep", "3"},
 		Timeout: time.Second,
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"sleep", "3"},
 		"timeout": "1s",
 	})
 	err := s.wait(c, process)
-	c.Assert(err, IsNil)
-	c.Assert(s.req.URL.String(), Equals, "http://localhost/v1/changes/123/wait?timeout=2s")
+	c.Assert(err, tc.IsNil)
+	c.Assert(s.req.URL.String(), tc.Equals, "http://localhost/v1/changes/123/wait?timeout=2s")
 }
 
-func (s *execSuite) TestOtherOptions(c *C) {
+func (s *execSuite) TestOtherOptions(c *tc.C) {
 	userID := 1000
 	groupID := 2000
 	opts := &client.ExecOptions{
@@ -126,7 +129,7 @@ func (s *execSuite) TestOtherOptions(c *C) {
 		Stderr:      io.Discard,
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command":      []any{"echo", "foo"},
 		"environment":  map[string]any{"K1": "V1", "K2": "V2"},
 		"working-dir":  "WD",
@@ -140,15 +143,15 @@ func (s *execSuite) TestOtherOptions(c *C) {
 		"split-stderr": true,
 	})
 	err := s.wait(c, process)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }
 
-func (s *execSuite) TestWaitChangeError(c *C) {
+func (s *execSuite) TestWaitChangeError(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"foo"},
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"foo"},
 	})
 
@@ -165,15 +168,15 @@ func (s *execSuite) TestWaitChangeError(c *C) {
 		"type": "sync"
 	}`
 	err := s.wait(c, process)
-	c.Assert(err, ErrorMatches, "change error!")
+	c.Assert(err, tc.ErrorMatches, "change error!")
 }
 
-func (s *execSuite) TestWaitTasksError(c *C) {
+func (s *execSuite) TestWaitTasksError(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"foo"},
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"foo"},
 	})
 
@@ -189,15 +192,15 @@ func (s *execSuite) TestWaitTasksError(c *C) {
 		"type": "sync"
 	}`
 	err := s.wait(c, process)
-	c.Assert(err, ErrorMatches, "expected exec change to contain at least one task")
+	c.Assert(err, tc.ErrorMatches, "expected exec change to contain at least one task")
 }
 
-func (s *execSuite) TestWaitExitCodeError(c *C) {
+func (s *execSuite) TestWaitExitCodeError(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"foo"},
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"foo"},
 	})
 
@@ -217,46 +220,46 @@ func (s *execSuite) TestWaitExitCodeError(c *C) {
 		"type": "sync"
 	}`
 	err := s.wait(c, process)
-	c.Assert(err, ErrorMatches, "cannot get exit code: .*")
+	c.Assert(err, tc.ErrorMatches, "cannot get exit code: .*")
 }
 
-func (s *execSuite) TestSendSignal(c *C) {
+func (s *execSuite) TestSendSignal(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"server"},
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"server"},
 	})
 	err := process.SendSignal("SIGHUP")
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = process.SendSignal("SIGUSR1")
-	c.Assert(err, IsNil)
-	c.Assert(s.controlWs.writes, DeepEquals, []write{
+	c.Assert(err, tc.IsNil)
+	c.Assert(s.controlWs.writes, tc.DeepEquals, []write{
 		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGHUP"}}`},
 		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGUSR1"}}`},
 	})
 }
 
-func (s *execSuite) TestSendResize(c *C) {
+func (s *execSuite) TestSendResize(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"server"},
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"server"},
 	})
 	err := process.SendResize(150, 50)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = process.SendResize(80, 25)
-	c.Assert(err, IsNil)
-	c.Assert(s.controlWs.writes, DeepEquals, []write{
+	c.Assert(err, tc.IsNil)
+	c.Assert(s.controlWs.writes, tc.DeepEquals, []write{
 		{websocket.TextMessage, `{"command":"resize","resize":{"width":150,"height":50}}`},
 		{websocket.TextMessage, `{"command":"resize","resize":{"width":80,"height":25}}`},
 	})
 }
 
-func (s *execSuite) TestOutputCombined(c *C) {
+func (s *execSuite) TestOutputCombined(c *tc.C) {
 	stdout := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
 		read{websocket.BinaryMessage, "OUT\n"},
@@ -268,15 +271,15 @@ func (s *execSuite) TestOutputCombined(c *C) {
 		Stdout:  &stdout,
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"/bin/sh", "-c", "echo OUT; echo ERR >err"},
 	})
 	err := s.wait(c, process)
-	c.Assert(err, IsNil)
-	c.Assert(stdout.String(), Equals, "OUT\nERR\n")
+	c.Assert(err, tc.IsNil)
+	c.Assert(stdout.String(), tc.Equals, "OUT\nERR\n")
 }
 
-func (s *execSuite) TestOutputSplit(c *C) {
+func (s *execSuite) TestOutputSplit(c *tc.C) {
 	stdout := bytes.Buffer{}
 	stderr := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
@@ -293,17 +296,17 @@ func (s *execSuite) TestOutputSplit(c *C) {
 		Stderr:  &stderr,
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command":      []any{"/bin/sh", "-c", "echo OUT; echo ERR >err"},
 		"split-stderr": true,
 	})
 	err := s.wait(c, process)
-	c.Assert(err, IsNil)
-	c.Assert(stdout.String(), Equals, "OUT\n")
-	c.Assert(stderr.String(), Equals, "ERR\n")
+	c.Assert(err, tc.IsNil)
+	c.Assert(stdout.String(), tc.Equals, "OUT\n")
+	c.Assert(stderr.String(), tc.Equals, "ERR\n")
 }
 
-func (s *execSuite) TestStdinAndStdout(c *C) {
+func (s *execSuite) TestStdinAndStdout(c *tc.C) {
 	stdout := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
 		read{websocket.BinaryMessage, "FOO\nBAR BAZZ\n"},
@@ -315,13 +318,13 @@ func (s *execSuite) TestStdinAndStdout(c *C) {
 		Stdout:  &stdout,
 	}
 	process, reqBody := s.exec(c, opts, 0)
-	c.Assert(reqBody, DeepEquals, map[string]any{
+	c.Assert(reqBody, tc.DeepEquals, map[string]any{
 		"command": []any{"awk", "{ print toupper($0) }"},
 	})
 	err := s.wait(c, process)
-	c.Assert(err, IsNil)
-	c.Assert(stdout.String(), Equals, "FOO\nBAR BAZZ\n")
-	c.Assert(s.stdioWs.writes, DeepEquals, []write{
+	c.Assert(err, tc.IsNil)
+	c.Assert(stdout.String(), tc.Equals, "FOO\nBAR BAZZ\n")
+	c.Assert(s.stdioWs.writes, tc.DeepEquals, []write{
 		{websocket.BinaryMessage, "foo\nBar BAZZ\n"},
 		{websocket.TextMessage, `{"command":"end"}`},
 	})
@@ -369,23 +372,23 @@ func (w *testWebsocket) WriteJSON(v any) error {
 	return nil
 }
 
-func (s *execSuite) exec(c *C, opts *client.ExecOptions, exitCode int) (process *client.ExecProcess, requestBody map[string]any) {
+func (s *execSuite) exec(c *tc.C, opts *client.ExecOptions, exitCode int) (process *client.ExecProcess, requestBody map[string]any) {
 	s.addResponses("123", exitCode)
 	process, err := s.cli.Exec(opts)
-	c.Assert(err, IsNil)
-	c.Assert(s.req.Method, Equals, "POST")
-	c.Assert(s.req.URL.String(), Equals, "http://localhost/v1/exec")
+	c.Assert(err, tc.IsNil)
+	c.Assert(s.req.Method, tc.Equals, "POST")
+	c.Assert(s.req.URL.String(), tc.Equals, "http://localhost/v1/exec")
 	err = json.NewDecoder(s.req.Body).Decode(&requestBody)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	return process, requestBody
 }
 
-func (s *execSuite) wait(c *C, process *client.ExecProcess) error {
+func (s *execSuite) wait(c *tc.C, process *client.ExecProcess) error {
 	err := process.Wait()
-	c.Assert(s.req.Method, Equals, "GET")
-	c.Assert(s.req.URL.Scheme, Equals, "http")
-	c.Assert(s.req.URL.Host, Equals, "localhost")
-	c.Assert(s.req.URL.Path, Equals, "/v1/changes/123/wait")
+	c.Assert(s.req.Method, tc.Equals, "GET")
+	c.Assert(s.req.URL.Scheme, tc.Equals, "http")
+	c.Assert(s.req.URL.Host, tc.Equals, "localhost")
+	c.Assert(s.req.URL.Path, tc.Equals, "/v1/changes/123/wait")
 	process.WaitStdinDone()
 	return err
 }

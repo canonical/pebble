@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/canonical/tc"
 	"golang.org/x/term"
-	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/cli"
@@ -20,9 +20,6 @@ import (
 	"github.com/canonical/pebble/internals/testutil"
 	"github.com/canonical/pebble/internals/workloads"
 )
-
-// Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
 
 type BasePebbleSuite struct {
 	testutil.BaseTest
@@ -40,7 +37,7 @@ func (s *BasePebbleSuite) readPassword(fd int) ([]byte, error) {
 	return []byte(s.password), nil
 }
 
-func (s *BasePebbleSuite) SetUpTest(c *C) {
+func (s *BasePebbleSuite) SetUpTest(c *tc.C) {
 	s.BaseTest.SetUpTest(c)
 
 	s.pebbleDir = c.MkDir()
@@ -68,7 +65,7 @@ func (s *BasePebbleSuite) SetUpTest(c *C) {
 	s.cliStatePath = filepath.Join(configHome, "pebble", "cli.json")
 }
 
-func (s *BasePebbleSuite) TearDownTest(c *C) {
+func (s *BasePebbleSuite) TearDownTest(c *tc.C) {
 	os.Setenv("PEBBLE", "")
 	os.Setenv("PEBBLE_SOCKET", "")
 
@@ -104,20 +101,20 @@ func (s *BasePebbleSuite) RedirectClientToTestServer(handler func(http.ResponseW
 }
 
 // DecodedRequestBody returns the JSON-decoded body of the request.
-func DecodedRequestBody(c *C, r *http.Request) map[string]any {
+func DecodedRequestBody(c *tc.C, r *http.Request) map[string]any {
 	var body map[string]any
 	decoder := json.NewDecoder(r.Body)
 	decoder.UseNumber()
 	err := decoder.Decode(&body)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	return body
 }
 
 // EncodeResponseBody writes JSON-serialized body to the response writer.
-func EncodeResponseBody(c *C, w http.ResponseWriter, body any) {
+func EncodeResponseBody(c *tc.C, w http.ResponseWriter, body any) {
 	encoder := json.NewEncoder(w)
 	err := encoder.Encode(body)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }
 
 func fakeArgs(args ...string) (restore func()) {
@@ -136,9 +133,11 @@ type PebbleSuite struct {
 	BasePebbleSuite
 }
 
-var _ = Suite(&PebbleSuite{})
+func TestPebbleSuite(t *testing.T) {
+	tc.Run(t, &PebbleSuite{})
+}
 
-func (s *PebbleSuite) TestErrorResult(c *C) {
+func (s *PebbleSuite) TestErrorResult(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "cannot do something"}}`)
 	})
@@ -147,34 +146,34 @@ func (s *PebbleSuite) TestErrorResult(c *C) {
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, ErrorMatches, `cannot do something`)
+	c.Assert(err, tc.ErrorMatches, `cannot do something`)
 }
 
-func (s *PebbleSuite) TestRunOptionApplyDefaults(c *C) {
+func (s *PebbleSuite) TestRunOptionApplyDefaults(c *tc.C) {
 	os.Setenv("PEBBLE", "")
 	os.Setenv("PEBBLE_SOCKET", "")
 	r := cli.WithDefaultRunOptions(nil)
-	c.Assert(r.PebbleDir, Equals, "/var/lib/pebble/default")
-	c.Assert(r.ClientConfig.Socket, Equals, "/var/lib/pebble/default/.pebble.socket")
+	c.Assert(r.PebbleDir, tc.Equals, "/var/lib/pebble/default")
+	c.Assert(r.ClientConfig.Socket, tc.Equals, "/var/lib/pebble/default/.pebble.socket")
 
 	os.Setenv("PEBBLE", "/foo")
 	r = cli.WithDefaultRunOptions(nil)
-	c.Assert(r.PebbleDir, Equals, "/foo")
-	c.Assert(r.ClientConfig.Socket, Equals, "/foo/.pebble.socket")
+	c.Assert(r.PebbleDir, tc.Equals, "/foo")
+	c.Assert(r.ClientConfig.Socket, tc.Equals, "/foo/.pebble.socket")
 
 	os.Setenv("PEBBLE", "/bar")
 	os.Setenv("PEBBLE_SOCKET", "/path/to/socket")
 	r = cli.WithDefaultRunOptions(nil)
-	c.Assert(r.PebbleDir, Equals, "/bar")
-	c.Assert(r.ClientConfig.Socket, Equals, "/path/to/socket")
+	c.Assert(r.PebbleDir, tc.Equals, "/bar")
+	c.Assert(r.ClientConfig.Socket, tc.Equals, "/path/to/socket")
 }
 
-func (s *BasePebbleSuite) readCLIState(c *C) map[string]any {
+func (s *BasePebbleSuite) readCLIState(c *tc.C) map[string]any {
 	data, err := os.ReadFile(s.cliStatePath)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	var fullState map[string]any
 	err = json.Unmarshal(data, &fullState)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	socketMap, ok := fullState["pebble"].(map[string]any)
 	if !ok {
@@ -189,7 +188,7 @@ func (s *BasePebbleSuite) readCLIState(c *C) map[string]any {
 	return v.(map[string]any)
 }
 
-func (s *BasePebbleSuite) writeCLIState(c *C, st map[string]any) {
+func (s *BasePebbleSuite) writeCLIState(c *tc.C, st map[string]any) {
 	r := cli.WithDefaultRunOptions(nil)
 	fullState := map[string]any{
 		"pebble": map[string]any{
@@ -197,9 +196,9 @@ func (s *BasePebbleSuite) writeCLIState(c *C, st map[string]any) {
 		},
 	}
 	err := os.MkdirAll(filepath.Dir(s.cliStatePath), 0o700)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	data, err := json.Marshal(fullState)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = os.WriteFile(s.cliStatePath, data, 0o600)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }

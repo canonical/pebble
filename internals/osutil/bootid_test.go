@@ -20,17 +20,21 @@
 package osutil_test
 
 import (
-	. "gopkg.in/check.v1"
+	"testing"
+
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/osutil"
 )
 
 type bootIdSuite struct{}
 
-var _ = Suite(&bootIdSuite{})
+func TestBootIdSuite(t *testing.T) {
+	tc.Run(t, &bootIdSuite{})
+}
 
-func (s *bootIdSuite) TestSmoke(c *C) {
+func (s *bootIdSuite) TestSmoke(c *tc.C) {
 	id, err := osutil.BootID()
-	c.Assert(err, IsNil)
-	c.Assert(id, HasLen, 36)
+	c.Assert(err, tc.IsNil)
+	c.Assert(id, tc.HasLen, 36)
 }

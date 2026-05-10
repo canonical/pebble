@@ -17,7 +17,7 @@ package pairingstate_test
 import (
 	"strings"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
 )
@@ -119,22 +119,22 @@ pairing:
     `,
 }}
 
-func (s *pairingSuite) TestPairingSectionExtensionSchema(c *C) {
+func (s *pairingSuite) TestPairingSectionExtensionSchema(c *tc.C) {
 
 	for i, t := range schemaTests {
 		c.Logf("Running TestPairingSectionExtensionSchema %q test using test data index %d\n", t.summary, i)
 		combined, err := parseCombineLayers(t.layers)
 		if t.error != "" {
-			c.Assert(err, ErrorMatches, t.error)
+			c.Assert(err, tc.ErrorMatches, t.error)
 		} else {
-			c.Assert(err, IsNil)
+			c.Assert(err, tc.IsNil)
 			section, ok := combined.Sections[pairingstate.PairingField]
-			c.Assert(ok, Equals, true)
-			c.Assert(section, NotNil)
+			c.Assert(ok, tc.Equals, true)
+			c.Assert(section, tc.NotNil)
 			ps, ok := section.(*pairingstate.PairingConfig)
-			c.Assert(ok, Equals, true)
-			c.Assert(ps, DeepEquals, t.combinedSection)
-			c.Assert(layerYAML(c, combined), Equals, strings.TrimSpace(t.combinedYAML))
+			c.Assert(ok, tc.Equals, true)
+			c.Assert(ps, tc.DeepEquals, t.combinedSection)
+			c.Assert(layerYAML(c, combined), tc.Equals, strings.TrimSpace(t.combinedYAML))
 		}
 	}
 }

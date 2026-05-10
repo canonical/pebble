@@ -16,26 +16,29 @@ package testutil
 
 import (
 	"os/exec"
+	"testing"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type fakeCommandSuite struct{}
 
-var _ = check.Suite(&fakeCommandSuite{})
+func TestFakeCommandSuite(t *testing.T) {
+	tc.Run(t, &fakeCommandSuite{})
+}
 
-func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
+func (s *fakeCommandSuite) TestFakeCommand(c *tc.C) {
 	fake := FakeCommand(c, "cmd", "true")
 	defer fake.Restore()
 	err := exec.Command("cmd", "first-run", "--arg1", "arg2", "a space").Run()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 	err = exec.Command("cmd", "second-run", "--arg1", "arg2", "a %s").Run()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 	err = exec.Command("cmd", "third-run", "--arg1", "arg2", "").Run()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 	err = exec.Command("cmd", "forth-run", "--arg1", "arg2", "", "a %s").Run()
-	c.Assert(err, check.IsNil)
-	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
+	c.Assert(err, tc.IsNil)
+	c.Assert(fake.Calls(), tc.DeepEquals, [][]string{
 		{"cmd", "first-run", "--arg1", "arg2", "a space"},
 		{"cmd", "second-run", "--arg1", "arg2", "a %s"},
 		{"cmd", "third-run", "--arg1", "arg2", ""},
@@ -43,23 +46,23 @@ func (s *fakeCommandSuite) TestFakeCommand(c *check.C) {
 	})
 }
 
-func (s *fakeCommandSuite) TestFakeCommandAlso(c *check.C) {
+func (s *fakeCommandSuite) TestFakeCommandAlso(c *tc.C) {
 	fake := FakeCommand(c, "fst", "")
 	also := fake.Also("snd", "")
 	defer fake.Restore()
 
-	c.Assert(exec.Command("fst").Run(), check.IsNil)
-	c.Assert(exec.Command("snd").Run(), check.IsNil)
-	c.Check(fake.Calls(), check.DeepEquals, [][]string{{"fst"}, {"snd"}})
-	c.Check(fake.Calls(), check.DeepEquals, also.Calls())
+	c.Assert(exec.Command("fst").Run(), tc.IsNil)
+	c.Assert(exec.Command("snd").Run(), tc.IsNil)
+	c.Check(fake.Calls(), tc.DeepEquals, [][]string{{"fst"}, {"snd"}})
+	c.Check(fake.Calls(), tc.DeepEquals, also.Calls())
 }
 
-func (s *fakeCommandSuite) TestFakeCommandConflictEcho(c *check.C) {
+func (s *fakeCommandSuite) TestFakeCommandConflictEcho(c *tc.C) {
 	fake := FakeCommand(c, "do-not-swallow-echo-args", "")
 	defer fake.Restore()
 
-	c.Assert(exec.Command("do-not-swallow-echo-args", "-E", "-n", "-e").Run(), check.IsNil)
-	c.Assert(fake.Calls(), check.DeepEquals, [][]string{
+	c.Assert(exec.Command("do-not-swallow-echo-args", "-E", "-n", "-e").Run(), tc.IsNil)
+	c.Assert(fake.Calls(), tc.DeepEquals, [][]string{
 		{"do-not-swallow-echo-args", "-E", "-n", "-e"},
 	})
 }

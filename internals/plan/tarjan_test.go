@@ -27,14 +27,18 @@
 package plan
 
 import (
-	. "gopkg.in/check.v1"
+	"testing"
+
+	"github.com/canonical/tc"
 )
 
 type TarjanSuite struct{}
 
-var _ = Suite(TarjanSuite{})
+func TestTarjanSuite(t *testing.T) {
+	tc.Run(t, &TarjanSuite{})
+}
 
-func (TarjanSuite) TestExample(c *C) {
+func (TarjanSuite) TestExample(c *tc.C) {
 	successors := map[string][]string{
 		"1": {"2", "3"},
 		"2": {"1", "5"},
@@ -47,7 +51,7 @@ func (TarjanSuite) TestExample(c *C) {
 		"9": {},
 	}
 
-	c.Assert(tarjanSort(successors), DeepEquals, [][]string{
+	c.Assert(tarjanSort(successors), tc.DeepEquals, [][]string{
 		{"9"},
 		{"6", "7", "8"},
 		{"5"},

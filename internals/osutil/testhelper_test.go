@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Canonical Ltd
+// Copyright (tc.C) 2014-2015 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -16,15 +16,18 @@ package osutil_test
 
 import (
 	"os"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/osutil"
 )
 
 type testhelperSuite struct{}
 
-var _ = Suite(&testhelperSuite{})
+func TestTesthelperSuite(t *testing.T) {
+	tc.Run(t, &testhelperSuite{})
+}
 
 func mockOsArgs(args []string) (restore func()) {
 	old := os.Args
@@ -34,19 +37,19 @@ func mockOsArgs(args []string) (restore func()) {
 	}
 }
 
-func (s *testhelperSuite) TestIsTestBinary(c *C) {
+func (s *testhelperSuite) TestIsTestBinary(c *tc.C) {
 	// obvious case
-	c.Assert(osutil.IsTestBinary(), Equals, true)
+	c.Assert(osutil.IsTestBinary(), tc.Equals, true)
 
 	defer mockOsArgs([]string{"foo", "bar", "baz"})()
-	c.Assert(osutil.IsTestBinary(), Equals, false)
+	c.Assert(osutil.IsTestBinary(), tc.Equals, false)
 }
 
-func (s *testhelperSuite) TestBinaryNoRegressionWithValidApp(c *C) {
+func (s *testhelperSuite) TestBinaryNoRegressionWithValidApp(c *tc.C) {
 	// Support go test binary
 	defer mockOsArgs([]string{"/go-build/some-snap.test", "bar", "baz"})()
-	c.Assert(osutil.IsTestBinary(), Equals, true)
+	c.Assert(osutil.IsTestBinary(), tc.Equals, true)
 	// Support dlv test binary
 	defer mockOsArgs([]string{"/cwd/pebble/debug.test1234", "bar", "baz"})()
-	c.Assert(osutil.IsTestBinary(), Equals, true)
+	c.Assert(osutil.IsTestBinary(), tc.Equals, true)
 }

@@ -14,10 +14,8 @@
 
 package testutil
 
-import (
-	"gopkg.in/check.v1"
-)
+import "github.com/canonical/tc"
 
 func UnexpectedIntChecker(relation string) *intChecker {
-	return &intChecker{CheckerInfo: &check.CheckerInfo{Name: "unexpected", Params: []string{"a", "b"}}, rel: relation}
+	return &intChecker{CheckerInfo: &tc.CheckerInfo{Name: "unexpected", Params: []string{"a", "b"}}, rel: relation}
 }

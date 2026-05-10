@@ -15,102 +15,102 @@
 package cli_test
 
 import (
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestHelpCommand(c *C) {
+func (s *PebbleSuite) TestHelpCommand(c *tc.C) {
 	restore := fakeArgs("pebble", "help")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, nil)
+	c.Check(s.Stdout(), tc.Matches, "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHelpAll(c *C) {
+func (s *PebbleSuite) TestHelpAll(c *tc.C) {
 	restore := fakeArgs("pebble", "help", "--all")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, "(?s)Pebble lets you control services.*run.*help.*version.*warnings.*")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, nil)
+	c.Check(s.Stdout(), tc.Matches, "(?s)Pebble lets you control services.*run.*help.*version.*warnings.*")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHelpAllWithCommand(c *C) {
+func (s *PebbleSuite) TestHelpAllWithCommand(c *tc.C) {
 	restore := fakeArgs("pebble", "help", "help", "--all")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, ErrorMatches, `help accepts a command, or '--all', but not both`)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, `help accepts a command, or '--all', but not both`)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHelpMan(c *C) {
+func (s *PebbleSuite) TestHelpMan(c *tc.C) {
 	restore := fakeArgs("pebble", "help", "--man")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, `(?s)\.TH pebble 8.*\.SH NAME.*pebble \\- System and service manager.*`)
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, nil)
+	c.Check(s.Stdout(), tc.Matches, `(?s)\.TH pebble 8.*\.SH NAME.*pebble \\- System and service manager.*`)
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHelpOption(c *C) {
+func (s *PebbleSuite) TestHelpOption(c *tc.C) {
 	restore := fakeArgs("pebble", "--help")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, nil)
+	c.Check(s.Stdout(), tc.Matches, "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHelpWithCommand(c *C) {
+func (s *PebbleSuite) TestHelpWithCommand(c *tc.C) {
 	restore := fakeArgs("pebble", "help", "help")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, "(?s)Usage.*pebble help.*The help command.*help command options.*")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, nil)
+	c.Check(s.Stdout(), tc.Matches, "(?s)Usage.*pebble help.*The help command.*help command options.*")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHelpWithUnknownCommand(c *C) {
+func (s *PebbleSuite) TestHelpWithUnknownCommand(c *tc.C) {
 	restore := fakeArgs("pebble", "help", "dachshund")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, ErrorMatches, `unknown command "dachshund", see 'pebble help'`)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, `unknown command "dachshund", see 'pebble help'`)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHelpWithUnknownSubcommand(c *C) {
+func (s *PebbleSuite) TestHelpWithUnknownSubcommand(c *tc.C) {
 	restore := fakeArgs("pebble", "help", "add", "dachshund")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, ErrorMatches, `unknown command "dachshund", see 'pebble help add'`)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, `unknown command "dachshund", see 'pebble help add'`)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestCommandWithHelpOption(c *C) {
+func (s *PebbleSuite) TestCommandWithHelpOption(c *tc.C) {
 	restore := fakeArgs("pebble", "help", "--help")
 	defer restore()
 
 	err := cli.RunMain()
-	c.Assert(err, Equals, nil)
-	c.Check(s.Stdout(), Matches, "(?s)Usage.*pebble help.*The help command.*help command options.*")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, nil)
+	c.Check(s.Stdout(), tc.Matches, "(?s)Usage.*pebble help.*The help command.*help command options.*")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestAddHelpCategory(c *C) {
+func (s *PebbleSuite) TestAddHelpCategory(c *tc.C) {
 	restore := fakeArgs("pebble")
 	defer restore()
 
@@ -121,8 +121,8 @@ func (s *PebbleSuite) TestAddHelpCategory(c *C) {
 	})
 
 	err := cli.RunMain()
-	c.Assert(err, Equals, nil)
+	c.Assert(err, tc.Equals, nil)
 
-	c.Check(s.Stdout(), Matches, "(?s).*Test category: run, logs\n.*")
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stdout(), tc.Matches, "(?s).*Test category: run, logs\n.*")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

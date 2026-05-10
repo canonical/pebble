@@ -20,12 +20,12 @@ import (
 	"os"
 	"path/filepath"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestRemoveIdentities(c *C) {
+func (s *PebbleSuite) TestRemoveIdentities(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "remove", map[string]any{
 			"bob": nil,
@@ -43,16 +43,16 @@ identities:
     bob: null
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"remove-identities", "--from", path})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Removed 1 identity.\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Removed 1 identity.\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRemoveIdentitiesNotNull(c *C) {
+func (s *PebbleSuite) TestRemoveIdentitiesNotNull(c *tc.C) {
 	path := filepath.Join(c.MkDir(), "identities.yaml")
 	data := `
 identities:
@@ -61,8 +61,8 @@ identities:
         local: {user-id: 42}
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	_, err = cli.ParserForTest().ParseArgs([]string{"remove-identities", "--from", path})
-	c.Assert(err, ErrorMatches, `identity value for "bob" must be null for remove operation`)
+	c.Assert(err, tc.ErrorMatches, `identity value for "bob" must be null for remove operation`)
 }

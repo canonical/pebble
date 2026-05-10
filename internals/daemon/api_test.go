@@ -23,17 +23,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"testing"
 	"time"
-
-	"gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
+	"github.com/canonical/tc"
 )
 
-var _ = check.Suite(&apiSuite{})
+func TestApiSuite(t *testing.T) {
+	tc.Run(t, &apiSuite{})
+}
 
 type apiSuite struct {
 	d *Daemon
@@ -46,7 +48,7 @@ type apiSuite struct {
 	overlordStarted bool
 }
 
-func (s *apiSuite) SetUpTest(c *check.C) {
+func (s *apiSuite) SetUpTest(c *tc.C) {
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
@@ -57,7 +59,7 @@ func (s *apiSuite) SetUpTest(c *check.C) {
 	s.pebbleDir = c.MkDir()
 }
 
-func (s *apiSuite) TearDownTest(c *check.C) {
+func (s *apiSuite) TearDownTest(c *tc.C) {
 	if s.overlordStarted {
 		s.d.Overlord().Stop()
 		s.overlordStarted = false
@@ -77,15 +79,15 @@ func (s *apiSuite) muxVars(*http.Request) map[string]string {
 	return s.vars
 }
 
-func (s *apiSuite) daemon(c *check.C) *Daemon {
+func (s *apiSuite) daemon(c *tc.C) *Daemon {
 	if s.d != nil {
 		panic("called daemon() twice")
 	}
 	d, err := New(&Options{Dir: s.pebbleDir})
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 	d.addRoutes()
 
-	c.Assert(d.overlord.StartUp(), check.IsNil)
+	c.Assert(d.overlord.StartUp(), tc.IsNil)
 
 	s.d = d
 	return d
@@ -105,11 +107,11 @@ func apiCmd(path string) *Command {
 	panic("no command with path " + path)
 }
 
-func (s *apiSuite) TestSysInfo(c *check.C) {
+func (s *apiSuite) TestSysInfo(c *tc.C) {
 	sysInfoCmd := apiCmd("/v1/system-info")
-	c.Assert(sysInfoCmd.GET, check.NotNil)
-	c.Check(sysInfoCmd.PUT, check.IsNil)
-	c.Check(sysInfoCmd.POST, check.IsNil)
+	c.Assert(sysInfoCmd.GET, tc.NotNil)
+	c.Check(sysInfoCmd.PUT, tc.IsNil)
+	c.Check(sysInfoCmd.POST, tc.IsNil)
 
 	rec := httptest.NewRecorder()
 
@@ -121,11 +123,11 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 	state.Lock()
 	_, err := restart.Manager(state, "ffffffff-ffff-ffff-ffff-ffffffffffff", nil)
 	state.Unlock()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 
 	sysInfoCmd.GET(sysInfoCmd, nil, nil).ServeHTTP(rec, nil)
-	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rec.Result().Header.Get("Content-Type"), check.Equals, "application/json")
+	c.Check(rec.Code, tc.Equals, 200)
+	c.Check(rec.Result().Header.Get("Content-Type"), tc.Equals, "application/json")
 
 	expected := map[string]any{
 		"boot-id":       "ffffffff-ffff-ffff-ffff-ffffffffffff",
@@ -134,10 +136,10 @@ func (s *apiSuite) TestSysInfo(c *check.C) {
 		"version":       "42b1",
 	}
 	var rsp resp
-	c.Assert(json.Unmarshal(rec.Body.Bytes(), &rsp), check.IsNil)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Result, check.DeepEquals, expected)
+	c.Assert(json.Unmarshal(rec.Body.Bytes(), &rsp), tc.IsNil)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, tc.DeepEquals, expected)
 }
 
 func fakeEnv(key, value string) (restore func()) {
@@ -159,9 +161,9 @@ func fakeEnv(key, value string) (restore func()) {
 	}
 }
 
-func createTestClientCertificate(c *check.C) *x509.Certificate {
+func createTestClientCertificate(c *tc.C) *x509.Certificate {
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
@@ -172,9 +174,9 @@ func createTestClientCertificate(c *check.C) *x509.Certificate {
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, privateKey.Public(), privateKey)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 
 	cert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.IsNil)
 	return cert
 }

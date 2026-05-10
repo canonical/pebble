@@ -19,16 +19,16 @@ import (
 	"net/http"
 	"net/url"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestGetPlan(c *check.C) {
+func (s *PebbleSuite) TestGetPlan(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/plan")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/plan")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"format": []string{"yaml"}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -37,22 +37,22 @@ func (s *PebbleSuite) TestGetPlan(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"plan"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Assert(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Assert(s.Stdout(), tc.Equals, `
 services:
     foo:
         override: replace
         command: cmd
 `[1:])
-	c.Assert(s.Stderr(), check.Equals, ``)
+	c.Assert(s.Stderr(), tc.Equals, ``)
 }
 
-func (s *PebbleSuite) TestGetPlanFails(c *check.C) {
+func (s *PebbleSuite) TestGetPlanFails(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/plan")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/plan")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"format": []string{"yaml"}})
 		fmt.Fprint(w, `{
     "type": "error",
     "result": {"message": "could not do the thing"}
@@ -60,14 +60,14 @@ func (s *PebbleSuite) TestGetPlanFails(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"plan"})
-	c.Assert(err.Error(), check.Equals, "could not do the thing")
-	c.Assert(rest, check.HasLen, 1)
-	c.Assert(s.Stdout(), check.Equals, ``)
-	c.Assert(s.Stderr(), check.Equals, ``)
+	c.Assert(err.Error(), tc.Equals, "could not do the thing")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Assert(s.Stdout(), tc.Equals, ``)
+	c.Assert(s.Stderr(), tc.Equals, ``)
 }
 
-func (s *PebbleSuite) TestPlanExtraArgs(c *check.C) {
+func (s *PebbleSuite) TestPlanExtraArgs(c *tc.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"plan", "extra", "args"})
-	c.Assert(err, check.Equals, cli.ErrExtraArgs)
-	c.Check(rest, check.HasLen, 1)
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Check(rest, tc.HasLen, 1)
 }

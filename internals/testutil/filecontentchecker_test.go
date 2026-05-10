@@ -18,80 +18,83 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"testing"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
-	. "github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 type fileContentCheckerSuite struct{}
 
-var _ = check.Suite(&fileContentCheckerSuite{})
+func TestFileContentCheckerSuite(t *testing.T) {
+	tc.Run(t, &fileContentCheckerSuite{})
+}
 
 type myStringer struct{ str string }
 
 func (m myStringer) String() string { return m.str }
 
-func (s *fileContentCheckerSuite) TestFileEquals(c *check.C) {
+func (s *fileContentCheckerSuite) TestFileEquals(c *tc.C) {
 	d := c.MkDir()
 	content := "not-so-random-string"
 	filename := filepath.Join(d, "canary")
-	c.Assert(os.WriteFile(filename, []byte(content), 0644), check.IsNil)
+	c.Assert(os.WriteFile(filename, []byte(content), 0644), tc.IsNil)
 
-	testInfo(c, FileEquals, "FileEquals", []string{"filename", "contents"})
-	testCheck(c, FileEquals, true, "", filename, content)
-	testCheck(c, FileEquals, true, "", filename, []byte(content))
-	testCheck(c, FileEquals, true, "", filename, myStringer{content})
+	testInfo(c, testutil.FileEquals, "FileEquals", []string{"filename", "contents"})
+	testCheck(c, testutil.FileEquals, true, "", filename, content)
+	testCheck(c, testutil.FileEquals, true, "", filename, []byte(content))
+	testCheck(c, testutil.FileEquals, true, "", filename, myStringer{content})
 
 	twofer := content + content
-	testCheck(c, FileEquals, false, "Cannot match with file contents:\nnot-so-random-string", filename, twofer)
-	testCheck(c, FileEquals, false, "Cannot match with file contents:\n<binary data>", filename, []byte(twofer))
-	testCheck(c, FileEquals, false, "Cannot match with file contents:\nnot-so-random-string", filename, myStringer{twofer})
+	testCheck(c, testutil.FileEquals, false, "Cannot match with file contents:\nnot-so-random-string", filename, twofer)
+	testCheck(c, testutil.FileEquals, false, "Cannot match with file contents:\n<binary data>", filename, []byte(twofer))
+	testCheck(c, testutil.FileEquals, false, "Cannot match with file contents:\nnot-so-random-string", filename, myStringer{twofer})
 
-	testCheck(c, FileEquals, false, `Cannot read file "": open : no such file or directory`, "", "")
-	testCheck(c, FileEquals, false, "Filename must be a string", 42, "")
-	testCheck(c, FileEquals, false, "Cannot compare file contents with something of type int", filename, 1)
+	testCheck(c, testutil.FileEquals, false, `Cannot read file "": open : no such file or directory`, "", "")
+	testCheck(c, testutil.FileEquals, false, "Filename must be a string", 42, "")
+	testCheck(c, testutil.FileEquals, false, "Cannot compare file contents with something of type int", filename, 1)
 }
 
-func (s *fileContentCheckerSuite) TestFileContains(c *check.C) {
+func (s *fileContentCheckerSuite) TestFileContains(c *tc.C) {
 	d := c.MkDir()
 	content := "not-so-random-string"
 	filename := filepath.Join(d, "canary")
-	c.Assert(os.WriteFile(filename, []byte(content), 0644), check.IsNil)
+	c.Assert(os.WriteFile(filename, []byte(content), 0644), tc.IsNil)
 
-	testInfo(c, FileContains, "FileContains", []string{"filename", "contents"})
-	testCheck(c, FileContains, true, "", filename, content[1:])
-	testCheck(c, FileContains, true, "", filename, []byte(content[1:]))
-	testCheck(c, FileContains, true, "", filename, myStringer{content[1:]})
+	testInfo(c, testutil.FileContains, "FileContains", []string{"filename", "contents"})
+	testCheck(c, testutil.FileContains, true, "", filename, content[1:])
+	testCheck(c, testutil.FileContains, true, "", filename, []byte(content[1:]))
+	testCheck(c, testutil.FileContains, true, "", filename, myStringer{content[1:]})
 	// undocumented
-	testCheck(c, FileContains, true, "", filename, regexp.MustCompile(".*"))
+	testCheck(c, testutil.FileContains, true, "", filename, regexp.MustCompile(".*"))
 
 	twofer := content + content
-	testCheck(c, FileContains, false, "Cannot match with file contents:\nnot-so-random-string", filename, twofer)
-	testCheck(c, FileContains, false, "Cannot match with file contents:\n<binary data>", filename, []byte(twofer))
-	testCheck(c, FileContains, false, "Cannot match with file contents:\nnot-so-random-string", filename, myStringer{twofer})
+	testCheck(c, testutil.FileContains, false, "Cannot match with file contents:\nnot-so-random-string", filename, twofer)
+	testCheck(c, testutil.FileContains, false, "Cannot match with file contents:\n<binary data>", filename, []byte(twofer))
+	testCheck(c, testutil.FileContains, false, "Cannot match with file contents:\nnot-so-random-string", filename, myStringer{twofer})
 	// undocumented
-	testCheck(c, FileContains, false, "Cannot match with file contents:\nnot-so-random-string", filename, regexp.MustCompile("^$"))
+	testCheck(c, testutil.FileContains, false, "Cannot match with file contents:\nnot-so-random-string", filename, regexp.MustCompile("^$"))
 
-	testCheck(c, FileContains, false, `Cannot read file "": open : no such file or directory`, "", "")
-	testCheck(c, FileContains, false, "Filename must be a string", 42, "")
-	testCheck(c, FileContains, false, "Cannot compare file contents with something of type int", filename, 1)
+	testCheck(c, testutil.FileContains, false, `Cannot read file "": open : no such file or directory`, "", "")
+	testCheck(c, testutil.FileContains, false, "Filename must be a string", 42, "")
+	testCheck(c, testutil.FileContains, false, "Cannot compare file contents with something of type int", filename, 1)
 }
 
-func (s *fileContentCheckerSuite) TestFileMatches(c *check.C) {
+func (s *fileContentCheckerSuite) TestFileMatches(c *tc.C) {
 	d := c.MkDir()
 	content := "not-so-random-string"
 	filename := filepath.Join(d, "canary")
-	c.Assert(os.WriteFile(filename, []byte(content), 0644), check.IsNil)
+	c.Assert(os.WriteFile(filename, []byte(content), 0644), tc.IsNil)
 
-	testInfo(c, FileMatches, "FileMatches", []string{"filename", "regex"})
-	testCheck(c, FileMatches, true, "", filename, ".*")
-	testCheck(c, FileMatches, true, "", filename, "^"+regexp.QuoteMeta(content)+"$")
+	testInfo(c, testutil.FileMatches, "FileMatches", []string{"filename", "regex"})
+	testCheck(c, testutil.FileMatches, true, "", filename, ".*")
+	testCheck(c, testutil.FileMatches, true, "", filename, "^"+regexp.QuoteMeta(content)+"$")
 
-	testCheck(c, FileMatches, false, "Cannot match with file contents:\nnot-so-random-string", filename, "^$")
-	testCheck(c, FileMatches, false, "Cannot match with file contents:\nnot-so-random-string", filename, "123"+regexp.QuoteMeta(content))
+	testCheck(c, testutil.FileMatches, false, "Cannot match with file contents:\nnot-so-random-string", filename, "^$")
+	testCheck(c, testutil.FileMatches, false, "Cannot match with file contents:\nnot-so-random-string", filename, "123"+regexp.QuoteMeta(content))
 
-	testCheck(c, FileMatches, false, `Cannot read file "": open : no such file or directory`, "", "")
-	testCheck(c, FileMatches, false, "Filename must be a string", 42, ".*")
-	testCheck(c, FileMatches, false, "Regex must be a string", filename, 1)
+	testCheck(c, testutil.FileMatches, false, `Cannot read file "": open : no such file or directory`, "", "")
+	testCheck(c, testutil.FileMatches, false, "Filename must be a string", 42, ".*")
+	testCheck(c, testutil.FileMatches, false, "Regex must be a string", filename, 1)
 }

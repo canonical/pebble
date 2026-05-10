@@ -19,12 +19,12 @@ import (
 	"net/http"
 	"net/url"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestIdentitiesText(c *C) {
+func (s *PebbleSuite) TestIdentitiesText(c *tc.C) {
 	expected := `
 Name  Access  Types
 bob   read    local
@@ -34,7 +34,7 @@ mary  admin   local
 	s.testIdentities(c, "text", expected)
 }
 
-func (s *PebbleSuite) TestIdentitiesYAML(c *C) {
+func (s *PebbleSuite) TestIdentitiesYAML(c *tc.C) {
 	expected := `
 identities:
     bob:
@@ -49,16 +49,16 @@ identities:
 	s.testIdentities(c, "yaml", expected)
 }
 
-func (s *PebbleSuite) TestIdentitiesJSON(c *C) {
+func (s *PebbleSuite) TestIdentitiesJSON(c *tc.C) {
 	expected := `{"identities":{"bob":{"access":"read","local":{"user-id":42}},"mary":{"access":"admin","local":{"user-id":1000}}}}` + "\n"
 	s.testIdentities(c, "json", expected)
 }
 
-func (s *PebbleSuite) testIdentities(c *C, format string, expected string) {
+func (s *PebbleSuite) testIdentities(c *tc.C, format string, expected string) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -74,18 +74,18 @@ func (s *PebbleSuite) testIdentities(c *C, format string, expected string) {
 		args = append(args, "--format", format)
 	}
 	rest, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, expected)
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, expected)
+	c.Check(s.Stderr(), tc.Equals, "")
 	s.ResetStdStreams()
 }
 
-func (s *PebbleSuite) TestIdentitiesNoIdentities(c *C) {
+func (s *PebbleSuite) TestIdentitiesNoIdentities(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -93,17 +93,17 @@ func (s *PebbleSuite) TestIdentitiesNoIdentities(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identities"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "No identities.\n")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "No identities.\n")
 }
 
-func (s *PebbleSuite) TestIdentitiesNoIdentitiesJSON(c *C) {
+func (s *PebbleSuite) TestIdentitiesNoIdentitiesJSON(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -111,17 +111,17 @@ func (s *PebbleSuite) TestIdentitiesNoIdentitiesJSON(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identities", "--format", "json"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `{"identities":{}}`+"\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"identities":{}}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestIdentitiesNoIdentitiesYAML(c *C) {
+func (s *PebbleSuite) TestIdentitiesNoIdentitiesYAML(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/identities")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/identities")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -129,13 +129,13 @@ func (s *PebbleSuite) TestIdentitiesNoIdentitiesYAML(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identities", "--format", "yaml"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "identities: {}\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "identities: {}\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestIdentitiesInvalidFormat(c *C) {
+func (s *PebbleSuite) TestIdentitiesInvalidFormat(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"identities", "--format", "foobar"})
-	c.Assert(err, ErrorMatches, "Invalid value.*for option.*--format.*")
+	c.Assert(err, tc.ErrorMatches, "Invalid value.*for option.*--format.*")
 }

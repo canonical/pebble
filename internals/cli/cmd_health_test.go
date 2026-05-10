@@ -19,16 +19,16 @@ import (
 	"net/http"
 	"net/url"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestHealth(c *check.C) {
+func (s *PebbleSuite) TestHealth(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/health")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/health")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprintf(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -40,16 +40,16 @@ func (s *PebbleSuite) TestHealth(c *check.C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(exitCode, check.Equals, 0)
-	c.Check(s.Stdout(), check.Equals, "healthy\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(exitCode, tc.Equals, 0)
+	c.Check(s.Stdout(), tc.Equals, "healthy\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHealthLevel(c *check.C) {
+func (s *PebbleSuite) TestHealthLevel(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/health")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"level": {"alive"}})
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/health")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"level": {"alive"}})
 		fmt.Fprintf(w, `{
 			"type": "sync",
 			"status-code": 502,
@@ -61,16 +61,16 @@ func (s *PebbleSuite) TestHealthLevel(c *check.C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(exitCode, check.Equals, 1)
-	c.Check(s.Stdout(), check.Equals, "unhealthy\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(exitCode, tc.Equals, 1)
+	c.Check(s.Stdout(), tc.Equals, "unhealthy\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHealthSpecificChecks(c *check.C) {
+func (s *PebbleSuite) TestHealthSpecificChecks(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/health")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/health")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{
 			"level": {"ready"},
 			"names": {"chk1", "chk3"},
 		})
@@ -85,17 +85,17 @@ func (s *PebbleSuite) TestHealthSpecificChecks(c *check.C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(exitCode, check.Equals, 0)
-	c.Check(s.Stdout(), check.Equals, "healthy\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(exitCode, tc.Equals, 0)
+	c.Check(s.Stdout(), tc.Equals, "healthy\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestHealthBadLevel(c *check.C) {
+func (s *PebbleSuite) TestHealthBadLevel(c *tc.C) {
 	restore := fakeArgs("pebble", "health", "--level", "foo")
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(exitCode, check.Equals, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Matches, "error: Invalid value .* Allowed values are: alive or ready\n")
+	c.Check(exitCode, tc.Equals, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Matches, "error: Invalid value .* Allowed values are: alive or ready\n")
 }

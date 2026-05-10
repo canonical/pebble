@@ -20,222 +20,224 @@ import (
 	"io"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
 type ringBufferSuite struct{}
 
-var _ = Suite(&ringBufferSuite{})
+func TestRingBufferSuite(t *testing.T) {
+	tc.Run(t, &ringBufferSuite{})
+}
 
-func (s *ringBufferSuite) TestWrites(c *C) {
+func (s *ringBufferSuite) TestWrites(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10)
 
 	n, err := fmt.Fprint(rb, "pebbletron")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 10)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 10)
 
 	p1, p2 := rb.Positions()
-	c.Assert(p1, Equals, servicelog.RingPos(0))
-	c.Assert(p2, Equals, servicelog.RingPos(10))
-	c.Assert(rb.Available(), Equals, 0)
+	c.Assert(p1, tc.Equals, servicelog.RingPos(0))
+	c.Assert(p2, tc.Equals, servicelog.RingPos(10))
+	c.Assert(rb.Available(), tc.Equals, 0)
 }
 
-func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *C) {
+func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *tc.C) {
 	rb := servicelog.NewRingBuffer(13)
 	_, a1 := rb.Positions()
-	c.Assert(a1, Equals, servicelog.RingPos(0))
+	c.Assert(a1, tc.Equals, servicelog.RingPos(0))
 	n, err := fmt.Fprint(rb, "pebble")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 6)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 6)
 	_, a2 := rb.Positions()
-	c.Assert(a2, Equals, servicelog.RingPos(6))
-	c.Assert(rb.Available(), Equals, 7)
+	c.Assert(a2, tc.Equals, servicelog.RingPos(6))
+	c.Assert(rb.Available(), tc.Equals, 7)
 
 	a := make([]byte, 6)
 	next, n, err := rb.Copy(a, a1)
-	c.Assert(err, Equals, io.EOF)
-	c.Assert(n, Equals, 6)
-	c.Assert(next, Equals, servicelog.RingPos(6))
-	c.Assert(string(a), Equals, "pebble")
+	c.Assert(err, tc.Equals, io.EOF)
+	c.Assert(n, tc.Equals, 6)
+	c.Assert(next, tc.Equals, servicelog.RingPos(6))
+	c.Assert(string(a), tc.Equals, "pebble")
 
 	_, b1 := rb.Positions()
-	c.Assert(b1, Equals, servicelog.RingPos(6))
+	c.Assert(b1, tc.Equals, servicelog.RingPos(6))
 	n, err = fmt.Fprint(rb, "elbbep")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 6)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 6)
 	_, b2 := rb.Positions()
-	c.Assert(b2, Equals, servicelog.RingPos(12))
-	c.Assert(rb.Available(), Equals, 1)
+	c.Assert(b2, tc.Equals, servicelog.RingPos(12))
+	c.Assert(rb.Available(), tc.Equals, 1)
 
 	b := make([]byte, 6)
 	next, n, err = rb.Copy(b, b1)
-	c.Assert(err, Equals, io.EOF)
-	c.Assert(n, Equals, 6)
-	c.Assert(next, Equals, servicelog.RingPos(12))
-	c.Assert(string(b), Equals, "elbbep")
+	c.Assert(err, tc.Equals, io.EOF)
+	c.Assert(n, tc.Equals, 6)
+	c.Assert(next, tc.Equals, servicelog.RingPos(12))
+	c.Assert(string(b), tc.Equals, "elbbep")
 
 	err = rb.Discard(int(a2 - a1))
-	c.Assert(err, IsNil)
-	c.Assert(rb.Available(), Equals, 7)
+	c.Assert(err, tc.IsNil)
+	c.Assert(rb.Available(), tc.Equals, 7)
 
 	_, c1 := rb.Positions()
-	c.Assert(c1, Equals, servicelog.RingPos(12))
+	c.Assert(c1, tc.Equals, servicelog.RingPos(12))
 	n, err = fmt.Fprint(rb, "PEBBLE")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 6)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 6)
 	_, c2 := rb.Positions()
-	c.Assert(c2, Equals, servicelog.RingPos(18))
-	c.Assert(rb.Available(), Equals, 1)
+	c.Assert(c2, tc.Equals, servicelog.RingPos(18))
+	c.Assert(rb.Available(), tc.Equals, 1)
 
 	cc := make([]byte, 6)
 	next, n, err = rb.Copy(cc, c1)
-	c.Assert(err, Equals, io.EOF)
-	c.Assert(n, Equals, 6)
-	c.Assert(next, Equals, servicelog.RingPos(18))
-	c.Assert(string(cc), Equals, "PEBBLE")
+	c.Assert(err, tc.Equals, io.EOF)
+	c.Assert(n, tc.Equals, 6)
+	c.Assert(next, tc.Equals, servicelog.RingPos(18))
+	c.Assert(string(cc), tc.Equals, "PEBBLE")
 }
 
-func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *C) {
+func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *tc.C) {
 	rb := servicelog.NewRingBuffer(13)
 	_, a1 := rb.Positions()
-	c.Assert(a1, Equals, servicelog.RingPos(0))
+	c.Assert(a1, tc.Equals, servicelog.RingPos(0))
 	n, err := fmt.Fprint(rb, "pebble")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 6)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 6)
 	_, a2 := rb.Positions()
-	c.Assert(a2, Equals, servicelog.RingPos(6))
-	c.Assert(rb.Available(), Equals, 7)
+	c.Assert(a2, tc.Equals, servicelog.RingPos(6))
+	c.Assert(rb.Available(), tc.Equals, 7)
 
 	a := &bytes.Buffer{}
 	next, read, err := rb.WriteTo(a, a1)
-	c.Assert(err, IsNil)
-	c.Assert(read, Equals, int64(6))
-	c.Assert(next, Equals, servicelog.RingPos(6))
-	c.Assert(a.String(), Equals, "pebble")
+	c.Assert(err, tc.IsNil)
+	c.Assert(read, tc.Equals, int64(6))
+	c.Assert(next, tc.Equals, servicelog.RingPos(6))
+	c.Assert(a.String(), tc.Equals, "pebble")
 
 	_, b1 := rb.Positions()
-	c.Assert(b1, Equals, servicelog.RingPos(6))
+	c.Assert(b1, tc.Equals, servicelog.RingPos(6))
 	n, err = fmt.Fprint(rb, "elbbep")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 6)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 6)
 	_, b2 := rb.Positions()
-	c.Assert(b2, Equals, servicelog.RingPos(12))
-	c.Assert(rb.Available(), Equals, 1)
+	c.Assert(b2, tc.Equals, servicelog.RingPos(12))
+	c.Assert(rb.Available(), tc.Equals, 1)
 
 	b := &bytes.Buffer{}
 	next, read, err = rb.WriteTo(b, b1)
-	c.Assert(err, IsNil)
-	c.Assert(read, Equals, int64(6))
-	c.Assert(next, Equals, servicelog.RingPos(12))
-	c.Assert(b.String(), Equals, "elbbep")
+	c.Assert(err, tc.IsNil)
+	c.Assert(read, tc.Equals, int64(6))
+	c.Assert(next, tc.Equals, servicelog.RingPos(12))
+	c.Assert(b.String(), tc.Equals, "elbbep")
 
 	err = rb.Discard(int(a2 - a1))
-	c.Assert(err, IsNil)
-	c.Assert(rb.Available(), Equals, 7)
+	c.Assert(err, tc.IsNil)
+	c.Assert(rb.Available(), tc.Equals, 7)
 
 	_, c1 := rb.Positions()
-	c.Assert(c1, Equals, servicelog.RingPos(12))
+	c.Assert(c1, tc.Equals, servicelog.RingPos(12))
 	n, err = fmt.Fprint(rb, "PEBBLE")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 6)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 6)
 	_, c2 := rb.Positions()
-	c.Assert(c2, Equals, servicelog.RingPos(18))
-	c.Assert(rb.Available(), Equals, 1)
+	c.Assert(c2, tc.Equals, servicelog.RingPos(18))
+	c.Assert(rb.Available(), tc.Equals, 1)
 
 	cc := &bytes.Buffer{}
 	next, read, err = rb.WriteTo(cc, c1)
-	c.Assert(err, IsNil)
-	c.Assert(read, Equals, int64(6))
-	c.Assert(next, Equals, servicelog.RingPos(18))
-	c.Assert(cc.String(), Equals, "PEBBLE")
+	c.Assert(err, tc.IsNil)
+	c.Assert(read, tc.Equals, int64(6))
+	c.Assert(next, tc.Equals, servicelog.RingPos(18))
+	c.Assert(cc.String(), tc.Equals, "PEBBLE")
 }
 
-func (s *ringBufferSuite) TestWriteShort(c *C) {
+func (s *ringBufferSuite) TestWriteShort(c *tc.C) {
 	rb := servicelog.NewRingBuffer(1)
 	n, err := fmt.Fprint(rb, "ab")
-	c.Assert(err, Equals, io.ErrShortWrite)
-	c.Assert(n, Equals, 1)
+	c.Assert(err, tc.Equals, io.ErrShortWrite)
+	c.Assert(n, tc.Equals, 1)
 }
 
-func (s *ringBufferSuite) TestCopy(c *C) {
+func (s *ringBufferSuite) TestCopy(c *tc.C) {
 	rb := servicelog.NewRingBuffer(3)
 	n, err := fmt.Fprint(rb, "abc")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 3)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 3)
 
 	a := make([]byte, 3)
 	next, n, err := rb.Copy(a, 0)
-	c.Assert(err, Equals, io.EOF)
-	c.Assert(n, Equals, 3)
-	c.Assert(next, Equals, servicelog.RingPos(3))
-	c.Assert(string(a), Equals, "abc")
+	c.Assert(err, tc.Equals, io.EOF)
+	c.Assert(n, tc.Equals, 3)
+	c.Assert(next, tc.Equals, servicelog.RingPos(3))
+	c.Assert(string(a), tc.Equals, "abc")
 
 	b := make([]byte, 1)
 	next, n, err = rb.Copy(b, 0)
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 1)
-	c.Assert(next, Equals, servicelog.RingPos(1))
-	c.Assert(string(b), Equals, "a")
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 1)
+	c.Assert(next, tc.Equals, servicelog.RingPos(1))
+	c.Assert(string(b), tc.Equals, "a")
 }
 
-func (s *ringBufferSuite) TestFullWrite(c *C) {
+func (s *ringBufferSuite) TestFullWrite(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10)
 	_, p1 := rb.Positions()
 	n, err := fmt.Fprintf(rb, "0123456789")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 10)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 10)
 	_, p2 := rb.Positions()
-	c.Assert(p2, Equals, servicelog.RingPos(10))
+	c.Assert(p2, tc.Equals, servicelog.RingPos(10))
 
 	slice := make([]byte, 10)
 	next, n, err := rb.Copy(slice, p1)
-	c.Assert(err, Equals, io.EOF)
-	c.Assert(n, Equals, 10)
-	c.Assert(next, Equals, servicelog.RingPos(10))
-	c.Assert(string(slice), Equals, "0123456789")
+	c.Assert(err, tc.Equals, io.EOF)
+	c.Assert(n, tc.Equals, 10)
+	c.Assert(next, tc.Equals, servicelog.RingPos(10))
+	c.Assert(string(slice), tc.Equals, "0123456789")
 
 	buffer := &bytes.Buffer{}
 	next, n1, err := rb.WriteTo(buffer, p1)
-	c.Assert(err, IsNil)
-	c.Assert(n1, Equals, int64(10))
-	c.Assert(next, Equals, servicelog.RingPos(10))
-	c.Assert(buffer.String(), Equals, "0123456789")
+	c.Assert(err, tc.IsNil)
+	c.Assert(n1, tc.Equals, int64(10))
+	c.Assert(next, tc.Equals, servicelog.RingPos(10))
+	c.Assert(buffer.String(), tc.Equals, "0123456789")
 }
 
-func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *C) {
+func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10)
 	_, p1 := rb.Positions()
 	n, err := fmt.Fprintf(rb, "01234")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 5)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 5)
 	_, p2 := rb.Positions()
 	err = rb.Discard(int(p2 - p1))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	_, p1 = rb.Positions()
-	c.Assert(p1, Not(Equals), servicelog.RingPos(0))
+	c.Assert(p1, tc.Not(tc.Equals), servicelog.RingPos(0))
 	n, err = fmt.Fprintf(rb, "0123456789")
-	c.Assert(err, IsNil)
-	c.Assert(n, Equals, 10)
+	c.Assert(err, tc.IsNil)
+	c.Assert(n, tc.Equals, 10)
 
 	slice := make([]byte, 10)
 	next, n, err := rb.Copy(slice, p1)
-	c.Assert(err, Equals, io.EOF)
-	c.Assert(n, Equals, 10)
-	c.Assert(next, Equals, servicelog.RingPos(15))
-	c.Assert(string(slice), Equals, "0123456789")
+	c.Assert(err, tc.Equals, io.EOF)
+	c.Assert(n, tc.Equals, 10)
+	c.Assert(next, tc.Equals, servicelog.RingPos(15))
+	c.Assert(string(slice), tc.Equals, "0123456789")
 
 	buffer := &bytes.Buffer{}
 	next, n1, err := rb.WriteTo(buffer, p1)
-	c.Assert(err, IsNil)
-	c.Assert(n1, Equals, int64(10))
-	c.Assert(next, Equals, servicelog.RingPos(15))
-	c.Assert(buffer.String(), Equals, "0123456789")
+	c.Assert(err, tc.IsNil)
+	c.Assert(n1, tc.Equals, int64(10))
+	c.Assert(next, tc.Equals, servicelog.RingPos(15))
+	c.Assert(buffer.String(), tc.Equals, "0123456789")
 }
 
-func (s *ringBufferSuite) TestAllocs(c *C) {
+func (s *ringBufferSuite) TestAllocs(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10)
 	payload := []byte("0123456789")
 	numAllocs := testing.AllocsPerRun(32, func() {
@@ -243,14 +245,14 @@ func (s *ringBufferSuite) TestAllocs(c *C) {
 		_, err := rb.Write(payload)
 		if err != nil {
 			// this looks funny, but its to avoid allocs.
-			c.Assert(err, IsNil)
+			c.Assert(err, tc.IsNil)
 		}
 		_, p2 := rb.Positions()
 		err = rb.Discard(int(p2 - p1))
 		if err != nil {
 			// this looks funny, but its to avoid allocs.
-			c.Assert(err, IsNil)
+			c.Assert(err, tc.IsNil)
 		}
 	})
-	c.Assert(int(numAllocs), Equals, 0)
+	c.Assert(int(numAllocs), tc.Equals, 0)
 }

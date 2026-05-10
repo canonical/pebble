@@ -21,9 +21,10 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/osutil"
@@ -31,47 +32,49 @@ import (
 
 type execSuite struct{}
 
-var _ = Suite(&execSuite{})
+func TestExecSuite(t *testing.T) {
+	tc.Run(t, &execSuite{})
+}
 
-func (s *execSuite) TestRunAndWaitRunsAndWaits(c *C) {
+func (s *execSuite) TestRunAndWaitRunsAndWaits(c *tc.C) {
 	buf, err := osutil.RunAndWait([]string{"sh", "-c", "echo hello; sleep .1"}, nil, time.Second, &tomb.Tomb{})
-	c.Assert(err, IsNil)
-	c.Check(string(buf), Equals, "hello\n")
+	c.Assert(err, tc.IsNil)
+	c.Check(string(buf), tc.Equals, "hello\n")
 }
 
-func (s *execSuite) TestRunAndWaitRunsSetsEnviron(c *C) {
+func (s *execSuite) TestRunAndWaitRunsSetsEnviron(c *tc.C) {
 	buf, err := osutil.RunAndWait([]string{"sh", "-c", "echo $FOO"}, []string{"FOO=42"}, time.Second, &tomb.Tomb{})
-	c.Assert(err, IsNil)
-	c.Check(string(buf), Equals, "42\n")
+	c.Assert(err, tc.IsNil)
+	c.Check(string(buf), tc.Equals, "42\n")
 }
 
-func (s *execSuite) TestRunAndWaitRunsAndKillsOnTimeout(c *C) {
+func (s *execSuite) TestRunAndWaitRunsAndKillsOnTimeout(c *tc.C) {
 	buf, err := osutil.RunAndWait([]string{"sleep", "1s"}, nil, time.Millisecond, &tomb.Tomb{})
-	c.Check(err, ErrorMatches, "exceeded maximum runtime.*")
-	c.Check(string(buf), Matches, "(?s).*exceeded maximum runtime.*")
+	c.Check(err, tc.ErrorMatches, "exceeded maximum runtime.*")
+	c.Check(string(buf), tc.Matches, "(?s).*exceeded maximum runtime.*")
 }
 
-func (s *execSuite) TestRunAndWaitRunsAndKillsOnAbort(c *C) {
+func (s *execSuite) TestRunAndWaitRunsAndKillsOnAbort(c *tc.C) {
 	tmb := &tomb.Tomb{}
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		tmb.Kill(nil)
 	}()
 	buf, err := osutil.RunAndWait([]string{"sleep", "1s"}, nil, time.Second, tmb)
-	c.Check(err, ErrorMatches, "aborted.*")
-	c.Check(string(buf), Matches, "(?s).*aborted.*")
+	c.Check(err, tc.ErrorMatches, "aborted.*")
+	c.Check(string(buf), tc.Matches, "(?s).*aborted.*")
 }
 
-func (s *execSuite) TestRunAndWaitKillImpatient(c *C) {
+func (s *execSuite) TestRunAndWaitKillImpatient(c *tc.C) {
 	defer osutil.FakeSyscallKill(func(int, syscall.Signal) error { return nil })()
 	defer osutil.FakeCmdWaitTimeout(time.Millisecond)()
 
 	buf, err := osutil.RunAndWait([]string{"sleep", "1s"}, nil, time.Millisecond, &tomb.Tomb{})
-	c.Check(err, ErrorMatches, ".* did not stop")
-	c.Check(string(buf), Equals, "")
+	c.Check(err, tc.ErrorMatches, ".* did not stop")
+	c.Check(string(buf), tc.Equals, "")
 }
 
-func (s *execSuite) TestRunAndWaitExposesKillallError(c *C) {
+func (s *execSuite) TestRunAndWaitExposesKillallError(c *tc.C) {
 	defer osutil.FakeSyscallKill(func(p int, s syscall.Signal) error {
 		syscall.Kill(p, s)
 		return fmt.Errorf("xyzzy")
@@ -79,10 +82,10 @@ func (s *execSuite) TestRunAndWaitExposesKillallError(c *C) {
 	defer osutil.FakeCmdWaitTimeout(time.Millisecond)()
 
 	_, err := osutil.RunAndWait([]string{"sleep", "1s"}, nil, time.Millisecond, &tomb.Tomb{})
-	c.Check(err, ErrorMatches, "cannot abort: xyzzy")
+	c.Check(err, tc.ErrorMatches, "cannot abort: xyzzy")
 }
 
-func (s *execSuite) TestKillProcessGroupKillsProcessGroup(c *C) {
+func (s *execSuite) TestKillProcessGroupKillsProcessGroup(c *tc.C) {
 	pid := 0
 	ppid := 0
 	defer osutil.FakeSyscallGetpgid(func(p int) (int, error) {
@@ -100,12 +103,12 @@ func (s *execSuite) TestKillProcessGroupKillsProcessGroup(c *C) {
 	defer cmd.Process.Kill()
 
 	err := osutil.KillProcessGroup(cmd)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	// process groups are passed to kill as negative numbers
-	c.Check(pid, Equals, -ppid)
+	c.Check(pid, tc.Equals, -ppid)
 }
 
-func (s *execSuite) TestKillProcessGroupShyOfInit(c *C) {
+func (s *execSuite) TestKillProcessGroupShyOfInit(c *tc.C) {
 	defer osutil.FakeSyscallGetpgid(func(int) (int, error) { return 1, nil })()
 
 	cmd := exec.Command("sleep", "1m")
@@ -114,35 +117,35 @@ func (s *execSuite) TestKillProcessGroupShyOfInit(c *C) {
 	defer cmd.Process.Kill()
 
 	err := osutil.KillProcessGroup(cmd)
-	c.Assert(err, ErrorMatches, "cannot kill pgid 1")
+	c.Assert(err, tc.ErrorMatches, "cannot kill pgid 1")
 }
 
-func (s *execSuite) TestStreamCommandHappy(c *C) {
+func (s *execSuite) TestStreamCommandHappy(c *tc.C) {
 	var buf bytes.Buffer
 	stdout, err := osutil.StreamCommand("sh", "-c", "echo hello; sleep .1; echo bye")
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	_, err = io.Copy(&buf, stdout)
-	c.Assert(err, IsNil)
-	c.Check(buf.String(), Equals, "hello\nbye\n")
+	c.Assert(err, tc.IsNil)
+	c.Check(buf.String(), tc.Equals, "hello\nbye\n")
 
 	wrf, wrc := osutil.WaitingReaderGuts(stdout)
-	c.Assert(wrf, FitsTypeOf, &os.File{})
+	c.Assert(wrf, tc.FitsTypeOf, &os.File{})
 	// Depending on golang version the error is one of the two.
-	c.Check(wrf.(*os.File).Close(), ErrorMatches, "invalid argument|file already closed")
-	c.Check(wrc.ProcessState, NotNil) // i.e. already waited for
+	c.Check(wrf.(*os.File).Close(), tc.ErrorMatches, "invalid argument|file already closed")
+	c.Check(wrc.ProcessState, tc.NotNil) // i.e. already waited for
 }
 
-func (s *execSuite) TestStreamCommandSad(c *C) {
+func (s *execSuite) TestStreamCommandSad(c *tc.C) {
 	var buf bytes.Buffer
 	stdout, err := osutil.StreamCommand("false")
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	_, err = io.Copy(&buf, stdout)
-	c.Assert(err, ErrorMatches, "exit status 1")
-	c.Check(buf.String(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, "exit status 1")
+	c.Check(buf.String(), tc.Equals, "")
 
 	wrf, wrc := osutil.WaitingReaderGuts(stdout)
-	c.Assert(wrf, FitsTypeOf, &os.File{})
+	c.Assert(wrf, tc.FitsTypeOf, &os.File{})
 	// Depending on golang version the error is one of the two.
-	c.Check(wrf.(*os.File).Close(), ErrorMatches, "invalid argument|file already closed")
-	c.Check(wrc.ProcessState, NotNil) // i.e. already waited for
+	c.Check(wrf.(*os.File).Close(), tc.ErrorMatches, "invalid argument|file already closed")
+	c.Check(wrc.ProcessState, tc.NotNil) // i.e. already waited for
 }

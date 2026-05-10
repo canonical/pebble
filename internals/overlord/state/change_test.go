@@ -21,37 +21,40 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 type changeSuite struct{}
 
-var _ = Suite(&changeSuite{})
+func TestChangeSuite(t *testing.T) {
+	tc.Run(t, &changeSuite{})
+}
 
-func (cs *changeSuite) TestNewChange(c *C) {
+func (cs *changeSuite) TestNewChange(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.NewChange("install", "summary...")
-	c.Check(chg.Kind(), Equals, "install")
-	c.Check(chg.Summary(), Equals, "summary...")
+	c.Check(chg.Kind(), tc.Equals, "install")
+	c.Check(chg.Summary(), tc.Equals, "summary...")
 
 	// Check notice is recorded on change spawn
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["type"], Equals, "change-update")
-	c.Check(n["key"], Equals, chg.ID())
-	c.Check(n["last-data"], DeepEquals, map[string]any{"kind": "install"})
-	c.Check(n["occurrences"], Equals, 1.0)
+	c.Check(n["type"], tc.Equals, "change-update")
+	c.Check(n["key"], tc.Equals, chg.ID())
+	c.Check(n["last-data"], tc.DeepEquals, map[string]any{"kind": "install"})
+	c.Check(n["occurrences"], tc.Equals, 1.0)
 }
 
-func (cs *changeSuite) TestNewChangeWithExtraNoticeData(c *C) {
+func (cs *changeSuite) TestNewChangeWithExtraNoticeData(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -59,12 +62,12 @@ func (cs *changeSuite) TestNewChangeWithExtraNoticeData(c *C) {
 	st.NewChangeWithNoticeData("perform-check", "...", map[string]string{"check-name": "c"})
 
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["last-data"], DeepEquals, map[string]any{"kind": "perform-check", "check-name": "c"})
+	c.Check(n["last-data"], tc.DeepEquals, map[string]any{"kind": "perform-check", "check-name": "c"})
 }
 
-func (cs *changeSuite) TestReadyTime(c *C) {
+func (cs *changeSuite) TestReadyTime(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -74,25 +77,25 @@ func (cs *changeSuite) TestReadyTime(c *C) {
 	now := time.Now()
 
 	t := chg.SpawnTime()
-	c.Check(t.After(now.Add(-5*time.Second)), Equals, true)
-	c.Check(t.Before(now.Add(5*time.Second)), Equals, true)
+	c.Check(t.After(now.Add(-5*time.Second)), tc.Equals, true)
+	c.Check(t.Before(now.Add(5*time.Second)), tc.Equals, true)
 
-	c.Check(chg.ReadyTime().IsZero(), Equals, true)
+	c.Check(chg.ReadyTime().IsZero(), tc.Equals, true)
 
 	chg.SetStatus(state.DoneStatus)
 
 	t = chg.ReadyTime()
-	c.Check(t.After(now.Add(-5*time.Second)), Equals, true)
-	c.Check(t.Before(now.Add(5*time.Second)), Equals, true)
+	c.Check(t.After(now.Add(-5*time.Second)), tc.Equals, true)
+	c.Check(t.Before(now.Add(5*time.Second)), tc.Equals, true)
 }
 
-func (cs *changeSuite) TestStatusString(c *C) {
+func (cs *changeSuite) TestStatusString(c *tc.C) {
 	for s := range state.WaitStatus + 1 {
-		c.Assert(s.String(), Matches, ".+")
+		c.Assert(s.String(), tc.Matches, ".+")
 	}
 }
 
-func (cs *changeSuite) TestGetSet(c *C) {
+func (cs *changeSuite) TestGetSet(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -103,28 +106,28 @@ func (cs *changeSuite) TestGetSet(c *C) {
 
 	var v int
 	err := chg.Get("a", &v)
-	c.Assert(err, IsNil)
-	c.Check(v, Equals, 1)
+	c.Assert(err, tc.IsNil)
+	c.Check(v, tc.Equals, 1)
 }
 
-func (cs *changeSuite) TestHas(c *C) {
+func (cs *changeSuite) TestHas(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.NewChange("install", "...")
-	c.Check(chg.Has("a"), Equals, false)
+	c.Check(chg.Has("a"), tc.Equals, false)
 
 	chg.Set("a", 1)
-	c.Check(chg.Has("a"), Equals, true)
+	c.Check(chg.Has("a"), tc.Equals, true)
 
 	chg.Set("a", nil)
-	c.Check(chg.Has("a"), Equals, false)
+	c.Check(chg.Has("a"), tc.Equals, false)
 }
 
 // TODO Better testing of full change roundtripping via JSON.
 
-func (cs *changeSuite) TestNewTaskAddTaskAndTasks(c *C) {
+func (cs *changeSuite) TestNewTaskAddTaskAndTasks(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -138,15 +141,15 @@ func (cs *changeSuite) TestNewTaskAddTaskAndTasks(c *C) {
 
 	tasks := chg.Tasks()
 	// Tasks must return tasks in the order they were added (first)!
-	c.Check(tasks, DeepEquals, []*state.Task{t1, t2})
-	c.Check(t1.Change(), Equals, chg)
-	c.Check(t2.Change(), Equals, chg)
+	c.Check(tasks, tc.DeepEquals, []*state.Task{t1, t2})
+	c.Check(t1.Change(), tc.Equals, chg)
+	c.Check(t2.Change(), tc.Equals, chg)
 
 	chg2 := st.NewChange("install", "...")
-	c.Check(func() { chg2.AddTask(t1) }, PanicMatches, `internal error: cannot add one "download" task to multiple changes`)
+	c.Check(func() { chg2.AddTask(t1) }, tc.PanicMatches, `internal error: cannot add one "download" task to multiple changes`)
 }
 
-func (cs *changeSuite) TestAddAll(c *C) {
+func (cs *changeSuite) TestAddAll(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -158,29 +161,29 @@ func (cs *changeSuite) TestAddAll(c *C) {
 	chg.AddAll(state.NewTaskSet(t1, t2))
 
 	tasks := chg.Tasks()
-	c.Check(tasks, DeepEquals, []*state.Task{t1, t2})
-	c.Check(t1.Change(), Equals, chg)
-	c.Check(t2.Change(), Equals, chg)
+	c.Check(tasks, tc.DeepEquals, []*state.Task{t1, t2})
+	c.Check(t1.Change(), tc.Equals, chg)
+	c.Check(t2.Change(), tc.Equals, chg)
 }
 
-func (cs *changeSuite) TestStatusExplicitlyDefined(c *C) {
+func (cs *changeSuite) TestStatusExplicitlyDefined(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.NewChange("install", "...")
-	c.Assert(chg.Status(), Equals, state.HoldStatus)
+	c.Assert(chg.Status(), tc.Equals, state.HoldStatus)
 
 	t := st.NewTask("download", "...")
 	chg.AddTask(t)
 
 	t.SetStatus(state.DoingStatus)
-	c.Assert(chg.Status(), Equals, state.DoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoingStatus)
 	chg.SetStatus(state.ErrorStatus)
-	c.Assert(chg.Status(), Equals, state.ErrorStatus)
+	c.Assert(chg.Status(), tc.Equals, state.ErrorStatus)
 }
 
-func (cs *changeSuite) TestLaneTasks(c *C) {
+func (cs *changeSuite) TestLaneTasks(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -213,7 +216,7 @@ func (cs *changeSuite) TestLaneTasks(c *C) {
 	chg.AddTask(t6)
 
 	checkTasks := func(obtained, expected []*state.Task) {
-		c.Assert(obtained, HasLen, len(expected))
+		c.Assert(obtained, tc.HasLen, len(expected))
 
 		tasks1 := make([]string, len(obtained))
 		tasks2 := make([]string, len(expected))
@@ -228,10 +231,10 @@ func (cs *changeSuite) TestLaneTasks(c *C) {
 		sort.Strings(tasks1)
 		sort.Strings(tasks2)
 
-		c.Assert(tasks1, DeepEquals, tasks2)
+		c.Assert(tasks1, tc.DeepEquals, tasks2)
 	}
 
-	c.Assert(chg.LaneTasks(), HasLen, 0)
+	c.Assert(chg.LaneTasks(), tc.HasLen, 0)
 
 	tasks := chg.LaneTasks(0)
 	checkTasks(tasks, []*state.Task{t5, t6})
@@ -249,7 +252,7 @@ func (cs *changeSuite) TestLaneTasks(c *C) {
 	checkTasks(tasks, []*state.Task{t1, t2, t3, t4})
 }
 
-func (cs *changeSuite) TestStatusDerivedFromTasks(c *C) {
+func (cs *changeSuite) TestStatusDerivedFromTasks(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -257,7 +260,7 @@ func (cs *changeSuite) TestStatusDerivedFromTasks(c *C) {
 	chg := st.NewChange("install", "...")
 
 	// Nothing to do with it if there are no tasks.
-	c.Assert(chg.Status(), Equals, state.HoldStatus)
+	c.Assert(chg.Status(), tc.Equals, state.HoldStatus)
 
 	tasks := make(map[state.Status]*state.Task)
 
@@ -297,11 +300,11 @@ func (cs *changeSuite) TestStatusDerivedFromTasks(c *C) {
 				tasks[s2].SetStatus(s)
 			}
 		}
-		c.Assert(chg.Status(), Equals, s)
+		c.Assert(chg.Status(), tc.Equals, s)
 	}
 }
 
-func (cs *changeSuite) TestCloseReadyOnExplicitStatus(c *C) {
+func (cs *changeSuite) TestCloseReadyOnExplicitStatus(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -313,7 +316,7 @@ func (cs *changeSuite) TestCloseReadyOnExplicitStatus(c *C) {
 		c.Fatalf("Change should not be ready")
 	default:
 	}
-	c.Assert(chg.IsReady(), Equals, false)
+	c.Assert(chg.IsReady(), tc.Equals, false)
 
 	chg.SetStatus(state.ErrorStatus)
 
@@ -322,10 +325,10 @@ func (cs *changeSuite) TestCloseReadyOnExplicitStatus(c *C) {
 	default:
 		c.Fatalf("Change should be ready")
 	}
-	c.Assert(chg.IsReady(), Equals, true)
+	c.Assert(chg.IsReady(), tc.Equals, true)
 }
 
-func (cs *changeSuite) TestCloseReadyWhenTasksReady(c *C) {
+func (cs *changeSuite) TestCloseReadyWhenTasksReady(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -341,7 +344,7 @@ func (cs *changeSuite) TestCloseReadyWhenTasksReady(c *C) {
 		c.Fatalf("Change should not be ready")
 	default:
 	}
-	c.Assert(chg.IsReady(), Equals, false)
+	c.Assert(chg.IsReady(), tc.Equals, false)
 
 	t1.SetStatus(state.DoneStatus)
 
@@ -350,7 +353,7 @@ func (cs *changeSuite) TestCloseReadyWhenTasksReady(c *C) {
 		c.Fatalf("Change should not be ready")
 	default:
 	}
-	c.Assert(chg.IsReady(), Equals, false)
+	c.Assert(chg.IsReady(), tc.Equals, false)
 
 	t2.SetStatus(state.DoneStatus)
 
@@ -359,10 +362,10 @@ func (cs *changeSuite) TestCloseReadyWhenTasksReady(c *C) {
 	default:
 		c.Fatalf("Change should be ready")
 	}
-	c.Assert(chg.IsReady(), Equals, true)
+	c.Assert(chg.IsReady(), tc.Equals, true)
 }
 
-func (cs *changeSuite) TestIsClean(c *C) {
+func (cs *changeSuite) TestIsClean(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -374,25 +377,25 @@ func (cs *changeSuite) TestIsClean(c *C) {
 	chg.AddAll(state.NewTaskSet(t1, t2))
 
 	t1.SetStatus(state.DoneStatus)
-	c.Assert(t1.SetClean, PanicMatches, ".*while change not ready")
+	c.Assert(t1.SetClean, tc.PanicMatches, ".*while change not ready")
 	t2.SetStatus(state.DoneStatus)
 
 	t1.SetClean()
-	c.Assert(chg.IsClean(), Equals, false)
+	c.Assert(chg.IsClean(), tc.Equals, false)
 	t2.SetClean()
-	c.Assert(chg.IsClean(), Equals, true)
+	c.Assert(chg.IsClean(), tc.Equals, true)
 }
 
-func (cs *changeSuite) TestState(c *C) {
+func (cs *changeSuite) TestState(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	chg := st.NewChange("install", "...")
 	st.Unlock()
 
-	c.Assert(chg.State(), Equals, st)
+	c.Assert(chg.State(), tc.Equals, st)
 }
 
-func (cs *changeSuite) TestErr(c *C) {
+func (cs *changeSuite) TestErr(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -405,28 +408,28 @@ func (cs *changeSuite) TestErr(c *C) {
 	chg.AddTask(t1)
 	chg.AddTask(t2)
 
-	c.Assert(chg.Err(), IsNil)
+	c.Assert(chg.Err(), tc.IsNil)
 
 	// t2 still running so change not yet in ErrorStatus
 	t1.SetStatus(state.ErrorStatus)
-	c.Assert(chg.Err(), IsNil)
+	c.Assert(chg.Err(), tc.IsNil)
 
 	t2.SetStatus(state.ErrorStatus)
-	c.Assert(chg.Err(), ErrorMatches, `internal inconsistency: change "install" in ErrorStatus with no task errors logged`)
+	c.Assert(chg.Err(), tc.ErrorMatches, `internal inconsistency: change "install" in ErrorStatus with no task errors logged`)
 
 	t1.Errorf("Download error")
-	c.Assert(chg.Err(), ErrorMatches, ""+
+	c.Assert(chg.Err(), tc.ErrorMatches, ""+
 		"cannot perform the following tasks:\n"+
 		"- Download \\(Download error\\)")
 
 	t2.Errorf("Activate error")
-	c.Assert(chg.Err(), ErrorMatches, ""+
+	c.Assert(chg.Err(), tc.ErrorMatches, ""+
 		"cannot perform the following tasks:\n"+
 		"- Download \\(Download error\\)\n"+
 		"- Activate \\(Activate error\\)")
 }
 
-func (cs *changeSuite) TestMethodEntrance(c *C) {
+func (cs *changeSuite) TestMethodEntrance(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 	st.Lock()
 	chg := st.NewChange("install", "...")
@@ -453,22 +456,22 @@ func (cs *changeSuite) TestMethodEntrance(c *C) {
 
 	for i, f := range reads {
 		c.Logf("Testing read function #%d", i)
-		c.Assert(f, PanicMatches, "internal error: accessing state without lock")
-		c.Assert(st.Modified(), Equals, false)
+		c.Assert(f, tc.PanicMatches, "internal error: accessing state without lock")
+		c.Assert(st.Modified(), tc.Equals, false)
 	}
 
 	for i, f := range writes {
 		st.Lock()
 		st.Unlock() //lint:ignore SA2001 empty critical section
-		c.Assert(st.Modified(), Equals, false)
+		c.Assert(st.Modified(), tc.Equals, false)
 
 		c.Logf("Testing write function #%d", i)
-		c.Assert(f, PanicMatches, "internal error: accessing state without lock")
-		c.Assert(st.Modified(), Equals, true)
+		c.Assert(f, tc.PanicMatches, "internal error: accessing state without lock")
+		c.Assert(st.Modified(), tc.Equals, true)
 	}
 }
 
-func (cs *changeSuite) TestAbort(c *C) {
+func (cs *changeSuite) TestAbort(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -492,23 +495,23 @@ func (cs *changeSuite) TestAbort(c *C) {
 	for _, t := range tasks {
 		var s state.Status
 		err := t.Get("old-status", &s)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
 		c.Logf("Checking %s task after abort", t.Summary())
 		switch s {
 		case state.DoStatus:
-			c.Assert(t.Status(), Equals, state.HoldStatus)
+			c.Assert(t.Status(), tc.Equals, state.HoldStatus)
 		case state.DoneStatus, state.WaitStatus:
-			c.Assert(t.Status(), Equals, state.UndoStatus)
+			c.Assert(t.Status(), tc.Equals, state.UndoStatus)
 		case state.DoingStatus:
-			c.Assert(t.Status(), Equals, state.AbortStatus)
+			c.Assert(t.Status(), tc.Equals, state.AbortStatus)
 		default:
-			c.Assert(t.Status(), Equals, s)
+			c.Assert(t.Status(), tc.Equals, s)
 		}
 	}
 }
 
-func (cs *changeSuite) TestAbortCircular(c *C) {
+func (cs *changeSuite) TestAbortCircular(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -526,11 +529,11 @@ func (cs *changeSuite) TestAbortCircular(c *C) {
 
 	tasks := chg.Tasks()
 	for _, t := range tasks {
-		c.Assert(t.Status(), Equals, state.HoldStatus)
+		c.Assert(t.Status(), tc.Equals, state.HoldStatus)
 	}
 }
 
-func (cs *changeSuite) TestAbortKⁿ(c *C) {
+func (cs *changeSuite) TestAbortKⁿ(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -567,7 +570,7 @@ func (cs *changeSuite) TestAbortKⁿ(c *C) {
 
 	tasks := chg.Tasks()
 	for _, t := range tasks {
-		c.Assert(t.Status(), Equals, state.HoldStatus)
+		c.Assert(t.Status(), tc.Equals, state.HoldStatus)
 	}
 }
 
@@ -679,7 +682,7 @@ var abortLanesTests = []struct {
 	},
 }
 
-func (ts *taskRunnerSuite) TestAbortLanes(c *C) {
+func (ts *taskRunnerSuite) TestAbortLanes(c *tc.C) {
 
 	names := strings.Fields("t11 t12 t21 t22 t31 t32 t41 t42")
 
@@ -692,7 +695,7 @@ func (ts *taskRunnerSuite) TestAbortLanes(c *C) {
 		st.Lock()
 		defer st.Unlock()
 
-		c.Assert(len(st.Tasks()), Equals, 0)
+		c.Assert(len(st.Tasks()), tc.Equals, 0)
 
 		chg := st.NewChange("install", "...")
 		tasks := make(map[string]*state.Task)
@@ -742,7 +745,7 @@ func (ts *taskRunnerSuite) TestAbortLanes(c *C) {
 				lanes := strings.SplitSeq(parts[2], ",")
 				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
-					c.Assert(err, IsNil)
+					c.Assert(err, tc.IsNil)
 					task.JoinLane(n)
 				}
 			}
@@ -777,7 +780,7 @@ func (ts *taskRunnerSuite) TestAbortLanes(c *C) {
 			obtained = append(obtained, name+":"+strings.ToLower(tasks[name].Status().String()))
 		}
 
-		c.Assert(strings.Join(obtained, " "), Equals, strings.Join(expected, " "), Commentf("setup: %s", test.setup))
+		c.Assert(strings.Join(obtained, " "), tc.Equals, strings.Join(expected, " "), tc.Commentf("setup: %s", test.setup))
 	}
 }
 
@@ -892,7 +895,7 @@ var abortUnreadyLanesTests = []struct {
 	},
 }
 
-func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
+func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *tc.C) {
 
 	names := strings.Fields("t11 t12 t21 t22 t31 t32 t41 t42")
 
@@ -905,7 +908,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 		st.Lock()
 		defer st.Unlock()
 
-		c.Assert(len(st.Tasks()), Equals, 0)
+		c.Assert(len(st.Tasks()), tc.Equals, 0)
 
 		chg := st.NewChange("install", "...")
 		tasks := make(map[string]*state.Task)
@@ -919,7 +922,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 
 		for wp := range strings.FieldsSeq(test.order) {
 			pair := strings.Split(wp, "->")
-			c.Assert(pair, HasLen, 2)
+			c.Assert(pair, tc.HasLen, 2)
 			// task 2 waits for task 1 is denoted as:
 			// task1->task2
 			tasks[pair[1]].WaitFor(tasks[pair[0]])
@@ -936,7 +939,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 			item := items[i]
 			parts := strings.Split(item, ":")
 			if parts[0] == "*" {
-				c.Assert(i, Equals, len(items)-1, Commentf("*: can only be used as the last entry"))
+				c.Assert(i, tc.Equals, len(items)-1, tc.Commentf("*: can only be used as the last entry"))
 				for _, name := range names {
 					if !seen[name] {
 						parts[0] = name
@@ -956,7 +959,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 				lanes := strings.SplitSeq(parts[2], ",")
 				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
-					c.Assert(err, IsNil)
+					c.Assert(err, tc.IsNil)
 					task.JoinLane(n)
 				}
 			}
@@ -975,7 +978,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 			item := expected[i]
 			parts := strings.Split(item, ":")
 			if parts[0] == "*" {
-				c.Assert(i, Equals, len(expected)-1, Commentf("*: can only be used as the last entry"))
+				c.Assert(i, tc.Equals, len(expected)-1, tc.Commentf("*: can only be used as the last entry"))
 				var expanded []string
 				for _, name := range names {
 					if !seen[name] {
@@ -992,7 +995,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *C) {
 			obtained = append(obtained, name+":"+strings.ToLower(tasks[name].Status().String()))
 		}
 
-		c.Assert(strings.Join(obtained, " "), Equals, strings.Join(expected, " "), Commentf("setup: %s", test.setup))
+		c.Assert(strings.Join(obtained, " "), tc.Equals, strings.Join(expected, " "), tc.Commentf("setup: %s", test.setup))
 	}
 }
 
@@ -1093,7 +1096,7 @@ var cyclicDependencyTests = []struct {
 	},
 }
 
-func (ts *taskRunnerSuite) TestCheckTaskDependencies(c *C) {
+func (ts *taskRunnerSuite) TestCheckTaskDependencies(c *tc.C) {
 
 	for i, test := range cyclicDependencyTests {
 		names := strings.Fields(test.setup)
@@ -1105,7 +1108,7 @@ func (ts *taskRunnerSuite) TestCheckTaskDependencies(c *C) {
 		st.Lock()
 		defer st.Unlock()
 
-		c.Assert(len(st.Tasks()), Equals, 0)
+		c.Assert(len(st.Tasks()), tc.Equals, 0)
 
 		chg := st.NewChange("install", "...")
 		tasks := make(map[string]*state.Task)
@@ -1119,7 +1122,7 @@ func (ts *taskRunnerSuite) TestCheckTaskDependencies(c *C) {
 
 		for wp := range strings.FieldsSeq(test.order) {
 			pair := strings.Split(wp, "->")
-			c.Assert(pair, HasLen, 2)
+			c.Assert(pair, tc.HasLen, 2)
 			// task 2 waits for task 1 is denoted as:
 			// task1->task2
 			tasks[pair[1]].WaitFor(tasks[pair[0]])
@@ -1128,17 +1131,17 @@ func (ts *taskRunnerSuite) TestCheckTaskDependencies(c *C) {
 		err := chg.CheckTaskDependencies()
 
 		if test.err != "" {
-			c.Assert(err, ErrorMatches, test.err)
-			c.Assert(errors.Is(err, &state.TaskDependencyCycleError{}), Equals, true)
+			c.Assert(err, tc.ErrorMatches, test.err)
+			c.Assert(errors.Is(err, &state.TaskDependencyCycleError{}), tc.Equals, true)
 			errTasksDepCycle := err.(*state.TaskDependencyCycleError)
-			c.Assert(errTasksDepCycle.IDs, DeepEquals, test.errIDs)
+			c.Assert(errTasksDepCycle.IDs, tc.DeepEquals, test.errIDs)
 		} else {
-			c.Assert(err, IsNil)
+			c.Assert(err, tc.IsNil)
 		}
 	}
 }
 
-func (cs *changeSuite) TestIsWaitingStatusOrderWithWaits(c *C) {
+func (cs *changeSuite) TestIsWaitingStatusOrderWithWaits(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1166,22 +1169,22 @@ func (cs *changeSuite) TestIsWaitingStatusOrderWithWaits(c *C) {
 	// task1 (do) => task2 (done) => task3 (doing)
 	t2.SetToWait(state.DoneStatus)
 	t3.SetStatus(state.DoingStatus)
-	c.Check(chg.Status(), Equals, state.DoingStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoingStatus)
 
 	// task1 (done) => task2 (done) => task3 (undoing)
 	t1.SetToWait(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
 	t3.SetStatus(state.UndoingStatus)
-	c.Check(chg.Status(), Equals, state.UndoingStatus)
+	c.Check(chg.Status(), tc.Equals, state.UndoingStatus)
 
 	// task1 (done) => task2 (done) => task3 (abort)
 	t1.SetToWait(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
 	t3.SetStatus(state.AbortStatus)
-	c.Check(chg.Status(), Equals, state.AbortStatus)
+	c.Check(chg.Status(), tc.Equals, state.AbortStatus)
 }
 
-func (cs *changeSuite) TestIsWaitingSingle(c *C) {
+func (cs *changeSuite) TestIsWaitingSingle(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1191,13 +1194,13 @@ func (cs *changeSuite) TestIsWaitingSingle(c *C) {
 	t1 := st.NewTask("task1", "...")
 
 	chg.AddTask(t1)
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	t1.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 }
 
-func (cs *changeSuite) TestIsWaitingTwoTasks(c *C) {
+func (cs *changeSuite) TestIsWaitingTwoTasks(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1218,23 +1221,23 @@ func (cs *changeSuite) TestIsWaitingTwoTasks(c *C) {
 	t3.SetToWait(state.DoneStatus)
 
 	// task1 (do) => task2 (do) no reboot
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	// task1 (done) => task2 (do) no reboot
 	t1.SetStatus(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	// task1 (wait) => task2 (do) means need a reboot
 	t1.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (done) => task2 (wait) means need a reboot
 	t1.SetStatus(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 }
 
-func (cs *changeSuite) TestIsWaitingCircularDependency(c *C) {
+func (cs *changeSuite) TestIsWaitingCircularDependency(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1262,24 +1265,24 @@ func (cs *changeSuite) TestIsWaitingCircularDependency(c *C) {
 	t4.SetToWait(state.DoneStatus)
 
 	// task1 (do) => task2 (do) => task3 (do) no reboot
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	// task1 (done) => task2 (do) => task3 (do) no reboot
 	t1.SetStatus(state.DoneStatus)
 	t2.SetStatus(state.DoingStatus)
-	c.Check(chg.Status(), Equals, state.DoingStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoingStatus)
 
 	// task1 (wait) => task2 (do) => task3 (do) means need a reboot
 	t2.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (done) => task2 (wait) => task3 (do) means need a reboot
 	t1.SetStatus(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 }
 
-func (cs *changeSuite) TestIsWaitingMultipleDependencies(c *C) {
+func (cs *changeSuite) TestIsWaitingMultipleDependencies(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1303,17 +1306,17 @@ func (cs *changeSuite) TestIsWaitingMultipleDependencies(c *C) {
 	t4.SetToWait(state.DoneStatus)
 
 	// task1 (do) + task2 (do) => task3 (do) no reboot
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	// task1 (done) + task2 (done) => task3 (do) no reboot
 	t1.SetStatus(state.DoneStatus)
 	t2.SetStatus(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	// task1 (done) + task2 (do) => task3 (do) no reboot
 	t1.SetStatus(state.DoneStatus)
 	t2.SetStatus(state.DoStatus)
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	// For the next two cases we are testing that a task with dependencies
 	// which have completed, but in a non-successful way is handled correctly.
@@ -1321,38 +1324,38 @@ func (cs *changeSuite) TestIsWaitingMultipleDependencies(c *C) {
 	// to finalize task2
 	t1.SetStatus(state.ErrorStatus)
 	t2.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (wait) + task2 (error) => task3 (do) means need reboot
 	// to finalize task1
 	t1.SetToWait(state.DoneStatus)
 	t2.SetStatus(state.ErrorStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (done) + task2 (wait) => task3 (do) means need a reboot
 	t1.SetStatus(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (wait) + task2 (wait) => task3 (do) means need a reboot
 	t1.SetToWait(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (done) + task2 (done) => task3 (wait) means need a reboot
 	t1.SetStatus(state.DoneStatus)
 	t2.SetStatus(state.DoneStatus)
 	t3.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (wait) + task2 (abort) => task3 (do)
 	t1.SetToWait(state.DoneStatus)
 	t2.SetStatus(state.AbortStatus)
 	t3.SetStatus(state.DoStatus)
-	c.Check(chg.Status(), Equals, state.AbortStatus)
+	c.Check(chg.Status(), tc.Equals, state.AbortStatus)
 }
 
-func (cs *changeSuite) TestIsWaitingUndoTwoTasks(c *C) {
+func (cs *changeSuite) TestIsWaitingUndoTwoTasks(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1378,25 +1381,25 @@ func (cs *changeSuite) TestIsWaitingUndoTwoTasks(c *C) {
 	// task1 (undo) <=| task2 (undo) no reboot
 	t1.SetStatus(state.UndoStatus)
 	t2.SetStatus(state.UndoStatus)
-	c.Check(chg.Status(), Equals, state.UndoStatus)
+	c.Check(chg.Status(), tc.Equals, state.UndoStatus)
 
 	// task1 (undo) <=| task2 (undone) no reboot
 	t1.SetStatus(state.UndoStatus)
 	t2.SetStatus(state.UndoneStatus)
-	c.Check(chg.Status(), Equals, state.UndoStatus)
+	c.Check(chg.Status(), tc.Equals, state.UndoStatus)
 
 	// task1 (undo) <=| task2 (wait) means need a reboot
 	t1.SetStatus(state.UndoStatus)
 	t2.SetToWait(state.DoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (wait) <=| task2 (undone) means need a reboot
 	t1.SetToWait(state.DoneStatus)
 	t2.SetStatus(state.UndoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 }
 
-func (cs *changeSuite) TestIsWaitingUndoMultipleDependencies(c *C) {
+func (cs *changeSuite) TestIsWaitingUndoMultipleDependencies(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1427,49 +1430,49 @@ func (cs *changeSuite) TestIsWaitingUndoMultipleDependencies(c *C) {
 	t1.SetStatus(state.UndoStatus)
 	t2.SetStatus(state.UndoStatus)
 	t3.SetStatus(state.UndoStatus)
-	c.Check(chg.Status(), Equals, state.UndoStatus)
+	c.Check(chg.Status(), tc.Equals, state.UndoStatus)
 
 	// task1 (undo) + task2 (undo) <=| task3 (undone) no reboot
 	t1.SetStatus(state.UndoStatus)
 	t2.SetStatus(state.UndoStatus)
 	t3.SetStatus(state.UndoneStatus)
-	c.Check(chg.Status(), Equals, state.UndoStatus)
+	c.Check(chg.Status(), tc.Equals, state.UndoStatus)
 
 	// task1 (undo) + task2 (undo) <=| task3 (wait) + task4 (error) means
 	// need reboot to continue undoing 1 and 2
 	t3.SetStatus(state.ErrorStatus)
 	t4.SetToWait(state.UndoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (undo) + task2 (undo) => task3 (error) + task4 (wait) means
 	// need reboot to continue undoing 1 and 2
 	t3.SetToWait(state.UndoneStatus)
 	t4.SetStatus(state.ErrorStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (wait) + task2 (wait) <=| task3 (undone) + task4 (undo) no reboot
 	t1.SetToWait(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
 	t3.SetStatus(state.UndoneStatus)
 	t4.SetStatus(state.UndoStatus)
-	c.Check(chg.Status(), Equals, state.UndoStatus)
+	c.Check(chg.Status(), tc.Equals, state.UndoStatus)
 
 	// task1 (wait) + task2 (done) <=| task3 (undone) + task4 (undone) means need a reboot
 	t1.SetToWait(state.DoneStatus)
 	t2.SetStatus(state.DoneStatus)
 	t3.SetStatus(state.UndoneStatus)
 	t4.SetStatus(state.UndoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 
 	// task1 (wait) + task2 (wait) <=| task3 (undone) + task4 (undone) means need a reboot
 	t1.SetToWait(state.DoneStatus)
 	t2.SetToWait(state.DoneStatus)
 	t3.SetStatus(state.UndoneStatus)
 	t4.SetStatus(state.UndoneStatus)
-	c.Check(chg.Status(), Equals, state.WaitStatus)
+	c.Check(chg.Status(), tc.Equals, state.WaitStatus)
 }
 
-func (cs *changeSuite) TestChangeStatusRecordsChangeUpdateNotice(c *C) {
+func (cs *changeSuite) TestChangeStatusRecordsChangeUpdateNotice(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1488,33 +1491,33 @@ func (cs *changeSuite) TestChangeStatusRecordsChangeUpdateNotice(c *C) {
 
 	// Verify that change status is alternating Doing -> Do -> Doing
 	t1.SetStatus(state.DoingStatus)
-	c.Assert(chg.Status(), Equals, state.DoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoingStatus)
 	t1.SetStatus(state.DoneStatus)
-	c.Assert(chg.Status(), Equals, state.DoStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoStatus)
 
 	t2.SetStatus(state.DoingStatus)
-	c.Assert(chg.Status(), Equals, state.DoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoingStatus)
 	t2.SetStatus(state.DoneStatus)
-	c.Assert(chg.Status(), Equals, state.DoStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoStatus)
 
 	t3.SetStatus(state.DoingStatus)
-	c.Assert(chg.Status(), Equals, state.DoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoingStatus)
 	t3.SetStatus(state.DoneStatus)
-	c.Assert(chg.Status(), Equals, state.DoneStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoneStatus)
 
 	// Check notice is recorded on change status updates and ignores
 	// the alternating status
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["type"], Equals, "change-update")
-	c.Check(n["key"], Equals, chg.ID())
-	c.Check(n["last-data"], DeepEquals, map[string]any{"kind": "change"})
+	c.Check(n["type"], tc.Equals, "change-update")
+	c.Check(n["key"], tc.Equals, chg.ID())
+	c.Check(n["last-data"], tc.DeepEquals, map[string]any{"kind": "change"})
 	// Default -> Doing -> Done
-	c.Check(n["occurrences"], Equals, 3.0)
+	c.Check(n["occurrences"], tc.Equals, 3.0)
 }
 
-func (cs *changeSuite) TestChangeStatusUndoRecordsChangeUpdateNotice(c *C) {
+func (cs *changeSuite) TestChangeStatusUndoRecordsChangeUpdateNotice(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1533,44 +1536,44 @@ func (cs *changeSuite) TestChangeStatusUndoRecordsChangeUpdateNotice(c *C) {
 
 	// Verify that change status is alternating Doing -> Do -> Doing
 	t1.SetStatus(state.DoingStatus)
-	c.Assert(chg.Status(), Equals, state.DoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoingStatus)
 	t1.SetStatus(state.DoneStatus)
-	c.Assert(chg.Status(), Equals, state.DoStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoStatus)
 
 	t2.SetStatus(state.DoingStatus)
-	c.Assert(chg.Status(), Equals, state.DoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoingStatus)
 	t2.SetStatus(state.DoneStatus)
-	c.Assert(chg.Status(), Equals, state.DoStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoStatus)
 
 	// Trigger an error and abort change
 	chg.Abort()
 	t3.SetStatus(state.ErrorStatus)
-	c.Assert(chg.Status(), Equals, state.UndoStatus)
+	c.Assert(chg.Status(), tc.Equals, state.UndoStatus)
 
 	// Verify that change status is alternating Undo -> Undoing -> Undo
 	t2.SetStatus(state.UndoingStatus)
-	c.Assert(chg.Status(), Equals, state.UndoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.UndoingStatus)
 	t2.SetStatus(state.UndoneStatus)
-	c.Assert(chg.Status(), Equals, state.UndoStatus)
+	c.Assert(chg.Status(), tc.Equals, state.UndoStatus)
 
 	t1.SetStatus(state.UndoingStatus)
-	c.Assert(chg.Status(), Equals, state.UndoingStatus)
+	c.Assert(chg.Status(), tc.Equals, state.UndoingStatus)
 	t1.SetStatus(state.UndoneStatus)
-	c.Assert(chg.Status(), Equals, state.ErrorStatus)
+	c.Assert(chg.Status(), tc.Equals, state.ErrorStatus)
 
 	// Check notice is recorded on change status updates and ignores
 	// the alternating status
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["type"], Equals, "change-update")
-	c.Check(n["key"], Equals, chg.ID())
-	c.Check(n["last-data"], DeepEquals, map[string]any{"kind": "change"})
+	c.Check(n["type"], tc.Equals, "change-update")
+	c.Check(n["key"], tc.Equals, chg.ID())
+	c.Check(n["last-data"], tc.DeepEquals, map[string]any{"kind": "change"})
 	// Default -> Doing -> Undo -> Undoing -> Error
-	c.Check(n["occurrences"], Equals, 5.0)
+	c.Check(n["occurrences"], tc.Equals, 5.0)
 }
 
-func (cs *changeSuite) TestChangeLastRecordedNoticeStatusPersisted(c *C) {
+func (cs *changeSuite) TestChangeLastRecordedNoticeStatusPersisted(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1579,11 +1582,11 @@ func (cs *changeSuite) TestChangeLastRecordedNoticeStatusPersisted(c *C) {
 	chg.SetStatus(state.DoingStatus)
 
 	data, err := json.Marshal(chg)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	var chgData map[string]any
 	err = json.Unmarshal(data, &chgData)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	obtainedStatus := state.Status(chgData["last-recorded-notice-status"].(float64))
-	c.Check(obtainedStatus, Equals, state.DoingStatus)
+	c.Check(obtainedStatus, tc.Equals, state.DoingStatus)
 }

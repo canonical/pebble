@@ -1,4 +1,4 @@
-// Copyright (C) 2024 Canonical Ltd
+// Copyright (tc.C) 2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -18,8 +18,9 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/daemon"
 	"github.com/canonical/pebble/internals/overlord/identities"
@@ -27,11 +28,13 @@ import (
 
 type accessSuite struct{}
 
-var _ = Suite(&accessSuite{})
+func TestAccessSuite(t *testing.T) {
+	tc.Run(t, &accessSuite{})
+}
 
 var errUnauthorized = daemon.Unauthorized("access denied")
 
-func (s *accessSuite) TestAccess(c *C) {
+func (s *accessSuite) TestAccess(c *tc.C) {
 	tests := []struct {
 		apiSource       daemon.TransportType
 		user            *daemon.UserState
@@ -191,29 +194,29 @@ func (s *accessSuite) TestAccess(c *C) {
 		// Check OpenAccess
 		openAccess := daemon.OpenAccess{}
 		err := openAccess.CheckAccess(nil, r, t.user)
-		c.Assert(err, DeepEquals, t.openCheckErr)
+		c.Assert(err, tc.DeepEquals, t.openCheckErr)
 		// Check AdminAccess
 		adminAccess := daemon.AdminAccess{}
 		err = adminAccess.CheckAccess(nil, r, t.user)
-		c.Assert(err, DeepEquals, t.adminCheckErr)
+		c.Assert(err, tc.DeepEquals, t.adminCheckErr)
 		// Check UserAccess
 		userAccess := daemon.UserAccess{}
 		err = userAccess.CheckAccess(nil, r, t.user)
-		c.Assert(err, DeepEquals, t.userCheckErr)
+		c.Assert(err, tc.DeepEquals, t.userCheckErr)
 		// Check MetricsAccess
 		metricsAccess := daemon.MetricsAccess{}
 		err = metricsAccess.CheckAccess(nil, r, t.user)
-		c.Assert(err, DeepEquals, t.metricsCheckErr)
+		c.Assert(err, tc.DeepEquals, t.metricsCheckErr)
 		// Check PairingAccess
 		pairingAccess := daemon.PairingAccess{}
 		err = pairingAccess.CheckAccess(nil, r, t.user)
-		c.Assert(err, DeepEquals, t.pairingCheckErr)
+		c.Assert(err, tc.DeepEquals, t.pairingCheckErr)
 	}
 }
 
 // TestPairingAccessWithPairingWindow tests the pairing specific behaviour
 // related to whether the pairing window is open or closed.
-func (s *accessSuite) TestPairingAccessWithPairingWindow(c *C) {
+func (s *accessSuite) TestPairingAccessWithPairingWindow(c *tc.C) {
 	pairingAccess := daemon.PairingAccess{}
 
 	r := &http.Request{
@@ -228,7 +231,7 @@ func (s *accessSuite) TestPairingAccessWithPairingWindow(c *C) {
 	defer restore()
 
 	err := pairingAccess.CheckAccess(nil, r, nil)
-	c.Assert(err, DeepEquals, errUnauthorized)
+	c.Assert(err, tc.DeepEquals, errUnauthorized)
 
 	// Test with pairing window open
 	restore = daemon.FakePairingWindowEnabled(func(d *daemon.Daemon) bool {
@@ -237,5 +240,5 @@ func (s *accessSuite) TestPairingAccessWithPairingWindow(c *C) {
 	defer restore()
 
 	err = pairingAccess.CheckAccess(nil, r, nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }

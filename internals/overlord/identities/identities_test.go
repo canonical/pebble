@@ -21,17 +21,17 @@ import (
 	"encoding/pem"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func TestIdentities(t *testing.T) { TestingT(t) }
-
 type identitiesSuite struct{}
 
-var _ = Suite(&identitiesSuite{})
+func TestIdentitiesSuite(t *testing.T) {
+	tc.Run(t, &identitiesSuite{})
+}
 
 // Generated using `openssl req -new -x509 -out cert.pem -days 3650 -subj "/CN=canonical.com"`
 const validPEMX509Cert = `-----BEGIN CERTIFICATE-----
@@ -55,10 +55,10 @@ mHLySscsVEgGwncFhL/9UW5iZl/tO/o+WiyVd/K4Vk0Yrp6uggA=
 -----END CERTIFICATE-----
 `
 
-func (s *identitiesSuite) TestMarshalState(c *C) {
+func (s *identitiesSuite) TestMarshalState(c *tc.C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -73,20 +73,20 @@ func (s *identitiesSuite) TestMarshalState(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Marshal entire state, then pull out just the "identities" key to test that.
 	data, err := json.Marshal(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	var unmarshalled map[string]any
 	err = json.Unmarshal(data, &unmarshalled)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	customData := unmarshalled["data"].(map[string]any)
 
 	data, err = json.MarshalIndent(customData["identities"], "", "    ")
-	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Assert(string(data), tc.Equals, `
 {
     "bob": {
         "access": "read",
@@ -103,10 +103,10 @@ func (s *identitiesSuite) TestMarshalState(c *C) {
 }`[1:])
 
 	_, hasLegacyIdentities := unmarshalled["identities"]
-	c.Assert(hasLegacyIdentities, Equals, false)
+	c.Assert(hasLegacyIdentities, tc.Equals, false)
 }
 
-func (s *identitiesSuite) TestUnmarshalState(c *C) {
+func (s *identitiesSuite) TestUnmarshalState(c *tc.C) {
 	data := []byte(`
 {
 	"data": {
@@ -128,14 +128,14 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
-	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
+	c.Assert(mgr.Identities(), tc.DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
 			Access: identities.ReadAccess,
@@ -149,10 +149,10 @@ func (s *identitiesSuite) TestUnmarshalState(c *C) {
 	})
 }
 
-func (s *identitiesSuite) TestAddIdentities(c *C) {
+func (s *identitiesSuite) TestAddIdentities(c *tc.C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -176,11 +176,11 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 		},
 	}
 	err = mgr.AddIdentities(original)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Ensure they were added correctly (and Name fields have been set).
 	idents := mgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
 			Access: identities.ReadAccess,
@@ -218,13 +218,13 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, ErrorMatches, "identities already exist: bob, mary")
+	c.Assert(err, tc.ErrorMatches, "identities already exist: bob, mary")
 
 	// Can't add a nil identity.
 	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": nil,
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must not be nil`)
+	c.Assert(err, tc.ErrorMatches, `identity "bill" invalid: identity must not be nil`)
 
 	// Access value must be valid.
 	err = mgr.AddIdentities(map[string]*identities.Identity{
@@ -233,15 +233,15 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", "metrics", or "untrusted"`)
+	c.Assert(err, tc.ErrorMatches, `identity "bill" invalid: invalid access value "bar", must be "admin", "read", "metrics", or "untrusted"`)
 
-	// Must have at least one type.
+	// tc.Must have at least one type.
 	err = mgr.AddIdentities(map[string]*identities.Identity{
 		"bill": {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
+	c.Assert(err, tc.ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
 
 	// May have two types.
 	err = mgr.AddIdentities(map[string]*identities.Identity{
@@ -251,7 +251,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1001},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Ensure user IDs are unique with existing users.
 	err = mgr.AddIdentities(map[string]*identities.Identity{
@@ -260,7 +260,7 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 1000 \(bill, mary\)`)
+	c.Assert(err, tc.ErrorMatches, `cannot have multiple identities with user ID 1000 \(bill, mary\)`)
 
 	// Ensure user IDs are unique among the ones being added (and test >2 with same UID).
 	err = mgr.AddIdentities(map[string]*identities.Identity{
@@ -277,13 +277,13 @@ func (s *identitiesSuite) TestAddIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 2000},
 		},
 	})
-	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 2000 \(bale, bill, boll\)`)
+	c.Assert(err, tc.ErrorMatches, `cannot have multiple identities with user ID 2000 \(bale, bill, boll\)`)
 }
 
-func (s *identitiesSuite) TestUpdateIdentities(c *C) {
+func (s *identitiesSuite) TestUpdateIdentities(c *tc.C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -303,7 +303,7 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 		},
 	}
 	err = mgr.AddIdentities(original)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	err = mgr.UpdateIdentities(map[string]*identities.Identity{
 		"bob": {
@@ -319,11 +319,11 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 			Basic:  &identities.BasicIdentity{Password: "new hash"},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Ensure they were updated correctly.
 	idents := mgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
 			Access: identities.AdminAccess,
@@ -356,13 +356,13 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, ErrorMatches, "identities do not exist: bale, bill")
+	c.Assert(err, tc.ErrorMatches, "identities do not exist: bale, bill")
 
 	// Ensure validation is being done (full testing done in AddIdentity).
 	err = mgr.UpdateIdentities(map[string]*identities.Identity{
 		"bob": nil,
 	})
-	c.Assert(err, ErrorMatches, `identity "bob" invalid: identity must not be nil`)
+	c.Assert(err, tc.ErrorMatches, `identity "bob" invalid: identity must not be nil`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
 	err = mgr.UpdateIdentities(map[string]*identities.Identity{
@@ -371,13 +371,13 @@ func (s *identitiesSuite) TestUpdateIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 42},
 		},
 	})
-	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 42 \(bob, mary\)`)
+	c.Assert(err, tc.ErrorMatches, `cannot have multiple identities with user ID 42 \(bob, mary\)`)
 }
 
-func (s *identitiesSuite) TestReplaceIdentities(c *C) {
+func (s *identitiesSuite) TestReplaceIdentities(c *tc.C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -393,7 +393,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 		},
 	}
 	err = mgr.AddIdentities(original)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	err = mgr.ReplaceIdentities(map[string]*identities.Identity{
 		"bob": nil, // nil means remove it
@@ -406,11 +406,11 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 44},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Ensure they were added/updated/deleted correctly.
 	idents := mgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"mary": {
 			Name:   "mary",
 			Access: identities.ReadAccess,
@@ -429,7 +429,7 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Access: "admin",
 		},
 	})
-	c.Assert(err, ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
+	c.Assert(err, tc.ErrorMatches, `identity "bill" invalid: identity must have at least one type \("local", "basic", or "cert"\)`)
 
 	// Ensure unique user ID testing is being done (full testing done in AddIdentity).
 	err = mgr.ReplaceIdentities(map[string]*identities.Identity{
@@ -438,13 +438,13 @@ func (s *identitiesSuite) TestReplaceIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 43},
 		},
 	})
-	c.Assert(err, ErrorMatches, `cannot have multiple identities with user ID 43 \(bob, mary\)`)
+	c.Assert(err, tc.ErrorMatches, `cannot have multiple identities with user ID 43 \(bob, mary\)`)
 }
 
-func (s *identitiesSuite) TestRemoveIdentities(c *C) {
+func (s *identitiesSuite) TestRemoveIdentities(c *tc.C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -472,18 +472,18 @@ func (s *identitiesSuite) TestRemoveIdentities(c *C) {
 		},
 	}
 	err = mgr.AddIdentities(original)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	err = mgr.RemoveIdentities(map[string]struct{}{
 		"bob":   {},
 		"mary":  {},
 		"nancy": {},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Ensure they were removed correctly.
 	idents := mgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"bill": {
 			Name:   "bill",
 			Access: identities.ReadAccess,
@@ -502,13 +502,13 @@ func (s *identitiesSuite) TestRemoveIdentities(c *C) {
 		"bale": {},
 		"mary": {},
 	})
-	c.Assert(err, ErrorMatches, "identities do not exist: bale, mary")
+	c.Assert(err, tc.ErrorMatches, "identities do not exist: bale, mary")
 }
 
-func (s *identitiesSuite) TestIdentities(c *C) {
+func (s *identitiesSuite) TestIdentities(c *tc.C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -528,7 +528,7 @@ func (s *identitiesSuite) TestIdentities(c *C) {
 		},
 	}
 	err = mgr.AddIdentities(original)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Ensure it returns correct results.
 	idents := mgr.Identities()
@@ -549,19 +549,19 @@ func (s *identitiesSuite) TestIdentities(c *C) {
 			Basic:  &identities.BasicIdentity{Password: "hash"},
 		},
 	}
-	c.Assert(idents, DeepEquals, expected)
+	c.Assert(idents, tc.DeepEquals, expected)
 
 	// Ensure the map was cloned (mutations to first map won't affect second).
 	idents2 := mgr.Identities()
-	c.Assert(idents2, DeepEquals, expected)
+	c.Assert(idents2, tc.DeepEquals, expected)
 	idents["changed"] = &identities.Identity{}
-	c.Assert(idents2, DeepEquals, expected)
+	c.Assert(idents2, tc.DeepEquals, expected)
 }
 
-func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
+func (s *identitiesSuite) TestIdentityFromInputs(c *tc.C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -584,7 +584,7 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		},
 	}
 	err = mgr.AddIdentities(ids)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	validCert := parseCert(c, validPEMX509Cert)
 	invalidCert := parseCert(c, invalidPEMX509Cert)
@@ -705,19 +705,19 @@ func (s *identitiesSuite) TestIdentityFromInputs(c *C) {
 		identity := mgr.IdentityFromInputs(test.userID, test.basicUser, test.basicPass, test.cert)
 
 		if test.expectedUser != "" {
-			c.Assert(identity, NotNil)
-			c.Assert(identity.Name, Equals, test.expectedUser)
-			c.Assert(identity.Access, Equals, test.expectedAccess)
+			c.Assert(identity, tc.NotNil)
+			c.Assert(identity.Name, tc.Equals, test.expectedUser)
+			c.Assert(identity.Access, tc.Equals, test.expectedAccess)
 		} else {
-			c.Assert(identity, IsNil)
+			c.Assert(identity, tc.IsNil)
 		}
 	}
 }
 
-func parseCert(c *C, pemBlock string) *x509.Certificate {
+func parseCert(c *tc.C, pemBlock string) *x509.Certificate {
 	block, _ := pem.Decode([]byte(pemBlock))
-	c.Assert(block, NotNil)
+	c.Assert(block, tc.NotNil)
 	cert, _ := x509.ParseCertificate(block.Bytes)
-	c.Assert(cert, NotNil)
+	c.Assert(cert, tc.NotNil)
 	return cert
 }

@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/plan"
@@ -252,7 +252,7 @@ workloads:
     `,
 }}
 
-func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
+func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *tc.C) {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
 
@@ -260,16 +260,16 @@ func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
 		c.Logf("Running TestWorkloadsSectionExtensionSchema %q test using test data index %d\n", t.summary, i)
 		combined, err := parseCombineLayers(t.layers)
 		if t.error != "" {
-			c.Assert(err, ErrorMatches, t.error)
+			c.Assert(err, tc.ErrorMatches, t.error)
 		} else {
-			c.Assert(err, IsNil)
+			c.Assert(err, tc.IsNil)
 			section, ok := combined.Sections[workloads.WorkloadsField]
-			c.Assert(ok, Equals, true)
-			c.Assert(section, NotNil)
+			c.Assert(ok, tc.Equals, true)
+			c.Assert(section, tc.NotNil)
 			ws, ok := section.(*workloads.WorkloadsSection)
-			c.Assert(ok, Equals, true)
-			c.Assert(ws, DeepEquals, t.combinedSection)
-			c.Assert(layerYAML(c, combined), Equals, strings.TrimSpace(t.combinedYAML))
+			c.Assert(ok, tc.Equals, true)
+			c.Assert(ws, tc.DeepEquals, t.combinedSection)
+			c.Assert(layerYAML(c, combined), tc.Equals, strings.TrimSpace(t.combinedYAML))
 		}
 	}
 }
@@ -286,8 +286,8 @@ func parseCombineLayers(yamls []string) (*plan.Layer, error) {
 	return plan.CombineLayers(layers...)
 }
 
-func layerYAML(c *C, layer *plan.Layer) string {
+func layerYAML(c *tc.C, layer *plan.Layer) string {
 	yml, err := yaml.Marshal(layer)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	return strings.TrimSpace(string(yml))
 }

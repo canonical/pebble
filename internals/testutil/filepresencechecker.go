@@ -18,23 +18,23 @@ import (
 	"fmt"
 	"os"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type filePresenceChecker struct {
-	*check.CheckerInfo
+	*tc.CheckerInfo
 	present bool
 }
 
 // FilePresent verifies that the given file exists.
-var FilePresent check.Checker = &filePresenceChecker{
-	CheckerInfo: &check.CheckerInfo{Name: "FilePresent", Params: []string{"filename"}},
+var FilePresent tc.Checker = &filePresenceChecker{
+	CheckerInfo: &tc.CheckerInfo{Name: "FilePresent", Params: []string{"filename"}},
 	present:     true,
 }
 
 // FileAbsent verifies that the given file does not exist.
-var FileAbsent check.Checker = &filePresenceChecker{
-	CheckerInfo: &check.CheckerInfo{Name: "FileAbsent", Params: []string{"filename"}},
+var FileAbsent tc.Checker = &filePresenceChecker{
+	CheckerInfo: &tc.CheckerInfo{Name: "FileAbsent", Params: []string{"filename"}},
 	present:     false,
 }
 

@@ -25,12 +25,12 @@ import (
 	"strings"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/logger"
 )
 
-func (s *apiSuite) TestChecksGet(c *C) {
+func (s *apiSuite) TestChecksGet(c *tc.C) {
 	writeTestLayer(s.pebbleDir, `
 checks:
     chk1:
@@ -59,8 +59,8 @@ checks:
 		// Health checks are started asynchronously as changes, so wait for
 		// them to appear.
 		rsp, body := s.getChecks(c, "")
-		c.Check(rsp.Status, Equals, 200)
-		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, tc.Equals, 200)
+		c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
 		expected := []any{
 			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "successes": 0.0, "threshold": 3.0, "change-id": "C0"},
 			map[string]any{"name": "chk2", "startup": "enabled", "status": "up", "level": "alive", "successes": 0.0, "threshold": 3.0, "change-id": "C1"},
@@ -78,72 +78,72 @@ checks:
 
 	// Request with names filter
 	rsp, body := s.getChecks(c, "?names=chk1&names=chk3")
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []any{
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(body["result"], tc.DeepEquals, []any{
 		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "successes": 0.0, "threshold": 3.0, "change-id": "C0"},
 		map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "successes": 0.0, "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with names filter (comma-separated values)
 	rsp, body = s.getChecks(c, "?names=chk1,chk3")
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []any{
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(body["result"], tc.DeepEquals, []any{
 		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "successes": 0.0, "threshold": 3.0, "change-id": "C0"},
 		map[string]any{"name": "chk3", "startup": "enabled", "status": "up", "successes": 0.0, "threshold": 3.0, "change-id": "C1"},
 	})
 
 	// Request with level filter
 	rsp, body = s.getChecks(c, "?level=alive")
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []any{
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(body["result"], tc.DeepEquals, []any{
 		map[string]any{"name": "chk2", "startup": "enabled", "status": "up", "level": "alive", "successes": 0.0, "threshold": 3.0, "change-id": "C0"},
 	})
 
 	// Request with names and level filters
 	rsp, body = s.getChecks(c, "?level=ready&names=chk1")
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []any{
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(body["result"], tc.DeepEquals, []any{
 		map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "successes": 0.0, "threshold": 3.0, "change-id": "C0"},
 	})
 }
 
-func (s *apiSuite) TestChecksGetInvalidLevel(c *C) {
+func (s *apiSuite) TestChecksGetInvalidLevel(c *tc.C) {
 	s.daemon(c)
 	s.startOverlord()
 
 	rsp, body := s.getChecks(c, "?level=foo")
-	c.Check(rsp.Status, Equals, 400)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Result, NotNil)
-	c.Check(body["result"], DeepEquals, map[string]any{
+	c.Check(rsp.Status, tc.Equals, 400)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
+	c.Check(rsp.Result, tc.NotNil)
+	c.Check(body["result"], tc.DeepEquals, map[string]any{
 		"message": `level must be "alive" or "ready"`,
 	})
 }
 
-func (s *apiSuite) TestChecksEmpty(c *C) {
+func (s *apiSuite) TestChecksEmpty(c *tc.C) {
 	s.daemon(c)
 	s.startOverlord()
 
 	rsp, body := s.getChecks(c, "")
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(body["result"], DeepEquals, []any{}) // should be [] rather than null
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(body["result"], tc.DeepEquals, []any{}) // should be [] rather than null
 }
 
-func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
+func (s *apiSuite) getChecks(c *tc.C, query string) (*resp, map[string]any) {
 	req, err := http.NewRequest("GET", "/v1/checks"+query, nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Code, Equals, rsp.Status)
+	c.Check(rec.Code, tc.Equals, rsp.Status)
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, IsNil)
+	c.Check(err, tc.IsNil)
 
 	// Standardise the change-id and prev-change-id fields before comparison as these can vary.
 	if results, ok := body["result"].([]any); ok {
@@ -163,7 +163,7 @@ func (s *apiSuite) getChecks(c *C, query string) (*resp, map[string]any) {
 	return rsp, body
 }
 
-func (s *apiSuite) TestChecksPost(c *C) {
+func (s *apiSuite) TestChecksPost(c *tc.C) {
 	logBuf, restore := logger.MockLogger("")
 	defer restore()
 
@@ -196,8 +196,8 @@ checks:
 		// Health checks are started asynchronously as changes, so wait for
 		// them to appear.
 		rsp, body := s.getChecks(c, "")
-		c.Check(rsp.Status, Equals, 200)
-		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, tc.Equals, 200)
+		c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
 		expected := []any{
 			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "successes": 0.0, "threshold": 3.0, "change-id": "C0"},
 			map[string]any{"name": "chk2", "startup": "disabled", "status": "inactive", "level": "alive", "successes": 0.0, "threshold": 3.0, "change-id": ""},
@@ -214,28 +214,28 @@ checks:
 	}
 
 	rsp := s.postChecks(c, `{"action": "stop", "checks": ["chk2", "chk3", "chk1"]}`)
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
 	// chk1 and chk3 will have stopped, and the response will list them
 	// alphabetically, not in the order we provided.
-	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{"chk1", "chk3"})
+	c.Check(rsp.Result.(responsePayload).Changed, tc.DeepEquals, []string{"chk1", "chk3"})
 
 	ensureSecurityLog(c, logBuf.String(), "WARN", "sys_monitor_disabled:<unknown>,chk1", "Stopping check chk1")
 	ensureSecurityLog(c, logBuf.String(), "WARN", "sys_monitor_disabled:<unknown>,chk2", "Stopping check chk2")
 	ensureSecurityLog(c, logBuf.String(), "WARN", "sys_monitor_disabled:<unknown>,chk3", "Stopping check chk3")
 }
 
-func (s *apiSuite) postChecks(c *C, body string) *resp {
+func (s *apiSuite) postChecks(c *tc.C, body string) *resp {
 	req, err := http.NewRequest("POST", "/v1/checks", strings.NewReader(body))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostChecks(apiCmd("/v1/checks"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Code, Equals, rsp.Status)
+	c.Check(rec.Code, tc.Equals, rsp.Status)
 	return rsp
 }
 
-func (s *apiSuite) TestChecksPostNoChange(c *C) {
+func (s *apiSuite) TestChecksPostNoChange(c *tc.C) {
 	writeTestLayer(s.pebbleDir, `
 checks:
     chk1:
@@ -250,26 +250,26 @@ checks:
 
 	// Try to stop a check that's already stopped (disabled)
 	rsp := s.postChecks(c, `{"action": "stop", "checks": ["chk1"]}`)
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
 	// Should return empty list, not nil
-	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{})
+	c.Check(rsp.Result.(responsePayload).Changed, tc.DeepEquals, []string{})
 
 	// Try to start the check
 	rsp = s.postChecks(c, `{"action": "start", "checks": ["chk1"]}`)
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{"chk1"})
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Result.(responsePayload).Changed, tc.DeepEquals, []string{"chk1"})
 
 	// Try to start again (already started)
 	rsp = s.postChecks(c, `{"action": "start", "checks": ["chk1"]}`)
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
 	// Should return empty list, not nil
-	c.Check(rsp.Result.(responsePayload).Changed, DeepEquals, []string{})
+	c.Check(rsp.Result.(responsePayload).Changed, tc.DeepEquals, []string{})
 }
 
-func (s *apiSuite) TestPostChecksRefresh(c *C) {
+func (s *apiSuite) TestPostChecksRefresh(c *tc.C) {
 	checksYAML := `
 checks:
     chk1:
@@ -289,8 +289,8 @@ checks:
 	start := time.Now()
 	for {
 		rsp, body := s.getChecks(c, "")
-		c.Check(rsp.Status, Equals, 200)
-		c.Check(rsp.Type, Equals, ResponseTypeSync)
+		c.Check(rsp.Status, tc.Equals, 200)
+		c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
 		expected := []any{
 			map[string]any{"name": "chk1", "startup": "enabled", "status": "up", "level": "ready", "successes": 0.0, "threshold": 3.0, "change-id": "C0"},
 		}
@@ -305,20 +305,20 @@ checks:
 	}
 
 	req, err := http.NewRequest("POST", "/v1/checks/refresh", strings.NewReader(`{"name": "chk1"}`))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostChecksRefresh(apiCmd("/v1/checks/refresh"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Make the sure the check has refreshed.
 	stat, err := os.Stat(donePath)
-	c.Assert(err, IsNil)
-	c.Assert(stat.Mode().IsRegular(), Equals, true)
+	c.Assert(err, tc.IsNil)
+	c.Assert(stat.Mode().IsRegular(), tc.Equals, true)
 	os.Remove(donePath)
 
-	c.Check(rec.Code, Equals, rsp.Status)
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
+	c.Check(rec.Code, tc.Equals, rsp.Status)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
 	info := rsp.Result.(refreshPayload).Info
 
 	// If the change-id is not empty or nil, replace it with a fixed value.
@@ -326,7 +326,7 @@ checks:
 		info.ChangeID = "C0"
 	}
 
-	c.Check(info, DeepEquals, checkInfo{
+	c.Check(info, tc.DeepEquals, checkInfo{
 		Name:         "chk1",
 		Level:        "ready",
 		Startup:      "enabled",
@@ -337,5 +337,5 @@ checks:
 		ChangeID:     "C0",
 		PrevChangeID: "",
 	})
-	c.Check(rsp.Result.(refreshPayload).Error, Equals, "")
+	c.Check(rsp.Result.(refreshPayload).Error, tc.Equals, "")
 }

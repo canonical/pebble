@@ -19,43 +19,43 @@ import (
 	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/timeutil"
 )
 
-func Test(t *testing.T) { TestingT(t) }
-
 type timeutilSuite struct{}
 
-var _ = Suite(&timeutilSuite{})
-
-func (ts *timeutilSuite) TestClock(c *C) {
-	td := timeutil.Clock{Hour: 23, Minute: 59}
-	c.Check(td.Add(time.Minute), Equals, timeutil.Clock{Hour: 0, Minute: 0})
-
-	td = timeutil.Clock{Hour: 5, Minute: 34}
-	c.Check(td.Add(time.Minute), Equals, timeutil.Clock{Hour: 5, Minute: 35})
-
-	td = timeutil.Clock{Hour: 10, Minute: 1}
-	c.Check(td.Sub(timeutil.Clock{Hour: 10, Minute: 0}), Equals, time.Minute)
-
-	td = timeutil.Clock{Hour: 23, Minute: 0}
-	c.Check(td.Add(time.Hour), Equals, timeutil.Clock{Hour: 0, Minute: 0})
-	c.Check(td.Add(2*time.Hour), Equals, timeutil.Clock{Hour: 1, Minute: 0})
-	c.Check(td.Sub(timeutil.Clock{Hour: 1, Minute: 0}), Equals, 22*time.Hour)
-	c.Check(td.Sub(timeutil.Clock{Hour: 0, Minute: 0}), Equals, 23*time.Hour)
-
-	td = timeutil.Clock{Hour: 1, Minute: 0}
-	c.Check(td.Sub(timeutil.Clock{Hour: 23, Minute: 0}), Equals, -2*time.Hour)
-	c.Check(td.Sub(timeutil.Clock{Hour: 1, Minute: 0}), Equals, time.Duration(0))
-
-	td = timeutil.Clock{Hour: 0, Minute: 0}
-	c.Check(td.Sub(timeutil.Clock{Hour: 23, Minute: 0}), Equals, -1*time.Hour)
-	c.Check(td.Sub(timeutil.Clock{Hour: 1, Minute: 0}), Equals, -23*time.Hour)
+func TestTimeutilSuite(t *testing.T) {
+	tc.Run(t, &timeutilSuite{})
 }
 
-func (ts *timeutilSuite) TestParseClock(c *C) {
+func (ts *timeutilSuite) TestClock(c *tc.C) {
+	td := timeutil.Clock{Hour: 23, Minute: 59}
+	c.Check(td.Add(time.Minute), tc.Equals, timeutil.Clock{Hour: 0, Minute: 0})
+
+	td = timeutil.Clock{Hour: 5, Minute: 34}
+	c.Check(td.Add(time.Minute), tc.Equals, timeutil.Clock{Hour: 5, Minute: 35})
+
+	td = timeutil.Clock{Hour: 10, Minute: 1}
+	c.Check(td.Sub(timeutil.Clock{Hour: 10, Minute: 0}), tc.Equals, time.Minute)
+
+	td = timeutil.Clock{Hour: 23, Minute: 0}
+	c.Check(td.Add(time.Hour), tc.Equals, timeutil.Clock{Hour: 0, Minute: 0})
+	c.Check(td.Add(2*time.Hour), tc.Equals, timeutil.Clock{Hour: 1, Minute: 0})
+	c.Check(td.Sub(timeutil.Clock{Hour: 1, Minute: 0}), tc.Equals, 22*time.Hour)
+	c.Check(td.Sub(timeutil.Clock{Hour: 0, Minute: 0}), tc.Equals, 23*time.Hour)
+
+	td = timeutil.Clock{Hour: 1, Minute: 0}
+	c.Check(td.Sub(timeutil.Clock{Hour: 23, Minute: 0}), tc.Equals, -2*time.Hour)
+	c.Check(td.Sub(timeutil.Clock{Hour: 1, Minute: 0}), tc.Equals, time.Duration(0))
+
+	td = timeutil.Clock{Hour: 0, Minute: 0}
+	c.Check(td.Sub(timeutil.Clock{Hour: 23, Minute: 0}), tc.Equals, -1*time.Hour)
+	c.Check(td.Sub(timeutil.Clock{Hour: 1, Minute: 0}), tc.Equals, -23*time.Hour)
+}
+
+func (ts *timeutilSuite) TestParseClock(c *tc.C) {
 	for _, t := range []struct {
 		timeStr      string
 		hour, minute int
@@ -70,16 +70,16 @@ func (ts *timeutilSuite) TestParseClock(c *C) {
 	} {
 		ti, err := timeutil.ParseClock(t.timeStr)
 		if t.errStr != "" {
-			c.Check(err, ErrorMatches, t.errStr)
+			c.Check(err, tc.ErrorMatches, t.errStr)
 		} else {
-			c.Check(err, IsNil)
-			c.Check(ti.Hour, Equals, t.hour)
-			c.Check(ti.Minute, Equals, t.minute)
+			c.Check(err, tc.IsNil)
+			c.Check(ti.Hour, tc.Equals, t.hour)
+			c.Check(ti.Minute, tc.Equals, t.minute)
 		}
 	}
 }
 
-func (ts *timeutilSuite) TestScheduleString(c *C) {
+func (ts *timeutilSuite) TestScheduleString(c *tc.C) {
 	for _, t := range []struct {
 		sched timeutil.Schedule
 		str   string
@@ -154,11 +154,11 @@ func (ts *timeutilSuite) TestScheduleString(c *C) {
 			"06:00~09:00/2",
 		},
 	} {
-		c.Check(t.sched.String(), Equals, t.str)
+		c.Check(t.sched.String(), tc.Equals, t.str)
 	}
 }
 
-func (ts *timeutilSuite) TestParseLegacySchedule(c *C) {
+func (ts *timeutilSuite) TestParseLegacySchedule(c *tc.C) {
 	for _, t := range []struct {
 		in       string
 		expected []*timeutil.Schedule
@@ -186,22 +186,22 @@ func (ts *timeutilSuite) TestParseLegacySchedule(c *C) {
 		c.Logf("trying: %v", t)
 		schedule, err := timeutil.ParseLegacySchedule(t.in)
 		if t.errStr != "" {
-			c.Check(err, ErrorMatches, t.errStr, Commentf("%q returned unexpected error: %s", t.in, err))
+			c.Check(err, tc.ErrorMatches, t.errStr, tc.Commentf("%q returned unexpected error: %s", t.in, err))
 		} else {
-			c.Check(err, IsNil, Commentf("%q returned error: %s", t.in, err))
-			c.Check(schedule, DeepEquals, t.expected, Commentf("%q failed", t.in))
+			c.Check(err, tc.IsNil, tc.Commentf("%q returned error: %s", t.in, err))
+			c.Check(schedule, tc.DeepEquals, t.expected, tc.Commentf("%q failed", t.in))
 		}
 
 	}
 }
 
-func parse(c *C, s string) (time.Duration, time.Duration) {
+func parse(c *tc.C, s string) (time.Duration, time.Duration) {
 	l := strings.Split(s, "-")
-	c.Assert(l, HasLen, 2)
+	c.Assert(l, tc.HasLen, 2)
 	a, err := time.ParseDuration(l[0])
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	b, err := time.ParseDuration(l[1])
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	return a, b
 }
 
@@ -209,7 +209,7 @@ const (
 	maxDuration = 60 * 24 * time.Hour
 )
 
-func (ts *timeutilSuite) TestLegacyScheduleNext(c *C) {
+func (ts *timeutilSuite) TestLegacyScheduleNext(c *tc.C) {
 	const shortForm = "2006-01-02 15:04"
 
 	for _, t := range []struct {
@@ -289,26 +289,26 @@ func (ts *timeutilSuite) TestLegacyScheduleNext(c *C) {
 		},
 	} {
 		last, err := time.ParseInLocation(shortForm, t.last, time.Local)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
 		fakeNow, err := time.ParseInLocation(shortForm, t.now, time.Local)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		restorer := timeutil.MockTimeNow(func() time.Time {
 			return fakeNow
 		})
 		defer restorer()
 
 		sched, err := timeutil.ParseLegacySchedule(t.schedule)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		minDist, maxDist := parse(c, t.next)
 
 		next := timeutil.Next(sched, last, maxDuration)
-		c.Check(next >= minDist && next <= maxDist, Equals, true, Commentf("invalid  distance for schedule %q with last refresh %q, now %q, expected %v, got %v", t.schedule, t.last, t.now, t.next, next))
+		c.Check(next >= minDist && next <= maxDist, tc.Equals, true, tc.Commentf("invalid  distance for schedule %q with last refresh %q, now %q, expected %v, got %v", t.schedule, t.last, t.now, t.next, next))
 	}
 
 }
 
-func (ts *timeutilSuite) TestParseSchedule(c *C) {
+func (ts *timeutilSuite) TestParseSchedule(c *tc.C) {
 	for _, t := range []struct {
 		in       string
 		expected []*timeutil.Schedule
@@ -485,15 +485,15 @@ func (ts *timeutilSuite) TestParseSchedule(c *C) {
 		c.Logf("trying %+v", t)
 		schedule, err := timeutil.ParseSchedule(t.in)
 		if t.errStr != "" {
-			c.Check(err, ErrorMatches, t.errStr, Commentf("%q returned unexpected error: %s", t.in, err))
+			c.Check(err, tc.ErrorMatches, t.errStr, tc.Commentf("%q returned unexpected error: %s", t.in, err))
 		} else {
-			c.Check(err, IsNil, Commentf("%q returned error: %s", t.in, err))
-			c.Check(schedule, DeepEquals, t.expected, Commentf("%q failed", t.in))
+			c.Check(err, tc.IsNil, tc.Commentf("%q returned error: %s", t.in, err))
+			c.Check(schedule, tc.DeepEquals, t.expected, tc.Commentf("%q failed", t.in))
 		}
 	}
 }
 
-func (ts *timeutilSuite) TestScheduleNext(c *C) {
+func (ts *timeutilSuite) TestScheduleNext(c *tc.C) {
 	const shortForm = "2006-01-02 15:04"
 
 	// force timezone for tests to UTC otherwise if run in a
@@ -758,17 +758,17 @@ func (ts *timeutilSuite) TestScheduleNext(c *C) {
 		c.Logf("trying %+v", t)
 
 		last, err := time.ParseInLocation(shortForm, t.last, time.Local)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
 		fakeNow, err := time.ParseInLocation(shortForm, t.now, time.Local)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		restorer := timeutil.MockTimeNow(func() time.Time {
 			return fakeNow
 		})
 		defer restorer()
 
 		sched, err := timeutil.ParseSchedule(t.schedule)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
 		// keep track of previous result for tests where event time is
 		// randomized
@@ -778,25 +778,25 @@ func (ts *timeutilSuite) TestScheduleNext(c *C) {
 		for range calls {
 			next := timeutil.Next(sched, last, maxDuration)
 			if t.randomized {
-				c.Check(next, Not(Equals), previous)
+				c.Check(next, tc.Not(tc.Equals), previous)
 			} else if previous != 0 {
 				// not randomized and not the first run
-				c.Check(next, Equals, previous)
+				c.Check(next, tc.Equals, previous)
 			}
 
 			c.Logf("next: %v", next)
 			minDist, maxDist := parse(c, t.next)
 
 			c.Check(next >= minDist && next <= maxDist,
-				Equals, true,
-				Commentf("invalid distance for schedule %q with last refresh %q, now %q, expected %v, got %v, date %s",
+				tc.Equals, true,
+				tc.Commentf("invalid distance for schedule %q with last refresh %q, now %q, expected %v, got %v, date %s",
 					t.schedule, t.last, t.now, t.next, next, fakeNow.Add(next)))
 			previous = next
 		}
 	}
 }
 
-func (ts *timeutilSuite) TestScheduleIncludes(c *C) {
+func (ts *timeutilSuite) TestScheduleIncludes(c *tc.C) {
 	const shortForm = "2006-01-02 15:04:05"
 
 	for _, t := range []struct {
@@ -929,17 +929,17 @@ func (ts *timeutilSuite) TestScheduleIncludes(c *C) {
 		c.Logf("trying %+v", t)
 
 		now, err := time.ParseInLocation(shortForm, t.now, time.Local)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
 		sched, err := timeutil.ParseSchedule(t.schedule)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
-		c.Check(timeutil.Includes(sched, now), Equals, t.expecting,
-			Commentf("unexpected result for schedule %v and time %v", t.schedule, now))
+		c.Check(timeutil.Includes(sched, now), tc.Equals, t.expecting,
+			tc.Commentf("unexpected result for schedule %v and time %v", t.schedule, now))
 	}
 }
 
-func (ts *timeutilSuite) TestClockSpans(c *C) {
+func (ts *timeutilSuite) TestClockSpans(c *tc.C) {
 	for _, t := range []struct {
 		clockspan  string
 		flattenend []string
@@ -954,20 +954,20 @@ func (ts *timeutilSuite) TestClockSpans(c *C) {
 	} {
 		c.Logf("trying %+v", t)
 		spans, err := timeutil.ParseClockSpan(t.clockspan)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
 		spanStrings := make([]string, len(t.flattenend))
 		flattened := spans.ClockSpans()
-		c.Assert(flattened, HasLen, len(t.flattenend))
+		c.Assert(flattened, tc.HasLen, len(t.flattenend))
 		for i := range flattened {
 			spanStrings[i] = flattened[i].String()
 		}
 
-		c.Assert(spanStrings, DeepEquals, t.flattenend)
+		c.Assert(spanStrings, tc.DeepEquals, t.flattenend)
 	}
 }
 
-func (ts *timeutilSuite) TestWeekSpans(c *C) {
+func (ts *timeutilSuite) TestWeekSpans(c *tc.C) {
 	const shortForm = "2006-01-02"
 
 	//     July 2018            August 2018
@@ -1028,12 +1028,12 @@ func (ts *timeutilSuite) TestWeekSpans(c *C) {
 	} {
 		c.Logf("trying %+v", t)
 		ws, err := timeutil.ParseWeekSpan(t.week)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 
 		when, err := time.ParseInLocation(shortForm, t.when, time.Local)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		c.Logf("when: %v %s", when, when.Weekday())
 
-		c.Check(ws.Match(when), Equals, t.match)
+		c.Check(ws.Match(when), tc.Equals, t.match)
 	}
 }

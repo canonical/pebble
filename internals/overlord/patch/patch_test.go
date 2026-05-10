@@ -24,19 +24,19 @@ import (
 	"sort"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func Test(t *testing.T) { TestingT(t) }
-
 type patchSuite struct{}
 
-var _ = Suite(&patchSuite{})
+func TestPatchSuite(t *testing.T) {
+	tc.Run(t, &patchSuite{})
+}
 
-func (s *patchSuite) TestInit(c *C) {
+func (s *patchSuite) TestInit(c *tc.C) {
 	restore := patch.Fake(2, 1, nil)
 	defer restore()
 
@@ -47,15 +47,15 @@ func (s *patchSuite) TestInit(c *C) {
 	defer st.Unlock()
 	var patchLevel int
 	err := st.Get("patch-level", &patchLevel)
-	c.Assert(err, IsNil)
-	c.Check(patchLevel, Equals, 2)
+	c.Assert(err, tc.IsNil)
+	c.Check(patchLevel, tc.Equals, 2)
 
 	var patchSublevel int
-	c.Assert(st.Get("patch-sublevel", &patchSublevel), IsNil)
-	c.Check(patchSublevel, Equals, 1)
+	c.Assert(st.Get("patch-sublevel", &patchSublevel), tc.IsNil)
+	c.Check(patchSublevel, tc.Equals, 1)
 }
 
-func (s *patchSuite) TestNothingToDo(c *C) {
+func (s *patchSuite) TestNothingToDo(c *tc.C) {
 	restore := patch.Fake(2, 1, nil)
 	defer restore()
 
@@ -64,10 +64,10 @@ func (s *patchSuite) TestNothingToDo(c *C) {
 	st.Set("patch-level", 2)
 	st.Unlock()
 	err := patch.Apply(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }
 
-func (s *patchSuite) TestNoDowngrade(c *C) {
+func (s *patchSuite) TestNoDowngrade(c *tc.C) {
 	restore := patch.Fake(2, 0, nil)
 	defer restore()
 
@@ -76,10 +76,10 @@ func (s *patchSuite) TestNoDowngrade(c *C) {
 	st.Set("patch-level", 3)
 	st.Unlock()
 	err := patch.Apply(st)
-	c.Assert(err, ErrorMatches, `cannot downgrade: software version is too old for the current system state \(patch level 3\)`)
+	c.Assert(err, tc.ErrorMatches, `cannot downgrade: software version is too old for the current system state \(patch level 3\)`)
 }
 
-func (s *patchSuite) TestApply(c *C) {
+func (s *patchSuite) TestApply(c *tc.C) {
 	p12 := func(st *state.State) error {
 		var n int
 		st.Get("n", &n)
@@ -111,30 +111,30 @@ func (s *patchSuite) TestApply(c *C) {
 	st.Set("patch-level", 1)
 	st.Unlock()
 	err := patch.Apply(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	var level int
 	err = st.Get("patch-level", &level)
-	c.Assert(err, IsNil)
-	c.Check(level, Equals, 3)
+	c.Assert(err, tc.IsNil)
+	c.Check(level, tc.Equals, 3)
 
 	var sublevel int
-	c.Assert(st.Get("patch-sublevel", &sublevel), IsNil)
-	c.Check(sublevel, Equals, 0)
+	c.Assert(st.Get("patch-sublevel", &sublevel), tc.IsNil)
+	c.Check(sublevel, tc.Equals, 0)
 
 	var n, o int
 	err = st.Get("n", &n)
-	c.Assert(err, IsNil)
-	c.Check(n, Equals, 10)
+	c.Assert(err, tc.IsNil)
+	c.Check(n, tc.Equals, 10)
 
-	c.Assert(st.Get("o", &o), IsNil)
-	c.Assert(o, Equals, 1)
+	c.Assert(st.Get("o", &o), tc.IsNil)
+	c.Assert(o, tc.Equals, 1)
 }
 
-func (s *patchSuite) TestApplyLevel6(c *C) {
+func (s *patchSuite) TestApplyLevel6(c *tc.C) {
 	var sequence []int
 	p50 := generatePatchFunc(50, &sequence)
 	p60 := generatePatchFunc(60, &sequence)
@@ -152,20 +152,20 @@ func (s *patchSuite) TestApplyLevel6(c *C) {
 	st.Lock()
 	st.Set("patch-level", 6)
 	st.Unlock()
-	c.Assert(patch.Apply(st), IsNil)
+	c.Assert(patch.Apply(st), tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	var level, sublevel int
-	c.Assert(sequence, DeepEquals, []int{61})
-	c.Assert(st.Get("patch-level", &level), IsNil)
-	c.Assert(st.Get("patch-sublevel", &sublevel), IsNil)
-	c.Check(level, Equals, 6)
-	c.Check(sublevel, Equals, 1)
+	c.Assert(sequence, tc.DeepEquals, []int{61})
+	c.Assert(st.Get("patch-level", &level), tc.IsNil)
+	c.Assert(st.Get("patch-sublevel", &sublevel), tc.IsNil)
+	c.Check(level, tc.Equals, 6)
+	c.Check(sublevel, tc.Equals, 1)
 }
 
-func (s *patchSuite) TestApplyFromSublevel(c *C) {
+func (s *patchSuite) TestApplyFromSublevel(c *tc.C) {
 	var sequence []int
 	p60 := generatePatchFunc(60, &sequence)
 	p61 := generatePatchFunc(61, &sequence)
@@ -185,16 +185,16 @@ func (s *patchSuite) TestApplyFromSublevel(c *C) {
 	st.Set("patch-level", 6)
 	st.Set("patch-sublevel", 0)
 	st.Unlock()
-	c.Assert(patch.Apply(st), IsNil)
+	c.Assert(patch.Apply(st), tc.IsNil)
 
 	st.Lock()
 
 	var level, sublevel int
-	c.Assert(st.Get("patch-level", &level), IsNil)
-	c.Assert(st.Get("patch-sublevel", &sublevel), IsNil)
-	c.Check(level, Equals, 7)
-	c.Check(sublevel, Equals, 1)
-	c.Assert(sequence, DeepEquals, []int{61, 62, 70, 71})
+	c.Assert(st.Get("patch-level", &level), tc.IsNil)
+	c.Assert(st.Get("patch-sublevel", &sublevel), tc.IsNil)
+	c.Check(level, tc.Equals, 7)
+	c.Check(sublevel, tc.Equals, 1)
+	c.Assert(sequence, tc.DeepEquals, []int{61, 62, 70, 71})
 
 	// now patching from 7.1 -> 7.2
 	sequence = []int{}
@@ -205,19 +205,19 @@ func (s *patchSuite) TestApplyFromSublevel(c *C) {
 	})
 
 	st.Unlock()
-	c.Assert(patch.Apply(st), IsNil)
-	c.Assert(sequence, DeepEquals, []int{72})
+	c.Assert(patch.Apply(st), tc.IsNil)
+	c.Assert(sequence, tc.DeepEquals, []int{72})
 
 	st.Lock()
 	defer st.Unlock()
 
-	c.Assert(st.Get("patch-level", &level), IsNil)
-	c.Assert(st.Get("patch-sublevel", &sublevel), IsNil)
-	c.Check(level, Equals, 7)
-	c.Check(sublevel, Equals, 2)
+	c.Assert(st.Get("patch-level", &level), tc.IsNil)
+	c.Assert(st.Get("patch-sublevel", &sublevel), tc.IsNil)
+	c.Check(level, tc.Equals, 7)
+	c.Check(sublevel, tc.Equals, 2)
 }
 
-func (s *patchSuite) TestMissing(c *C) {
+func (s *patchSuite) TestMissing(c *tc.C) {
 	restore := patch.Fake(3, 0, map[int][]patch.PatchFunc{
 		3: {func(s *state.State) error { return nil }},
 	})
@@ -228,10 +228,10 @@ func (s *patchSuite) TestMissing(c *C) {
 	st.Set("patch-level", 1)
 	st.Unlock()
 	err := patch.Apply(st)
-	c.Assert(err, ErrorMatches, `cannot upgrade: software version is too new for the current system state \(patch level 1\)`)
+	c.Assert(err, tc.ErrorMatches, `cannot upgrade: software version is too new for the current system state \(patch level 1\)`)
 }
 
-func (s *patchSuite) TestDowngradeSublevel(c *C) {
+func (s *patchSuite) TestDowngradeSublevel(c *tc.C) {
 	restore := patch.Fake(3, 1, map[int][]patch.PatchFunc{
 		3: {func(s *state.State) error { return nil }},
 	})
@@ -244,18 +244,18 @@ func (s *patchSuite) TestDowngradeSublevel(c *C) {
 	st.Unlock()
 
 	// we're at patch level 3, sublevel 6 according to state, but the implemented level is 3,1
-	c.Assert(patch.Apply(st), IsNil)
+	c.Assert(patch.Apply(st), tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 	var level, sublevel int
-	c.Assert(st.Get("patch-level", &level), IsNil)
-	c.Assert(st.Get("patch-sublevel", &sublevel), IsNil)
-	c.Check(level, Equals, 3)
-	c.Check(sublevel, Equals, 1)
+	c.Assert(st.Get("patch-level", &level), tc.IsNil)
+	c.Assert(st.Get("patch-sublevel", &sublevel), tc.IsNil)
+	c.Check(level, tc.Equals, 3)
+	c.Check(sublevel, tc.Equals, 1)
 }
 
-func (s *patchSuite) TestError(c *C) {
+func (s *patchSuite) TestError(c *tc.C) {
 	p12 := func(st *state.State) error {
 		var n int
 		st.Get("n", &n)
@@ -286,23 +286,23 @@ func (s *patchSuite) TestError(c *C) {
 	st.Set("patch-level", 1)
 	st.Unlock()
 	err := patch.Apply(st)
-	c.Assert(err, ErrorMatches, `cannot patch system state to level 3, sublevel 0: boom`)
+	c.Assert(err, tc.ErrorMatches, `cannot patch system state to level 3, sublevel 0: boom`)
 
 	st.Lock()
 	defer st.Unlock()
 
 	var level int
 	err = st.Get("patch-level", &level)
-	c.Assert(err, IsNil)
-	c.Check(level, Equals, 2)
+	c.Assert(err, tc.IsNil)
+	c.Check(level, tc.Equals, 2)
 
 	var n int
 	err = st.Get("n", &n)
-	c.Assert(err, IsNil)
-	c.Check(n, Equals, 10)
+	c.Assert(err, tc.IsNil)
+	c.Check(n, tc.Equals, 10)
 }
 
-func (s *patchSuite) TestSanity(c *C) {
+func (s *patchSuite) TestSanity(c *tc.C) {
 	patches := patch.PatchesForTest()
 	levels := make([]int, 0, len(patches))
 	for l := range patches {
@@ -311,13 +311,13 @@ func (s *patchSuite) TestSanity(c *C) {
 	sort.Ints(levels)
 	// all steps present
 	for i, level := range levels {
-		c.Check(level, Equals, i+1)
+		c.Check(level, tc.Equals, i+1)
 	}
 	// ends at implemented patch level
-	c.Check(levels[len(levels)-1], Equals, patch.Level)
+	c.Check(levels[len(levels)-1], tc.Equals, patch.Level)
 
 	// Sublevel matches the number of patches for last Level.
-	c.Check(len(patches[patch.Level])-1, Equals, patch.Sublevel)
+	c.Check(len(patches[patch.Level])-1, tc.Equals, patch.Sublevel)
 }
 
 func generatePatchFunc(testValue int, sequence *[]int) patch.PatchFunc {

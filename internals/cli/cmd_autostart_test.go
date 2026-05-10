@@ -18,23 +18,23 @@ import (
 	"fmt"
 	"net/http"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestAutostartExtraArgs(c *check.C) {
+func (s *PebbleSuite) TestAutostartExtraArgs(c *tc.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart", "extra", "args"})
-	c.Assert(err, check.Equals, cli.ErrExtraArgs)
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestAutostart(c *check.C) {
+func (s *PebbleSuite) TestAutostart(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/42" {
-			c.Check(r.Method, check.Equals, "GET")
+			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{
 	"type": "sync",
 	"result": {
@@ -51,11 +51,11 @@ func (s *PebbleSuite) TestAutostart(c *check.C) {
 			return
 		}
 
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})
@@ -68,18 +68,18 @@ func (s *PebbleSuite) TestAutostart(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *check.C) {
+func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})
@@ -92,20 +92,20 @@ func (s *PebbleSuite) TestAutostartFailsNoDefaultServices(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart"})
-	c.Assert(err, check.ErrorMatches, "no default services")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "no default services")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestAutostartNoWait(c *check.C) {
+func (s *PebbleSuite) TestAutostartNoWait(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
-		c.Check(r.URL.Path, check.Not(check.Equals), "/v1/changes/42")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
+		c.Check(r.URL.Path, tc.Not(tc.Equals), "/v1/changes/42")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})
@@ -118,25 +118,25 @@ func (s *PebbleSuite) TestAutostartNoWait(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart", "--no-wait"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "42\n")
-	c.Check(s.Stderr(), check.Equals, ``)
+	c.Assert(err, tc.IsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "42\n")
+	c.Check(s.Stderr(), tc.Equals, ``)
 }
 
-func (s *PebbleSuite) TestAutostartFailsGetChange(c *check.C) {
+func (s *PebbleSuite) TestAutostartFailsGetChange(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/42" {
-			c.Check(r.Method, check.Equals, "GET")
+			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not foo"}}`)
 			return
 		}
 
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "autostart",
 			"services": nil,
 		})
@@ -149,8 +149,8 @@ func (s *PebbleSuite) TestAutostartFailsGetChange(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart"})
-	c.Assert(err, check.ErrorMatches, "could not foo")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not foo")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

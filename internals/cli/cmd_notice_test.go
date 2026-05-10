@@ -19,15 +19,15 @@ import (
 	"net/http"
 	"net/url"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestNoticeID(c *C) {
+func (s *PebbleSuite) TestNoticeID(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices/123")
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices/123")
 
 		fmt.Fprint(w, `{
 			"type": "sync",
@@ -49,9 +49,9 @@ func (s *PebbleSuite) TestNoticeID(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "123"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 id: "123"
 user-id: 1000
 type: custom
@@ -65,13 +65,13 @@ last-data:
 repeat-after: 1h0m0s
 expire-after: 168h0m0s
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoticeIDNotFound(c *C) {
+func (s *PebbleSuite) TestNoticeIDNotFound(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices/123")
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices/123")
 
 		fmt.Fprint(w, `{
 			"type": "error",
@@ -83,16 +83,16 @@ func (s *PebbleSuite) TestNoticeIDNotFound(c *C) {
 	})
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"notice", "123"})
-	c.Assert(err, ErrorMatches, `cannot find notice with ID "123"`)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, `cannot find notice with ID "123"`)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
+func (s *PebbleSuite) TestNoticeTypeKey(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
 			"types": {"custom"},
 			"keys":  {"a.b/c"},
 		})
@@ -114,9 +114,9 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "custom", "a.b/c"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 id: "123"
 user-id: null
 type: custom
@@ -126,14 +126,14 @@ last-occurred: 2023-09-05T19:18:00Z
 last-repeated: 2023-09-05T18:18:00Z
 occurrences: 1
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoticeTypeKeyUID(c *C) {
+func (s *PebbleSuite) TestNoticeTypeKeyUID(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
 			"types":   {"custom"},
 			"keys":    {"a.b/c"},
 			"user-id": {"1001"},
@@ -156,9 +156,9 @@ func (s *PebbleSuite) TestNoticeTypeKeyUID(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "--uid", "1001", "custom", "a.b/c"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 id: "123"
 user-id: 1001
 type: custom
@@ -168,14 +168,14 @@ last-occurred: 2023-09-05T19:18:00Z
 last-repeated: 2023-09-05T18:18:00Z
 occurrences: 1
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *C) {
+func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
 			"types": {"custom"},
 			"keys":  {"a.b/c"},
 		})
@@ -187,7 +187,7 @@ func (s *PebbleSuite) TestNoticeTypeKeyNotFound(c *C) {
 	})
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"notice", "custom", "a.b/c"})
-	c.Assert(err, ErrorMatches, `cannot find custom notice with key "a.b/c"`)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, `cannot find custom notice with key "a.b/c"`)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

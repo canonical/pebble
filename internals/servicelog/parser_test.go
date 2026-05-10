@@ -19,32 +19,35 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
 type parserSuite struct{}
 
-var _ = Suite(&parserSuite{})
+func TestParserSuite(t *testing.T) {
+	tc.Run(t, &parserSuite{})
+}
 
-func (s *parserSuite) TestParse(c *C) {
+func (s *parserSuite) TestParse(c *tc.C) {
 	_, err := servicelog.Parse([]byte("foo bar"))
-	c.Check(err, ErrorMatches, "line has too few fields")
+	c.Check(err, tc.ErrorMatches, "line has too few fields")
 
 	_, err = servicelog.Parse([]byte("foo bar baz"))
-	c.Check(err, ErrorMatches, "invalid log timestamp")
+	c.Check(err, tc.ErrorMatches, "invalid log timestamp")
 
 	_, err = servicelog.Parse([]byte("2021-05-26T12:37:00Z [] baz"))
-	c.Check(err, ErrorMatches, "invalid log service name")
+	c.Check(err, tc.ErrorMatches, "invalid log service name")
 
 	_, err = servicelog.Parse([]byte("2021-05-26T12:37:00Z bar baz"))
-	c.Check(err, ErrorMatches, "invalid log service name")
+	c.Check(err, tc.ErrorMatches, "invalid log service name")
 
 	entry, err := servicelog.Parse([]byte("2021-05-26T12:37:00Z [bar] baz"))
-	c.Check(err, IsNil)
+	c.Check(err, tc.IsNil)
 	checkEntry(c, entry, servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
 		Service: "bar",
@@ -52,7 +55,7 @@ func (s *parserSuite) TestParse(c *C) {
 	})
 
 	entry, err = servicelog.Parse([]byte("2020-12-25T00:01:02.123456Z [x] a longer message\n"))
-	c.Check(err, IsNil)
+	c.Check(err, tc.IsNil)
 	checkEntry(c, entry, servicelog.Entry{
 		Time:    time.Date(2020, 12, 25, 0, 1, 2, 123456000, time.UTC),
 		Service: "x",
@@ -60,85 +63,85 @@ func (s *parserSuite) TestParse(c *C) {
 	})
 }
 
-func checkEntry(c *C, got, expected servicelog.Entry) {
-	c.Check(got.Time.Equal(expected.Time), Equals, true,
-		Commentf("expected timestamp %v, got %v", expected.Time, got.Time))
-	c.Check(got.Service, Equals, expected.Service)
-	c.Check(got.Message, Equals, expected.Message)
+func checkEntry(c *tc.C, got, expected servicelog.Entry) {
+	c.Check(got.Time.Equal(expected.Time), tc.Equals, true,
+		tc.Commentf("expected timestamp %v, got %v", expected.Time, got.Time))
+	c.Check(got.Service, tc.Equals, expected.Service)
+	c.Check(got.Message, tc.Equals, expected.Message)
 }
 
-func (s *parserSuite) TestParser(c *C) {
+func (s *parserSuite) TestParser(c *tc.C) {
 	// empty string
 	parser := servicelog.NewParser(strings.NewReader(""), 1024)
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.IsNil)
 
 	// single invalid log line
 	parser = servicelog.NewParser(strings.NewReader("foo"), 1024)
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.IsNil)
 
 	// invalid log line followed by valid
 	parser = servicelog.NewParser(strings.NewReader("foo\n2021-05-26T12:37:00Z [s] msg\n"), 1024)
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
 		Service: "s",
 		Message: "msg\n",
 	})
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.IsNil)
 
 	// valid log line followed by invalid (will use time/service of previous)
 	parser = servicelog.NewParser(strings.NewReader(`
 2021-05-26T12:37:00Z [s] msg
 (... output truncated ...)
 `), 1024)
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
 		Service: "s",
 		Message: "msg\n",
 	})
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
 		Service: "s",
 		Message: "(... output truncated ...)\n",
 	})
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.IsNil)
 
 	// too-small buffer
 	parser = servicelog.NewParser(strings.NewReader(`
 2021-05-26T12:37:00Z [s] msg
 2021-05-26T12:37:01Z [s] a longish message
 `), 30)
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
 		Service: "s",
 		Message: "msg\n",
 	})
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 1, 0, time.UTC),
 		Service: "s",
 		Message: "a lon",
 	})
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 1, 0, time.UTC),
 		Service: "s",
 		Message: "gish message\n",
 	})
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.IsNil)
 
 	// Read error is handled
 	parser = servicelog.NewParser(&errReader{errors.New("ERROR!")}, 1024)
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), ErrorMatches, "ERROR!")
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.ErrorMatches, "ERROR!")
 }
 
 type errReader struct {
@@ -149,7 +152,7 @@ func (r *errReader) Read(p []byte) (int, error) {
 	return 0, r.err
 }
 
-func (s *parserSuite) TestRoundTrip(c *C) {
+func (s *parserSuite) TestRoundTrip(c *tc.C) {
 	start := time.Now().UTC()
 	time.Sleep(10 * time.Millisecond) // to ensure that log timestamps are strictly after start
 	buf := &bytes.Buffer{}
@@ -161,34 +164,34 @@ func (s *parserSuite) TestRoundTrip(c *C) {
 	i := 0
 	for parser.Next() {
 		got := parser.Entry()
-		c.Check(got.Time.After(start), Equals, true,
-			Commentf("expected timestamp after %v, got %v", start, got.Time))
-		c.Check(got.Service, Equals, "svc")
-		c.Check(got.Message, Equals, fmt.Sprintf("message %d\n", i))
+		c.Check(got.Time.After(start), tc.Equals, true,
+			tc.Commentf("expected timestamp after %v, got %v", start, got.Time))
+		c.Check(got.Service, tc.Equals, "svc")
+		c.Check(got.Message, tc.Equals, fmt.Sprintf("message %d\n", i))
 		i++
 	}
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Err(), tc.IsNil)
 }
 
-func (s *parserSuite) TestNewDataAfterEOF(c *C) {
+func (s *parserSuite) TestNewDataAfterEOF(c *tc.C) {
 	r := strings.NewReader("2021-05-26T12:37:00Z [s] msg1\n")
 	parser := servicelog.NewParser(r, 1024)
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
 		Service: "s",
 		Message: "msg1\n",
 	})
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.IsNil)
 
 	r.Reset("2021-05-26T12:37:01Z [s] msg2\n")
-	c.Check(parser.Next(), Equals, true)
+	c.Check(parser.Next(), tc.Equals, true)
 	checkEntry(c, parser.Entry(), servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 1, 0, time.UTC),
 		Service: "s",
 		Message: "msg2\n",
 	})
-	c.Check(parser.Next(), Equals, false)
-	c.Check(parser.Err(), IsNil)
+	c.Check(parser.Next(), tc.Equals, false)
+	c.Check(parser.Err(), tc.IsNil)
 }

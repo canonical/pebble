@@ -20,22 +20,22 @@ import (
 	"io"
 	"net/http"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestNotifyBasic(c *C) {
+func (s *PebbleSuite) TestNotifyBasic(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "POST")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 
 		body, err := io.ReadAll(r.Body)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		var m map[string]any
 		err = json.Unmarshal(body, &m)
-		c.Assert(err, IsNil)
-		c.Check(m, DeepEquals, map[string]any{
+		c.Assert(err, tc.IsNil)
+		c.Check(m, tc.DeepEquals, map[string]any{
 			"action": "add",
 			"type":   "custom",
 			"key":    "a.b/c",
@@ -49,23 +49,23 @@ func (s *PebbleSuite) TestNotifyBasic(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notify", "a.b/c"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Recorded notice 123\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Recorded notice 123\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNotifyData(c *C) {
+func (s *PebbleSuite) TestNotifyData(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "POST")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 
 		body, err := io.ReadAll(r.Body)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		var m map[string]any
 		err = json.Unmarshal(body, &m)
-		c.Assert(err, IsNil)
-		c.Check(m, DeepEquals, map[string]any{
+		c.Assert(err, tc.IsNil)
+		c.Check(m, tc.DeepEquals, map[string]any{
 			"action": "add",
 			"type":   "custom",
 			"key":    "a.b/c",
@@ -85,13 +85,13 @@ func (s *PebbleSuite) TestNotifyData(c *C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notify", "--repeat-after=1h", "a.b/c", "k=v", "foo=bar bazz"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Recorded notice 42\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Recorded notice 42\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNotifyInvalidData(c *C) {
+func (s *PebbleSuite) TestNotifyInvalidData(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"notify", "a.b/c", "bad"})
-	c.Assert(err, ErrorMatches, "data args.*")
+	c.Assert(err, tc.ErrorMatches, "data args.*")
 }

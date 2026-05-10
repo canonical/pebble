@@ -26,9 +26,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/logger"
@@ -38,18 +39,20 @@ import (
 	"github.com/canonical/pebble/internals/reaper"
 )
 
-var _ = Suite(&execSuite{})
+func TestExecSuite(t *testing.T) {
+	tc.Run(t, &execSuite{})
+}
 
 type execSuite struct {
 	daemon *Daemon
 	client *client.Client
 }
 
-func (s *execSuite) SetUpSuite(c *C) {
+func (s *execSuite) SetUpSuite(c *tc.C) {
 	logger.SetLogger(logger.New(os.Stderr, "[test] "))
 }
 
-func (s *execSuite) SetUpTest(c *C) {
+func (s *execSuite) SetUpTest(c *tc.C) {
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 	err := reaper.Start()
 	if err != nil {
@@ -61,19 +64,19 @@ func (s *execSuite) SetUpTest(c *C) {
 		Dir:        c.MkDir(),
 		SocketPath: socketPath,
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = daemon.Init()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	daemon.Start()
 	s.daemon = daemon
 
 	s.client, err = client.New(&client.Config{Socket: socketPath})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }
 
-func (s *execSuite) TearDownTest(c *C) {
+func (s *execSuite) TearDownTest(c *tc.C) {
 	err := s.daemon.Stop(nil)
-	c.Check(err, IsNil)
+	c.Check(err, tc.IsNil)
 
 	err = reaper.Stop()
 	if err != nil {
@@ -84,128 +87,128 @@ func (s *execSuite) TearDownTest(c *C) {
 
 // Some of these tests use the Go client for simplicity.
 
-func (s *execSuite) TestStdinStdout(c *C) {
+func (s *execSuite) TestStdinStdout(c *tc.C) {
 	logBuf, restore := logger.MockLogger("")
 	defer restore()
 
 	stdout, stderr, waitErr := s.exec(c, "foo bar", &client.ExecOptions{
 		Command: []string{"cat"},
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "foo bar")
-	c.Check(stderr, Equals, "")
+	c.Check(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, "foo bar")
+	c.Check(stderr, tc.Equals, "")
 
 	ensureSecurityLog(c, logBuf.String(), "WARN", fmt.Sprintf("authz_admin:%d,exec", os.Getuid()), "Executing command cat")
 }
 
-func (s *execSuite) TestStderr(c *C) {
+func (s *execSuite) TestStderr(c *tc.C) {
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo some stderr! >&2"},
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "")
-	c.Check(stderr, Equals, "some stderr!\n")
+	c.Check(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, "")
+	c.Check(stderr, tc.Equals, "some stderr!\n")
 }
 
-func (s *execSuite) TestCombinedStderr(c *C) {
+func (s *execSuite) TestCombinedStderr(c *tc.C) {
 	outBuf := &bytes.Buffer{}
 	opts := &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR! >&2"},
 		Stdout:  outBuf,
 	}
 	process, err := s.client.Exec(opts)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = process.Wait()
-	c.Check(err, IsNil)
-	c.Check(outBuf.String(), Equals, "OUT\nERR!\n")
+	c.Check(err, tc.IsNil)
+	c.Check(outBuf.String(), tc.Equals, "OUT\nERR!\n")
 }
 
-func (s *execSuite) TestEnvironment(c *C) {
+func (s *execSuite) TestEnvironment(c *tc.C) {
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
 		Environment: map[string]string{"FOO": "bar"},
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "FOO=bar\n")
-	c.Check(stderr, Equals, "")
+	c.Check(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, "FOO=bar\n")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
+func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *tc.C) {
 	restore := fakeEnv("FOO", "bar")
 	defer restore()
 
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo FOO=$FOO"},
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "FOO=bar\n")
-	c.Check(stderr, Equals, "")
+	c.Check(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, "FOO=bar\n")
+	c.Check(stderr, tc.Equals, "")
 
 	// Check that requested environment takes precedence.
 	stdout, stderr, waitErr = s.exec(c, "", &client.ExecOptions{
 		Command:     []string{"/bin/sh", "-c", "echo FOO=$FOO"},
 		Environment: map[string]string{"FOO": "foo"},
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, "FOO=foo\n")
-	c.Check(stderr, Equals, "")
+	c.Check(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, "FOO=foo\n")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) TestWorkingDir(c *C) {
+func (s *execSuite) TestWorkingDir(c *tc.C) {
 	workingDir := c.MkDir()
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command:    []string{"pwd"},
 		WorkingDir: workingDir,
 	})
-	c.Check(waitErr, IsNil)
-	c.Check(stdout, Equals, workingDir+"\n")
-	c.Check(stderr, Equals, "")
+	c.Check(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, workingDir+"\n")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) TestWorkingDirDoesNotExist(c *C) {
+func (s *execSuite) TestWorkingDirDoesNotExist(c *tc.C) {
 	_, err := s.client.Exec(&client.ExecOptions{
 		Command:    []string{"pwd"},
 		WorkingDir: "/non/existent",
 	})
-	c.Check(err, ErrorMatches, `.*working directory.*does not exist`)
+	c.Check(err, tc.ErrorMatches, `.*working directory.*does not exist`)
 }
 
-func (s *execSuite) TestWorkingDirNotADirectory(c *C) {
+func (s *execSuite) TestWorkingDirNotADirectory(c *tc.C) {
 	path := filepath.Join(c.MkDir(), "test")
 	err := os.WriteFile(path, nil, 0o777)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	_, err = s.client.Exec(&client.ExecOptions{
 		Command:    []string{"pwd"},
 		WorkingDir: path,
 	})
-	c.Check(err, ErrorMatches, `.*working directory.*not a directory`)
+	c.Check(err, tc.ErrorMatches, `.*working directory.*not a directory`)
 }
 
-func (s *execSuite) TestExitError(c *C) {
+func (s *execSuite) TestExitError(c *tc.C) {
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >&2; exit 42"},
 	})
-	c.Check(waitErr.Error(), Equals, "exit status 42")
+	c.Check(waitErr.Error(), tc.Equals, "exit status 42")
 	exitCode := 0
 	if exitError, ok := waitErr.(*client.ExitError); ok {
 		exitCode = exitError.ExitCode()
 	}
-	c.Check(exitCode, Equals, 42)
-	c.Check(stdout, Equals, "OUT\n")
-	c.Check(stderr, Equals, "ERR\n")
+	c.Check(exitCode, tc.Equals, 42)
+	c.Check(stdout, tc.Equals, "OUT\n")
+	c.Check(stderr, tc.Equals, "ERR\n")
 }
 
-func (s *execSuite) TestTimeout(c *C) {
+func (s *execSuite) TestTimeout(c *tc.C) {
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"sleep", "1"},
 		Timeout: 10 * time.Millisecond,
 	})
-	c.Check(waitErr, ErrorMatches, `cannot perform the following tasks:\n.*timed out after 10ms.*`)
-	c.Check(stdout, Equals, "")
-	c.Check(stderr, Equals, "")
+	c.Check(waitErr, tc.ErrorMatches, `cannot perform the following tasks:\n.*timed out after 10ms.*`)
+	c.Check(stdout, tc.Equals, "")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) TestContextNoOverrides(c *C) {
+func (s *execSuite) TestContextNoOverrides(c *tc.C) {
 	dir := c.MkDir()
 	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
 		Label: "layer1",
@@ -217,18 +220,18 @@ func (s *execSuite) TestContextNoOverrides(c *C) {
 			WorkingDir:  dir,
 		}},
 	}, false)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
 		ServiceContext: "svc1",
 	})
-	c.Assert(err, IsNil)
-	c.Check(stdout, Equals, "FOO=foo BAR=bar\n"+dir+"\n")
-	c.Check(stderr, Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(stdout, tc.Equals, "FOO=foo BAR=bar\n"+dir+"\n")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) TestContextOverrides(c *C) {
+func (s *execSuite) TestContextOverrides(c *tc.C) {
 	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
 		Label: "layer1",
 		Services: map[string]*plan.Service{"svc1": {
@@ -239,7 +242,7 @@ func (s *execSuite) TestContextOverrides(c *C) {
 			WorkingDir:  c.MkDir(),
 		}},
 	}, false)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	overrideDir := c.MkDir()
 	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
@@ -248,27 +251,27 @@ func (s *execSuite) TestContextOverrides(c *C) {
 		Environment:    map[string]string{"FOO": "oof"},
 		WorkingDir:     overrideDir,
 	})
-	c.Assert(err, IsNil)
-	c.Check(stdout, Equals, "FOO=oof BAR=bar\n"+overrideDir+"\n")
-	c.Check(stderr, Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(stdout, tc.Equals, "FOO=oof BAR=bar\n"+overrideDir+"\n")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) TestCurrentUserGroup(c *C) {
+func (s *execSuite) TestCurrentUserGroup(c *tc.C) {
 	current, err := user.Current()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	group, err := user.LookupGroupId(current.Gid)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		User:    current.Username,
 		Group:   group.Name,
 	})
-	c.Assert(waitErr, IsNil)
-	c.Check(stdout, Equals, current.Username+"\n"+group.Name+"\n")
-	c.Check(stderr, Equals, "")
+	c.Assert(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, current.Username+"\n"+group.Name+"\n")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) TestUserGroup(c *C) {
+func (s *execSuite) TestUserGroup(c *tc.C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
@@ -282,9 +285,9 @@ func (s *execSuite) TestUserGroup(c *C) {
 		User:    username,
 		Group:   group,
 	})
-	c.Assert(waitErr, IsNil)
-	c.Check(stdout, Equals, username+"\n"+group+"\n")
-	c.Check(stderr, Equals, "")
+	c.Assert(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, username+"\n"+group+"\n")
+	c.Check(stderr, tc.Equals, "")
 
 	_, err := s.client.Exec(&client.ExecOptions{
 		Command:     []string{"pwd"},
@@ -292,10 +295,10 @@ func (s *execSuite) TestUserGroup(c *C) {
 		User:        username,
 		Group:       group,
 	})
-	c.Assert(err, ErrorMatches, `.*home directory.*does not exist`)
+	c.Assert(err, tc.ErrorMatches, `.*home directory.*does not exist`)
 }
 
-func (s *execSuite) TestUserIDGroupID(c *C) {
+func (s *execSuite) TestUserIDGroupID(c *tc.C) {
 	if os.Getuid() != 0 {
 		c.Skip("requires running as root")
 	}
@@ -305,36 +308,36 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
 	}
 	u, err := user.Lookup(username)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	g, err := user.LookupGroup(group)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	uid, err := strconv.Atoi(u.Uid)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	gid, err := strconv.Atoi(g.Gid)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		UserID:  &uid,
 		GroupID: &gid,
 	})
-	c.Assert(waitErr, IsNil)
-	c.Check(stdout, Equals, username+"\n"+group+"\n")
-	c.Check(stderr, Equals, "")
+	c.Assert(waitErr, tc.IsNil)
+	c.Check(stdout, tc.Equals, username+"\n"+group+"\n")
+	c.Check(stderr, tc.Equals, "")
 }
 
-func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, stderr string, waitErr error) {
+func (s *execSuite) exec(c *tc.C, stdin string, opts *client.ExecOptions) (stdout, stderr string, waitErr error) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
 	opts.Stdin = strings.NewReader(stdin)
 	opts.Stdout = outBuf
 	opts.Stderr = errBuf
 	process, err := s.client.Exec(opts)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	waitErr = process.Wait()
 	return outBuf.String(), errBuf.String(), waitErr
 }
 
-func (s *execSuite) TestSignal(c *C) {
+func (s *execSuite) TestSignal(c *tc.C) {
 	opts := &client.ExecOptions{
 		Command: []string{"sleep", "1"},
 		Stdin:   strings.NewReader(""),
@@ -342,22 +345,22 @@ func (s *execSuite) TestSignal(c *C) {
 		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	err = process.SendSignal("SIGINT")
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	err = process.Wait()
-	c.Check(err, NotNil)
+	c.Check(err, tc.NotNil)
 
 	exitCode := 0
 	if exitError, ok := err.(*client.ExitError); ok {
 		exitCode = exitError.ExitCode()
 	}
-	c.Check(exitCode, Equals, 130)
+	c.Check(exitCode, tc.Equals, 130)
 }
 
-func (s *execSuite) TestStreaming(c *C) {
+func (s *execSuite) TestStreaming(c *tc.C) {
 	stdinCh := make(chan []byte)
 	stdoutCh := make(chan []byte)
 	opts := &client.ExecOptions{
@@ -367,7 +370,7 @@ func (s *execSuite) TestStreaming(c *C) {
 		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	for i := range 20 {
 		chunk := fmt.Sprintf("chunk %d ", i)
@@ -378,7 +381,7 @@ func (s *execSuite) TestStreaming(c *C) {
 		}
 		select {
 		case b := <-stdoutCh:
-			c.Check(string(b), Equals, chunk)
+			c.Check(string(b), tc.Equals, chunk)
 		case <-time.After(time.Second):
 			c.Fatalf("timed out waiting for stdout")
 		}
@@ -391,7 +394,7 @@ func (s *execSuite) TestStreaming(c *C) {
 	}
 
 	err = process.Wait()
-	c.Check(err, IsNil)
+	c.Check(err, tc.IsNil)
 }
 
 type channelReader struct {
@@ -416,52 +419,52 @@ func (w channelWriter) Write(buf []byte) (int, error) {
 	return len(buf), nil
 }
 
-func (s *execSuite) TestNoCommand(c *C) {
+func (s *execSuite) TestNoCommand(c *tc.C) {
 	httpResp, execResp := execRequest(c, &client.ExecOptions{})
-	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.Type, Equals, "error")
-	c.Check(execResp.Result["message"], Equals, "must specify command")
+	c.Check(httpResp.StatusCode, tc.Equals, http.StatusBadRequest)
+	c.Check(execResp.StatusCode, tc.Equals, http.StatusBadRequest)
+	c.Check(execResp.Type, tc.Equals, "error")
+	c.Check(execResp.Result["message"], tc.Equals, "must specify command")
 }
 
-func (s *execSuite) TestCommandNotFound(c *C) {
+func (s *execSuite) TestCommandNotFound(c *tc.C) {
 	httpResp, execResp := execRequest(c, &client.ExecOptions{
 		Command: []string{"badcmd"},
 	})
-	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.Type, Equals, "error")
-	c.Check(execResp.Result["message"], Matches, "cannot find executable .*")
+	c.Check(httpResp.StatusCode, tc.Equals, http.StatusBadRequest)
+	c.Check(execResp.StatusCode, tc.Equals, http.StatusBadRequest)
+	c.Check(execResp.Type, tc.Equals, "error")
+	c.Check(execResp.Result["message"], tc.Matches, "cannot find executable .*")
 }
 
-func (s *execSuite) TestUserGroupError(c *C) {
+func (s *execSuite) TestUserGroupError(c *tc.C) {
 	gid := os.Getgid()
 	httpResp, execResp := execRequest(c, &client.ExecOptions{
 		Command: []string{"echo", "foo"},
 		GroupID: &gid,
 	})
-	c.Check(httpResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.StatusCode, Equals, http.StatusBadRequest)
-	c.Check(execResp.Type, Equals, "error")
-	c.Check(execResp.Result["message"], Matches, ".*must specify user, not just group.*")
+	c.Check(httpResp.StatusCode, tc.Equals, http.StatusBadRequest)
+	c.Check(execResp.StatusCode, tc.Equals, http.StatusBadRequest)
+	c.Check(execResp.Type, tc.Equals, "error")
+	c.Check(execResp.Result["message"], tc.Matches, ".*must specify user, not just group.*")
 }
 
 // TestExecChangeReady simulates the scenario where the change is ready before the websocket
 // connection is established, so the connection should fail.
-func (s *execSuite) TestExecChangeReady(c *C) {
+func (s *execSuite) TestExecChangeReady(c *tc.C) {
 	httpResp, execResp := execRequest(c, &client.ExecOptions{
 		Command: []string{"echo", "foo"},
 	})
-	c.Assert(httpResp.StatusCode, Equals, http.StatusAccepted)
+	c.Assert(httpResp.StatusCode, tc.Equals, http.StatusAccepted)
 
 	changeID := execResp.Change
-	c.Assert(changeID, Not(Equals), "")
+	c.Assert(changeID, tc.Not(tc.Equals), "")
 
 	st := s.daemon.overlord.State()
 	st.Lock()
 	change := st.Change(changeID)
-	c.Assert(change, NotNil)
-	c.Assert(len(change.Tasks()), Equals, 1)
+	c.Assert(change, tc.NotNil)
+	c.Assert(len(change.Tasks()), tc.Equals, 1)
 	// Set the change as failed and set the error on the task.
 	change.SetStatus(state.ErrorStatus)
 	change.Tasks()[0].Errorf("something went wrong")
@@ -469,7 +472,7 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 	st.Unlock()
 
 	taskID, ok := execResp.Result["task-id"].(string)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, tc.Equals, true)
 
 	vars := map[string]string{"task-id": taskID, "websocket-id": "control"}
 	restoreMuxVars := FakeMuxVars(func(*http.Request) map[string]string {
@@ -479,13 +482,13 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 
 	websocketCmd := apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
 	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, "control"), nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1GetTaskWebsocket(websocketCmd, req, nil).(websocketResponse)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 500)
-	c.Check(rec.Body.String(), Matches, `.*something went wrong.*`)
+	c.Check(rec.Code, tc.Equals, 500)
+	c.Check(rec.Body.String(), tc.Matches, `.*something went wrong.*`)
 }
 
 type execResponse struct {
@@ -497,7 +500,7 @@ type execResponse struct {
 
 // execRequest directly calls exec via the ServeHTTP endpoint, rather than
 // using the Go client.
-func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) {
+func execRequest(c *tc.C, opts *client.ExecOptions) (*http.Response, execResponse) {
 	var timeoutStr string
 	if opts.Timeout != 0 {
 		timeoutStr = opts.Timeout.String()
@@ -517,11 +520,11 @@ func execRequest(c *C, opts *client.ExecOptions) (*http.Response, execResponse) 
 		Height:      opts.Height,
 	}
 	requestBody, err := json.Marshal(&payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	httpResp, body := doRequest(c, v1PostExec, "POST", "/v1/exec", nil, nil, requestBody)
 	var execResp execResponse
 	err = json.Unmarshal(body.Bytes(), &execResp)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	return httpResp, execResp
 }

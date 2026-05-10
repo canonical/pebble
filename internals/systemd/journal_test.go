@@ -18,32 +18,35 @@ import (
 	"log/syslog"
 	"net"
 	"path"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	. "github.com/canonical/pebble/internals/systemd"
 )
 
 type journalTestSuite struct{}
 
-var _ = Suite(&journalTestSuite{})
+func TestJournalTestSuite(t *testing.T) {
+	tc.Run(t, &journalTestSuite{})
+}
 
-func (j *journalTestSuite) TestStreamFileErrorNoPath(c *C) {
+func (j *journalTestSuite) TestStreamFileErrorNoPath(c *tc.C) {
 	restore := FakeJournalStdoutPath(path.Join(c.MkDir(), "fake-journal"))
 	defer restore()
 
 	jout, err := NewJournalStreamFile("foobar", syslog.LOG_INFO, false)
-	c.Assert(err, ErrorMatches, ".*no such file or directory")
-	c.Assert(jout, IsNil)
+	c.Assert(err, tc.ErrorMatches, ".*no such file or directory")
+	c.Assert(jout, tc.IsNil)
 }
 
-func (j *journalTestSuite) TestStreamFileHeader(c *C) {
+func (j *journalTestSuite) TestStreamFileHeader(c *tc.C) {
 	fakePath := path.Join(c.MkDir(), "fake-journal")
 	restore := FakeJournalStdoutPath(fakePath)
 	defer restore()
 
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: fakePath})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	defer listener.Close()
 
 	doneCh := make(chan struct{}, 1)
@@ -53,31 +56,31 @@ func (j *journalTestSuite) TestStreamFileHeader(c *C) {
 
 		// see https://github.com/systemd/systemd/blob/97a33b126c845327a3a19d6e66f05684823868fb/src/journal/journal-send.c#L424
 		conn, err := listener.AcceptUnix()
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		defer conn.Close()
 
 		expectedHdrLen := len("foobar") + 1 + 1 + 2 + 2 + 2 + 2 + 2
 		hdrBuf := make([]byte, expectedHdrLen)
 		hdrLen, err := conn.Read(hdrBuf)
-		c.Assert(err, IsNil)
-		c.Assert(hdrLen, Equals, expectedHdrLen)
-		c.Check(hdrBuf, DeepEquals, []byte("foobar\n\n6\n0\n0\n0\n0\n"))
+		c.Assert(err, tc.IsNil)
+		c.Assert(hdrLen, tc.Equals, expectedHdrLen)
+		c.Check(hdrBuf, tc.DeepEquals, []byte("foobar\n\n6\n0\n0\n0\n0\n"))
 
 		data := make([]byte, 4096)
 		sz, err := conn.Read(data)
-		c.Assert(err, IsNil)
-		c.Assert(sz > 0, Equals, true)
-		c.Check(data[0:sz], DeepEquals, []byte("hello from unit tests"))
+		c.Assert(err, tc.IsNil)
+		c.Assert(sz > 0, tc.Equals, true)
+		c.Check(data[0:sz], tc.DeepEquals, []byte("hello from unit tests"))
 
 		doneCh <- struct{}{}
 	}()
 
 	jout, err := NewJournalStreamFile("foobar", syslog.LOG_INFO, false)
-	c.Assert(err, IsNil)
-	c.Assert(jout, NotNil)
+	c.Assert(err, tc.IsNil)
+	c.Assert(jout, tc.NotNil)
 
 	_, err = jout.WriteString("hello from unit tests")
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	defer jout.Close()
 
 	<-doneCh

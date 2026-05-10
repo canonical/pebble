@@ -24,21 +24,21 @@ import (
 	"os"
 	"path/filepath"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestPull(c *C) {
+func (s *PebbleSuite) TestPull(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.URL.Path, Equals, "/v1/files")
-		c.Assert(r.Method, Equals, "GET")
-		c.Assert(r.URL.Query(), DeepEquals, url.Values{
+		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{
 			"action": {"read"},
 			"path":   {"/foo/bar.dat"},
 		})
-		c.Assert(r.Header.Get("Accept"), Equals, "multipart/form-data")
+		c.Assert(r.Header.Get("Accept"), tc.Equals, "multipart/form-data")
 
 		mw := multipart.NewWriter(w)
 		header := w.Header()
@@ -46,7 +46,7 @@ func (s *PebbleSuite) TestPull(c *C) {
 		w.WriteHeader(http.StatusOK)
 
 		fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		fw.Write([]byte("Hello, world!"))
 
 		mh := textproto.MIMEHeader{}
@@ -54,7 +54,7 @@ func (s *PebbleSuite) TestPull(c *C) {
 		mh.Set("Content-Disposition", `form-data; name="response"`)
 
 		part, err := mw.CreatePart(mh)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		fmt.Fprintf(part, `{
 			"type": "sync",
 			"status-code": 200,
@@ -71,34 +71,34 @@ func (s *PebbleSuite) TestPull(c *C) {
 
 	args := []string{"pull", "/foo/bar.dat", filePath}
 	rest, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, IsNil)
-	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	b, err := os.ReadFile(filePath)
-	c.Assert(err, IsNil)
-	c.Check(b, DeepEquals, []byte("Hello, world!"))
+	c.Assert(err, tc.IsNil)
+	c.Check(b, tc.DeepEquals, []byte("Hello, world!"))
 }
 
-func (s *PebbleSuite) TestPullFailsExtraArgs(c *C) {
+func (s *PebbleSuite) TestPullFailsExtraArgs(c *tc.C) {
 	args := []string{"pull", "/foo/bar.dat", "extra", "args"}
 	rest, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, Equals, cli.ErrExtraArgs)
-	c.Assert(rest, HasLen, 1)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPullFailsAPI(c *C) {
+func (s *PebbleSuite) TestPullFailsAPI(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.URL.Path, Equals, "/v1/files")
-		c.Assert(r.Method, Equals, "GET")
-		c.Assert(r.URL.Query(), DeepEquals, url.Values{
+		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{
 			"action": {"read"},
 			"path":   {"/foo/bar.dat"},
 		})
-		c.Assert(r.Header.Get("Accept"), Equals, "multipart/form-data")
+		c.Assert(r.Header.Get("Accept"), tc.Equals, "multipart/form-data")
 
 		mw := multipart.NewWriter(w)
 		header := w.Header()
@@ -106,7 +106,7 @@ func (s *PebbleSuite) TestPullFailsAPI(c *C) {
 		w.WriteHeader(http.StatusOK)
 
 		fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		fw.Write([]byte("Hello, world!"))
 
 		mh := textproto.MIMEHeader{}
@@ -114,7 +114,7 @@ func (s *PebbleSuite) TestPullFailsAPI(c *C) {
 		mh.Set("Content-Disposition", `form-data; name="response"`)
 
 		part, err := mw.CreatePart(mh)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		fmt.Fprintf(part, ` {
 			"type": "sync",
 			"result": [{
@@ -138,29 +138,29 @@ func (s *PebbleSuite) TestPullFailsAPI(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs(args)
 
 	clientErr, ok := err.(*client.Error)
-	c.Assert(ok, Equals, true)
-	c.Assert(clientErr.Message, Equals, "could not foo")
-	c.Assert(clientErr.Kind, Equals, "permission-denied")
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(clientErr.Message, tc.Equals, "could not foo")
+	c.Assert(clientErr.Kind, tc.Equals, "permission-denied")
 
 	// File should have been discarded
 	_, err = os.Stat(filePath)
 	isErrNotExist := errors.Is(err, os.ErrNotExist)
-	c.Assert(isErrNotExist, Equals, true)
+	c.Assert(isErrNotExist, tc.Equals, true)
 
-	c.Assert(rest, HasLen, 1)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPullFailsCreateFile(c *C) {
+func (s *PebbleSuite) TestPullFailsCreateFile(c *tc.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.URL.Path, Equals, "/v1/files")
-		c.Assert(r.Method, Equals, "GET")
-		c.Assert(r.URL.Query(), DeepEquals, url.Values{
+		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{
 			"action": {"read"},
 			"path":   {"/foo/bar.dat"},
 		})
-		c.Assert(r.Header.Get("Accept"), Equals, "multipart/form-data")
+		c.Assert(r.Header.Get("Accept"), tc.Equals, "multipart/form-data")
 
 		mw := multipart.NewWriter(w)
 		header := w.Header()
@@ -168,7 +168,7 @@ func (s *PebbleSuite) TestPullFailsCreateFile(c *C) {
 		w.WriteHeader(http.StatusOK)
 
 		fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		fw.Write([]byte("Hello, world!"))
 
 		mh := textproto.MIMEHeader{}
@@ -176,7 +176,7 @@ func (s *PebbleSuite) TestPullFailsCreateFile(c *C) {
 		mh.Set("Content-Disposition", `form-data; name="response"`)
 
 		part, err := mw.CreatePart(mh)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		fmt.Fprintf(part, `{
 			"type": "sync",
 			"result": [{
@@ -195,9 +195,9 @@ func (s *PebbleSuite) TestPullFailsCreateFile(c *C) {
 	args := []string{"pull", "/foo/bar.dat", ""}
 	rest, err := cli.ParserForTest().ParseArgs(args)
 	isErrNotExist := errors.Is(err, os.ErrNotExist)
-	c.Assert(isErrNotExist, Equals, true)
+	c.Assert(isErrNotExist, tc.Equals, true)
 
-	c.Assert(rest, HasLen, 1)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

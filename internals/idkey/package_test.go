@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Canonical Ltd
+// Copyright (tc.C) 2025 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -17,12 +17,11 @@ package idkey_test
 import (
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
-
-// Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
 
 type keySuite struct{}
 
-var _ = Suite(&keySuite{})
+func TestKeySuite(t *testing.T) {
+	tc.Run(t, &keySuite{})
+}

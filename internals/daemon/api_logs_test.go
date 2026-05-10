@@ -26,15 +26,18 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-var _ = Suite(&logsSuite{})
+func TestLogsSuite(t *testing.T) {
+	tc.Run(t, &logsSuite{})
+}
 
 type logsSuite struct{}
 
@@ -84,41 +87,41 @@ func (m testServiceManager) ServiceLogs(services []string, last int) (map[string
 	return its, nil
 }
 
-func (s *logsSuite) TestInvalidFollow(c *C) {
+func (s *logsSuite) TestInvalidFollow(c *tc.C) {
 	rec := s.recordResponse(c, "/v1/logs?follow=invalid", nil)
-	c.Assert(rec.Code, Equals, http.StatusBadRequest)
+	c.Assert(rec.Code, tc.Equals, http.StatusBadRequest)
 	checkError(c, rec.Body.Bytes(), http.StatusBadRequest, `follow parameter must be "true" or "false"`)
 }
 
-func (s *logsSuite) TestInvalidN(c *C) {
+func (s *logsSuite) TestInvalidN(c *tc.C) {
 	rec := s.recordResponse(c, "/v1/logs?n=nan", nil)
-	c.Assert(rec.Code, Equals, http.StatusBadRequest)
+	c.Assert(rec.Code, tc.Equals, http.StatusBadRequest)
 	checkError(c, rec.Body.Bytes(), http.StatusBadRequest, `n must be -1, 0, or a positive integer`)
 
 	rec = s.recordResponse(c, "/v1/logs?n=-2", nil)
-	c.Assert(rec.Code, Equals, http.StatusBadRequest)
+	c.Assert(rec.Code, tc.Equals, http.StatusBadRequest)
 	checkError(c, rec.Body.Bytes(), http.StatusBadRequest, `n must be -1, 0, or a positive integer`)
 }
 
-func (s *logsSuite) TestServicesError(c *C) {
+func (s *logsSuite) TestServicesError(c *tc.C) {
 	svcMgr := testServiceManager{
 		servicesErr: fmt.Errorf("Services error!"),
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusInternalServerError)
+	c.Assert(rec.Code, tc.Equals, http.StatusInternalServerError)
 	checkError(c, rec.Body.Bytes(), http.StatusInternalServerError, `cannot fetch services: Services error!`)
 }
 
-func (s *logsSuite) TestServiceLogsError(c *C) {
+func (s *logsSuite) TestServiceLogsError(c *tc.C) {
 	svcMgr := testServiceManager{
 		serviceLogsErr: fmt.Errorf("ServiceLogs error!"),
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusInternalServerError)
+	c.Assert(rec.Code, tc.Equals, http.StatusInternalServerError)
 	checkError(c, rec.Body.Bytes(), http.StatusInternalServerError, `cannot fetch log iterators: ServiceLogs error!`)
 }
 
-func (s *logsSuite) TestOneServiceDefaults(c *C) {
+func (s *logsSuite) TestOneServiceDefaults(c *tc.C) {
 	rb := servicelog.NewRingBuffer(4096)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
 	for i := range 32 {
@@ -132,19 +135,19 @@ func (s *logsSuite) TestOneServiceDefaults(c *C) {
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
+	c.Assert(rec.Code, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 30)
+	c.Assert(logs, tc.HasLen, 30)
 	for i := range 29 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+3))
 	}
-	c.Check(logs[29].Time, Not(Equals), time.Time{})
-	c.Check(logs[29].Service, Equals, "nginx")
-	c.Check(logs[29].Message, Equals, "truncated")
+	c.Check(logs[29].Time, tc.Not(tc.Equals), time.Time{})
+	c.Check(logs[29].Service, tc.Equals, "nginx")
+	c.Check(logs[29].Message, tc.Equals, "truncated")
 }
 
-func (s *logsSuite) TestOneServiceWithN(c *C) {
+func (s *logsSuite) TestOneServiceWithN(c *tc.C) {
 	rb := servicelog.NewRingBuffer(4096)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
 	for i := range 20 {
@@ -157,16 +160,16 @@ func (s *logsSuite) TestOneServiceWithN(c *C) {
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs?n=3", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
+	c.Assert(rec.Code, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 3)
+	c.Assert(logs, tc.HasLen, 3)
 	for i := range 3 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+17))
 	}
 }
 
-func (s *logsSuite) TestOneServiceAllLogs(c *C) {
+func (s *logsSuite) TestOneServiceAllLogs(c *tc.C) {
 	exampleLog := "2021-05-20T16:55:00.000Z [nginx] message 00\n"
 	rb := servicelog.NewRingBuffer(len(exampleLog) * 20)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
@@ -180,16 +183,16 @@ func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs?n=-1", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
+	c.Assert(rec.Code, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 20)
+	c.Assert(logs, tc.HasLen, 20)
 	for i := range 20 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+20))
 	}
 }
 
-func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
+func (s *logsSuite) TestOneServiceOutOfTwo(c *tc.C) {
 	rb := servicelog.NewRingBuffer(4096)
 	lw := servicelog.NewFormatWriter(rb, "nginx")
 	for i := range 20 {
@@ -203,16 +206,16 @@ func (s *logsSuite) TestOneServiceOutOfTwo(c *C) {
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs?n=3&services=nginx", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
+	c.Assert(rec.Code, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 3)
+	c.Assert(logs, tc.HasLen, 3)
 	for i := range 3 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+17))
 	}
 }
 
-func (s *logsSuite) TestNoLogs(c *C) {
+func (s *logsSuite) TestNoLogs(c *tc.C) {
 	svcMgr := testServiceManager{
 		buffers: map[string]*servicelog.RingBuffer{
 			"foo": servicelog.NewRingBuffer(1),
@@ -221,13 +224,13 @@ func (s *logsSuite) TestNoLogs(c *C) {
 	}
 	for _, url := range []string{"/v1/logs", "/v1/logs?n=0"} {
 		rec := s.recordResponse(c, url, svcMgr)
-		c.Assert(rec.Code, Equals, http.StatusOK)
+		c.Assert(rec.Code, tc.Equals, http.StatusOK)
 		logs := decodeLogs(c, rec.Body)
-		c.Assert(logs, HasLen, 0)
+		c.Assert(logs, tc.HasLen, 0)
 	}
 }
 
-func (s *logsSuite) TestMultipleServicesAll(c *C) {
+func (s *logsSuite) TestMultipleServicesAll(c *tc.C) {
 	rb1 := servicelog.NewRingBuffer(4096)
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")
@@ -246,17 +249,17 @@ func (s *logsSuite) TestMultipleServicesAll(c *C) {
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs?n=-1", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
+	c.Assert(rec.Code, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 20)
+	c.Assert(logs, tc.HasLen, 20)
 	for i := range 10 {
 		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", i))
 		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", i))
 	}
 }
 
-func (s *logsSuite) TestMultipleServicesN(c *C) {
+func (s *logsSuite) TestMultipleServicesN(c *tc.C) {
 	rb1 := servicelog.NewRingBuffer(4096)
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")
@@ -275,17 +278,17 @@ func (s *logsSuite) TestMultipleServicesN(c *C) {
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
+	c.Assert(rec.Code, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 30)
+	c.Assert(logs, tc.HasLen, 30)
 	for i := range 15 {
 		checkLog(c, logs[i*2], "one", fmt.Sprintf("message1 %d", 15+i))
 		checkLog(c, logs[i*2+1], "two", fmt.Sprintf("message2 %d", 15+i))
 	}
 }
 
-func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
+func (s *logsSuite) TestMultipleServicesNFewLogs(c *tc.C) {
 	rb1 := servicelog.NewRingBuffer(4096)
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")
@@ -302,15 +305,15 @@ func (s *logsSuite) TestMultipleServicesNFewLogs(c *C) {
 		},
 	}
 	rec := s.recordResponse(c, "/v1/logs", svcMgr)
-	c.Assert(rec.Code, Equals, http.StatusOK)
+	c.Assert(rec.Code, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 2)
+	c.Assert(logs, tc.HasLen, 2)
 	checkLog(c, logs[0], "one", "message1 1")
 	checkLog(c, logs[1], "two", "message2 1")
 }
 
-func (s *logsSuite) TestLoggingTooFast(c *C) {
+func (s *logsSuite) TestLoggingTooFast(c *tc.C) {
 	rb := servicelog.NewRingBuffer(1024)
 	lw := servicelog.NewFormatWriter(rb, "svc")
 
@@ -334,16 +337,16 @@ func (s *logsSuite) TestLoggingTooFast(c *C) {
 		},
 	}
 	req, err := http.NewRequest("GET", "/v1/logs", nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 	rec := &responseRecorder{onWrite: func() {
 		firstWrite <- struct{}{}
 	}}
 	rsp.ServeHTTP(rec, req)
-	c.Assert(rec.status, Equals, http.StatusOK)
+	c.Assert(rec.status, tc.Equals, http.StatusOK)
 
 	logs := decodeLogs(c, bytes.NewReader(rec.buf.Bytes()))
-	c.Assert(len(logs), Equals, 3)
+	c.Assert(len(logs), tc.Equals, 3)
 	for i := range 3 {
 		checkLog(c, logs[i], "svc", fmt.Sprintf("message %d", i))
 	}
@@ -375,7 +378,7 @@ func (r *responseRecorder) WriteHeader(status int) {
 	r.status = status
 }
 
-func (s *logsSuite) TestMultipleServicesFollow(c *C) {
+func (s *logsSuite) TestMultipleServicesFollow(c *tc.C) {
 	rb1 := servicelog.NewRingBuffer(4096)
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")
@@ -395,7 +398,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	// Start a cancellable request
 	ctx, cancel := context.WithCancel(context.Background())
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true&n=2", nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 
 	// writeChan is sent to whenever a response write occurs
@@ -420,7 +423,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	}
 	waitLog := func() testLogEntry {
 		logs := waitLogs()
-		c.Assert(logs, HasLen, 1)
+		c.Assert(logs, tc.HasLen, 1)
 		return logs[0]
 	}
 
@@ -429,7 +432,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	if len(logs) == 1 {
 		logs = append(logs, waitLog())
 	}
-	c.Check(logs, HasLen, 2)
+	c.Check(logs, tc.HasLen, 2)
 	checkLog(c, logs[0], "one", "message1 1")
 	checkLog(c, logs[1], "two", "message2 1")
 
@@ -451,7 +454,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 	case <-time.After(1 * time.Second):
 		c.Fatalf("timed out waiting for request to be finished")
 	}
-	c.Assert(rec.status, Equals, http.StatusOK)
+	c.Assert(rec.status, tc.Equals, http.StatusOK)
 }
 
 type followRecorder struct {
@@ -485,34 +488,34 @@ func (r *followRecorder) Flush() {
 	r.written = r.written[:0]
 }
 
-func (s *logsSuite) recordResponse(c *C, url string, svcMgr serviceManager) *httptest.ResponseRecorder {
+func (s *logsSuite) recordResponse(c *tc.C, url string, svcMgr serviceManager) *httptest.ResponseRecorder {
 	req, err := http.NewRequest("GET", url, nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	if rec.Code == http.StatusOK {
-		c.Assert(rec.Result().Header.Get("Content-Type"), Equals, "application/x-ndjson")
+		c.Assert(rec.Result().Header.Get("Content-Type"), tc.Equals, "application/x-ndjson")
 	} else {
-		c.Assert(rec.Result().Header.Get("Content-Type"), Equals, "application/json")
+		c.Assert(rec.Result().Header.Get("Content-Type"), tc.Equals, "application/json")
 	}
 	return rec
 }
 
-func decodeLog(c *C, reader *bufio.Reader) (testLogEntry, bool) {
+func decodeLog(c *tc.C, reader *bufio.Reader) (testLogEntry, bool) {
 	// Read log metadata JSON and newline separator
 	logBytes, err := reader.ReadSlice('\n')
 	if err == io.EOF {
 		return testLogEntry{}, false
 	}
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	var entry testLogEntry
 	err = json.Unmarshal(logBytes, &entry)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	return entry, true
 }
 
-func decodeLogs(c *C, r io.Reader) []testLogEntry {
+func decodeLogs(c *tc.C, r io.Reader) []testLogEntry {
 	var entries []testLogEntry
 	reader := bufio.NewReader(r)
 	for {
@@ -525,7 +528,7 @@ func decodeLogs(c *C, r io.Reader) []testLogEntry {
 	return entries
 }
 
-func checkError(c *C, body []byte, status int, errorMatch string) {
+func checkError(c *tc.C, body []byte, status int, errorMatch string) {
 	var rsp struct {
 		Type       string
 		StatusCode int `json:"status-code"`
@@ -535,15 +538,15 @@ func checkError(c *C, body []byte, status int, errorMatch string) {
 		}
 	}
 	err := json.Unmarshal(body, &rsp)
-	c.Check(err, IsNil)
-	c.Check(rsp.Type, Equals, "error")
-	c.Check(rsp.StatusCode, Equals, status)
-	c.Check(rsp.Status, Equals, http.StatusText(status))
-	c.Check(rsp.Result.Message, Matches, errorMatch)
+	c.Check(err, tc.IsNil)
+	c.Check(rsp.Type, tc.Equals, "error")
+	c.Check(rsp.StatusCode, tc.Equals, status)
+	c.Check(rsp.Status, tc.Equals, http.StatusText(status))
+	c.Check(rsp.Result.Message, tc.Matches, errorMatch)
 }
 
-func checkLog(c *C, l testLogEntry, service, message string) {
-	c.Check(l.Time, Not(Equals), time.Time{})
-	c.Check(l.Service, Equals, service)
-	c.Check(l.Message, Equals, message)
+func checkLog(c *tc.C, l testLogEntry, service, message string) {
+	c.Check(l.Time, tc.Not(tc.Equals), time.Time{})
+	c.Check(l.Service, tc.Equals, service)
+	c.Check(l.Message, tc.Equals, message)
 }

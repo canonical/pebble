@@ -14,9 +14,7 @@
 
 package testutil
 
-import (
-	"gopkg.in/check.v1"
-)
+import "github.com/canonical/tc"
 
 // BaseTest is a structure used as a base test suite for many of the pebble
 // tests.
@@ -25,14 +23,14 @@ type BaseTest struct {
 }
 
 // SetUpTest prepares the cleanup
-func (s *BaseTest) SetUpTest(c *check.C) {
+func (s *BaseTest) SetUpTest(c *tc.C) {
 	s.cleanupHandlers = nil
 }
 
 // TearDownTest cleans up the channel.ini files in case they were changed by
 // the test.
 // It also runs the cleanup handlers
-func (s *BaseTest) TearDownTest(c *check.C) {
+func (s *BaseTest) TearDownTest(c *tc.C) {
 	// run cleanup handlers and clear the slice
 	for _, f := range s.cleanupHandlers {
 		f()

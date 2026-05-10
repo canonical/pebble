@@ -21,7 +21,7 @@ import (
 	"text/template"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
@@ -83,39 +83,39 @@ func writeMessageServices(s *PebbleSuite) {
 	writeTemplate(layerPath, layerTemplate, layerTemplateData)
 }
 
-func (s *PebbleSuite) TestEnterHelpCommand(c *C) {
+func (s *PebbleSuite) TestEnterHelpCommand(c *tc.C) {
 	restore := fakeArgs("pebble", "enter", "help")
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "")
-	c.Check(s.Stdout(), Matches, "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
-	c.Check(s.Stdout(), Not(Matches), "^(?s)Usage:\n  pebble enter \\[enter-OPTIONS\\] \\[<subcommand>\\.\\.\\.\\].*")
-	c.Check(exitCode, Equals, 0)
+	c.Check(s.Stderr(), tc.Equals, "")
+	c.Check(s.Stdout(), tc.Matches, "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
+	c.Check(s.Stdout(), tc.Not(tc.Matches), "^(?s)Usage:\n  pebble enter \\[enter-OPTIONS\\] \\[<subcommand>\\.\\.\\.\\].*")
+	c.Check(exitCode, tc.Equals, 0)
 }
 
-func (s *PebbleSuite) TestEnterHelpOption(c *C) {
+func (s *PebbleSuite) TestEnterHelpOption(c *tc.C) {
 	restore := fakeArgs("pebble", "enter", "--help")
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "")
-	c.Check(s.Stdout(), Not(Matches), "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
-	c.Check(s.Stdout(), Matches, "^(?s)Usage:\n  pebble enter \\[enter-OPTIONS\\] \\[<subcommand>\\.\\.\\.\\].*")
-	c.Check(exitCode, Equals, 0)
+	c.Check(s.Stderr(), tc.Equals, "")
+	c.Check(s.Stdout(), tc.Not(tc.Matches), "(?s)Pebble lets you control services.*Commands can be classified as follows.*")
+	c.Check(s.Stdout(), tc.Matches, "^(?s)Usage:\n  pebble enter \\[enter-OPTIONS\\] \\[<subcommand>\\.\\.\\.\\].*")
+	c.Check(exitCode, tc.Equals, 0)
 }
 
-func (s *PebbleSuite) TestEnterUnknownCommand(c *C) {
+func (s *PebbleSuite) TestEnterUnknownCommand(c *tc.C) {
 	restore := fakeArgs("pebble", "enter", "foo")
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "error: unknown command \"foo\", see 'pebble help'\n")
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(exitCode, Equals, 1)
+	c.Check(s.Stderr(), tc.Equals, "error: unknown command \"foo\", see 'pebble help'\n")
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(exitCode, tc.Equals, 1)
 }
 
-func (s *PebbleSuite) TestEnterServicesStatus(c *C) {
+func (s *PebbleSuite) TestEnterServicesStatus(c *tc.C) {
 	expectedOutput := dumbDedent(`
 		Service           Startup   Current   Since
 		write-message-01  enabled   inactive  -
@@ -128,32 +128,32 @@ func (s *PebbleSuite) TestEnterServicesStatus(c *C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "")
-	c.Check(s.Stdout(), Equals, expectedOutput)
-	c.Check(exitCode, Equals, 0)
+	c.Check(s.Stderr(), tc.Equals, "")
+	c.Check(s.Stdout(), tc.Equals, expectedOutput)
+	c.Check(exitCode, tc.Equals, 0)
 }
 
-func (s *PebbleSuite) TestEnterServicesNoRun(c *C) {
+func (s *PebbleSuite) TestEnterServicesNoRun(c *tc.C) {
 	restore := fakeArgs("pebble", "enter", "--run", "services")
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "error: enter: cannot provide --run before \"services\" subcommand\n")
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(exitCode, Equals, 1)
+	c.Check(s.Stderr(), tc.Equals, "error: enter: cannot provide --run before \"services\" subcommand\n")
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(exitCode, tc.Equals, 1)
 }
 
-func (s *PebbleSuite) TestEnterExecNoVerbose(c *C) {
+func (s *PebbleSuite) TestEnterExecNoVerbose(c *tc.C) {
 	restore := fakeArgs("pebble", "enter", "--verbose", "exec", "date")
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "error: enter: cannot provide -v/--verbose before \"exec\" subcommand\n")
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(exitCode, Equals, 1)
+	c.Check(s.Stderr(), tc.Equals, "error: enter: cannot provide -v/--verbose before \"exec\" subcommand\n")
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(exitCode, tc.Equals, 1)
 }
 
-func (s *PebbleSuite) TestEnterExecListDir(c *C) {
+func (s *PebbleSuite) TestEnterExecListDir(c *tc.C) {
 	files := []string{"foo", "bar", "baz"}
 	for _, file := range files {
 		path := filepath.Join(s.pebbleDir, file)
@@ -166,12 +166,12 @@ func (s *PebbleSuite) TestEnterExecListDir(c *C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(s.Stderr(), Equals, "")
-	c.Check(s.Stdout(), Equals, "bar\nbaz\nfoo\n")
-	c.Check(exitCode, Equals, 0)
+	c.Check(s.Stderr(), tc.Equals, "")
+	c.Check(s.Stdout(), tc.Equals, "bar\nbaz\nfoo\n")
+	c.Check(exitCode, tc.Equals, 0)
 }
 
-func (s *PebbleSuite) TestEnterExecReadServiceOutputFile(c *C) {
+func (s *PebbleSuite) TestEnterExecReadServiceOutputFile(c *tc.C) {
 	writeMessageServices(s)
 
 	script := `
@@ -188,12 +188,12 @@ func (s *PebbleSuite) TestEnterExecReadServiceOutputFile(c *C) {
 	exitCode := cli.PebbleMain()
 	// stderr is written to stdout buffer because of "combine stderr" mode,
 	// see cmd/pebble/cmd_exec.go:163
-	c.Check(s.Stderr(), Equals, "")
-	c.Check(s.Stdout(), Matches, "foo\ncat: msg2: No such file or directory.*\n")
-	c.Check(exitCode, Equals, 1)
+	c.Check(s.Stderr(), tc.Equals, "")
+	c.Check(s.Stdout(), tc.Matches, "foo\ncat: msg2: No such file or directory.*\n")
+	c.Check(exitCode, tc.Equals, 1)
 }
 
-func (s *PebbleSuite) TestEnterExecCommandHelpOption(c *C) {
+func (s *PebbleSuite) TestEnterExecCommandHelpOption(c *tc.C) {
 	cmd := []string{"pebble", "enter", "exec", "--help"}
 	restore := fakeArgs(cmd...)
 	defer restore()
@@ -201,14 +201,14 @@ func (s *PebbleSuite) TestEnterExecCommandHelpOption(c *C) {
 	exitCode := cli.PebbleMain()
 	// stderr is written to stdout buffer because of "combine stderr" mode,
 	// see cmd/pebble/cmd_exec.go:163
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 	stdout := s.Stdout()
-	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble exec \\[exec-OPTIONS\\] <command>\n.*")
-	c.Check(stdout, Matches, "(?s).*\\bThe exec command runs a remote command and waits for it to finish\\..*")
-	c.Check(exitCode, Equals, 0)
+	c.Check(stdout, tc.Matches, "^(?s)Usage:\n  pebble exec \\[exec-OPTIONS\\] <command>\n.*")
+	c.Check(stdout, tc.Matches, "(?s).*\\bThe exec command runs a remote command and waits for it to finish\\..*")
+	c.Check(exitCode, tc.Equals, 0)
 }
 
-func (s *PebbleSuite) TestEnterHelpCommandHelpOption(c *C) {
+func (s *PebbleSuite) TestEnterHelpCommandHelpOption(c *tc.C) {
 	cmd := []string{"pebble", "enter", "help", "--help"}
 	restore := fakeArgs(cmd...)
 	defer restore()
@@ -216,14 +216,14 @@ func (s *PebbleSuite) TestEnterHelpCommandHelpOption(c *C) {
 	exitCode := cli.PebbleMain()
 	// stderr is written to stdout buffer because of "combine stderr" mode,
 	// see cmd/pebble/cmd_exec.go:163
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 	stdout := s.Stdout()
-	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble help \\[help-OPTIONS\\] \\[<command>\\.\\.\\.\\]\n.*")
-	c.Check(stdout, Matches, "(?s).*\\bThe help command displays information about commands\\..*")
-	c.Check(exitCode, Equals, 0)
+	c.Check(stdout, tc.Matches, "^(?s)Usage:\n  pebble help \\[help-OPTIONS\\] \\[<command>\\.\\.\\.\\]\n.*")
+	c.Check(stdout, tc.Matches, "(?s).*\\bThe help command displays information about commands\\..*")
+	c.Check(exitCode, tc.Equals, 0)
 }
 
-func (s *PebbleSuite) TestEnterHelpCommandExecArg(c *C) {
+func (s *PebbleSuite) TestEnterHelpCommandExecArg(c *tc.C) {
 	cmd := []string{"pebble", "enter", "help", "exec"}
 	restore := fakeArgs(cmd...)
 	defer restore()
@@ -231,14 +231,14 @@ func (s *PebbleSuite) TestEnterHelpCommandExecArg(c *C) {
 	exitCode := cli.PebbleMain()
 	// stderr is written to stdout buffer because of "combine stderr" mode,
 	// see cmd/pebble/cmd_exec.go:163
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 	stdout := s.Stdout()
-	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble exec \\[exec-OPTIONS\\] <command>\n.*")
-	c.Check(stdout, Matches, "(?s).*\\bThe exec command runs a remote command and waits for it to finish\\..*")
-	c.Check(exitCode, Equals, 0)
+	c.Check(stdout, tc.Matches, "^(?s)Usage:\n  pebble exec \\[exec-OPTIONS\\] <command>\n.*")
+	c.Check(stdout, tc.Matches, "(?s).*\\bThe exec command runs a remote command and waits for it to finish\\..*")
+	c.Check(exitCode, tc.Equals, 0)
 }
 
-func (s *PebbleSuite) TestEnterHelpCommandHelpArg(c *C) {
+func (s *PebbleSuite) TestEnterHelpCommandHelpArg(c *tc.C) {
 	cmd := []string{"pebble", "enter", "help", "help"}
 	restore := fakeArgs(cmd...)
 	defer restore()
@@ -246,16 +246,16 @@ func (s *PebbleSuite) TestEnterHelpCommandHelpArg(c *C) {
 	exitCode := cli.PebbleMain()
 	// stderr is written to stdout buffer because of "combine stderr" mode,
 	// see cmd/pebble/cmd_exec.go:163
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 	stdout := s.Stdout()
-	c.Check(stdout, Matches, "^(?s)Usage:\n  pebble help \\[help-OPTIONS\\] \\[<command>\\.\\.\\.\\]\n.*")
-	c.Check(stdout, Matches, "(?s).*\\bThe help command displays information about commands\\..*")
-	c.Check(exitCode, Equals, 0)
+	c.Check(stdout, tc.Matches, "^(?s)Usage:\n  pebble help \\[help-OPTIONS\\] \\[<command>\\.\\.\\.\\]\n.*")
+	c.Check(stdout, tc.Matches, "(?s).*\\bThe help command displays information about commands\\..*")
+	c.Check(exitCode, tc.Equals, 0)
 }
 
 // TestEnterSubCommandWaits checks that the subcommand in enter
 // starts **after** the default services have started.
-func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
+func (s *PebbleSuite) TestEnterSubCommandWaits(c *tc.C) {
 	layerTemplate := dumbDedent(`
 		services:
 		  stat:
@@ -271,19 +271,19 @@ func (s *PebbleSuite) TestEnterSubCommandWaits(c *C) {
 	defer restore()
 
 	exitCode := cli.PebbleMain()
-	c.Check(exitCode, Equals, 0)
+	c.Check(exitCode, tc.Equals, 0)
 	// stderr is written to stdout buffer because of "combine stderr" mode,
 	// see cmd/pebble/cmd_exec.go:163
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 	stdout := s.Stdout()
 
 	svcOut, err := os.ReadFile(filepath.Join(s.pebbleDir, "enter-wait"))
-	c.Check(err, IsNil)
+	c.Check(err, tc.IsNil)
 
 	layout := "2006-01-02 15:04:05.000000000-07:00"
 	subCmdExecTime, err := time.Parse(layout, strings.TrimSpace(stdout))
-	c.Check(err, IsNil)
+	c.Check(err, tc.IsNil)
 	svcStartTime, err := time.Parse(layout, strings.TrimSpace(string(svcOut)))
-	c.Check(err, IsNil)
-	c.Check(svcStartTime.Before(subCmdExecTime), Equals, true)
+	c.Check(err, tc.IsNil)
+	c.Check(svcStartTime.Before(subCmdExecTime), tc.Equals, true)
 }

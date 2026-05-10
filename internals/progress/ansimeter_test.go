@@ -18,70 +18,73 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"testing"
 	"time"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/progress"
 )
 
 type ansiSuite struct{}
 
-var _ = check.Suite(ansiSuite{})
+func TestAnsiSuite(t *testing.T) {
+	tc.Run(t, &ansiSuite{})
+}
 
-func (ansiSuite) TestNorm(c *check.C) {
+func (ansiSuite) TestNorm(c *tc.C) {
 	msg := []rune(strings.Repeat("0123456789", 100))
 	high := []rune("🤗🤗🤗🤗🤗")
-	c.Assert(msg, check.HasLen, 1000)
+	c.Assert(msg, tc.HasLen, 1000)
 	for i := 1; i < 1000; i += 1 {
 		long := progress.Norm(i, msg)
 		short := progress.Norm(i, nil)
 		// a long message is truncated to fit
-		c.Check(long, check.HasLen, i)
-		c.Check(long[len(long)-1], check.Equals, rune('…'))
+		c.Check(long, tc.HasLen, i)
+		c.Check(long[len(long)-1], tc.Equals, rune('…'))
 		// a short message is padded to width
-		c.Check(short, check.HasLen, i)
-		c.Check(string(short), check.Equals, strings.Repeat(" ", i))
+		c.Check(short, tc.HasLen, i)
+		c.Check(string(short), tc.Equals, strings.Repeat(" ", i))
 		// high unicode? no problem
-		c.Check(progress.Norm(i, high), check.HasLen, i)
+		c.Check(progress.Norm(i, high), tc.HasLen, i)
 	}
 	// check it doesn't panic for negative nor zero widths
-	c.Check(progress.Norm(0, []rune("hello")), check.HasLen, 0)
-	c.Check(progress.Norm(-10, []rune("hello")), check.HasLen, 0)
+	c.Check(progress.Norm(0, []rune("hello")), tc.HasLen, 0)
+	c.Check(progress.Norm(-10, []rune("hello")), tc.HasLen, 0)
 }
 
-func (ansiSuite) TestPercent(c *check.C) {
+func (ansiSuite) TestPercent(c *tc.C) {
 	p := &progress.ANSIMeter{}
 	for i := -1000.; i < 1000.; i += 5 {
 		p.SetTotal(i)
 		for j := -1000.; j < 1000.; j += 3 {
 			p.SetWritten(j)
 			percent := p.Percent()
-			c.Check(percent, check.HasLen, 4)
-			c.Check(percent[len(percent)-1:], check.Equals, "%")
+			c.Check(percent, tc.HasLen, 4)
+			c.Check(percent[len(percent)-1:], tc.Equals, "%")
 		}
 	}
 }
 
-func (ansiSuite) TestStart(c *check.C) {
+func (ansiSuite) TestStart(c *tc.C) {
 	var buf bytes.Buffer
 	defer progress.MockStdout(&buf)()
 	defer progress.MockTermWidth(func() int { return 80 })()
 
 	p := &progress.ANSIMeter{}
 	p.Start("0123456789", 100)
-	c.Check(p.GetTotal(), check.Equals, 100.)
-	c.Check(p.GetWritten(), check.Equals, 0.)
-	c.Check(buf.String(), check.Equals, progress.CursorInvisible)
+	c.Check(p.GetTotal(), tc.Equals, 100.)
+	c.Check(p.GetWritten(), tc.Equals, 0.)
+	c.Check(buf.String(), tc.Equals, progress.CursorInvisible)
 }
 
-func (ansiSuite) TestFinish(c *check.C) {
+func (ansiSuite) TestFinish(c *tc.C) {
 	var buf bytes.Buffer
 	defer progress.MockStdout(&buf)()
 	defer progress.MockTermWidth(func() int { return 80 })()
 	p := &progress.ANSIMeter{}
 	p.Finished()
-	c.Check(buf.String(), check.Equals, fmt.Sprint(
+	c.Check(buf.String(), tc.Equals, fmt.Sprint(
 		"\r",                       // move cursor to start of line
 		progress.ExitAttributeMode, // turn off color, reverse, bold, anything
 		progress.CursorVisible,     // turn the cursor back on
@@ -89,7 +92,7 @@ func (ansiSuite) TestFinish(c *check.C) {
 	))
 }
 
-func (ansiSuite) TestSetLayout(c *check.C) {
+func (ansiSuite) TestSetLayout(c *tc.C) {
 	var buf bytes.Buffer
 	var width int
 	defer progress.MockStdout(&buf)()
@@ -102,29 +105,29 @@ func (ansiSuite) TestSetLayout(c *check.C) {
 	defer ticker.Stop()
 	p.Start(msg, 1e300)
 	for i := 1; i <= 80; i++ {
-		desc := check.Commentf("width %d", i)
+		desc := tc.Commentf("width %d", i)
 		width = i
 		buf.Reset()
 		<-ticker.C
 		p.Set(float64(i))
 		out := buf.String()
-		c.Check([]rune(out), check.HasLen, i+1, desc)
+		c.Check([]rune(out), tc.HasLen, i+1, desc)
 		switch {
 		case i < len(msg):
-			c.Check(out, check.Equals, "\r"+msg[:i-1]+"…", desc)
+			c.Check(out, tc.Equals, "\r"+msg[:i-1]+"…", desc)
 		case i <= 15:
-			c.Check(out, check.Equals, fmt.Sprintf("\r%*s", -i, msg), desc)
+			c.Check(out, tc.Equals, fmt.Sprintf("\r%*s", -i, msg), desc)
 		case i <= 20:
-			c.Check(out, check.Equals, fmt.Sprintf("\r%*s ages!", -(i-6), msg), desc)
+			c.Check(out, tc.Equals, fmt.Sprintf("\r%*s ages!", -(i-6), msg), desc)
 		case i <= 29:
-			c.Check(out, check.Equals, fmt.Sprintf("\r%*s   0%% ages!", -(i-11), msg), desc)
+			c.Check(out, tc.Equals, fmt.Sprintf("\r%*s   0%% ages!", -(i-11), msg), desc)
 		default:
-			c.Check(out, check.Matches, fmt.Sprintf("\r%*s   0%%  [ 0-9]{4}B/s ages!", -(i-20), msg), desc)
+			c.Check(out, tc.Matches, fmt.Sprintf("\r%*s   0%%  [ 0-9]{4}B/s ages!", -(i-20), msg), desc)
 		}
 	}
 }
 
-func (ansiSuite) TestSetEscapes(c *check.C) {
+func (ansiSuite) TestSetEscapes(c *tc.C) {
 	var buf bytes.Buffer
 	defer progress.MockStdout(&buf)()
 	defer progress.MockSimpleEscapes()()
@@ -139,11 +142,11 @@ func (ansiSuite) TestSetEscapes(c *check.C) {
 		// here we're using the fact that the message has the same
 		// length as p's total to make the test simpler :-)
 		expected := "\r<MR>" + msg[:int(i)] + "<ME>" + msg[int(i):]
-		c.Check(buf.String(), check.Equals, expected, check.Commentf("%g", i))
+		c.Check(buf.String(), tc.Equals, expected, tc.Commentf("%g", i))
 	}
 }
 
-func (ansiSuite) TestSpin(c *check.C) {
+func (ansiSuite) TestSpin(c *tc.C) {
 	termWidth := 9
 	var buf bytes.Buffer
 	defer progress.MockStdout(&buf)()
@@ -152,7 +155,7 @@ func (ansiSuite) TestSpin(c *check.C) {
 
 	p := &progress.ANSIMeter{}
 	msg := "0123456789"
-	c.Assert(len(msg), check.Equals, 10)
+	c.Assert(len(msg), tc.Equals, 10)
 	p.Start(msg, 10)
 
 	// term too narrow to fit msg
@@ -160,7 +163,7 @@ func (ansiSuite) TestSpin(c *check.C) {
 		buf.Reset()
 		p.Spin(msg)
 		expected := "\r" + msg[:8] + "…"
-		c.Check(buf.String(), check.Equals, expected, check.Commentf("%d (%s)", i, s))
+		c.Check(buf.String(), tc.Equals, expected, tc.Commentf("%d (%s)", i, s))
 	}
 
 	// term fits msg but not spinner
@@ -169,7 +172,7 @@ func (ansiSuite) TestSpin(c *check.C) {
 		buf.Reset()
 		p.Spin(msg)
 		expected := "\r" + msg + " "
-		c.Check(buf.String(), check.Equals, expected, check.Commentf("%d (%s)", i, s))
+		c.Check(buf.String(), tc.Equals, expected, tc.Commentf("%d (%s)", i, s))
 	}
 
 	// term fits msg and spinner
@@ -178,11 +181,11 @@ func (ansiSuite) TestSpin(c *check.C) {
 		buf.Reset()
 		p.Spin(msg)
 		expected := "\r" + msg + " " + s
-		c.Check(buf.String(), check.Equals, expected, check.Commentf("%d (%s)", i, s))
+		c.Check(buf.String(), tc.Equals, expected, tc.Commentf("%d (%s)", i, s))
 	}
 }
 
-func (ansiSuite) TestNotify(c *check.C) {
+func (ansiSuite) TestNotify(c *tc.C) {
 	var buf bytes.Buffer
 	var width int
 	defer progress.MockStdout(&buf)()
@@ -196,7 +199,7 @@ func (ansiSuite) TestNotify(c *check.C) {
 	p.Set(0)
 	p.Notify("hello there")
 	p.Set(1)
-	c.Check(buf.String(), check.Equals, "<VI>"+ // the VI from Start()
+	c.Check(buf.String(), tc.Equals, "<VI>"+ // the VI from Start()
 		"\r<MR><ME>working   "+ // the Set(0)
 		"\r<ME><CE>hello\n"+ // first line of the Notify (note it wrapped at word end)
 		"there\n"+
@@ -206,7 +209,7 @@ func (ansiSuite) TestNotify(c *check.C) {
 	p.Set(0)
 	p.Notify("supercalifragilisticexpialidocious")
 	p.Set(1)
-	c.Check(buf.String(), check.Equals, ""+ // no Start() this time
+	c.Check(buf.String(), tc.Equals, ""+ // no Start() this time
 		"\r<MR><ME>working   "+ // the Set(0)
 		"\r<ME><CE>supercalif\n"+ // the Notify, word is too long so it's just split
 		"ragilistic\n"+
@@ -219,14 +222,14 @@ func (ansiSuite) TestNotify(c *check.C) {
 	p.Set(0)
 	p.Notify("hello there")
 	p.Set(1)
-	c.Check(buf.String(), check.Equals, ""+ // no Start()
+	c.Check(buf.String(), tc.Equals, ""+ // no Start()
 		"\r<MR><ME>working    ages!"+ // the Set(0)
 		"\r<ME><CE>hello there\n"+ // first line of the Notify (no wrap!)
 		"\r<MR><ME>working    ages!") // the Set(1)
 
 }
 
-func (ansiSuite) TestWrite(c *check.C) {
+func (ansiSuite) TestWrite(c *tc.C) {
 	var buf bytes.Buffer
 	defer progress.MockStdout(&buf)()
 	defer progress.MockSimpleEscapes()()
@@ -236,11 +239,11 @@ func (ansiSuite) TestWrite(c *check.C) {
 	p.Start("123456789x", 10)
 	for i := range 10 {
 		n, err := fmt.Fprintf(p, "%d", i)
-		c.Assert(err, check.IsNil)
-		c.Check(n, check.Equals, 1)
+		c.Assert(err, tc.IsNil)
+		c.Check(n, tc.Equals, 1)
 	}
 
-	c.Check(buf.String(), check.Equals, strings.Join([]string{
+	c.Check(buf.String(), tc.Equals, strings.Join([]string{
 		"<VI>", // Start()
 		"\r<MR>1<ME>23456789x",
 		"\r<MR>12<ME>3456789x",

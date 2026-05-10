@@ -18,9 +18,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"testing"
 	"time"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
@@ -29,7 +30,9 @@ type warningSuite struct {
 	BasePebbleSuite
 }
 
-var _ = check.Suite(&warningSuite{})
+func TestWarningSuite(t *testing.T) {
+	tc.Run(t, &warningSuite{})
+}
 
 const testWarnings = `
 {
@@ -66,37 +69,37 @@ const testWarnings = `
 	"type": "sync"
 }`
 
-func mkWarningsFakeHandler(c *check.C, body string) func(w http.ResponseWriter, r *http.Request) {
+func mkWarningsFakeHandler(c *tc.C, body string) func(w http.ResponseWriter, r *http.Request) {
 	var called bool
 	return func(w http.ResponseWriter, r *http.Request) {
 		if called {
 			c.Fatalf("expected a single request")
 		}
 		called = true
-		c.Check(r.URL.Path, check.Equals, "/v1/notices")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 		query := r.URL.Query()
-		c.Check(query["types"], check.DeepEquals, []string{"warning"})
+		c.Check(query["types"], tc.DeepEquals, []string{"warning"})
 
 		buf, err := io.ReadAll(r.Body)
-		c.Assert(err, check.IsNil)
-		c.Check(string(buf), check.Equals, "")
-		c.Check(r.Method, check.Equals, "GET")
+		c.Assert(err, tc.IsNil)
+		c.Check(string(buf), tc.Equals, "")
+		c.Check(r.Method, tc.Equals, "GET")
 		w.WriteHeader(200)
 		fmt.Fprintln(w, body)
 	}
 }
 
-func (s *warningSuite) TestNoWarningsEver(c *check.C) {
+func (s *warningSuite) TestNoWarningsEver(c *tc.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "No warnings.\n")
-	c.Check(s.Stdout(), check.Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stderr(), tc.Equals, "No warnings.\n")
+	c.Check(s.Stdout(), tc.Equals, "")
 }
 
-func (s *warningSuite) TestNoFurtherWarnings(c *check.C) {
+func (s *warningSuite) TestNoFurtherWarnings(c *tc.C) {
 	s.writeCLIState(c, map[string]any{
 		"warnings-last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
 		"warnings-last-okayed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
@@ -105,20 +108,20 @@ func (s *warningSuite) TestNoFurtherWarnings(c *check.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "No further warnings.\n")
-	c.Check(s.Stdout(), check.Equals, "")
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stderr(), tc.Equals, "No further warnings.\n")
+	c.Check(s.Stdout(), tc.Equals, "")
 }
 
-func (s *warningSuite) TestWarnings(c *check.C) {
+func (s *warningSuite) TestWarnings(c *tc.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--unicode=never"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stderr(), tc.Equals, "")
+	c.Check(s.Stdout(), tc.Equals, `
 last-occurrence:  2018-09-19T12:41:18Z
 warning: |
   hello world number one
@@ -133,14 +136,14 @@ warning: |
 `[1:])
 }
 
-func (s *warningSuite) TestVerboseWarnings(c *check.C) {
+func (s *warningSuite) TestVerboseWarnings(c *tc.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--verbose", "--unicode=never"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stderr(), check.Equals, "")
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.IsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stderr(), tc.Equals, "")
+	c.Check(s.Stdout(), tc.Equals, `
 first-occurrence:  2018-09-19T12:41:18Z
 last-occurrence:   2018-09-19T12:41:18Z
 last-repeated:     2018-09-19T12:41:18Z
@@ -167,19 +170,19 @@ warning: |
 `[1:])
 }
 
-func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
+func (s *warningSuite) TestCommandWithWarnings(c *tc.C) {
 	var responseTimestamp time.Time
 
 	timesCalled := 0
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		timesCalled++
-		c.Check(r.URL.Path, check.Equals, "/v1/system-info")
-		c.Check(r.URL.Query(), check.HasLen, 0)
+		c.Check(r.URL.Path, tc.Equals, "/v1/system-info")
+		c.Check(r.URL.Query(), tc.HasLen, 0)
 
 		buf, err := io.ReadAll(r.Body)
-		c.Assert(err, check.IsNil)
-		c.Check(string(buf), check.Equals, "")
-		c.Check(r.Method, check.Equals, "GET")
+		c.Assert(err, tc.IsNil)
+		c.Check(string(buf), tc.Equals, "")
+		c.Check(r.Method, tc.Equals, "GET")
 		w.WriteHeader(200)
 		latestWarningStr := ""
 		if !responseTimestamp.IsZero() {
@@ -213,32 +216,32 @@ func (s *warningSuite) TestCommandWithWarnings(c *check.C) {
 			SocketPath: runOpts.ClientConfig.Socket,
 			PebbleDir:  runOpts.PebbleDir,
 		}).ParseArgs([]string{"version"})
-		c.Assert(err, check.IsNil)
+		c.Assert(err, tc.IsNil)
 
 		latest := client.LatestWarningTime()
 		if expectedCount == 0 {
-			c.Check(latest, check.Equals, time.Time{})
+			c.Check(latest, tc.Equals, time.Time{})
 		} else {
-			c.Check(latest, check.Equals, responseTimestamp)
+			c.Check(latest, tc.Equals, responseTimestamp)
 		}
 
 		cli.MaybePresentWarnings(time.Time{}, latest)
 
-		c.Check(rest, check.HasLen, 0)
-		c.Check(s.Stdout(), check.Matches, `(?s)client.*server.*`)
-		c.Check(s.Stderr(), check.Equals, expectedWarning)
+		c.Check(rest, tc.HasLen, 0)
+		c.Check(s.Stdout(), tc.Matches, `(?s)client.*server.*`)
+		c.Check(s.Stderr(), tc.Equals, expectedWarning)
 		s.ResetStdStreams()
 	}
 
-	c.Check(timesCalled, check.Equals, len(expectedWarnings))
+	c.Check(timesCalled, tc.Equals, len(expectedWarnings))
 }
 
-func (s *warningSuite) TestExtraArgs(c *check.C) {
+func (s *warningSuite) TestExtraArgs(c *tc.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "extra", "args"})
-	c.Assert(err, check.Equals, cli.ErrExtraArgs)
-	c.Check(rest, check.HasLen, 1)
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Check(rest, tc.HasLen, 1)
 
 	rest, err = cli.ParserForTest().ParseArgs([]string{"okay", "extra", "invalid arg"})
-	c.Assert(err, check.Equals, cli.ErrExtraArgs)
-	c.Check(rest, check.HasLen, 1)
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Check(rest, tc.HasLen, 1)
 }

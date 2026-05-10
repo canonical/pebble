@@ -20,157 +20,159 @@ import (
 	"crypto/rand"
 	"os"
 	"path/filepath"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/idkey"
 )
 
 // TestNoDirectory checks if leaf directory creation works.
-func (ks *keySuite) TestNoDirectory(c *C) {
+func (ks *keySuite) TestNoDirectory(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
 	firstBoot, err := idkey.Generate(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Load the identity key (other boots)
 	nextBoot, err := idkey.Load(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Both should be the same identity.
-	c.Assert(firstBoot.Fingerprint(), Equals, nextBoot.Fingerprint())
+	c.Assert(firstBoot.Fingerprint(), tc.Equals, nextBoot.Fingerprint())
 }
 
 // TestGet checks if the Get() function correctly only creates a new
 // identity the first time.
-func (ks *keySuite) TestGet(c *C) {
+func (ks *keySuite) TestGet(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
 	firstBoot, err := idkey.Get(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Load the identity key (other boots)
 	nextBoot, err := idkey.Get(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Both should be the same identity.
-	c.Assert(firstBoot.Fingerprint(), Equals, nextBoot.Fingerprint())
+	c.Assert(firstBoot.Fingerprint(), tc.Equals, nextBoot.Fingerprint())
 }
 
 // TestDirectoryInvalid confirms that if the leaf directory has invalid
 // permissions we exit.
-func (ks *keySuite) TestDirectoryInvalid(c *C) {
+func (ks *keySuite) TestDirectoryInvalid(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 	err := os.MkdirAll(keyDir, 0o740)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Loading
 	_, err = idkey.Load(keyDir)
-	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
+	c.Assert(err, tc.ErrorMatches, ".* expected permission 0o700 .*")
 
 	// Saving
 	_, err = idkey.Generate(keyDir)
-	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
+	c.Assert(err, tc.ErrorMatches, ".* expected permission 0o700 .*")
 }
 
 // TestDirInvalid checks for a missing non-leaf directory. The caller
 // must create this.
-func (ks *keySuite) TestDirInvalid(c *C) {
+func (ks *keySuite) TestDirInvalid(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "foo/identity")
 
 	// Saving
 	_, err := idkey.Generate(keyDir)
-	c.Assert(err, ErrorMatches, "cannot create identity directory.*")
+	c.Assert(err, tc.ErrorMatches, "cannot create identity directory.*")
 }
 
 // TestInvalidKey checks permission of the key file.
-func (ks *keySuite) TestInvalidKey(c *C) {
+func (ks *keySuite) TestInvalidKey(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
 	_, err := idkey.Generate(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	err = os.Chmod(filepath.Join(keyDir, "key.pem"), 0o644)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Load the identity key (other boots)
 	_, err = idkey.Load(keyDir)
-	c.Assert(err, ErrorMatches, ".*expected permission.*")
+	c.Assert(err, tc.ErrorMatches, ".*expected permission.*")
 }
 
 // TestEmptyKey checks if a key fails to load.
-func (ks *keySuite) TestEmptyKey(c *C) {
+func (ks *keySuite) TestEmptyKey(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
 	_, err := idkey.Generate(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Zero the existing file.
 	f, err := os.OpenFile(filepath.Join(keyDir, "key.pem"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = f.Close()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Load the identity key (other boots)
 	_, err = idkey.Load(keyDir)
-	c.Assert(err, ErrorMatches, ".*missing 'PRIVATE KEY' block.*")
+	c.Assert(err, tc.ErrorMatches, ".*missing 'PRIVATE KEY' block.*")
 }
 
 // TestKeyWithTrailingBytes checks if a key fails to load if unexpected
 // bytes follow the private key block.
-func (ks *keySuite) TestKeyWithTrailingBytes(c *C) {
+func (ks *keySuite) TestKeyWithTrailingBytes(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
 	_, err := idkey.Generate(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Append some unexpected bytes after the PEM block.
 	f, err := os.OpenFile(filepath.Join(keyDir, "key.pem"), os.O_RDWR|os.O_APPEND, 0o600)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	_, err = f.Write([]byte("\n1234567890"))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = f.Close()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Load the identity key (other boots)
 	_, err = idkey.Load(keyDir)
-	c.Assert(err, ErrorMatches, ".*unexpected bytes.*")
+	c.Assert(err, tc.ErrorMatches, ".*unexpected bytes.*")
 }
 
 // TestKeySign makes sure the crypto.Signer works.
-func (ks *keySuite) TestKeySign(c *C) {
+func (ks *keySuite) TestKeySign(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
 	signer, err := idkey.Generate(keyDir)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	message := []byte("hello world")
 
 	// Hash is optional for Ed25519, but crypto.Signer requires a hash function
 	signature, err := signer.Sign(rand.Reader, message, crypto.Hash(0))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// Extract the public key
 	pubKey, ok := signer.Public().(ed25519.PublicKey)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, tc.Equals, true)
 
 	// Verify signature
 	ok = ed25519.Verify(pubKey, message, signature)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, tc.Equals, true)
 }
 
 // BenchmarkKeyGeneration prints some performance metrics. To run this test
-// use: go test -check.b
-func (ks *keySuite) BenchmarkKeyGeneration(c *C) {
-	for i := 0; i < c.N; i++ {
+// use: go test -tc.b
+func (ks *keySuite) BenchmarkKeyGeneration(b *testing.B) {
+	c := &tc.TBC{TB: b}
+	for i := 0; i < b.N; i++ {
 		keyDir := filepath.Join(c.MkDir(), "identity")
 		_, err := idkey.Generate(keyDir)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 	}
 }

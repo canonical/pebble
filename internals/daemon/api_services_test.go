@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
@@ -68,7 +68,7 @@ func writeTestLayer(pebbleDir, layerYAML string) {
 	}
 }
 
-func (s *apiSuite) TestServicesStart(c *C) {
+func (s *apiSuite) TestServicesStart(c *tc.C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
@@ -86,36 +86,36 @@ func (s *apiSuite) TestServicesStart(c *C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, Equals, 202)
-	c.Check(rsp.Status, Equals, 202)
-	c.Check(rsp.Type, Equals, ResponseTypeAsync)
-	c.Check(rsp.Result, IsNil)
+	c.Check(rec.Code, tc.Equals, 202)
+	c.Check(rsp.Status, tc.Equals, 202)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.Change(rsp.Change)
-	c.Assert(chg, NotNil)
-	c.Assert(chg.Summary(), Equals, `Start service "test3" and 2 more`)
+	c.Assert(chg, tc.NotNil)
+	c.Assert(chg.Summary(), tc.Equals, `Start service "test3" and 2 more`)
 
-	c.Check(chg.Kind(), Equals, "start")
+	c.Check(chg.Kind(), tc.Equals, "start")
 
 	tasks := chg.Tasks()
-	c.Assert(tasks, HasLen, 3)
+	c.Assert(tasks, tc.HasLen, 3)
 
 	// In the proper order, with dependencies.
-	c.Assert(tasks[0].Summary(), Equals, `Start service "test1"`)
-	c.Assert(tasks[1].Summary(), Equals, `Start service "test2"`)
-	c.Assert(tasks[2].Summary(), Equals, `Start service "test3"`)
+	c.Assert(tasks[0].Summary(), tc.Equals, `Start service "test1"`)
+	c.Assert(tasks[1].Summary(), tc.Equals, `Start service "test2"`)
+	c.Assert(tasks[2].Summary(), tc.Equals, `Start service "test3"`)
 }
 
-func (s *apiSuite) TestServicesStop(c *C) {
+func (s *apiSuite) TestServicesStop(c *tc.C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
@@ -133,36 +133,36 @@ func (s *apiSuite) TestServicesStop(c *C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, Equals, 202)
-	c.Check(rsp.Status, Equals, 202)
-	c.Check(rsp.Type, Equals, ResponseTypeAsync)
-	c.Check(rsp.Result, IsNil)
+	c.Check(rec.Code, tc.Equals, 202)
+	c.Check(rsp.Status, tc.Equals, 202)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.Change(rsp.Change)
-	c.Assert(chg, NotNil)
-	c.Assert(chg.Summary(), Equals, `Stop service "test2" and 2 more`)
+	c.Assert(chg, tc.NotNil)
+	c.Assert(chg.Summary(), tc.Equals, `Stop service "test2" and 2 more`)
 
-	c.Check(chg.Kind(), Equals, "stop")
+	c.Check(chg.Kind(), tc.Equals, "stop")
 
 	tasks := chg.Tasks()
-	c.Assert(tasks, HasLen, 3)
+	c.Assert(tasks, tc.HasLen, 3)
 
 	// In the proper order, with dependencies.
-	c.Assert(tasks[0].Summary(), Equals, `Stop service "test3"`)
-	c.Assert(tasks[1].Summary(), Equals, `Stop service "test2"`)
-	c.Assert(tasks[2].Summary(), Equals, `Stop service "test1"`)
+	c.Assert(tasks[0].Summary(), tc.Equals, `Stop service "test3"`)
+	c.Assert(tasks[1].Summary(), tc.Equals, `Stop service "test2"`)
+	c.Assert(tasks[2].Summary(), tc.Equals, `Stop service "test1"`)
 }
 
-func (s *apiSuite) TestServicesAutoStart(c *C) {
+func (s *apiSuite) TestServicesAutoStart(c *tc.C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
@@ -180,52 +180,52 @@ func (s *apiSuite) TestServicesAutoStart(c *C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, Equals, 202)
-	c.Check(rsp.Status, Equals, 202)
-	c.Check(rsp.Type, Equals, ResponseTypeAsync)
-	c.Check(rsp.Result, IsNil)
+	c.Check(rec.Code, tc.Equals, 202)
+	c.Check(rsp.Status, tc.Equals, 202)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.Change(rsp.Change)
-	c.Assert(chg, NotNil)
+	c.Assert(chg, tc.NotNil)
 
-	c.Check(chg.Kind(), Equals, "autostart")
+	c.Check(chg.Kind(), tc.Equals, "autostart")
 
 	tasks := chg.Tasks()
-	c.Assert(tasks, HasLen, 2)
-	c.Assert(tasks[0].Summary(), Equals, `Start service "test1"`)
-	c.Assert(tasks[1].Summary(), Equals, `Start service "test2"`)
+	c.Assert(tasks, tc.HasLen, 2)
+	c.Assert(tasks[0].Summary(), tc.Equals, `Start service "test1"`)
+	c.Assert(tasks[1].Summary(), tc.Equals, `Start service "test2"`)
 }
 
-func (s *apiSuite) TestServicesGet(c *C) {
+func (s *apiSuite) TestServicesGet(c *tc.C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	s.daemon(c)
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/services", nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, Equals, 200)
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Result, NotNil)
+	c.Check(rec.Code, tc.Equals, 200)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, tc.NotNil)
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, IsNil)
-	c.Check(body["result"], DeepEquals, []any{
+	c.Check(err, tc.IsNil)
+	c.Check(body["result"], tc.DeepEquals, []any{
 		map[string]any{"startup": "enabled", "name": "test1", "current": "inactive"},
 		map[string]any{"startup": "disabled", "name": "test2", "current": "inactive"},
 		map[string]any{"startup": "disabled", "name": "test3", "current": "inactive"},
@@ -233,7 +233,7 @@ func (s *apiSuite) TestServicesGet(c *C) {
 	})
 }
 
-func (s *apiSuite) TestServicesRestart(c *C) {
+func (s *apiSuite) TestServicesRestart(c *tc.C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
@@ -251,38 +251,38 @@ func (s *apiSuite) TestServicesRestart(c *C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, Equals, 202)
-	c.Check(rsp.Status, Equals, 202)
-	c.Check(rsp.Type, Equals, ResponseTypeAsync)
-	c.Check(rsp.Result, IsNil)
+	c.Check(rec.Code, tc.Equals, 202)
+	c.Check(rsp.Status, tc.Equals, 202)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.Change(rsp.Change)
-	c.Assert(chg, NotNil)
-	c.Assert(chg.Summary(), Equals, `Restart service "test3" and 2 more`)
+	c.Assert(chg, tc.NotNil)
+	c.Assert(chg.Summary(), tc.Equals, `Restart service "test3" and 2 more`)
 
-	c.Check(chg.Kind(), Equals, "restart")
+	c.Check(chg.Kind(), tc.Equals, "restart")
 
 	tasks := chg.Tasks()
-	c.Assert(tasks, HasLen, 5)
+	c.Assert(tasks, tc.HasLen, 5)
 
 	// In the proper order, with dependencies.
-	c.Assert(tasks[0].Summary(), Equals, `Stop service "test1"`)
-	c.Assert(tasks[1].Summary(), Equals, `Stop service "test3"`)
-	c.Assert(tasks[2].Summary(), Equals, `Start service "test1"`)
-	c.Assert(tasks[3].Summary(), Equals, `Start service "test2"`)
-	c.Assert(tasks[4].Summary(), Equals, `Start service "test3"`)
+	c.Assert(tasks[0].Summary(), tc.Equals, `Stop service "test1"`)
+	c.Assert(tasks[1].Summary(), tc.Equals, `Stop service "test3"`)
+	c.Assert(tasks[2].Summary(), tc.Equals, `Start service "test1"`)
+	c.Assert(tasks[3].Summary(), tc.Equals, `Start service "test2"`)
+	c.Assert(tasks[4].Summary(), tc.Equals, `Start service "test3"`)
 }
 
-func (s *apiSuite) TestServicesReplan(c *C) {
+func (s *apiSuite) TestServicesReplan(c *tc.C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
@@ -300,31 +300,31 @@ func (s *apiSuite) TestServicesReplan(c *C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, Equals, 202)
-	c.Check(rsp.Status, Equals, 202)
-	c.Check(rsp.Type, Equals, ResponseTypeAsync)
-	c.Check(rsp.Result, IsNil)
+	c.Check(rec.Code, tc.Equals, 202)
+	c.Check(rsp.Status, tc.Equals, 202)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.Change(rsp.Change)
-	c.Check(chg, NotNil)
-	c.Check(chg.Kind(), Equals, "replan")
-	c.Check(chg.Summary(), Equals, `Replan service "test1" and 1 more`)
+	c.Check(chg, tc.NotNil)
+	c.Check(chg.Kind(), tc.Equals, "replan")
+	c.Check(chg.Summary(), tc.Equals, `Replan service "test1" and 1 more`)
 	tasks := chg.Tasks()
-	c.Check(tasks, HasLen, 2)
-	c.Check(tasks[0].Summary(), Equals, `Start service "test1"`)
-	c.Check(tasks[1].Summary(), Equals, `Start service "test2"`)
+	c.Check(tasks, tc.HasLen, 2)
+	c.Check(tasks[0].Summary(), tc.Equals, `Start service "test1"`)
+	c.Check(tasks[1].Summary(), tc.Equals, `Start service "test2"`)
 }
 
-func (s *apiSuite) TestServicesReplanNoServices(c *C) {
+func (s *apiSuite) TestServicesReplanNoServices(c *tc.C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, `
 services:
@@ -339,32 +339,32 @@ services:
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", strings.NewReader(`{"action": "replan"}`))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, Equals, 202)
-	c.Check(rsp.Status, Equals, 202)
-	c.Check(rsp.Type, Equals, ResponseTypeAsync)
-	c.Check(rsp.Result, IsNil)
+	c.Check(rec.Code, tc.Equals, 202)
+	c.Check(rsp.Status, tc.Equals, 202)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeAsync)
+	c.Check(rsp.Result, tc.IsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	chg := st.Change(rsp.Change)
-	c.Check(chg, NotNil)
-	c.Check(chg.IsReady(), Equals, true)
-	c.Check(chg.Kind(), Equals, "replan")
-	c.Check(chg.Summary(), Equals, "Replan - no services")
+	c.Check(chg, tc.NotNil)
+	c.Check(chg.IsReady(), tc.Equals, true)
+	c.Check(chg.Kind(), tc.Equals, "replan")
+	c.Check(chg.Summary(), tc.Equals, "Replan - no services")
 	tasks := chg.Tasks()
-	c.Check(tasks, HasLen, 0)
+	c.Check(tasks, tc.HasLen, 0)
 }
 
 // Regression test for 3-lock deadlock issue described in
 // https://github.com/canonical/pebble/issues/314
-func (s *apiSuite) TestDeadlock(c *C) {
+func (s *apiSuite) TestDeadlock(c *tc.C) {
 	// Set up
 	writeTestLayer(s.pebbleDir, `
 services:
@@ -376,11 +376,11 @@ services:
 		Dir:        s.pebbleDir,
 		SocketPath: s.pebbleDir + ".pebble.socket",
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = daemon.Init()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 	err = daemon.Start()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 
 	// To try to reproduce the deadlock, call these endpoints in a loop:
 	// - GET /v1/services
@@ -389,7 +389,7 @@ services:
 
 	getServices := func(ctx context.Context) {
 		req, err := http.NewRequestWithContext(ctx, "GET", "/v1/services", nil)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		rsp := v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
@@ -401,7 +401,7 @@ services:
 	serviceAction := func(ctx context.Context, action string) {
 		body := `{"action": "` + action + `", "services": ["test"]}`
 		req, err := http.NewRequestWithContext(ctx, "POST", "/v1/services", strings.NewReader(body))
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.IsNil)
 		rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
@@ -465,5 +465,5 @@ services:
 		}
 	}
 	err = daemon.Stop(nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.IsNil)
 }
