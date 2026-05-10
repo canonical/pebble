@@ -1,6 +1,6 @@
 module github.com/canonical/pebble
 
-go 1.26.2
+go 1.26.3
 
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
@@ -10,8 +10,8 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/gorilla/websocket v1.5.1
 	github.com/pkg/term v1.1.0
-	golang.org/x/sys v0.33.0
-	golang.org/x/term v0.32.0
+	golang.org/x/sys v0.44.0
+	golang.org/x/term v0.43.0
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	gopkg.in/yaml.v3 v3.0.1
 )
