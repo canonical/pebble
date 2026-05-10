@@ -64,19 +64,19 @@ func (s *execSuite) SetUpTest(c *tc.C) {
 		Dir:        c.MkDir(),
 		SocketPath: socketPath,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = daemon.Init()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	daemon.Start()
 	s.daemon = daemon
 
 	s.client, err = client.New(&client.Config{Socket: socketPath})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *execSuite) TearDownTest(c *tc.C) {
 	err := s.daemon.Stop(nil)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = reaper.Stop()
 	if err != nil {
@@ -117,9 +117,9 @@ func (s *execSuite) TestCombinedStderr(c *tc.C) {
 		Stdout:  outBuf,
 	}
 	process, err := s.client.Exec(opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = process.Wait()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(outBuf.String(), tc.Equals, "OUT\nERR!\n")
 }
 
@@ -176,7 +176,7 @@ func (s *execSuite) TestWorkingDirDoesNotExist(c *tc.C) {
 func (s *execSuite) TestWorkingDirNotADirectory(c *tc.C) {
 	path := filepath.Join(c.MkDir(), "test")
 	err := os.WriteFile(path, nil, 0o777)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	_, err = s.client.Exec(&client.ExecOptions{
 		Command:    []string{"pwd"},
 		WorkingDir: path,
@@ -220,13 +220,13 @@ func (s *execSuite) TestContextNoOverrides(c *tc.C) {
 			WorkingDir:  dir,
 		}},
 	}, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
 		Command:        []string{"/bin/sh", "-c", "echo FOO=$FOO BAR=$BAR; pwd"},
 		ServiceContext: "svc1",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(stdout, tc.Equals, "FOO=foo BAR=bar\n"+dir+"\n")
 	c.Check(stderr, tc.Equals, "")
 }
@@ -242,7 +242,7 @@ func (s *execSuite) TestContextOverrides(c *tc.C) {
 			WorkingDir:  c.MkDir(),
 		}},
 	}, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	overrideDir := c.MkDir()
 	stdout, stderr, err := s.exec(c, "", &client.ExecOptions{
@@ -251,16 +251,16 @@ func (s *execSuite) TestContextOverrides(c *tc.C) {
 		Environment:    map[string]string{"FOO": "oof"},
 		WorkingDir:     overrideDir,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(stdout, tc.Equals, "FOO=oof BAR=bar\n"+overrideDir+"\n")
 	c.Check(stderr, tc.Equals, "")
 }
 
 func (s *execSuite) TestCurrentUserGroup(c *tc.C) {
 	current, err := user.Current()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	group, err := user.LookupGroupId(current.Gid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		User:    current.Username,
@@ -308,13 +308,13 @@ func (s *execSuite) TestUserIDGroupID(c *tc.C) {
 		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
 	}
 	u, err := user.Lookup(username)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	g, err := user.LookupGroup(group)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	uid, err := strconv.Atoi(u.Uid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	gid, err := strconv.Atoi(g.Gid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "id -n -u && id -n -g"},
 		UserID:  &uid,
@@ -332,7 +332,7 @@ func (s *execSuite) exec(c *tc.C, stdin string, opts *client.ExecOptions) (stdou
 	opts.Stdout = outBuf
 	opts.Stderr = errBuf
 	process, err := s.client.Exec(opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	waitErr = process.Wait()
 	return outBuf.String(), errBuf.String(), waitErr
 }
@@ -345,10 +345,10 @@ func (s *execSuite) TestSignal(c *tc.C) {
 		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = process.SendSignal("SIGINT")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = process.Wait()
 	c.Check(err, tc.NotNil)
@@ -370,7 +370,7 @@ func (s *execSuite) TestStreaming(c *tc.C) {
 		Stderr:  io.Discard,
 	}
 	process, err := s.client.Exec(opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	for i := range 20 {
 		chunk := fmt.Sprintf("chunk %d ", i)
@@ -394,7 +394,7 @@ func (s *execSuite) TestStreaming(c *tc.C) {
 	}
 
 	err = process.Wait()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 type channelReader struct {
@@ -482,7 +482,7 @@ func (s *execSuite) TestExecChangeReady(c *tc.C) {
 
 	websocketCmd := apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
 	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, "control"), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetTaskWebsocket(websocketCmd, req, nil).(websocketResponse)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -520,11 +520,11 @@ func execRequest(c *tc.C, opts *client.ExecOptions) (*http.Response, execRespons
 		Height:      opts.Height,
 	}
 	requestBody, err := json.Marshal(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	httpResp, body := doRequest(c, v1PostExec, "POST", "/v1/exec", nil, nil, requestBody)
 	var execResp execResponse
 	err = json.Unmarshal(body.Bytes(), &execResp)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return httpResp, execResp
 }

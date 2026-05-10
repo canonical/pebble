@@ -37,7 +37,7 @@ func (s *PebbleSuite) TestCheck(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 name: chk1
@@ -80,7 +80,7 @@ func (s *PebbleSuite) TestCheckFailure(c *tc.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 name: chk1
@@ -130,7 +130,7 @@ func (s *PebbleSuite) TestCheckRefresh(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--refresh", "chk1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 name: chk1
@@ -179,7 +179,7 @@ func (s *PebbleSuite) TestCheckRefreshFailure(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--refresh", "chk1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 name: chk1
@@ -230,7 +230,7 @@ func (s *PebbleSuite) TestCheckJSON(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--format", "json", "chk1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"name":"chk1","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1"}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -248,7 +248,7 @@ func (s *PebbleSuite) TestCheckYAML(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--format", "yaml", "chk1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 name: chk1
@@ -293,7 +293,7 @@ func (s *PebbleSuite) TestCheckPrevChangeLog(c *tc.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "chk1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 name: chk1

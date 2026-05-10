@@ -29,16 +29,16 @@ func (cs *clientSuite) TestPair(c *tc.C) {
 	cs.rsp = `{"type": "sync", "result": null}`
 	cert, err := cs.cli.Pair()
 	c.Assert(cert, tc.Equals, idCert)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/pairing")
 	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{})
 
 	body, err := io.ReadAll(cs.req.Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var m map[string]any
 	err = json.Unmarshal(body, &m)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(m, tc.DeepEquals, map[string]any{
 		"action": "pair",
 	})

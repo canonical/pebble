@@ -234,7 +234,7 @@ func (s *S) TestDefaultServiceNames(c *tc.C) {
 	s.planChanged(c)
 
 	services, err := s.manager.DefaultServiceNames()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(services, tc.DeepEquals, []string{"test1", "test2"})
 }
 
@@ -294,7 +294,7 @@ services:
 	s.planChanged(c)
 
 	_, _, err := s.manager.Replan()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.startServices(c, [][]string{{"test9"}})
 	s.waitUntilService(c, "test9", func(service *servstate.ServiceInfo) bool {
 		return service.Current == servstate.StatusActive
@@ -323,7 +323,7 @@ services:
 	// Start the service without waiting for change ready.
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, [][]string{{serviceName}})
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	chgStart := s.st.NewChange("test", "Start test")
 	chgStart.AddAll(ts)
 	s.st.Unlock()
@@ -367,7 +367,7 @@ services:
 	s.planChanged(c)
 
 	_, _, err := s.manager.Replan()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	s.startServices(c, [][]string{{"test6"}})
 	s.waitUntilService(c, "test6", func(service *servstate.ServiceInfo) bool {
@@ -407,7 +407,7 @@ services:
 	s.planChanged(c)
 
 	stops, starts, err := s.manager.Replan()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(stops, tc.DeepEquals, [][]string{{"test2", "test1"}})
 	c.Check(starts, tc.DeepEquals, [][]string{{"test1", "test2"}})
 
@@ -440,7 +440,7 @@ workloads:
 	}
 
 	stops, starts, err := s.manager.Replan()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(stops, tc.DeepEquals, [][]string{nil})
 	c.Check(starts, tc.DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 
@@ -459,7 +459,7 @@ workloads:
 	s.planChanged(c)
 
 	stops, starts, err = s.manager.Replan()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(stops, tc.DeepEquals, [][]string{nil})
 	c.Check(starts, tc.DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 
@@ -472,7 +472,7 @@ workloads:
 	s.planChanged(c)
 
 	stops, starts, err = s.manager.Replan()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(stops, tc.DeepEquals, [][]string{nil})
 	c.Check(starts, tc.DeepEquals, [][]string{{"test1", "test2"}, {"test6"}})
 	s.stopTestServices(c)
@@ -505,7 +505,7 @@ services:
 
 	// Call Replan and ensure the ServiceManager's config has updated.
 	_, _, err := s.manager.Replan()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	config = s.manager.Config("test2")
 	c.Assert(config, tc.NotNil)
 	c.Check(config.OnSuccess, tc.Equals, plan.ActionIgnore)
@@ -583,9 +583,9 @@ func (s *S) TestCurrentUserGroup(c *tc.C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	current, err := user.Current()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	group, err := user.LookupGroupId(current.Gid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	outputPath := filepath.Join(c.MkDir(), "output")
 	layer := `
@@ -613,7 +613,7 @@ services:
 	s.waitForDoneCheck(c, "usrtest")
 
 	output, err := os.ReadFile(outputPath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(output), tc.Equals, current.Username+"\n")
 }
 
@@ -649,11 +649,11 @@ func (s *S) TestUserGroupFails(c *tc.C) {
 
 	// Ensure that setCmdCredential was called with the correct UID and GID
 	u, err := user.Lookup("nobody")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	uid, _ := strconv.Atoi(u.Uid)
 	c.Check(gotUid, tc.Equals, uint32(uid))
 	g, err := user.LookupGroup("nogroup")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	gid, _ := strconv.Atoi(g.Gid)
 	c.Check(gotGid, tc.Equals, uint32(gid))
 }
@@ -774,7 +774,7 @@ func (s *S) TestServices(c *tc.C) {
 
 	started := time.Now()
 	services, err := s.manager.Services(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(services, tc.DeepEquals, []*servstate.ServiceInfo{
 		{Name: "test1", Current: servstate.StatusInactive, Startup: servstate.StartupEnabled},
 		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
@@ -784,7 +784,7 @@ func (s *S) TestServices(c *tc.C) {
 	})
 
 	services, err = s.manager.Services([]string{"test2", "test3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(services, tc.DeepEquals, []*servstate.ServiceInfo{
 		{Name: "test2", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test3", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
@@ -794,7 +794,7 @@ func (s *S) TestServices(c *tc.C) {
 	s.startServices(c, [][]string{{"test2"}})
 
 	services, err = s.manager.Services(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(services[1].CurrentSince.After(started) && services[1].CurrentSince.Before(started.Add(5*time.Second)), tc.Equals, true)
 	services[1].CurrentSince = time.Time{}
 	c.Assert(services, tc.DeepEquals, []*servstate.ServiceInfo{
@@ -832,9 +832,9 @@ services:
 	// passing down the parent's environment too, but the layer's config
 	// should override these if also set there.
 	err := os.Setenv("PEBBLE_ENV_TEST_PARENT", "from-parent")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.Setenv("PEBBLE_ENV_TEST_1", "should be overridden")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Start "envtest" service
 	chg := s.startServices(c, [][]string{{"envtest"}})
@@ -849,7 +849,7 @@ services:
 	if os.IsNotExist(err) {
 		c.Fatal("'envtest' service did not run")
 	}
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(data), tc.Equals, `
 PEBBLE_ENV_TEST_1=foo
 PEBBLE_ENV_TEST_2=bar bazz
@@ -912,7 +912,7 @@ services:
 
 	// Send signal to process to terminate it early.
 	err := s.manager.SendSignal([]string{"test2"}, "SIGTERM")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Wait until "test2" service completes the echo command (so that we
 	// know the log buffer contains stdout).
@@ -922,7 +922,7 @@ services:
 
 	// Send signal to terminate it again.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Wait until "test2" service completes the echo command (so that we
 	// know the log buffer contains stdout).
@@ -937,7 +937,7 @@ services:
 
 	// Send signal to process to terminate it early.
 	err = s.manager.SendSignal([]string{"test2"}, "SIGTERM")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Wait until "test2" service completes the echo command (so that we
 	// know the log buffer contains stdout).
@@ -1041,7 +1041,7 @@ checks:
 	s.waitForDoneCheck(c, "test2")
 
 	b, err := os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\n")
 
 	// Now wait till check happens (it will-fail)
@@ -1063,13 +1063,13 @@ checks:
 	s.waitForDoneCheck(c, "test2")
 
 	b, err = os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\nx\n")
 
 	// Shouldn't be restarted again
 	time.Sleep(125 * time.Millisecond)
 	b, err = os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\nx\n")
 	_ = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
 		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
@@ -1137,7 +1137,7 @@ checks:
 	s.waitForDoneCheck(c, "test2")
 
 	b, err := os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\n")
 
 	// Ensure it exits and goes into backoff state
@@ -1155,7 +1155,7 @@ checks:
 	s.waitForDoneCheck(c, "test2")
 
 	b, err = os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\nx\n")
 
 	svc := s.serviceByName(c, "test2")
@@ -1165,7 +1165,7 @@ checks:
 	// Shouldn't be restarted again
 	time.Sleep(125 * time.Millisecond)
 	b, err = os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\nx\n")
 	waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
 		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
@@ -1227,7 +1227,7 @@ checks:
 	s.waitForDoneCheck(c, "test2")
 
 	b, err := os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\n")
 
 	// Now wait till check happens (it will-fail)
@@ -1244,7 +1244,7 @@ checks:
 	// Service shouldn't have been restarted
 	time.Sleep(125 * time.Millisecond)
 	b, err = os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\n")
 	_ = waitChecks(c, checkMgr, func(checks []*checkstate.CheckInfo) bool {
 		return len(checks) == 1 && checks[0].Status == checkstate.CheckStatusDown
@@ -1312,7 +1312,7 @@ checks:
 	s.waitForDoneCheck(c, "test2")
 
 	b, err := os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, "x\n")
 
 	// Now wait till check happens (it will-fail)
@@ -1614,13 +1614,13 @@ func (s *S) TestReapZombies(c *tc.C) {
 
 	// Ensure we've been set as a child subreaper
 	isSubreaper, err := getChildSubreaper()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(isSubreaper, tc.Equals, true)
 
 	// Start a service which runs this test executable with an environment
 	// variable set so the "service" knows to create a zombie child.
 	testExecutable, err := os.Executable()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	exitChildPath := filepath.Join(s.dir, "exit-child")
 	layer := `
 services:
@@ -1674,7 +1674,7 @@ zombi:
 		select {
 		case <-ticker.C:
 			stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			statFields := strings.Fields(string(stat))
 			c.Assert(len(statFields) >= 3, tc.Equals, true)
 			if statFields[2] == "Z" {
@@ -1688,7 +1688,7 @@ zombi:
 
 	// Wait till the child terminates (test2 exits)
 	fd, err := os.OpenFile(exitChildPath, os.O_RDONLY|os.O_CREATE, 0666)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fd.Close()
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusInactive
@@ -1722,7 +1722,7 @@ func (s *S) TestStopRunning(c *tc.C) {
 
 	// Create and execute a change for stopping the running services.
 	taskSet, err := servstate.StopRunning(s.st, s.manager)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.st.Lock()
 	change := s.st.NewChange("stop", "Stop all running services")
 	change.AddAll(taskSet)
@@ -1751,7 +1751,7 @@ func (s *S) TestStopRunningNoServices(c *tc.C) {
 	s.planChanged(c)
 
 	taskSet, err := servstate.StopRunning(s.st, s.manager)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(taskSet, tc.IsNil)
 }
 
@@ -1783,7 +1783,7 @@ services:
 	s.waitForDoneCheck(c, "nowrkdir")
 
 	output, err := os.ReadFile(outputPath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(output), tc.Matches, ".*/overlord/servstate\n")
 }
 
@@ -1816,7 +1816,7 @@ services:
 	s.waitForDoneCheck(c, "wrkdir")
 
 	output, err := os.ReadFile(outputPath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(output), tc.Equals, dir+"\n")
 }
 
@@ -1826,7 +1826,7 @@ func (s *S) TestWaitDelay(c *tc.C) {
 
 	// tc.Run the test binary with PEBBLE_TEST_WAITDELAY=1 (see TestMain).
 	testExecutable, err := os.Executable()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layer := `
 services:
     waitdelay:
@@ -1985,7 +1985,7 @@ func (s *S) tryPlanAddLayer(c *tc.C, layerYAML string) error {
 func (s *S) newServiceManager(c *tc.C) {
 	var err error
 	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *S) planChanged(c *tc.C) {
@@ -1997,12 +1997,12 @@ func (s *S) planChanged(c *tc.C) {
 func (s *S) planAddLayer(c *tc.C, layerYAML string) {
 	cnt := len(s.plan.Layers)
 	layer, err := plan.ParseLayer(cnt, fmt.Sprintf("test-plan-layer-%v", cnt), []byte(layerYAML))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// Resolve {{.NotifyDoneCheck}}
 	s.insertDoneChecks(c, layer)
 	layers := append(s.plan.Layers, layer)
 	combined, err := plan.CombineLayers(layers...)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(combined.Validate(), tc.IsNil)
 	s.plan = &plan.Plan{
 		Layers:     layers,
@@ -2017,7 +2017,7 @@ func (s *S) planAddLayer(c *tc.C, layerYAML string) {
 // Make sure services are all stopped before the next test starts.
 func (s *S) stopRunningServices(c *tc.C) {
 	taskSet, err := servstate.StopRunning(s.st, s.manager)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	if taskSet == nil {
 		return
@@ -2090,20 +2090,20 @@ func (s *S) testServiceLogs(c *tc.C, outputs map[string]string) {
 	}
 
 	iterators, err := s.manager.ServiceLogs([]string{"test1", "test2"}, -1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(iterators, tc.HasLen, 2)
 
 	for serviceName, it := range iterators {
 		buf := &bytes.Buffer{}
 		for it.Next(nil) {
 			_, err = io.Copy(buf, it)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 
 		c.Assert(buf.String(), tc.Matches, outputs[serviceName])
 
 		err = it.Close()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	s.stopTestServices(c)
@@ -2112,7 +2112,7 @@ func (s *S) testServiceLogs(c *tc.C, outputs map[string]string) {
 func (s *S) startServices(c *tc.C, lanes [][]string) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, lanes)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	chg := s.st.NewChange("test", "Start test")
 	chg.AddAll(ts)
 	s.st.Unlock()
@@ -2123,7 +2123,7 @@ func (s *S) startServices(c *tc.C, lanes [][]string) *state.Change {
 func (s *S) stopServices(c *tc.C, lanes [][]string) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Stop(s.st, lanes)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	chg := s.st.NewChange("test", "Stop test")
 	chg.AddAll(ts)
 	s.st.Unlock()
@@ -2133,7 +2133,7 @@ func (s *S) stopServices(c *tc.C, lanes [][]string) *state.Change {
 
 func (s *S) serviceByName(c *tc.C, name string) *servstate.ServiceInfo {
 	services, err := s.manager.Services([]string{name})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(services, tc.HasLen, 1)
 	return services[0]
 }
@@ -2293,7 +2293,7 @@ func waitForDone(donePath string, timeoutHandler func()) {
 func waitChecks(c *tc.C, checkMgr *checkstate.CheckManager, f func(checks []*checkstate.CheckInfo) bool) []*checkstate.CheckInfo {
 	for start := time.Now(); time.Since(start) < 10*time.Second; {
 		checks, err := checkMgr.Checks()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if f(checks) {
 			return checks
 		}
@@ -2461,7 +2461,7 @@ func (s *S) TestPruneInactiveOlderThanPruneWait(c *tc.C) {
 	// Immediately prune; all inactive services are not older than pruneWait, so nothing will be pruned.
 	s.manager.Prune(7*24*time.Hour, 1000)
 	services, err := s.manager.Services(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	for _, service := range services {
 		// CurrentSince is not nil, meaning the serviceData is not pruned.
 		c.Assert(service.CurrentSince, tc.Not(tc.Equals), time.Time{})
@@ -2474,14 +2474,14 @@ func (s *S) TestPruneInactiveOlderThanPruneWait(c *tc.C) {
 	s.manager.Prune(7*24*time.Hour, 1000)
 
 	services, err = s.manager.Services([]string{"test3", "test4", "test5"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	for _, service := range services {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
 		c.Assert(service.CurrentSince, tc.Equals, time.Time{})
 	}
 	// Active services not affected.
 	services, err = s.manager.Services([]string{"test1", "test2"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	for _, service := range services {
 		c.Assert(service.CurrentSince, tc.Not(tc.Equals), time.Time{})
 	}
@@ -2510,14 +2510,14 @@ func (s *S) TestPruneMaxServiceData(c *tc.C) {
 	s.manager.Prune(7*24*time.Hour, 0)
 
 	services, err := s.manager.Services([]string{"test3", "test4", "test5"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	for _, service := range services {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
 		c.Assert(service.CurrentSince, tc.Equals, time.Time{})
 	}
 	// Active services not affected.
 	services, err = s.manager.Services([]string{"test1", "test2"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	for _, service := range services {
 		c.Assert(service.CurrentSince, tc.Not(tc.Equals), time.Time{})
 	}
@@ -2558,7 +2558,7 @@ func (s *S) TestPruneSortByCurrentSince(c *tc.C) {
 	s.manager.Prune(100*365*24*time.Hour, 2)
 
 	services, err := s.manager.Services([]string{"test3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	for _, service := range services {
 		// If serviceData is pruned, manager.Services returns zero value for CurrentSince.
 		c.Assert(service.CurrentSince, tc.Equals, time.Time{})
@@ -2566,7 +2566,7 @@ func (s *S) TestPruneSortByCurrentSince(c *tc.C) {
 	// Active services not affected;
 	// services with newer currentSince are not pruned either.
 	services, err = s.manager.Services([]string{"test1", "test2", "test4", "test5"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	for _, service := range services {
 		c.Assert(service.CurrentSince, tc.Not(tc.Equals), time.Time{})
 	}

@@ -43,7 +43,7 @@ func TestPlanSuite(t *testing.T) {
 func (ps *planSuite) SetUpTest(c *tc.C) {
 	ps.layersDir = filepath.Join(c.MkDir(), "layers")
 	err := os.Mkdir(ps.layersDir, 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	//Reset write layer counter
 	ps.writeLayerCounter = 1
@@ -52,14 +52,14 @@ func (ps *planSuite) SetUpTest(c *tc.C) {
 func (ps *planSuite) writeLayer(c *tc.C, layer string) {
 	filename := fmt.Sprintf("%03[1]d-layer-file-%[1]d.yaml", ps.writeLayerCounter)
 	err := os.WriteFile(filepath.Join(ps.layersDir, filename), []byte(layer), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ps.writeLayerCounter++
 }
 
 func (ps *planSuite) parseLayer(c *tc.C, order int, label, layerYAML string) *plan.Layer {
 	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return layer
 }
 
@@ -71,7 +71,7 @@ func (ps *planSuite) planLayersHasLen(c *tc.C, expectedLen int) {
 func (ps *planSuite) planYAML(c *tc.C) string {
 	plan := ps.planMgr.Plan()
 	yml, err := yaml.Marshal(plan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return string(yml)
 }
 

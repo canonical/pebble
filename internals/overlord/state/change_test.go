@@ -106,7 +106,7 @@ func (cs *changeSuite) TestGetSet(c *tc.C) {
 
 	var v int
 	err := chg.Get("a", &v)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.Equals, 1)
 }
 
@@ -495,7 +495,7 @@ func (cs *changeSuite) TestAbort(c *tc.C) {
 	for _, t := range tasks {
 		var s state.Status
 		err := t.Get("old-status", &s)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		c.Logf("Checking %s task after abort", t.Summary())
 		switch s {
@@ -745,7 +745,7 @@ func (ts *taskRunnerSuite) TestAbortLanes(c *tc.C) {
 				lanes := strings.SplitSeq(parts[2], ",")
 				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
-					c.Assert(err, tc.IsNil)
+					c.Assert(err, tc.ErrorIsNil)
 					task.JoinLane(n)
 				}
 			}
@@ -959,7 +959,7 @@ func (ts *taskRunnerSuite) TestAbortUnreadyLanes(c *tc.C) {
 				lanes := strings.SplitSeq(parts[2], ",")
 				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
-					c.Assert(err, tc.IsNil)
+					c.Assert(err, tc.ErrorIsNil)
 					task.JoinLane(n)
 				}
 			}
@@ -1136,7 +1136,7 @@ func (ts *taskRunnerSuite) TestCheckTaskDependencies(c *tc.C) {
 			errTasksDepCycle := err.(*state.TaskDependencyCycleError)
 			c.Assert(errTasksDepCycle.IDs, tc.DeepEquals, test.errIDs)
 		} else {
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 	}
 }
@@ -1582,11 +1582,11 @@ func (cs *changeSuite) TestChangeLastRecordedNoticeStatusPersisted(c *tc.C) {
 	chg.SetStatus(state.DoingStatus)
 
 	data, err := json.Marshal(chg)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	var chgData map[string]any
 	err = json.Unmarshal(data, &chgData)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	obtainedStatus := state.Status(chgData["last-recorded-notice-status"].(float64))
 	c.Check(obtainedStatus, tc.Equals, state.DoingStatus)
 }

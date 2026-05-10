@@ -55,11 +55,11 @@ func (s *patch2Suite) TestLegacyIdentities(c *tc.C) {
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = patch.Apply(st)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -80,10 +80,10 @@ func (s *patch2Suite) TestLegacyIdentities(c *tc.C) {
 	// ensure we moved forward to patch-level 2 (sublevel 0)
 	var patchLevel int
 	err = st.Get("patch-level", &patchLevel)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(patchLevel, tc.Equals, 2)
 	err = st.Get("patch-sublevel", &patchLevel)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(patchLevel, tc.Equals, 0)
 }
 
@@ -117,11 +117,11 @@ func (s *patch2Suite) TestNewAndLegacyIdentities(c *tc.C) {
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = patch.Apply(st)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()

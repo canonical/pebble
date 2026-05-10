@@ -87,7 +87,7 @@ func (s *PebbleSuite) TestChecks(c *tc.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup   Status    Successes  Failures  Change
@@ -113,7 +113,7 @@ func (s *PebbleSuite) TestPlanNoChecks(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "Plan has no health checks.\n")
@@ -131,7 +131,7 @@ func (s *PebbleSuite) TestNoMatchingChecks(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "No matching health checks.\n")
@@ -152,7 +152,7 @@ func (s *PebbleSuite) TestChecksFiltering(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup  Status  Successes  Failures  Change
@@ -204,7 +204,7 @@ func (s *PebbleSuite) TestChecksPrevChangeLog(c *tc.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup  Status  Successes  Failures  Change
@@ -238,7 +238,7 @@ func (s *PebbleSuite) TestChecksPrevChangeLogTruncated(c *tc.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup  Status  Successes  Failures  Change
@@ -263,7 +263,7 @@ func (s *PebbleSuite) TestChecksJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"checks":{"chk1":{"name":"chk1","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1"},"chk2":{"name":"chk2","level":"alive","startup":"enabled","status":"down","failures":1,"threshold":1,"change-id":"2"}}}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -284,7 +284,7 @@ func (s *PebbleSuite) TestChecksYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "yaml"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 checks:
@@ -308,7 +308,7 @@ func (s *PebbleSuite) TestNoChecksJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"checks":{}}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -322,7 +322,7 @@ func (s *PebbleSuite) TestNoChecksYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "yaml"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "checks: {}\n")
 	c.Check(s.Stderr(), tc.Equals, "")

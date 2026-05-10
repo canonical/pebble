@@ -68,7 +68,7 @@ func (s *PebbleSuite) TestReplan(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"replan"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -118,7 +118,7 @@ func (s *PebbleSuite) TestReplanNoWait(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"replan", "--no-wait"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "43\n")
 	c.Check(s.Stderr(), tc.Equals, ``)

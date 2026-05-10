@@ -49,7 +49,7 @@ func (s *PebbleSuite) TestNoticeID(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "123"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 id: "123"
@@ -114,7 +114,7 @@ func (s *PebbleSuite) TestNoticeTypeKey(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "custom", "a.b/c"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 id: "123"
@@ -156,7 +156,7 @@ func (s *PebbleSuite) TestNoticeTypeKeyUID(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notice", "--uid", "1001", "custom", "a.b/c"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 id: "123"

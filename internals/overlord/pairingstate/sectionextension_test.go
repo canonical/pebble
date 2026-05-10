@@ -127,7 +127,7 @@ func (s *pairingSuite) TestPairingSectionExtensionSchema(c *tc.C) {
 		if t.error != "" {
 			c.Assert(err, tc.ErrorMatches, t.error)
 		} else {
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			section, ok := combined.Sections[pairingstate.PairingField]
 			c.Assert(ok, tc.Equals, true)
 			c.Assert(section, tc.NotNil)

@@ -80,7 +80,7 @@ func (s *execSuite) TestExitZero(c *tc.C) {
 		"command": []any{"true"},
 	})
 	err := s.wait(c, process)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *execSuite) TestExitNonZero(c *tc.C) {
@@ -108,7 +108,7 @@ func (s *execSuite) TestTimeout(c *tc.C) {
 		"timeout": "1s",
 	})
 	err := s.wait(c, process)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(s.req.URL.String(), tc.Equals, "http://localhost/v1/changes/123/wait?timeout=2s")
 }
 
@@ -143,7 +143,7 @@ func (s *execSuite) TestOtherOptions(c *tc.C) {
 		"split-stderr": true,
 	})
 	err := s.wait(c, process)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *execSuite) TestWaitChangeError(c *tc.C) {
@@ -232,9 +232,9 @@ func (s *execSuite) TestSendSignal(c *tc.C) {
 		"command": []any{"server"},
 	})
 	err := process.SendSignal("SIGHUP")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = process.SendSignal("SIGUSR1")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(s.controlWs.writes, tc.DeepEquals, []write{
 		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGHUP"}}`},
 		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGUSR1"}}`},
@@ -250,9 +250,9 @@ func (s *execSuite) TestSendResize(c *tc.C) {
 		"command": []any{"server"},
 	})
 	err := process.SendResize(150, 50)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = process.SendResize(80, 25)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(s.controlWs.writes, tc.DeepEquals, []write{
 		{websocket.TextMessage, `{"command":"resize","resize":{"width":150,"height":50}}`},
 		{websocket.TextMessage, `{"command":"resize","resize":{"width":80,"height":25}}`},
@@ -275,7 +275,7 @@ func (s *execSuite) TestOutputCombined(c *tc.C) {
 		"command": []any{"/bin/sh", "-c", "echo OUT; echo ERR >err"},
 	})
 	err := s.wait(c, process)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(stdout.String(), tc.Equals, "OUT\nERR\n")
 }
 
@@ -301,7 +301,7 @@ func (s *execSuite) TestOutputSplit(c *tc.C) {
 		"split-stderr": true,
 	})
 	err := s.wait(c, process)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(stdout.String(), tc.Equals, "OUT\n")
 	c.Assert(stderr.String(), tc.Equals, "ERR\n")
 }
@@ -322,7 +322,7 @@ func (s *execSuite) TestStdinAndStdout(c *tc.C) {
 		"command": []any{"awk", "{ print toupper($0) }"},
 	})
 	err := s.wait(c, process)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(stdout.String(), tc.Equals, "FOO\nBAR BAZZ\n")
 	c.Assert(s.stdioWs.writes, tc.DeepEquals, []write{
 		{websocket.BinaryMessage, "foo\nBar BAZZ\n"},
@@ -375,11 +375,11 @@ func (w *testWebsocket) WriteJSON(v any) error {
 func (s *execSuite) exec(c *tc.C, opts *client.ExecOptions, exitCode int) (process *client.ExecProcess, requestBody map[string]any) {
 	s.addResponses("123", exitCode)
 	process, err := s.cli.Exec(opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(s.req.Method, tc.Equals, "POST")
 	c.Assert(s.req.URL.String(), tc.Equals, "http://localhost/v1/exec")
 	err = json.NewDecoder(s.req.Body).Decode(&requestBody)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return process, requestBody
 }
 

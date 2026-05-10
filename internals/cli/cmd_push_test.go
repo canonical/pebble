@@ -52,22 +52,22 @@ func (s *PebbleSuite) TestPush(c *tc.C) {
 		c.Assert(r.Method, tc.Equals, "POST")
 
 		mr, err := r.MultipartReader()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Check metadata part
 		metadata, err := mr.NextPart()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(metadata.Header.Get("Content-Type"), tc.Equals, "application/json")
 		c.Assert(metadata.FormName(), tc.Equals, "request")
 
 		buf := bytes.NewBuffer(make([]byte, 0))
 		_, err = buf.ReadFrom(metadata)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Decode metadata
 		var payload writeFilesPayload
 		err = json.NewDecoder(buf).Decode(&payload)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(payload, tc.DeepEquals, writeFilesPayload{
 			Action: "write",
 			Files: []writeFilesItem{{
@@ -78,14 +78,14 @@ func (s *PebbleSuite) TestPush(c *tc.C) {
 
 		// Check file part
 		file, err := mr.NextPart()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(file.Header.Get("Content-Type"), tc.Equals, "application/octet-stream")
 		c.Assert(file.FormName(), tc.Equals, "files")
 		c.Assert(path.Base(file.FileName()), tc.Equals, "file.bin")
 
 		buf.Reset()
 		_, err = buf.ReadFrom(file)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(buf.String(), tc.Equals, "Hello, world!")
 
 		// Check end of multipart request
@@ -99,11 +99,11 @@ func (s *PebbleSuite) TestPush(c *tc.C) {
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
 	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	args := []string{"push", filePath, "/tmp/file.bin"}
 	rest, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -135,22 +135,22 @@ func (s *PebbleSuite) TestPushAPIFails(c *tc.C) {
 		c.Assert(r.Method, tc.Equals, "POST")
 
 		mr, err := r.MultipartReader()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Check metadata part
 		metadata, err := mr.NextPart()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(metadata.Header.Get("Content-Type"), tc.Equals, "application/json")
 		c.Assert(metadata.FormName(), tc.Equals, "request")
 
 		buf := bytes.NewBuffer(make([]byte, 0))
 		_, err = buf.ReadFrom(metadata)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Decode metadata
 		var payload writeFilesPayload
 		err = json.NewDecoder(buf).Decode(&payload)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(payload, tc.DeepEquals, writeFilesPayload{
 			Action: "write",
 			Files: []writeFilesItem{{
@@ -161,14 +161,14 @@ func (s *PebbleSuite) TestPushAPIFails(c *tc.C) {
 
 		// Check file part
 		file, err := mr.NextPart()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(file.Header.Get("Content-Type"), tc.Equals, "application/octet-stream")
 		c.Assert(file.FormName(), tc.Equals, "files")
 		c.Assert(path.Base(file.FileName()), tc.Equals, "file.bin")
 
 		buf.Reset()
 		_, err = buf.ReadFrom(file)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(buf.String(), tc.Equals, "Hello, world!")
 
 		// Check end of multipart request
@@ -192,7 +192,7 @@ func (s *PebbleSuite) TestPushAPIFails(c *tc.C) {
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
 	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	args := []string{"push", "-m", "600", filePath, "/tmp/file.bin"}
 	rest, err := cli.ParserForTest().ParseArgs(args)

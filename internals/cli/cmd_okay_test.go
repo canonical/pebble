@@ -29,7 +29,7 @@ func (s *PebbleSuite) TestOkay(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -50,7 +50,7 @@ func (s *PebbleSuite) TestOkayWarnings(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"okay", "--warnings"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")

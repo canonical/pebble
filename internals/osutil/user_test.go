@@ -69,7 +69,7 @@ func (s *userSuite) TestRealUser(c *tc.C) {
 
 		os.Setenv("SUDO_USER", t.SudoUsername)
 		cur, err := osutil.RealUser()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(cur.Username, tc.Equals, t.CurrentUsername)
 	}
 }
@@ -89,7 +89,7 @@ func (s *userSuite) TestUidGid(c *tc.C) {
 		c.Check(uid, tc.Equals, t.Uid, tc.Commentf(k))
 		c.Check(gid, tc.Equals, t.Gid, tc.Commentf(k))
 		if t.Err == "" {
-			c.Check(err, tc.IsNil, tc.Commentf(k))
+			c.Assert(err, tc.ErrorIsNil, tc.Commentf(k))
 		} else {
 			c.Check(err, tc.ErrorMatches, ".*"+t.Err+".*", tc.Commentf(k))
 		}
@@ -160,7 +160,7 @@ func (s *userSuite) TestNormalizeUidGid(c *tc.C) {
 
 func (s *userSuite) TestIsCurrent(c *tc.C) {
 	isCurrent, err := osutil.IsCurrent(os.Getuid(), os.Getgid())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(isCurrent, tc.Equals, true)
 
 	// Different uid and gid
@@ -172,7 +172,7 @@ func (s *userSuite) TestIsCurrent(c *tc.C) {
 	})
 	defer restore()
 	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getpid())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(isCurrent, tc.Equals, false)
 
 	// Different uid only
@@ -183,7 +183,7 @@ func (s *userSuite) TestIsCurrent(c *tc.C) {
 		}, nil
 	})
 	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getpid())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(isCurrent, tc.Equals, false)
 
 	// Different gid only
@@ -194,6 +194,6 @@ func (s *userSuite) TestIsCurrent(c *tc.C) {
 		}, nil
 	})
 	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getgid())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(isCurrent, tc.Equals, false)
 }

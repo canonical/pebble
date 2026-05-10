@@ -81,7 +81,7 @@ func mkWarningsFakeHandler(c *tc.C, body string) func(w http.ResponseWriter, r *
 		c.Check(query["types"], tc.DeepEquals, []string{"warning"})
 
 		buf, err := io.ReadAll(r.Body)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(string(buf), tc.Equals, "")
 		c.Check(r.Method, tc.Equals, "GET")
 		w.WriteHeader(200)
@@ -93,7 +93,7 @@ func (s *warningSuite) TestNoWarningsEver(c *tc.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stderr(), tc.Equals, "No warnings.\n")
 	c.Check(s.Stdout(), tc.Equals, "")
@@ -108,7 +108,7 @@ func (s *warningSuite) TestNoFurtherWarnings(c *tc.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, `{"type": "sync", "status-code": 200, "result": []}`))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stderr(), tc.Equals, "No further warnings.\n")
 	c.Check(s.Stdout(), tc.Equals, "")
@@ -118,7 +118,7 @@ func (s *warningSuite) TestWarnings(c *tc.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--unicode=never"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stderr(), tc.Equals, "")
 	c.Check(s.Stdout(), tc.Equals, `
@@ -140,7 +140,7 @@ func (s *warningSuite) TestVerboseWarnings(c *tc.C) {
 	s.RedirectClientToTestServer(mkWarningsFakeHandler(c, testWarnings))
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"warnings", "--abs-time", "--verbose", "--unicode=never"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stderr(), tc.Equals, "")
 	c.Check(s.Stdout(), tc.Equals, `
@@ -180,7 +180,7 @@ func (s *warningSuite) TestCommandWithWarnings(c *tc.C) {
 		c.Check(r.URL.Query(), tc.HasLen, 0)
 
 		buf, err := io.ReadAll(r.Body)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(string(buf), tc.Equals, "")
 		c.Check(r.Method, tc.Equals, "GET")
 		w.WriteHeader(200)
@@ -216,7 +216,7 @@ func (s *warningSuite) TestCommandWithWarnings(c *tc.C) {
 			SocketPath: runOpts.ClientConfig.Socket,
 			PebbleDir:  runOpts.PebbleDir,
 		}).ParseArgs([]string{"version"})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		latest := client.LatestWarningTime()
 		if expectedCount == 0 {

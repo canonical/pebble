@@ -76,12 +76,12 @@ func (ss *stateSuite) TestGetAndSet(c *tc.C) {
 
 	var mSt1B mgrState1
 	err := st.Get("mgr1", &mSt1B)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(&mSt1B, tc.DeepEquals, mSt1)
 
 	var mSt2B mgrState2
 	err = st.Get("mgr2", &mSt2B)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(&mSt2B, tc.DeepEquals, mSt2)
 }
 
@@ -145,7 +145,7 @@ func (ss *stateSuite) TestSetToNilDeletes(c *tc.C) {
 	st.Set("a", map[string]int{"a": 1})
 	var v map[string]int
 	err := st.Get("a", &v)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.HasLen, 1)
 
 	st.Set("a", nil)
@@ -159,7 +159,7 @@ func (ss *stateSuite) TestSetToNilDeletes(c *tc.C) {
 func (ss *stateSuite) TestNullMeansNoState(c *tc.C) {
 	buf := bytes.NewBufferString(`{"data": {"a": null}}`)
 	st, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -248,7 +248,7 @@ func (ss *stateSuite) TestImplicitCheckpointAndRead(c *tc.C) {
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(st2.Modified(), tc.Equals, false)
 
 	st2.Lock()
@@ -256,17 +256,17 @@ func (ss *stateSuite) TestImplicitCheckpointAndRead(c *tc.C) {
 
 	var v int
 	err = st2.Get("v", &v)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.Equals, 1)
 
 	var mSt1B mgrState1
 	err = st2.Get("mgr1", &mSt1B)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(&mSt1B, tc.DeepEquals, mSt1)
 
 	var mSt2B mgrState2
 	err = st2.Get("mgr2", &mSt2B)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(&mSt2B, tc.DeepEquals, mSt2)
 }
 
@@ -372,7 +372,7 @@ func (ss *stateSuite) TestNewChangeWithNoticeData(c *tc.C) {
 
 	var data map[string]string
 	err := chg.Get("notice-data", &data)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(data, tc.DeepEquals, extraData)
 }
 
@@ -411,7 +411,7 @@ func (ss *stateSuite) TestNewChangeAndCheckpoint(c *tc.C) {
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
@@ -430,7 +430,7 @@ func (ss *stateSuite) TestNewChangeAndCheckpoint(c *tc.C) {
 
 	var v int
 	err = chg0.Get("a", &v)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.Equals, 1)
 
 	c.Check(chg0.Status(), tc.Equals, state.ErrorStatus)
@@ -462,7 +462,7 @@ func (ss *stateSuite) TestNewChangeAndCheckpointTaskDerivedStatus(c *tc.C) {
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2.Lock()
 	defer st2.Unlock()
@@ -514,7 +514,7 @@ func (ss *stateSuite) TestNewTaskAndCheckpoint(c *tc.C) {
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
@@ -538,7 +538,7 @@ func (ss *stateSuite) TestNewTaskAndCheckpoint(c *tc.C) {
 
 	var v int
 	err = task0_1.Get("a", &v)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.Equals, 1)
 
 	c.Check(task0_1.Status(), tc.Equals, state.DoneStatus)
@@ -580,7 +580,7 @@ func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *tc.C) {
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
@@ -632,7 +632,7 @@ func (ss *stateSuite) TestEmptyTaskAndChangeDataAndCheckpointReadAndSet(c *tc.C)
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
@@ -676,7 +676,7 @@ func (ss *stateSuite) TestCheckpointPreserveLastIds(c *tc.C) {
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2.Lock()
 	defer st2.Unlock()
@@ -707,7 +707,7 @@ func (ss *stateSuite) TestCheckpointPreserveCleanStatus(c *tc.C) {
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2.Lock()
 	defer st2.Unlock()
@@ -839,13 +839,13 @@ func (ss *stateSuite) TestPrune(c *tc.C) {
 	state.FakeChangeTimes(chg1, now.Add(-abortWait), unset)
 
 	n1ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg1.ID(), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	chg2 := st.NewChange("prune", "...")
 	chg2.AddTask(t2)
 	c.Assert(chg2.Status(), tc.Equals, state.DoStatus)
 	n2ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg2.ID(), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	state.FakeChangeTimes(chg2, now.Add(-pruneWait), now.Add(-pruneWait))
 
 	chg3 := st.NewChange("ready-but-recent", "...")
@@ -862,7 +862,7 @@ func (ss *stateSuite) TestPrune(c *tc.C) {
 		// defaultNoticeExpireAfter = 7 * 24 * time.Hour
 		Time: now.Add(-8 * 24 * time.Hour),
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// unlinked task
 	t5 := st.NewTask("unliked", "...")
@@ -1116,7 +1116,7 @@ func (ss *stateSuite) TestPruneHonorsStartOperationTime(c *tc.C) {
 
 func (ss *stateSuite) TestReadStateInitsTransientMapFields(c *tc.C) {
 	st, err := state.ReadState(nil, bytes.NewBufferString("{}"))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Lock()
 	defer st.Unlock()
 
@@ -1133,13 +1133,13 @@ func (ss *stateSuite) TestTimingsSupport(c *tc.C) {
 	var tims []int
 
 	err := st.GetMaybeTimings(&tims)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(tims, tc.IsNil)
 
 	st.SaveTimings([]int{1, 2, 3})
 
 	err = st.GetMaybeTimings(&tims)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(tims, tc.DeepEquals, []int{1, 2, 3})
 }
 

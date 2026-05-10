@@ -411,7 +411,7 @@ nexttest:
 		}) {
 			// Verify "x-field" data.
 			x := p.Sections[xField].(*xSection)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			c.Assert(x.Entries, tc.DeepEquals, testData.result.x.Entries)
 		}
 
@@ -420,13 +420,13 @@ nexttest:
 		}) {
 			// Verify "y-field" data.
 			y := p.Sections[yField].(*ySection)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			c.Assert(y.Entries, tc.DeepEquals, testData.result.y.Entries)
 		}
 
 		// Verify combined plan YAML.
 		planYAML, err := yaml.Marshal(p)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(string(planYAML), tc.Equals, testData.resultYaml)
 	}
 }
@@ -471,9 +471,9 @@ func (s *S) TestSectionOrderExt(c *tc.C) {
 			srv1:
 				override: replace
 				command: cmd`))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	combined, err := plan.CombineLayers(layer)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	plan := plan.Plan{
 		Services:   combined.Services,
 		Checks:     combined.Checks,
@@ -481,7 +481,7 @@ func (s *S) TestSectionOrderExt(c *tc.C) {
 		Sections:   combined.Sections,
 	}
 	data, err := yaml.Marshal(plan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(data), tc.Equals, string(reindent(`
 		services:
 			srv1:
@@ -517,11 +517,11 @@ func (s *S) TestSectionOrderExt(c *tc.C) {
 // writeLayerFiles writes layer files of a test to disk.
 func (s *S) writeLayerFiles(c *tc.C, layersDir string, inputs []*inputLayer) {
 	err := os.MkdirAll(layersDir, 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	for _, input := range inputs {
 		err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-%s.yaml", input.order, input.label)), reindent(input.yaml), 0644)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 }
 

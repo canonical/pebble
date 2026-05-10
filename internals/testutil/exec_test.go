@@ -31,13 +31,13 @@ func (s *fakeCommandSuite) TestFakeCommand(c *tc.C) {
 	fake := FakeCommand(c, "cmd", "true")
 	defer fake.Restore()
 	err := exec.Command("cmd", "first-run", "--arg1", "arg2", "a space").Run()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = exec.Command("cmd", "second-run", "--arg1", "arg2", "a %s").Run()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = exec.Command("cmd", "third-run", "--arg1", "arg2", "").Run()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = exec.Command("cmd", "forth-run", "--arg1", "arg2", "", "a %s").Run()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(fake.Calls(), tc.DeepEquals, [][]string{
 		{"cmd", "first-run", "--arg1", "arg2", "a space"},
 		{"cmd", "second-run", "--arg1", "arg2", "a %s"},

@@ -118,7 +118,7 @@ func (s *PebbleSuite) TestNoChanges(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "svc1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "no changes found\n")
@@ -158,7 +158,7 @@ two +Do +2016-04-21 +2016-04-2[12] +...
 `[1:]
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Matches, expectedChanges)
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -173,7 +173,7 @@ func (s *PebbleSuite) TestChangesJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"changes":[{"id":"four","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"}],"ready":false,"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"},{"id":"three","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-01-21T01:02:03Z","ready-time":"2016-01-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-01-21T01:02:03Z"},{"id":"one","kind":"remove","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"},{"id":"two","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}]}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -188,7 +188,7 @@ func (s *PebbleSuite) TestChangesYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "yaml"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 changes:
@@ -276,7 +276,7 @@ func (s *PebbleSuite) TestNoChangesJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"changes":[]}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -291,7 +291,7 @@ func (s *PebbleSuite) TestNoChangesYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "yaml"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "changes: []\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -335,7 +335,7 @@ func (s *PebbleSuite) TestChangeSimple(c *tc.C) {
 Do +2016-04-21T01:02:03Z +- +some summary
 `
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Matches, expectedChange)
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -370,7 +370,7 @@ func (s *PebbleSuite) TestChangeSimpleRebooting(c *tc.C) {
 	})
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "42"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.Stderr(), tc.Equals, "WARNING: Pebble is about to reboot the system\n")
 }
 
@@ -400,7 +400,7 @@ func (s *PebbleSuite) TestTasksLast(c *tc.C) {
 Do +2016-04-21T01:02:03Z +- +some summary
 `
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "--last=install"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.DeepEquals, []string{})
 	c.Check(s.Stdout(), tc.Matches, expectedChange)
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -427,7 +427,7 @@ func (s *PebbleSuite) TestTasksLastQuestionmark(c *tc.C) {
 	})
 	for i := range 2 {
 		rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--last=foobar?"})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(rest, tc.DeepEquals, []string{})
 		c.Check(s.Stdout(), tc.Matches, "")
 		c.Check(s.Stderr(), tc.Equals, "")
@@ -461,7 +461,7 @@ func (s *PebbleSuite) TestTasksJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "json", "42"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"id":"uno","kind":"foo","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -475,7 +475,7 @@ func (s *PebbleSuite) TestTasksYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "yaml", "42"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 id: uno
@@ -518,7 +518,7 @@ func (s *PebbleSuite) TestChangeProgress(c *tc.C) {
 		n++
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.DeepEquals, []string{})
 	c.Check(s.Stdout(), tc.Matches, `(?ms)Status +Spawn +Ready +Summary
 Doing +2016-04-21T01:02:03Z +2016-04-21T01:02:04Z +some summary \(50.00%\)

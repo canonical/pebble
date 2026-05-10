@@ -42,7 +42,7 @@ func (s *PebbleSuite) TestStopChecks(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"stop-checks", "chk1", "chk2", "chk3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "Checks stopped: chk1, chk2\n")
 	c.Check(s.Stderr(), tc.Equals, "")

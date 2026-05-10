@@ -49,7 +49,7 @@ func (s *apiSuite) TestGetPlanErrors(c *tc.C) {
 
 	for _, test := range tests {
 		req, err := http.NewRequest("POST", test.url, nil)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		rsp := v1GetPlan(planCmd, req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
@@ -66,7 +66,7 @@ func (s *apiSuite) TestGetPlan(c *tc.C) {
 	planCmd := apiCmd("/v1/plan")
 
 	req, err := http.NewRequest("GET", "/v1/plan?format=yaml", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetPlan(planCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -88,7 +88,7 @@ func (s *apiSuite) planYAML(c *tc.C) string {
 	manager := s.d.overlord.PlanManager()
 	plan := manager.Plan()
 	yml, err := yaml.Marshal(plan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return string(yml)
 }
 
@@ -116,7 +116,7 @@ func (s *apiSuite) TestLayersErrors(c *tc.C) {
 
 	for _, test := range tests {
 		req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(test.payload))
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
@@ -137,7 +137,7 @@ func (s *apiSuite) TestLayersAddAppend(c *tc.C) {
 
 	payload := `{"action": "add", "label": "foo", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -166,7 +166,7 @@ func (s *apiSuite) TestLayersAddCombine(c *tc.C) {
 
 	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -193,7 +193,7 @@ func (s *apiSuite) TestLayersCombineFormatError(c *tc.C) {
 
 	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)

@@ -90,7 +90,7 @@ func (ts *taskSuite) TestGetSet(c *tc.C) {
 
 	var v int
 	err := t.Get("a", &v)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.Equals, 1)
 }
 
@@ -120,7 +120,7 @@ func (ts *taskSuite) TestClear(c *tc.C) {
 
 	var v int
 	err := t.Get("a", &v)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.Equals, 1)
 
 	t.Clear("a")
@@ -190,7 +190,7 @@ func (ts *taskSuite) TestTaskMarshalsWaitStatus(c *tc.C) {
 	t1.SetToWait(state.UndoStatus)
 
 	d, err := t1.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	needle := fmt.Sprintf(`"waited-status":%d`, t1.WaitedStatus())
 	c.Assert(string(d), testutil.Contains, needle)
@@ -310,7 +310,7 @@ func (ts *taskSuite) TestTaskMarshalsWaitFor(c *tc.C) {
 	t2.WaitFor(t1)
 
 	d, err := t2.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	needle := fmt.Sprintf(`"wait-tasks":["%s"`, t1.ID())
 	c.Assert(string(d), testutil.Contains, needle)
@@ -326,7 +326,7 @@ func (ts *taskSuite) TestTaskMarshalsDoingUndoingTime(c *tc.C) {
 	t.AccumulateUndoingTime(654321)
 
 	d, err := t.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(string(d), testutil.Contains, `"doing-time":123456`)
 	c.Assert(string(d), testutil.Contains, `"undoing-time":654321`)
@@ -437,7 +437,7 @@ func (ts *taskSuite) TestTaskMarshalsLog(c *tc.C) {
 	t.Logf("foo")
 
 	d, err := t.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(string(d), tc.Matches, `.*"log":\["....-..-..T.* INFO foo"\].*`)
 }
@@ -630,22 +630,22 @@ func (cs *taskSuite) TestTaskSetEdge(c *tc.C) {
 	ts.MarkEdge(t1, edge1)
 	t, err = ts.Edge(edge1)
 	c.Assert(t, tc.Equals, t1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// two edges
 	ts.MarkEdge(t2, edge2)
 	t, err = ts.Edge(edge1)
 	c.Assert(t, tc.Equals, t1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	t, err = ts.Edge(edge2)
 	c.Assert(t, tc.Equals, t2)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// edges can be reassigned
 	ts.MarkEdge(t3, edge1)
 	t, err = ts.Edge(edge1)
 	c.Assert(t, tc.Equals, t3)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// it is possible to check if edge exists without failing
 	t = ts.MaybeEdge(edge1)
@@ -669,21 +669,21 @@ func (cs *taskSuite) TestTaskAddAllWithEdges(c *tc.C) {
 	ts.MarkEdge(t1, edge1)
 	t, err := ts.Edge(edge1)
 	c.Assert(t, tc.Equals, t1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ts2 := state.NewTaskSet()
 	err = ts2.AddAllWithEdges(ts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	t, err = ts2.Edge(edge1)
 	c.Assert(t, tc.Equals, t1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// doing it again is no harm
 	err = ts2.AddAllWithEdges(ts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	t, err = ts2.Edge(edge1)
 	c.Assert(t, tc.Equals, t1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// but conflicting edges are an error
 	t4 := st.NewTask("another-kind", "4...")

@@ -31,10 +31,10 @@ func (s *PebbleSuite) TestNotifyBasic(c *tc.C) {
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 
 		body, err := io.ReadAll(r.Body)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		var m map[string]any
 		err = json.Unmarshal(body, &m)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(m, tc.DeepEquals, map[string]any{
 			"action": "add",
 			"type":   "custom",
@@ -49,7 +49,7 @@ func (s *PebbleSuite) TestNotifyBasic(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notify", "a.b/c"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "Recorded notice 123\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -61,10 +61,10 @@ func (s *PebbleSuite) TestNotifyData(c *tc.C) {
 		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
 
 		body, err := io.ReadAll(r.Body)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		var m map[string]any
 		err = json.Unmarshal(body, &m)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(m, tc.DeepEquals, map[string]any{
 			"action": "add",
 			"type":   "custom",
@@ -85,7 +85,7 @@ func (s *PebbleSuite) TestNotifyData(c *tc.C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notify", "--repeat-after=1h", "a.b/c", "k=v", "foo=bar bazz"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "Recorded notice 42\n")
 	c.Check(s.Stderr(), tc.Equals, "")

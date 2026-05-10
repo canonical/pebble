@@ -106,7 +106,7 @@ func DecodedRequestBody(c *tc.C, r *http.Request) map[string]any {
 	decoder := json.NewDecoder(r.Body)
 	decoder.UseNumber()
 	err := decoder.Decode(&body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return body
 }
 
@@ -114,7 +114,7 @@ func DecodedRequestBody(c *tc.C, r *http.Request) map[string]any {
 func EncodeResponseBody(c *tc.C, w http.ResponseWriter, body any) {
 	encoder := json.NewEncoder(w)
 	err := encoder.Encode(body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func fakeArgs(args ...string) (restore func()) {
@@ -170,10 +170,10 @@ func (s *PebbleSuite) TestRunOptionApplyDefaults(c *tc.C) {
 
 func (s *BasePebbleSuite) readCLIState(c *tc.C) map[string]any {
 	data, err := os.ReadFile(s.cliStatePath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var fullState map[string]any
 	err = json.Unmarshal(data, &fullState)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	socketMap, ok := fullState["pebble"].(map[string]any)
 	if !ok {
@@ -196,9 +196,9 @@ func (s *BasePebbleSuite) writeCLIState(c *tc.C, st map[string]any) {
 		},
 	}
 	err := os.MkdirAll(filepath.Dir(s.cliStatePath), 0o700)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	data, err := json.Marshal(fullState)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(s.cliStatePath, data, 0o600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }

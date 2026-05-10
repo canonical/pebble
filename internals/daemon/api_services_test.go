@@ -86,7 +86,7 @@ func (s *apiSuite) TestServicesStart(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -133,7 +133,7 @@ func (s *apiSuite) TestServicesStop(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -180,7 +180,7 @@ func (s *apiSuite) TestServicesAutoStart(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -212,7 +212,7 @@ func (s *apiSuite) TestServicesGet(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/services", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -224,7 +224,7 @@ func (s *apiSuite) TestServicesGet(c *tc.C) {
 	c.Check(rsp.Result, tc.NotNil)
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(body["result"], tc.DeepEquals, []any{
 		map[string]any{"startup": "enabled", "name": "test1", "current": "inactive"},
 		map[string]any{"startup": "disabled", "name": "test2", "current": "inactive"},
@@ -251,7 +251,7 @@ func (s *apiSuite) TestServicesRestart(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -300,7 +300,7 @@ func (s *apiSuite) TestServicesReplan(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(servicesCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -339,7 +339,7 @@ services:
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/services", strings.NewReader(`{"action": "replan"}`))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -376,11 +376,11 @@ services:
 		Dir:        s.pebbleDir,
 		SocketPath: s.pebbleDir + ".pebble.socket",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = daemon.Init()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = daemon.Start()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// To try to reproduce the deadlock, call these endpoints in a loop:
 	// - GET /v1/services
@@ -389,7 +389,7 @@ services:
 
 	getServices := func(ctx context.Context) {
 		req, err := http.NewRequestWithContext(ctx, "GET", "/v1/services", nil)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		rsp := v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
@@ -401,7 +401,7 @@ services:
 	serviceAction := func(ctx context.Context, action string) {
 		body := `{"action": "` + action + `", "services": ["test"]}`
 		req, err := http.NewRequestWithContext(ctx, "POST", "/v1/services", strings.NewReader(body))
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
@@ -465,5 +465,5 @@ services:
 		}
 	}
 	err = daemon.Stop(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }

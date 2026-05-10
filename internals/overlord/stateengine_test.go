@@ -76,12 +76,12 @@ func (ses *stateEngineSuite) TestStartUp(c *tc.C) {
 	se.AddManager(mgr2)
 
 	err := se.StartUp()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(calls, tc.DeepEquals, []string{"startup:mgr1", "startup:mgr2"})
 
 	// noop
 	err = se.StartUp()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(calls, tc.HasLen, 2)
 }
 
@@ -123,11 +123,11 @@ func (ses *stateEngineSuite) TestEnsure(c *tc.C) {
 	calls = []string{}
 
 	err = se.Ensure()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(calls, tc.DeepEquals, []string{"ensure:mgr1", "ensure:mgr2"})
 
 	err = se.Ensure()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(calls, tc.DeepEquals, []string{"ensure:mgr1", "ensure:mgr2", "ensure:mgr1", "ensure:mgr2"})
 }
 

@@ -68,7 +68,7 @@ func (s *PebbleSuite) TestAutostart(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -118,7 +118,7 @@ func (s *PebbleSuite) TestAutostartNoWait(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"autostart", "--no-wait"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "42\n")
 	c.Check(s.Stderr(), tc.Equals, ``)

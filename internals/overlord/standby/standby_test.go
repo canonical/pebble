@@ -132,7 +132,7 @@ func (s *standbySuite) TestStartChecks(c *tc.C) {
 		<-ch2
 	}))
 	s.state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	m := standby.New(s.state)
 	m.AddOpinion(opine(func() bool {
@@ -160,7 +160,7 @@ func (s *standbySuite) TestStopWaits(c *tc.C) {
 		c.Fatal("request restart should have not been called")
 	}))
 	s.state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ch := make(chan struct{})
 	opineReady := make(chan struct{})

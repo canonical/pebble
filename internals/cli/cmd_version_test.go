@@ -32,7 +32,7 @@ func (s *PebbleSuite) TestVersion(c *tc.C) {
 	defer restore()
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"version"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.Stdout(), tc.Equals, "client  4.56\nserver  7.89\n")
 	c.Check(s.Stderr(), tc.Equals, "")
 }
@@ -42,7 +42,7 @@ func (s *PebbleSuite) TestVersionClientOnly(c *tc.C) {
 	defer restore()
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"version", "--client"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.Stdout(), tc.Equals, "v1.2.3\n")
 	c.Check(s.Stderr(), tc.Equals, "")
 }

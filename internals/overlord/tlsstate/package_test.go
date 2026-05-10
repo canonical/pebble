@@ -96,7 +96,7 @@ func (ts *tlsSuite) testTLSClient(c *tc.C, ca *x509.Certificate, clock time.Time
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(body), tc.Equals, "TLS 1.3!")
 
 	return serverCerts, nil
@@ -107,7 +107,7 @@ func (ts *tlsSuite) testTLSServer(c *tc.C, getCertificate func(*tls.ClientHelloI
 	// server routine is starting up.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 	// Get the allocated port.
 	ts.serverHTTPSPort = listener.Addr().(*net.TCPAddr).Port

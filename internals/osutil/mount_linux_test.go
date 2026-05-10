@@ -37,19 +37,19 @@ func (s *mountSuite) TestIsMountedHappyish(c *tc.C) {
 	defer osutil.FakeMountInfo(content)()
 
 	mounted, err := osutil.IsMounted("/snap/ubuntu-core/855")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(mounted, tc.Equals, true)
 
 	mounted, err = osutil.IsMounted("/snap/something/123")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(mounted, tc.Equals, true)
 
 	mounted, err = osutil.IsMounted("/snap/random/456")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(mounted, tc.Equals, true)
 
 	mounted, err = osutil.IsMounted("/random/made/up/name")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(mounted, tc.Equals, false)
 }
 

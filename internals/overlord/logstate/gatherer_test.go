@@ -50,7 +50,7 @@ func (s *gathererSuite) TestGatherer(c *tc.C) {
 	}
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -87,7 +87,7 @@ func (s *gathererSuite) TestGathererTimeout(c *tc.C) {
 	}
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -114,14 +114,14 @@ func (s *gathererSuite) TestGathererShutdown(c *tc.C) {
 	}
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	err = testSvc.stop()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	hasShutdown := make(chan struct{})
 	go func() {
@@ -172,7 +172,7 @@ func (s *gathererSuite) TestRetryLoki(c *tc.C) {
 			},
 		},
 	)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.PlanChanged(&plan.Plan{
@@ -210,7 +210,7 @@ func (s *gathererSuite) TestRetryLoki(c *tc.C) {
 	handler = func(w http.ResponseWriter, r *http.Request) {
 		close(reqReceived)
 		reqBody, err := io.ReadAll(r.Body)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		expected := `{"streams":\[{"stream":{"pebble_service":"svc1"},"values":\[` +
 			// First two log lines should have been truncated
@@ -247,7 +247,7 @@ func (s *gathererSuite) TestConcurrency(c *tc.C) {
 	g, err := newLogGathererInternal(target, &logGathererOptions{
 		maxBufferedEntries: 2,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	svc1 := newTestService("svc1")
 	svc2 := newTestService("svc2")
@@ -329,9 +329,9 @@ func (s *gathererSuite) TestConcurrency(c *tc.C) {
 	)
 
 	err = svc1.stop()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = svc2.stop()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	g.Stop()
 }
 

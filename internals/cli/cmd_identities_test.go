@@ -74,7 +74,7 @@ func (s *PebbleSuite) testIdentities(c *tc.C, format string, expected string) {
 		args = append(args, "--format", format)
 	}
 	rest, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, expected)
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -93,7 +93,7 @@ func (s *PebbleSuite) TestIdentitiesNoIdentities(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identities"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "No identities.\n")
@@ -111,7 +111,7 @@ func (s *PebbleSuite) TestIdentitiesNoIdentitiesJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identities", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"identities":{}}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -129,7 +129,7 @@ func (s *PebbleSuite) TestIdentitiesNoIdentitiesYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identities", "--format", "yaml"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "identities: {}\n")
 	c.Check(s.Stderr(), tc.Equals, "")

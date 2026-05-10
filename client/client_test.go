@@ -62,7 +62,7 @@ func TestClientSuite(t *testing.T) {
 func (cs *clientSuite) SetUpTest(c *tc.C) {
 	var err error
 	cs.cli, err = client.New(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cs.cli.SetDoer(cs)
 	cs.err = nil
 	cs.req = nil
@@ -161,10 +161,10 @@ func (cs *clientSuite) TestClientWorks(c *tc.C) {
 		Path:   "/this",
 		Body:   reqBody,
 	})
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	dec := json.NewDecoder(resp.Body)
 	err = dec.Decode(&v)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(v, tc.DeepEquals, []int{1, 2})
 	c.Assert(cs.req, tc.NotNil)
 	c.Assert(cs.req.URL, tc.NotNil)
@@ -187,7 +187,7 @@ func (cs *clientSuite) TestClientDefaultsToNoAuthorization(c *tc.C) {
 func (cs *clientSuite) TestClientSysInfo(c *tc.C) {
 	cs.rsp = `{"type": "sync", "result": {"version": "1"}}`
 	sysInfo, err := cs.cli.SysInfo()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(sysInfo, tc.DeepEquals, &client.SysInfo{Version: "1"})
 }
 
@@ -229,14 +229,14 @@ func (cs *clientSuite) TestClientReportsInnerJSONError(c *tc.C) {
 func (cs *clientSuite) TestClientAsync(c *tc.C) {
 	cs.rsp = `{"type":"async", "status-code": 202, "change": "42"}`
 	changeId, err := cs.cli.FakeAsyncRequest()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(changeId, tc.Equals, "42")
 }
 
 func (cs *clientSuite) TestClientMaintenance(c *tc.C) {
 	cs.rsp = `{"type":"sync", "result":{"series":"42"}, "maintenance": {"kind": "system-restart", "message": "system is restarting"}}`
 	_, err := cs.cli.SysInfo()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.cli.Maintenance().(*client.Error), tc.DeepEquals, &client.Error{
 		Kind:    client.ErrorKindSystemRestart,
 		Message: "system is restarting",
@@ -244,14 +244,14 @@ func (cs *clientSuite) TestClientMaintenance(c *tc.C) {
 
 	cs.rsp = `{"type":"sync", "result":{"series":"42"}}`
 	_, err = cs.cli.SysInfo()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.cli.Maintenance(), tc.Equals, error(nil))
 }
 
 func (cs *clientSuite) TestClientAsyncOpMaintenance(c *tc.C) {
 	cs.rsp = `{"type":"async", "status-code": 202, "change": "42", "maintenance": {"kind": "system-restart", "message": "system is restarting"}}`
 	_, err := cs.cli.FakeAsyncRequest()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.cli.Maintenance().(*client.Error), tc.DeepEquals, &client.Error{
 		Kind:    client.ErrorKindSystemRestart,
 		Message: "system is restarting",
@@ -259,7 +259,7 @@ func (cs *clientSuite) TestClientAsyncOpMaintenance(c *tc.C) {
 
 	cs.rsp = `{"type":"async", "status-code": 202, "change": "42"}`
 	_, err = cs.cli.FakeAsyncRequest()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.cli.Maintenance(), tc.Equals, error(nil))
 }
 
@@ -297,7 +297,7 @@ func (cs *clientSuite) TestParseError(c *tc.C) {
 
 func (cs *clientSuite) TestUserAgent(c *tc.C) {
 	cli, err := client.New(&client.Config{UserAgent: "some-agent/9.87"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cli.SetDoer(cs)
 
 	resp, err := cli.Requester().Do(context.Background(), &client.RequestOptions{
@@ -305,7 +305,7 @@ func (cs *clientSuite) TestUserAgent(c *tc.C) {
 		Method: "GET",
 		Path:   "/",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var v string
 	err = resp.DecodeResult(&v)
 	c.Assert(err, tc.NotNil)
@@ -314,7 +314,7 @@ func (cs *clientSuite) TestUserAgent(c *tc.C) {
 
 func (cs *clientSuite) TestContentType(c *tc.C) {
 	cli, err := client.New(&client.Config{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cli.SetDoer(cs)
 
 	resp, err := cli.Requester().Do(context.Background(), &client.RequestOptions{
@@ -322,7 +322,7 @@ func (cs *clientSuite) TestContentType(c *tc.C) {
 		Method: "GET",
 		Path:   "/",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var v string
 	err = resp.DecodeResult(&v)
 	c.Assert(err, tc.NotNil)
@@ -340,13 +340,13 @@ func (cs *clientSuite) TestDebugPost(c *tc.C) {
 
 	var result []string
 	err := cs.cli.DebugPost("do-something", []string{"param1", "param2"}, &result)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(result, tc.DeepEquals, []string{"res1", "res2"})
 	c.Check(cs.reqs, tc.HasLen, 1)
 	c.Check(cs.reqs[0].Method, tc.Equals, "POST")
 	c.Check(cs.reqs[0].URL.Path, tc.Equals, "/v1/debug")
 	data, err := io.ReadAll(cs.reqs[0].Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(data), tc.DeepEquals, `{"action":"do-something","params":["param1","param2"]}`)
 }
 
@@ -355,7 +355,7 @@ func (cs *clientSuite) TestDebugGet(c *tc.C) {
 
 	var result []string
 	err := cs.cli.DebugGet("do-something", &result, map[string]string{"foo": "bar"})
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(result, tc.DeepEquals, []string{"res1", "res2"})
 	c.Check(cs.reqs, tc.HasLen, 1)
 	c.Check(cs.reqs[0].Method, tc.Equals, "GET")
@@ -365,7 +365,7 @@ func (cs *clientSuite) TestDebugGet(c *tc.C) {
 
 func (cs *clientSuite) TestNonExistentSocketErrors(c *tc.C) {
 	cli, err := client.New(&client.Config{Socket: "/tmp/not-the-droids-you-are-looking-for"})
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, err = cli.SysInfo()
 	c.Check(err, tc.NotNil)
@@ -389,7 +389,7 @@ func (cs *clientSuite) TestLatestWarningTime(c *tc.C) {
 	}`
 
 	info, err := cs.cli.SysInfo()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(info, tc.DeepEquals, &client.SysInfo{
 		Version: "1.15.0",
 		BootID:  "BOOTID",
@@ -435,9 +435,9 @@ func (cs *clientSuite) TestClientIntegrationUnixSocket(c *tc.C) {
 		BasicUsername: testUsername,
 		BasicPassword: testPassword,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	si, err := cli.SysInfo()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(si.Version, tc.Equals, "1")
 }
 
@@ -446,7 +446,7 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *tc.C) {
 	testPassword := "bar"
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 	defer listener.Close()
 	// Get the allocated port.
@@ -476,9 +476,9 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *tc.C) {
 		BasicUsername: testUsername,
 		BasicPassword: testPassword,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	si, err := cli.SysInfo()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(si.Version, tc.Equals, "1")
 }
 
@@ -488,7 +488,7 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *tc.C) {
 
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 	defer listener.Close()
 	// Get the allocated port.
@@ -507,7 +507,7 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *tc.C) {
 		}
 		incomingTLS := r.TLS.PeerCertificates[0]
 		_, err := incomingTLS.Verify(opts)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		fmt.Fprintln(w, `{"type":"sync", "result":{"version":"1"}}`)
 	}
@@ -536,7 +536,7 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *tc.C) {
 		BaseURL:         fmt.Sprintf("https://localhost:%d", testPort),
 		TLSClientIDCert: clientTLSCerts,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	_, err = cli.SysInfo()
 	c.Assert(err, tc.ErrorMatches, ".*cannot verify server: see TLS config options")
 
@@ -546,10 +546,10 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *tc.C) {
 		TLSServerInsecure: true,
 		TLSClientIDCert:   clientTLSCerts,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cert, si, err := cli.SysInfoWithServerID()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(si.Version, tc.Equals, "1")
 	c.Check(cert, tc.DeepEquals, serverIDCert)
 
@@ -564,10 +564,10 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *tc.C) {
 		TLSServerFingerprint: serverFingerprint,
 		TLSClientIDCert:      clientTLSCerts,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cert, si, err = cli.SysInfoWithServerID()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(si.Version, tc.Equals, "1")
 	c.Check(cert, tc.DeepEquals, serverIDCert)
 
@@ -582,17 +582,17 @@ func (cs *clientSuite) TestClientIntegrationHTTPS(c *tc.C) {
 		TLSServerIDCert: serverIDCert,
 		TLSClientIDCert: clientTLSCerts,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cert, si, err = cli.SysInfoWithServerID()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(si.Version, tc.Equals, "1")
 	c.Check(cert, tc.DeepEquals, serverIDCert)
 }
 
 func createTestServerTLSCerts(c *tc.C) (*tls.Certificate, *x509.Certificate, string) {
 	_, caKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	template := x509.Certificate{
 		SerialNumber:          big.NewInt(1),
@@ -609,13 +609,13 @@ func createTestServerTLSCerts(c *tc.C) (*tls.Certificate, *x509.Certificate, str
 
 	// Self-signed certificate.
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, caKey.Public(), caKey)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	caCert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, tlsKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	template = x509.Certificate{
 		SerialNumber:          big.NewInt(1),
@@ -628,14 +628,14 @@ func createTestServerTLSCerts(c *tc.C) (*tls.Certificate, *x509.Certificate, str
 
 	// CA signed TLS certificate.
 	certDER, err = x509.CreateCertificate(rand.Reader, &template, caCert, tlsKey.Public(), caKey)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tlsCert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Fingerprint
 	fingerprint, err := client.GetIdentityFingerprint(caCert)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tls := &tls.Certificate{
 		Certificate: [][]byte{tlsCert.Raw, caCert.Raw},
@@ -647,7 +647,7 @@ func createTestServerTLSCerts(c *tc.C) (*tls.Certificate, *x509.Certificate, str
 
 func createTestClientTLSCerts(c *tc.C) *tls.Certificate {
 	_, tlsKeyPair, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
@@ -659,10 +659,10 @@ func createTestClientTLSCerts(c *tc.C) *tls.Certificate {
 
 	// Self-signed certificate.
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, tlsKeyPair.Public(), tlsKeyPair)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	return &tls.Certificate{
 		Certificate: [][]byte{cert.Raw},

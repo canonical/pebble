@@ -61,7 +61,7 @@ func (s *CheckersSuite) TestHTTP(c *tc.C) {
 	// Good 200 URL works
 	chk := &httpChecker{url: server.URL + "/foo/bar"}
 	err := chk.check(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(path, tc.Equals, "/foo/bar")
 
 	// Custom headers are sent through
@@ -70,7 +70,7 @@ func (s *CheckersSuite) TestHTTP(c *tc.C) {
 		headers: map[string]string{"X-Name": "Bob Smith", "User-Agent": "pebble-test"},
 	}
 	err = chk.check(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(path, tc.Equals, "/foo/bar")
 	c.Assert(headers.Get("X-Name"), tc.Equals, "Bob Smith")
 	c.Assert(headers.Get("User-Agent"), tc.Equals, "pebble-test")
@@ -124,14 +124,14 @@ func (s *CheckersSuite) TestHTTP(c *tc.C) {
 
 func (s *CheckersSuite) TestTCP(c *tc.C) {
 	listener, err := net.Listen("tcp", "localhost:")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	port := listener.Addr().(*net.TCPAddr).Port
 	defer listener.Close()
 
 	// Correct port works
 	chk := &tcpChecker{port: port}
 	err = chk.check(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Invalid port fails
 	chk = &tcpChecker{port: 12345}
@@ -159,13 +159,13 @@ func (s *CheckersSuite) TestTCP(c *tc.C) {
 
 func (s *CheckersSuite) TestExec(c *tc.C) {
 	err := reaper.Start()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer reaper.Stop()
 
 	// Valid command succeeds
 	chk := &execChecker{command: "echo foo"}
 	err = chk.check(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Un-parseable command fails
 	chk = &execChecker{command: "'"}
@@ -247,9 +247,9 @@ func (s *CheckersSuite) TestExec(c *tc.C) {
 
 	// Can run as current user and group
 	currentUser, err := user.Current()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	group, err := user.LookupGroupId(currentUser.Gid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	chk = &execChecker{
 		command: "/bin/sh -c 'id -n -u; exit 1'",
 		user:    currentUser.Username,

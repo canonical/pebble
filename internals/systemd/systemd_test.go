@@ -76,7 +76,7 @@ func (s *SystemdTestSuite) SetUpTest(c *tc.C) {
 	s.rootDir = c.MkDir()
 	s.restoreServicesDir = systemd.FakeServicesDir(filepath.Join(s.rootDir, systemd.ServicesDir))
 	err := os.MkdirAll(systemd.ServicesDir, 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// force UTC timezone, for reproducible timestamps
 	os.Setenv("TZ", "")
@@ -141,19 +141,19 @@ func (s *SystemdTestSuite) myJctl(svcs []string, n int, follow bool) (io.ReadClo
 
 func (s *SystemdTestSuite) TestDaemonReload(c *tc.C) {
 	err := systemd.New("", systemd.SystemMode, s.rep).DaemonReload()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(s.argses, tc.DeepEquals, [][]string{{"daemon-reload"}})
 }
 
 func (s *SystemdTestSuite) TestStart(c *tc.C) {
 	err := systemd.New("", systemd.SystemMode, s.rep).Start("foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"start", "foo"}})
 }
 
 func (s *SystemdTestSuite) TestStartMany(c *tc.C) {
 	err := systemd.New("", systemd.SystemMode, s.rep).Start("foo", "bar", "baz")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"start", "foo", "bar", "baz"}})
 }
 
@@ -168,7 +168,7 @@ func (s *SystemdTestSuite) TestStop(c *tc.C) {
 	}
 	s.errors = []error{nil, nil, nil, nil, &systemd.Timeout{}}
 	err := systemd.New("", systemd.SystemMode, s.rep).Stop("foo", 1*time.Second)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(s.argses, tc.HasLen, 4)
 	c.Check(s.argses[0], tc.DeepEquals, []string{"stop", "foo"})
 	c.Check(s.argses[1], tc.DeepEquals, []string{"show", "--property=ActiveState", "foo"})
@@ -206,7 +206,7 @@ UnitFileState=disabled
 	}
 	s.errors = []error{nil}
 	out, err := systemd.New("", systemd.SystemMode, s.rep).Status("foo.service", "bar.service", "baz.service", "some.timer", "other.socket")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(out, tc.DeepEquals, []*systemd.UnitStatus{
 		{
 			Daemon:   "simple",
@@ -376,31 +376,31 @@ func (s *SystemdTestSuite) TestStopTimeout(c *tc.C) {
 
 func (s *SystemdTestSuite) TestDisable(c *tc.C) {
 	err := systemd.New("xyzzy", systemd.SystemMode, s.rep).Disable("foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"--root", "xyzzy", "disable", "foo"}})
 }
 
 func (s *SystemdTestSuite) TestAvailable(c *tc.C) {
 	err := systemd.Available()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"--version"}})
 }
 
 func (s *SystemdTestSuite) TestEnable(c *tc.C) {
 	err := systemd.New("xyzzy", systemd.SystemMode, s.rep).Enable("foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"--root", "xyzzy", "enable", "foo"}})
 }
 
 func (s *SystemdTestSuite) TestMask(c *tc.C) {
 	err := systemd.New("xyzzy", systemd.SystemMode, s.rep).Mask("foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"--root", "xyzzy", "mask", "foo"}})
 }
 
 func (s *SystemdTestSuite) TestUnmask(c *tc.C) {
 	err := systemd.New("xyzzy", systemd.SystemMode, s.rep).Unmask("foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"--root", "xyzzy", "unmask", "foo"}})
 }
 
@@ -414,7 +414,7 @@ func (s *SystemdTestSuite) TestRestart(c *tc.C) {
 	}
 	s.errors = []error{nil, nil, nil, nil, &systemd.Timeout{}}
 	err := systemd.New("", systemd.SystemMode, s.rep).Restart("foo", 100*time.Millisecond)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.HasLen, 3)
 	c.Check(s.argses[0], tc.DeepEquals, []string{"stop", "foo"})
 	c.Check(s.argses[1], tc.DeepEquals, []string{"show", "--property=ActiveState", "foo"})
@@ -450,9 +450,9 @@ func (s *SystemdTestSuite) TestLogs(c *tc.C) {
 	s.jouts = [][]byte{[]byte(expected)}
 
 	reader, err := systemd.New("", systemd.SystemMode, s.rep).LogReader([]string{"foo"}, 24, false)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	logs, err := io.ReadAll(reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(logs), tc.Equals, expected)
 	c.Check(s.jns, tc.DeepEquals, []string{"24"})
 	c.Check(s.jsvcs, tc.DeepEquals, [][]string{{"foo"}})
@@ -479,11 +479,11 @@ func (s *SystemdTestSuite) TestTime(c *tc.C) {
 	c.Check(err, tc.ErrorMatches, `timestamp not a decimal number: "what"`)
 
 	t, err = systemd.Log{"__REALTIME_TIMESTAMP": "0"}.Time()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(t.String(), tc.Equals, "1970-01-01 00:00:00 +0000 UTC")
 
 	t, err = systemd.Log{"__REALTIME_TIMESTAMP": "42"}.Time()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(t.String(), tc.Equals, "1970-01-01 00:00:00.000042 +0000 UTC")
 }
 
@@ -493,9 +493,9 @@ func (s *SystemdTestSuite) TestMountUnitPath(c *tc.C) {
 
 func makeFakeFile(c *tc.C, path string) {
 	err := os.MkdirAll(filepath.Dir(path), 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(path, nil, 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *SystemdTestSuite) TestAddMountUnit(c *tc.C) {
@@ -506,7 +506,7 @@ func (s *SystemdTestSuite) TestAddMountUnit(c *tc.C) {
 	makeFakeFile(c, fakeSnapPath)
 
 	mountUnitName, err := systemd.New(s.rootDir, systemd.SystemMode, nil).AddMountUnitFile("foo", "42", fakeSnapPath, "/snap/snapname/123", "squashfs")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer os.Remove(mountUnitName)
 
 	c.Assert(filepath.Join(systemd.ServicesDir, mountUnitName), testutil.FileEquals, fmt.Sprintf(`
@@ -538,7 +538,7 @@ func (s *SystemdTestSuite) TestAddMountUnitForDirs(c *tc.C) {
 	// a directory instead of a file produces a different output
 	snapDir := c.MkDir()
 	mountUnitName, err := systemd.New("", systemd.SystemMode, nil).AddMountUnitFile("foodir", "x1", snapDir, "/snap/snapname/x1", "squashfs")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer os.Remove(mountUnitName)
 
 	c.Assert(filepath.Join(systemd.ServicesDir, mountUnitName), testutil.FileEquals, fmt.Sprintf(`
@@ -581,12 +581,12 @@ exit 0
 
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
 	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(fakeSnapPath, nil, 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	mountUnitName, err := systemd.New("", systemd.SystemMode, nil).AddMountUnitFile("foo", "x1", fakeSnapPath, "/snap/snapname/123", "squashfs")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer os.Remove(mountUnitName)
 
 	c.Check(filepath.Join(systemd.ServicesDir, mountUnitName), testutil.FileEquals, fmt.Sprintf(`
@@ -619,12 +619,12 @@ exit 0
 
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
 	err := os.MkdirAll(filepath.Dir(fakeSnapPath), 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(fakeSnapPath, nil, 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	mountUnitName, err := systemd.New("", systemd.SystemMode, nil).AddMountUnitFile("foo", "x1", fakeSnapPath, "/snap/snapname/123", "squashfs")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer os.Remove(mountUnitName)
 
 	c.Assert(filepath.Join(systemd.ServicesDir, mountUnitName), testutil.FileEquals, fmt.Sprintf(`
@@ -653,13 +653,13 @@ func (s *SystemdTestSuite) TestJctl(c *tc.C) {
 	})
 
 	_, err = systemd.Jctl([]string{"foo", "bar"}, 10, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(args, tc.DeepEquals, []string{"-o", "json", "--no-pager", "-n", "10", "-u", "foo", "-u", "bar"})
 	_, err = systemd.Jctl([]string{"foo", "bar", "baz"}, 99, true)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(args, tc.DeepEquals, []string{"-o", "json", "--no-pager", "-n", "99", "-f", "-u", "foo", "-u", "bar", "-u", "baz"})
 	_, err = systemd.Jctl([]string{"foo", "bar"}, -1, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(args, tc.DeepEquals, []string{"-o", "json", "--no-pager", "--no-tail", "-u", "foo", "-u", "bar"})
 }
 
@@ -671,7 +671,7 @@ func (s *SystemdTestSuite) TestIsActiveIsInactive(c *tc.C) {
 
 	active, err := systemd.New("xyzzy", systemd.SystemMode, s.rep).IsActive("foo")
 	c.Assert(active, tc.Equals, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"--root", "xyzzy", "is-active", "foo"}})
 }
 
@@ -680,7 +680,7 @@ func (s *SystemdTestSuite) TestIsActiveIsActive(c *tc.C) {
 
 	active, err := systemd.New("xyzzy", systemd.SystemMode, s.rep).IsActive("foo")
 	c.Assert(active, tc.Equals, true)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(s.argses, tc.DeepEquals, [][]string{{"--root", "xyzzy", "is-active", "foo"}})
 }
 
@@ -698,7 +698,7 @@ func (s *SystemdTestSuite) TestIsActiveErr(c *tc.C) {
 func makeFakeMountUnit(c *tc.C, mountDir string) string {
 	mountUnit := systemd.MountUnitPath(mountDir)
 	err := os.WriteFile(mountUnit, nil, 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return mountUnit
 }
 
@@ -707,7 +707,7 @@ func (s *SystemdTestSuite) TestRemoveMountUnit(c *tc.C) {
 	mountDir := s.rootDir + "/snap/foo/42"
 	mountUnit := makeFakeMountUnit(c, "/snap/foo/42")
 	err := systemd.New(s.rootDir, systemd.SystemMode, nil).RemoveMountUnitFile(mountDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// the file is gone
 	c.Check(osutil.CanStat(mountUnit), tc.Equals, false)
@@ -745,7 +745,7 @@ func (s *SystemdTestSuite) TestDaemonReloadMutex(c *tc.C) {
 	// panic because systemd.daemonReloadNoLock ensures the lock is
 	// taken when this happens.
 	_, err := sysd.AddMountUnitFile("foo", "42", fakeSnapPath, "/snap/foo/42", "squashfs")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	close(stopCh)
 	<-stoppedCh
 }

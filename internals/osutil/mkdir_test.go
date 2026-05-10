@@ -39,7 +39,7 @@ func (mkdirSuite) TestSimpleDir(c *tc.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 }
 
@@ -47,20 +47,20 @@ func (mkdirSuite) TestExistOK(c *tc.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 
 	err = osutil.Mkdir(tmpDir+"/foo", 0o755, &osutil.MkdirOptions{
 		ExistOK: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (mkdirSuite) TestExistNotOK(c *tc.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 
 	err = osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
@@ -71,7 +71,7 @@ func (mkdirSuite) TestExistsButNotDir(c *tc.C) {
 	tmpDir := c.MkDir()
 
 	_, err := os.Create(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = osutil.Mkdir(tmpDir+"/foo", 0o755, nil)
 	c.Assert(err, tc.ErrorMatches, `.*: not a directory`)
@@ -81,7 +81,7 @@ func (mkdirSuite) TestDirEndWithSlash(c *tc.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo/", 0755, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (mkdirSuite) TestMakeParents(c *tc.C) {
@@ -90,7 +90,7 @@ func (mkdirSuite) TestMakeParents(c *tc.C) {
 	err := osutil.Mkdir(tmpDir+"/foo/bar", 0o755, &osutil.MkdirOptions{
 		MakeParents: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), tc.Equals, true)
 }
@@ -101,14 +101,14 @@ func (mkdirSuite) TestMakeParentsAndExistOK(c *tc.C) {
 	err := osutil.Mkdir(tmpDir+"/foo/bar", 0o755, &osutil.MkdirOptions{
 		MakeParents: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), tc.Equals, true)
 
 	err = osutil.Mkdir(tmpDir+"/foo/bar/", 0o755, &osutil.MkdirOptions{
 		ExistOK: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (mkdirSuite) TestMakeParentsAndExistNotOK(c *tc.C) {
@@ -117,7 +117,7 @@ func (mkdirSuite) TestMakeParentsAndExistNotOK(c *tc.C) {
 	err := osutil.Mkdir(tmpDir+"/foo/bar", 0o755, &osutil.MkdirOptions{
 		MakeParents: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), tc.Equals, true)
 
@@ -129,7 +129,7 @@ func (mkdirSuite) TestParentExistsButNotDir(c *tc.C) {
 	tmpDir := c.MkDir()
 
 	_, err := os.Create(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = osutil.Mkdir(tmpDir+"/foo/bar/", 0o755, &osutil.MkdirOptions{
 		MakeParents: true,
@@ -146,11 +146,11 @@ func (mkdirSuite) TestChmod(c *tc.C) {
 	err := osutil.Mkdir(tmpDir+"/foo", 0o777, &osutil.MkdirOptions{
 		Chmod: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 
 	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o777))
 }
 
@@ -161,11 +161,11 @@ func (mkdirSuite) TestNoChmod(c *tc.C) {
 	tmpDir := c.MkDir()
 
 	err := osutil.Mkdir(tmpDir+"/foo", 0o777, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 
 	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o755))
 }
 
@@ -176,16 +176,16 @@ func (mkdirSuite) TestMakeParentsAndChmod(c *tc.C) {
 		MakeParents: true,
 		Chmod:       true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), tc.Equals, true)
 
 	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o777))
 
 	info, err = os.Stat(tmpDir + "/foo/bar")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o777))
 }
 
@@ -198,16 +198,16 @@ func (mkdirSuite) TestMakeParentsAndNoChmod(c *tc.C) {
 	err := osutil.Mkdir(tmpDir+"/foo/bar", 0o777, &osutil.MkdirOptions{
 		MakeParents: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), tc.Equals, true)
 
 	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o755))
 
 	info, err = os.Stat(tmpDir + "/foo/bar")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o755))
 }
 
@@ -223,13 +223,13 @@ func (mkdirSuite) TestMakeParentsChmodAndChown(c *tc.C) {
 	}
 
 	u, err := user.Lookup(username)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	g, err := user.LookupGroup(group)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	uid, err := strconv.Atoi(u.Uid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	gid, err := strconv.Atoi(g.Gid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	tmpDir := c.MkDir()
 
 	err = osutil.Mkdir(tmpDir+"/foo/bar", 0o777, &osutil.MkdirOptions{
@@ -239,12 +239,12 @@ func (mkdirSuite) TestMakeParentsChmodAndChown(c *tc.C) {
 		UserID:      sys.UserID(uid),
 		GroupID:     sys.GroupID(gid),
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(osutil.IsDir(tmpDir+"/foo"), tc.Equals, true)
 	c.Assert(osutil.IsDir(tmpDir+"/foo/bar"), tc.Equals, true)
 
 	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o777))
 	stat, ok := info.Sys().(*syscall.Stat_t)
 	c.Assert(ok, tc.Equals, true)
@@ -252,7 +252,7 @@ func (mkdirSuite) TestMakeParentsChmodAndChown(c *tc.C) {
 	c.Assert(int(stat.Gid), tc.Equals, gid)
 
 	info, err = os.Stat(tmpDir + "/foo/bar")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o777))
 	stat, ok = info.Sys().(*syscall.Stat_t)
 	c.Assert(ok, tc.Equals, true)

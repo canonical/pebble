@@ -47,7 +47,7 @@ func (s *patchSuite) TestInit(c *tc.C) {
 	defer st.Unlock()
 	var patchLevel int
 	err := st.Get("patch-level", &patchLevel)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(patchLevel, tc.Equals, 2)
 
 	var patchSublevel int
@@ -64,7 +64,7 @@ func (s *patchSuite) TestNothingToDo(c *tc.C) {
 	st.Set("patch-level", 2)
 	st.Unlock()
 	err := patch.Apply(st)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *patchSuite) TestNoDowngrade(c *tc.C) {
@@ -111,14 +111,14 @@ func (s *patchSuite) TestApply(c *tc.C) {
 	st.Set("patch-level", 1)
 	st.Unlock()
 	err := patch.Apply(st)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	var level int
 	err = st.Get("patch-level", &level)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(level, tc.Equals, 3)
 
 	var sublevel int
@@ -127,7 +127,7 @@ func (s *patchSuite) TestApply(c *tc.C) {
 
 	var n, o int
 	err = st.Get("n", &n)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(n, tc.Equals, 10)
 
 	c.Assert(st.Get("o", &o), tc.IsNil)
@@ -293,12 +293,12 @@ func (s *patchSuite) TestError(c *tc.C) {
 
 	var level int
 	err = st.Get("patch-level", &level)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(level, tc.Equals, 2)
 
 	var n int
 	err = st.Get("n", &n)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(n, tc.Equals, 10)
 }
 

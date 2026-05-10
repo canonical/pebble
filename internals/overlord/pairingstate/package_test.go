@@ -71,14 +71,14 @@ func (ps *pairingSuite) newManager(c *tc.C, s *pairingstate.PairingDetails) {
 
 	var err error
 	ps.identitiesMgr, err = identities.NewManager(ps.state)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ps.manager, err = pairingstate.NewManager(ps.state, ps.identitiesMgr)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ps.overlord.AddManager(ps.manager)
 	err = ps.overlord.StartUp()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 // PairingDetails returns the persisted pairing state.
@@ -137,12 +137,12 @@ func (ps *pairingSuite) expectWindowEnableDisable(c *tc.C, timeout time.Duration
 func generateTestClientCert(c *tc.C) *x509.Certificate {
 	// Generate ed25519 key pair
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Generate serial number
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	now := time.Now()
 	template := &x509.Certificate{
@@ -159,11 +159,11 @@ func generateTestClientCert(c *tc.C) *x509.Certificate {
 
 	// Create self-signed certificate
 	certDER, err := x509.CreateCertificate(rand.Reader, template, template, privateKey.Public(), privateKey)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Parse certificate from DER
 	cert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	return cert
 }
@@ -185,6 +185,6 @@ func parseCombineLayers(yamls []string) (*plan.Layer, error) {
 // layerYAML presents a plan as a marshalled YAML string.
 func layerYAML(c *tc.C, layer *plan.Layer) string {
 	yml, err := yaml.Marshal(layer)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return strings.TrimSpace(string(yml))
 }

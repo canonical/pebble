@@ -107,7 +107,7 @@ func (s *LogSuite) TestMockLoggerReadWriteThreadsafe(c *tc.C) {
 		logger.Noticef("%s", s.logbuf.String())
 	}
 	err := t.Wait()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *LogSuite) TestAppendTimestamp(c *tc.C) {

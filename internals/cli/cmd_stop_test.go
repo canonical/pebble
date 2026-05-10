@@ -60,7 +60,7 @@ func (s *PebbleSuite) TestStop(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"stop", "srv1", "srv2"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -107,7 +107,7 @@ func (s *PebbleSuite) TestStopNoWait(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"stop", "srv1", "srv2", "--no-wait"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "46\n")
 	c.Check(s.Stderr(), tc.Equals, "")

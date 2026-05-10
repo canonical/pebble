@@ -40,7 +40,7 @@ func (cs *clientSuite) TestIdentities(c *tc.C) {
 		}
 	}}`
 	identities, err := cs.cli.Identities(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "GET")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/identities")
 	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{})
@@ -86,15 +86,15 @@ func (cs *clientSuite) TestRemoveIdentities(c *tc.C) {
 		"bob":  {},
 		"mary": {},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/identities")
 
 	body, err := io.ReadAll(cs.req.Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var m map[string]any
 	err = json.Unmarshal(body, &m)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(m, tc.DeepEquals, map[string]any{
 		"action": "remove",
 		"identities": map[string]any{
@@ -116,15 +116,15 @@ func (cs *clientSuite) testPostIdentities(c *tc.C, action string, clientFunc fun
 			Local:  &client.LocalIdentity{UserID: new(uint32(1000))},
 		},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/identities")
 
 	body, err := io.ReadAll(cs.req.Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var m map[string]any
 	err = json.Unmarshal(body, &m)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(m, tc.DeepEquals, map[string]any{
 		"action": action,
 		"identities": map[string]any{

@@ -48,7 +48,7 @@ func (cs *clientSuite) TestStartStop(c *tc.C) {
 		}
 
 		changeId, err := startStop(&opts)
-		c.Check(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(changeId, tc.Equals, "42")
 		c.Check(cs.req.Method, tc.Equals, "POST")
 		c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")
@@ -73,7 +73,7 @@ func (cs *clientSuite) TestAutostart(c *tc.C) {
 	opts := client.ServiceOptions{}
 
 	changeId, err := cs.cli.AutoStart(&opts)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(changeId, tc.Equals, "42")
 	c.Check(cs.req.Method, tc.Equals, "POST")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")
@@ -99,7 +99,7 @@ func (cs *clientSuite) TestServicesGet(c *tc.C) {
 		Names: []string{"svc1", "svc2"},
 	}
 	services, err := cs.cli.Services(&opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(services, tc.DeepEquals, []*client.ServiceInfo{
 		{Name: "svc1", Startup: client.StartupEnabled, Current: client.StatusInactive},
 		{Name: "svc2", Startup: client.StartupDisabled, Current: client.StatusActive, CurrentSince: time.Date(2022, 4, 28, 17, 5, 23, 0, time.UTC)},
@@ -125,7 +125,7 @@ func (cs *clientSuite) TestRestart(c *tc.C) {
 	}
 
 	changeId, err := cs.cli.Restart(&opts)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(changeId, tc.Equals, "42")
 	c.Check(cs.req.Method, tc.Equals, "POST")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")
@@ -149,7 +149,7 @@ func (cs *clientSuite) TestReplan(c *tc.C) {
 	opts := client.ServiceOptions{}
 
 	changeId, err := cs.cli.Replan(&opts)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(changeId, tc.Equals, "42")
 	c.Check(cs.req.Method, tc.Equals, "POST")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")

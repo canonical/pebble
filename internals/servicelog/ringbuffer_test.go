@@ -35,7 +35,7 @@ func (s *ringBufferSuite) TestWrites(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10)
 
 	n, err := fmt.Fprint(rb, "pebbletron")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 10)
 
 	p1, p2 := rb.Positions()
@@ -49,7 +49,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *tc.C) {
 	_, a1 := rb.Positions()
 	c.Assert(a1, tc.Equals, servicelog.RingPos(0))
 	n, err := fmt.Fprint(rb, "pebble")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 6)
 	_, a2 := rb.Positions()
 	c.Assert(a2, tc.Equals, servicelog.RingPos(6))
@@ -65,7 +65,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *tc.C) {
 	_, b1 := rb.Positions()
 	c.Assert(b1, tc.Equals, servicelog.RingPos(6))
 	n, err = fmt.Fprint(rb, "elbbep")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 6)
 	_, b2 := rb.Positions()
 	c.Assert(b2, tc.Equals, servicelog.RingPos(12))
@@ -79,13 +79,13 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteCopy(c *tc.C) {
 	c.Assert(string(b), tc.Equals, "elbbep")
 
 	err = rb.Discard(int(a2 - a1))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rb.Available(), tc.Equals, 7)
 
 	_, c1 := rb.Positions()
 	c.Assert(c1, tc.Equals, servicelog.RingPos(12))
 	n, err = fmt.Fprint(rb, "PEBBLE")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 6)
 	_, c2 := rb.Positions()
 	c.Assert(c2, tc.Equals, servicelog.RingPos(18))
@@ -104,7 +104,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *tc.C) {
 	_, a1 := rb.Positions()
 	c.Assert(a1, tc.Equals, servicelog.RingPos(0))
 	n, err := fmt.Fprint(rb, "pebble")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 6)
 	_, a2 := rb.Positions()
 	c.Assert(a2, tc.Equals, servicelog.RingPos(6))
@@ -112,7 +112,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *tc.C) {
 
 	a := &bytes.Buffer{}
 	next, read, err := rb.WriteTo(a, a1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(read, tc.Equals, int64(6))
 	c.Assert(next, tc.Equals, servicelog.RingPos(6))
 	c.Assert(a.String(), tc.Equals, "pebble")
@@ -120,7 +120,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *tc.C) {
 	_, b1 := rb.Positions()
 	c.Assert(b1, tc.Equals, servicelog.RingPos(6))
 	n, err = fmt.Fprint(rb, "elbbep")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 6)
 	_, b2 := rb.Positions()
 	c.Assert(b2, tc.Equals, servicelog.RingPos(12))
@@ -128,19 +128,19 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *tc.C) {
 
 	b := &bytes.Buffer{}
 	next, read, err = rb.WriteTo(b, b1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(read, tc.Equals, int64(6))
 	c.Assert(next, tc.Equals, servicelog.RingPos(12))
 	c.Assert(b.String(), tc.Equals, "elbbep")
 
 	err = rb.Discard(int(a2 - a1))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rb.Available(), tc.Equals, 7)
 
 	_, c1 := rb.Positions()
 	c.Assert(c1, tc.Equals, servicelog.RingPos(12))
 	n, err = fmt.Fprint(rb, "PEBBLE")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 6)
 	_, c2 := rb.Positions()
 	c.Assert(c2, tc.Equals, servicelog.RingPos(18))
@@ -148,7 +148,7 @@ func (s *ringBufferSuite) TestCrossBoundaryWriteWithWriteTo(c *tc.C) {
 
 	cc := &bytes.Buffer{}
 	next, read, err = rb.WriteTo(cc, c1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(read, tc.Equals, int64(6))
 	c.Assert(next, tc.Equals, servicelog.RingPos(18))
 	c.Assert(cc.String(), tc.Equals, "PEBBLE")
@@ -164,7 +164,7 @@ func (s *ringBufferSuite) TestWriteShort(c *tc.C) {
 func (s *ringBufferSuite) TestCopy(c *tc.C) {
 	rb := servicelog.NewRingBuffer(3)
 	n, err := fmt.Fprint(rb, "abc")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 3)
 
 	a := make([]byte, 3)
@@ -176,7 +176,7 @@ func (s *ringBufferSuite) TestCopy(c *tc.C) {
 
 	b := make([]byte, 1)
 	next, n, err = rb.Copy(b, 0)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 1)
 	c.Assert(next, tc.Equals, servicelog.RingPos(1))
 	c.Assert(string(b), tc.Equals, "a")
@@ -186,7 +186,7 @@ func (s *ringBufferSuite) TestFullWrite(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10)
 	_, p1 := rb.Positions()
 	n, err := fmt.Fprintf(rb, "0123456789")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 10)
 	_, p2 := rb.Positions()
 	c.Assert(p2, tc.Equals, servicelog.RingPos(10))
@@ -200,7 +200,7 @@ func (s *ringBufferSuite) TestFullWrite(c *tc.C) {
 
 	buffer := &bytes.Buffer{}
 	next, n1, err := rb.WriteTo(buffer, p1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n1, tc.Equals, int64(10))
 	c.Assert(next, tc.Equals, servicelog.RingPos(10))
 	c.Assert(buffer.String(), tc.Equals, "0123456789")
@@ -210,16 +210,16 @@ func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10)
 	_, p1 := rb.Positions()
 	n, err := fmt.Fprintf(rb, "01234")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 5)
 	_, p2 := rb.Positions()
 	err = rb.Discard(int(p2 - p1))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, p1 = rb.Positions()
 	c.Assert(p1, tc.Not(tc.Equals), servicelog.RingPos(0))
 	n, err = fmt.Fprintf(rb, "0123456789")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 10)
 
 	slice := make([]byte, 10)
@@ -231,7 +231,7 @@ func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *tc.C) {
 
 	buffer := &bytes.Buffer{}
 	next, n1, err := rb.WriteTo(buffer, p1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n1, tc.Equals, int64(10))
 	c.Assert(next, tc.Equals, servicelog.RingPos(15))
 	c.Assert(buffer.String(), tc.Equals, "0123456789")
@@ -245,13 +245,13 @@ func (s *ringBufferSuite) TestAllocs(c *tc.C) {
 		_, err := rb.Write(payload)
 		if err != nil {
 			// this looks funny, but its to avoid allocs.
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 		_, p2 := rb.Positions()
 		err = rb.Discard(int(p2 - p1))
 		if err != nil {
 			// this looks funny, but its to avoid allocs.
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 	})
 	c.Assert(int(numAllocs), tc.Equals, 0)

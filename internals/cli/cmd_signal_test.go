@@ -40,7 +40,7 @@ func (s *PebbleSuite) TestSignalShortName(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "HUP", "s1"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 }
 
@@ -61,7 +61,7 @@ func (s *PebbleSuite) TestSignalFullName(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "SIGHUP", "s2"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 }
 
@@ -82,7 +82,7 @@ func (s *PebbleSuite) TestSignalMultipleServices(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "SIGHUP", "s1", "s2"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 }
 

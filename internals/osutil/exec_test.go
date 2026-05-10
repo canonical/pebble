@@ -38,13 +38,13 @@ func TestExecSuite(t *testing.T) {
 
 func (s *execSuite) TestRunAndWaitRunsAndWaits(c *tc.C) {
 	buf, err := osutil.RunAndWait([]string{"sh", "-c", "echo hello; sleep .1"}, nil, time.Second, &tomb.Tomb{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(buf), tc.Equals, "hello\n")
 }
 
 func (s *execSuite) TestRunAndWaitRunsSetsEnviron(c *tc.C) {
 	buf, err := osutil.RunAndWait([]string{"sh", "-c", "echo $FOO"}, []string{"FOO=42"}, time.Second, &tomb.Tomb{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(buf), tc.Equals, "42\n")
 }
 
@@ -103,7 +103,7 @@ func (s *execSuite) TestKillProcessGroupKillsProcessGroup(c *tc.C) {
 	defer cmd.Process.Kill()
 
 	err := osutil.KillProcessGroup(cmd)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// process groups are passed to kill as negative numbers
 	c.Check(pid, tc.Equals, -ppid)
 }
@@ -123,9 +123,9 @@ func (s *execSuite) TestKillProcessGroupShyOfInit(c *tc.C) {
 func (s *execSuite) TestStreamCommandHappy(c *tc.C) {
 	var buf bytes.Buffer
 	stdout, err := osutil.StreamCommand("sh", "-c", "echo hello; sleep .1; echo bye")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	_, err = io.Copy(&buf, stdout)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(buf.String(), tc.Equals, "hello\nbye\n")
 
 	wrf, wrc := osutil.WaitingReaderGuts(stdout)
@@ -138,7 +138,7 @@ func (s *execSuite) TestStreamCommandHappy(c *tc.C) {
 func (s *execSuite) TestStreamCommandSad(c *tc.C) {
 	var buf bytes.Buffer
 	stdout, err := osutil.StreamCommand("false")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	_, err = io.Copy(&buf, stdout)
 	c.Assert(err, tc.ErrorMatches, "exit status 1")
 	c.Check(buf.String(), tc.Equals, "")

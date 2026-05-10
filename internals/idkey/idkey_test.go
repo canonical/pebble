@@ -33,11 +33,11 @@ func (ks *keySuite) TestNoDirectory(c *tc.C) {
 
 	// Create a new identity key (first boot)
 	firstBoot, err := idkey.Generate(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Load the identity key (other boots)
 	nextBoot, err := idkey.Load(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Both should be the same identity.
 	c.Assert(firstBoot.Fingerprint(), tc.Equals, nextBoot.Fingerprint())
@@ -50,11 +50,11 @@ func (ks *keySuite) TestGet(c *tc.C) {
 
 	// Create a new identity key (first boot)
 	firstBoot, err := idkey.Get(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Load the identity key (other boots)
 	nextBoot, err := idkey.Get(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Both should be the same identity.
 	c.Assert(firstBoot.Fingerprint(), tc.Equals, nextBoot.Fingerprint())
@@ -65,7 +65,7 @@ func (ks *keySuite) TestGet(c *tc.C) {
 func (ks *keySuite) TestDirectoryInvalid(c *tc.C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 	err := os.MkdirAll(keyDir, 0o740)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Loading
 	_, err = idkey.Load(keyDir)
@@ -92,10 +92,10 @@ func (ks *keySuite) TestInvalidKey(c *tc.C) {
 
 	// Create a new identity key (first boot)
 	_, err := idkey.Generate(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = os.Chmod(filepath.Join(keyDir, "key.pem"), 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Load the identity key (other boots)
 	_, err = idkey.Load(keyDir)
@@ -108,13 +108,13 @@ func (ks *keySuite) TestEmptyKey(c *tc.C) {
 
 	// Create a new identity key (first boot)
 	_, err := idkey.Generate(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Zero the existing file.
 	f, err := os.OpenFile(filepath.Join(keyDir, "key.pem"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = f.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Load the identity key (other boots)
 	_, err = idkey.Load(keyDir)
@@ -128,15 +128,15 @@ func (ks *keySuite) TestKeyWithTrailingBytes(c *tc.C) {
 
 	// Create a new identity key (first boot)
 	_, err := idkey.Generate(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Append some unexpected bytes after the PEM block.
 	f, err := os.OpenFile(filepath.Join(keyDir, "key.pem"), os.O_RDWR|os.O_APPEND, 0o600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	_, err = f.Write([]byte("\n1234567890"))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = f.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Load the identity key (other boots)
 	_, err = idkey.Load(keyDir)
@@ -149,13 +149,13 @@ func (ks *keySuite) TestKeySign(c *tc.C) {
 
 	// Create a new identity key (first boot)
 	signer, err := idkey.Generate(keyDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	message := []byte("hello world")
 
 	// Hash is optional for Ed25519, but crypto.Signer requires a hash function
 	signature, err := signer.Sign(rand.Reader, message, crypto.Hash(0))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Extract the public key
 	pubKey, ok := signer.Public().(ed25519.PublicKey)
@@ -173,6 +173,6 @@ func (ks *keySuite) BenchmarkKeyGeneration(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		keyDir := filepath.Join(c.MkDir(), "identity")
 		_, err := idkey.Generate(keyDir)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 }

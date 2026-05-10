@@ -39,7 +39,7 @@ func (ts *tlsSuite) TestNoDirectory(c *tc.C) {
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 	_, err := mgr.GetCertificate(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 // TestDirectoryInvalidPerm checks if startup will fail if the TLS directory
@@ -47,7 +47,7 @@ func (ts *tlsSuite) TestNoDirectory(c *tc.C) {
 func (ts *tlsSuite) TestDirectoryInvalidPerm(c *tc.C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	err := os.MkdirAll(tlsDir, 0740)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
@@ -71,16 +71,16 @@ func (ts *tlsSuite) TestKeypairDirNoParent(c *tc.C) {
 func (ts *tlsSuite) TestInvalidIDCertContent(c *tc.C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	err := os.MkdirAll(tlsDir, 0700)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Empty the file.
 	f, err := os.OpenFile(filepath.Join(tlsDir, "identity.pem"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = f.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, tc.ErrorMatches, ".*missing 'CERTIFICATE' block.*")
@@ -91,22 +91,22 @@ func (ts *tlsSuite) TestInvalidIDCertContent(c *tc.C) {
 func (ts *tlsSuite) TestIDCertExtraBytes(c *tc.C) {
 	tlsDir := filepath.Join(c.MkDir(), "tls")
 	err := os.MkdirAll(tlsDir, 0700)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	key := newIDKey(c)
 	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 
 	// Generate certificates on demand.
 	_, err = mgr.GetCertificate(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Append some random bytes at the end.
 	f, err := os.OpenFile(filepath.Join(tlsDir, "identity.pem"), os.O_RDWR|os.O_APPEND, 0o600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	_, err = f.Write([]byte("\n1234567890"))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = f.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Simulate a process restart by creating a new manager.
 	mgr = tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
@@ -124,11 +124,11 @@ func (ts *tlsSuite) TestInvalidIDCertPerm(c *tc.C) {
 
 	// Generate certificates on demand.
 	_, err := mgr.GetCertificate(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Make the permission invalid.
 	err = os.Chmod(filepath.Join(tlsDir, "identity.pem"), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Simulate a process restart by creating a new manager.
 	mgr = tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
@@ -156,7 +156,7 @@ func (ts *tlsSuite) TestTLSServerClient(c *tc.C) {
 	// happen during a trust exchange procedure, after which we pin (trust) the
 	// identity certificate by our client.
 	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	tlsCert := certs[0]
 	idCert := certs[1]
 	restoreTime()
@@ -169,7 +169,7 @@ func (ts *tlsSuite) TestTLSServerClient(c *tc.C) {
 
 		// Test a trusted client connection (we use the identity as the root CA).
 		certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		tlsCert := certs[0]
 
@@ -201,7 +201,7 @@ func (ts *tlsSuite) TestTLSServerClientTLSReuse(c *tc.C) {
 	// happen during a trust exchange procedure, after which we pin (trust) the
 	// identity certificate by our client.
 	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	tlsCert := certs[0]
 	idCert := certs[1]
 	restoreTime()
@@ -213,7 +213,7 @@ func (ts *tlsSuite) TestTLSServerClientTLSReuse(c *tc.C) {
 
 		// Test a trusted client connection (we use the identity as the root CA).
 		certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Should stay the same
 		c.Assert(tlsCert.Equal(certs[0]), tc.Equals, true)
@@ -245,7 +245,7 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *tc.C) {
 	// happen during a trust exchange procedure, after which we pin (trust) the
 	// identity certificate by our client.
 	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	tlsCert1 := certs[0]
 	idCert := certs[1]
 	restoreTime()
@@ -262,7 +262,7 @@ func (ts *tlsSuite) TestTLSServerClientRenewWindow(c *tc.C) {
 
 	// Test a trusted client connection (we use the identity as the root CA).
 	certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tlsCert2 := certs[0]
 	// Validity duration should still be 1 hour
@@ -296,7 +296,7 @@ func (ts *tlsSuite) TestTLSServerClientIDExpires(c *tc.C) {
 	// happen during a trust exchange procedure, after which we pin (trust) the
 	// identity certificate by our client.
 	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	tlsCert := certs[0]
 	idCert := certs[1]
 	restoreTime()
@@ -306,7 +306,7 @@ func (ts *tlsSuite) TestTLSServerClientIDExpires(c *tc.C) {
 	restoreTime = tlsstate.FakeTimeNow(testTime)
 	// Test a trusted client connection (we use the identity as the root CA).
 	certs, err = ts.testTLSVerifiedClient(c, idCert, testTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// TLS certificate stays the same
 	c.Assert(tlsCert.Equal(certs[0]), tc.Equals, true)
 	restoreTime()
@@ -324,7 +324,7 @@ func (ts *tlsSuite) TestTLSServerClientIDExpires(c *tc.C) {
 	c.Assert(tlsCert.Equal(certs[0]), tc.Equals, true)
 	// Test non-verified connection (which should still work).
 	certs, err = ts.testTLSInsecureClient(c, testTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// ID certificate did not change (and is expired)
 	c.Assert(idCert.Equal(certs[1]), tc.Equals, true)
 	c.Assert(certs[1].NotAfter.Before(testTime), tc.Equals, true)
@@ -356,7 +356,7 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *tc.C) {
 	// happen during a trust exchange procedure, after which we pin (trust) the
 	// identity certificate by our client.
 	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	tlsCert := certs[0]
 	idCert := certs[1]
 	restoreTime()
@@ -382,7 +382,7 @@ func (ts *tlsSuite) TestTLSServerClientIDKeyChange(c *tc.C) {
 	c.Assert(err, tc.ErrorMatches, ".*Root CA verify failed.*")
 	// Test non-verified connection.
 	certs, err = ts.testTLSInsecureClient(c, testTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// ID certificate changed
 	c.Assert(idCert.Equal(certs[1]), tc.Equals, false)
 	// TLS certificate changed.
@@ -427,7 +427,7 @@ func (ts *tlsSuite) TestCertCustomization(c *tc.C) {
 	defer restoreTime()
 
 	certs, err := ts.testTLSInsecureClient(c, testTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tlsCert := certs[0]
 	idCert := certs[1]
@@ -492,7 +492,7 @@ func (ts *tlsSuite) BenchmarkIDTLSCertGen(b *testing.B) {
 
 		// Create identity and TLS certificates on demand.
 		_, err := mgr.GetCertificate(nil)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 }
 
@@ -608,7 +608,7 @@ func (ts *tlsSuite) TestTLSServerClientCustomCertificates(c *tc.C) {
 	testBaseTime := getTestTime(2000, 1, 1)
 	restoreTime := tlsstate.FakeTimeNow(testBaseTime)
 	certs, err := ts.testTLSInsecureClient(c, testBaseTime)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	tlsCert := certs[0]
 	idCert := certs[1]
 	restoreTime()

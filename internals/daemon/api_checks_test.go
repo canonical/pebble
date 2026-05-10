@@ -136,14 +136,14 @@ func (s *apiSuite) TestChecksEmpty(c *tc.C) {
 
 func (s *apiSuite) getChecks(c *tc.C, query string) (*resp, map[string]any) {
 	req, err := http.NewRequest("GET", "/v1/checks"+query, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChecks(apiCmd("/v1/checks"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 	c.Check(rec.Code, tc.Equals, rsp.Status)
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Standardise the change-id and prev-change-id fields before comparison as these can vary.
 	if results, ok := body["result"].([]any); ok {
@@ -227,7 +227,7 @@ checks:
 
 func (s *apiSuite) postChecks(c *tc.C, body string) *resp {
 	req, err := http.NewRequest("POST", "/v1/checks", strings.NewReader(body))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostChecks(apiCmd("/v1/checks"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -305,14 +305,14 @@ checks:
 	}
 
 	req, err := http.NewRequest("POST", "/v1/checks/refresh", strings.NewReader(`{"name": "chk1"}`))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostChecksRefresh(apiCmd("/v1/checks/refresh"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Make the sure the check has refreshed.
 	stat, err := os.Stat(donePath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(stat.Mode().IsRegular(), tc.Equals, true)
 	os.Remove(donePath)
 

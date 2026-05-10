@@ -278,12 +278,12 @@ func (s *PebbleSuite) TestEnterSubCommandWaits(c *tc.C) {
 	stdout := s.Stdout()
 
 	svcOut, err := os.ReadFile(filepath.Join(s.pebbleDir, "enter-wait"))
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	layout := "2006-01-02 15:04:05.000000000-07:00"
 	subCmdExecTime, err := time.Parse(layout, strings.TrimSpace(stdout))
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	svcStartTime, err := time.Parse(layout, strings.TrimSpace(string(svcOut)))
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(svcStartTime.Before(subCmdExecTime), tc.Equals, true)
 }

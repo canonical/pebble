@@ -43,10 +43,10 @@ identities:
     bob: null
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"remove-identities", "--from", path})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "Removed 1 identity.\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -61,7 +61,7 @@ identities:
         local: {user-id: 42}
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, err = cli.ParserForTest().ParseArgs([]string{"remove-identities", "--from", path})
 	c.Assert(err, tc.ErrorMatches, `identity value for "bob" must be null for remove operation`)

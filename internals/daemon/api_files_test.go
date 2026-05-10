@@ -397,7 +397,7 @@ func (s *filesSuite) TestMakeDirsSingle(c *tc.C) {
 		},
 	}
 	reqBody, err := json.Marshal(payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
 	c.Check(response.StatusCode, tc.Equals, http.StatusOK)
 
@@ -429,7 +429,7 @@ func (s *filesSuite) TestMakeDirsMultiple(c *tc.C) {
 		},
 	}
 	reqBody, err := json.Marshal(payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
 	c.Check(response.StatusCode, tc.Equals, http.StatusOK)
 
@@ -446,10 +446,10 @@ func (s *filesSuite) TestMakeDirsMultiple(c *tc.C) {
 	c.Check(osutil.IsDir(tmpDir+"/will/not/work"), tc.Equals, false)
 	c.Check(osutil.IsDir(tmpDir+"/make/my/parents"), tc.Equals, true)
 	st, err := os.Stat(tmpDir + "/newdir")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(st.Mode().Perm(), tc.Equals, os.FileMode(0o755))
 	st, err = os.Stat(tmpDir + "/make/my/parents")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(st.Mode().Perm(), tc.Equals, os.FileMode(0o700))
 }
 
@@ -516,7 +516,7 @@ func (s *filesSuite) testMakeDirsUserGroup(c *tc.C, uid, gid int, user, group st
 		},
 	}
 	reqBody, err := json.Marshal(payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
 	c.Check(response.StatusCode, tc.Equals, http.StatusOK)
 
@@ -550,56 +550,56 @@ func (s *filesSuite) TestMakeDirsUserGroupReal(c *tc.C) {
 		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
 	}
 	u, err := user.Lookup(username)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	g, err := user.LookupGroup(group)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	uid, err := strconv.Atoi(u.Uid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	gid, err := strconv.Atoi(g.Gid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tmpDir := s.testMakeDirsUserGroup(c, uid, gid, username, group)
 
 	info, err := os.Stat(tmpDir + "/normal")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT := info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(0))
 	c.Check(statT.Gid, tc.Equals, uint32(0))
 
 	info, err = os.Stat(tmpDir + "/uid-gid")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(uid))
 
 	info, err = os.Stat(tmpDir + "/user-group")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(uid))
 
 	info, err = os.Stat(tmpDir + "/nested1")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(int(info.Mode()&os.ModePerm), tc.Equals, 0o755)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(0))
 	c.Check(statT.Gid, tc.Equals, uint32(0))
 
 	info, err = os.Stat(tmpDir + "/nested1/normal")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(0))
 	c.Check(statT.Gid, tc.Equals, uint32(0))
 
 	info, err = os.Stat(tmpDir + "/nested2")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(int(info.Mode()&os.ModePerm), tc.Equals, 0o755)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(gid))
 
 	info, err = os.Stat(tmpDir + "/nested2/user-group")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(gid))
@@ -622,7 +622,7 @@ func (s *filesSuite) TestRemoveSingle(c *tc.C) {
 		},
 	}
 	reqBody, err := json.Marshal(payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
 	c.Check(response.StatusCode, tc.Equals, http.StatusOK)
 
@@ -661,7 +661,7 @@ func (s *filesSuite) TestRemoveMultiple(c *tc.C) {
 		},
 	}
 	reqBody, err := json.Marshal(payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, body := doRequest(c, v1PostFiles, "POST", "/v1/files", nil, headers, reqBody)
 	c.Check(response.StatusCode, tc.Equals, http.StatusOK)
 
@@ -940,7 +940,7 @@ Bar
 	assertFile(c, path1, 0o777, "Bye bye")
 	assertFile(c, path2, 0o644, "Foo\nBar")
 	info, err := os.Stat(tmpDir + "/foo")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, os.FileMode(0o755))
 }
 
@@ -1011,56 +1011,56 @@ func (s *filesSuite) TestWriteUserGroupReal(c *tc.C) {
 		c.Fatalf("must set PEBBLE_TEST_USER and PEBBLE_TEST_GROUP")
 	}
 	u, err := user.Lookup(username)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	g, err := user.LookupGroup(group)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	uid, err := strconv.Atoi(u.Uid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	gid, err := strconv.Atoi(g.Gid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tmpDir := s.testWriteUserGroup(c, uid, gid, username, group)
 
 	info, err := os.Stat(tmpDir + "/normal")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT := info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(0))
 	c.Check(statT.Gid, tc.Equals, uint32(0))
 
 	info, err = os.Stat(tmpDir + "/uid-gid")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(uid))
 
 	info, err = os.Stat(tmpDir + "/user-group")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(uid))
 
 	info, err = os.Stat(tmpDir + "/nested1")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(int(info.Mode()&os.ModePerm), tc.Equals, 0o755)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(0))
 	c.Check(statT.Gid, tc.Equals, uint32(0))
 
 	info, err = os.Stat(tmpDir + "/nested1/normal")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(0))
 	c.Check(statT.Gid, tc.Equals, uint32(0))
 
 	info, err = os.Stat(tmpDir + "/nested2")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(int(info.Mode()&os.ModePerm), tc.Equals, 0o755)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(gid))
 
 	info, err = os.Stat(tmpDir + "/nested2/user-group")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	statT = info.Sys().(*syscall.Stat_t)
 	c.Check(statT.Uid, tc.Equals, uint32(uid))
 	c.Check(statT.Gid, tc.Equals, uint32(gid))
@@ -1215,10 +1215,10 @@ group not found
 
 func assertFile(c *tc.C, path string, perm os.FileMode, content string) {
 	b, err := os.ReadFile(path)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(b), tc.Equals, content)
 	info, err := os.Stat(path)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode().Perm(), tc.Equals, perm)
 }
 
@@ -1227,7 +1227,7 @@ func assertFile(c *tc.C, path string, perm os.FileMode, content string) {
 func readMultipart(c *tc.C, response *http.Response, body io.Reader, result any) map[string]string {
 	contentType := response.Header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(mediaType, tc.Equals, "multipart/form-data")
 	c.Assert(params["boundary"], tc.Not(tc.Equals), "")
 	mr := multipart.NewReader(body, params["boundary"])
@@ -1237,12 +1237,12 @@ func readMultipart(c *tc.C, response *http.Response, body io.Reader, result any)
 	var part *multipart.Part
 	for {
 		part, err = mr.NextPart()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if part.FormName() != "files" {
 			break
 		}
 		b, err := io.ReadAll(part)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		files[multipartFilename(part)] = string(b)
 		part.Close()
 	}
@@ -1251,7 +1251,7 @@ func readMultipart(c *tc.C, response *http.Response, body io.Reader, result any)
 	c.Assert(part.FormName(), tc.Equals, "response")
 	decoder := json.NewDecoder(part)
 	err = decoder.Decode(result)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	part.Close()
 
 	// Ensure that was the last part
@@ -1267,7 +1267,7 @@ func doRequest(c *tc.C, f ResponseFunc, method, url string, query url.Values, he
 		bodyReader = bytes.NewBuffer(body)
 	}
 	req, err := http.NewRequest(method, url, bodyReader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	if query != nil {
 		req.URL.RawQuery = query.Encode()
 	}
@@ -1303,7 +1303,7 @@ func createTestFiles(c *tc.C) string {
 
 func writeTempFile(c *tc.C, dir, filename, content string, perm os.FileMode) {
 	err := os.WriteFile(filepath.Join(dir, filename), []byte(content), perm)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func assertListResult(c *tc.C, result any, index int, typ, dir, name, perms string, size int) {
@@ -1319,7 +1319,7 @@ func assertListResult(c *tc.C, result any, index int, typ, dir, name, perms stri
 		c.Assert(ok, tc.Equals, false)
 	}
 	_, err := time.Parse(time.RFC3339, x["last-modified"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	uid := int(x["user-id"].(float64))
 	c.Assert(uid, tc.Equals, os.Getuid())
@@ -1327,10 +1327,10 @@ func assertListResult(c *tc.C, result any, index int, typ, dir, name, perms stri
 	c.Assert(gid, tc.Equals, os.Getgid())
 
 	usr, err := user.LookupId(strconv.Itoa(uid))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(x["user"], tc.Equals, usr.Username)
 	group, err := user.LookupGroupId(strconv.Itoa(gid))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(x["group"], tc.Equals, group.Name)
 }
 

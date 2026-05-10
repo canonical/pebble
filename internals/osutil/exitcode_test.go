@@ -31,19 +31,19 @@ func TestExitCodeTestSuite(t *testing.T) {
 func (ts *ExitCodeTestSuite) TestExitCode(c *tc.C) {
 	cmd := exec.Command("true")
 	err := cmd.Run()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cmd = exec.Command("false")
 	err = cmd.Run()
 	c.Assert(err, tc.NotNil)
 	e, err := ExitCode(err)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e, tc.Equals, 1)
 
 	cmd = exec.Command("sh", "-c", "exit 7")
 	err = cmd.Run()
 	e, err = ExitCode(err)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e, tc.Equals, 7)
 
 	// ensure that non exec.ExitError values give a error

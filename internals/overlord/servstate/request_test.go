@@ -41,19 +41,19 @@ services:
 	defer s.st.Unlock()
 
 	tset, err := servstate.Start(s.st, [][]string{{"one"}, {"two"}})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
 	c.Assert(len(tasks), tc.Equals, 2)
 
 	c.Assert(tasks[0].Kind(), tc.Equals, "start")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "one")
 
 	c.Assert(tasks[1].Kind(), tc.Equals, "start")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "two")
 
 	c.Assert(tasks[0].Lanes()[0], tc.Not(tc.Equals), tasks[1].Lanes()[0])
@@ -84,19 +84,19 @@ services:
 	defer s.st.Unlock()
 
 	tset, err := servstate.Start(s.st, [][]string{{"one", "two"}})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
 	c.Assert(len(tasks), tc.Equals, 2)
 
 	c.Assert(tasks[0].Kind(), tc.Equals, "start")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "one")
 
 	c.Assert(tasks[1].Kind(), tc.Equals, "start")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "two")
 
 	c.Assert(tasks[0].Lanes()[0], tc.Equals, tasks[1].Lanes()[0])
@@ -127,19 +127,19 @@ services:
 	defer s.st.Unlock()
 
 	tset, err := servstate.Start(s.st, [][]string{{"one", "two"}})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
 	c.Assert(len(tasks), tc.Equals, 2)
 
 	c.Assert(tasks[0].Kind(), tc.Equals, "start")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "one")
 
 	c.Assert(tasks[1].Kind(), tc.Equals, "start")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "two")
 
 	c.Assert(tasks[0].Lanes()[0], tc.Equals, tasks[1].Lanes()[0])
@@ -150,18 +150,18 @@ func (s *S) TestStop(c *tc.C) {
 	defer s.st.Unlock()
 
 	tset, err := servstate.Stop(s.st, [][]string{{"one", "two"}})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
 	c.Assert(len(tasks), tc.Equals, 2)
 
 	c.Assert(tasks[0].Kind(), tc.Equals, "stop")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "one")
 
 	c.Assert(tasks[1].Kind(), tc.Equals, "stop")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(req.Name, tc.Equals, "two")
 }

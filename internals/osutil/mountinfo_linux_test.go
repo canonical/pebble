@@ -36,7 +36,7 @@ func (s *mountinfoSuite) TestParseMountInfoEntry1(c *tc.C) {
 	real := "36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw,errors=continue"
 	canonical := "36 35 98:0 /mnt1 /mnt2 noatime,rw master:1 - ext3 /dev/root errors=continue,rw"
 	entry, err := osutil.ParseMountInfoEntry(real)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entry.String(), tc.Equals, canonical)
 
 	c.Assert(entry.MountID, tc.Equals, 36)
@@ -58,7 +58,7 @@ func (s *mountinfoSuite) TestParseMountInfoEntry2(c *tc.C) {
 	real := "36 35 98:0 /mnt1 /mnt2 rw,noatime - ext3 /dev/root rw,errors=continue"
 	canonical := "36 35 98:0 /mnt1 /mnt2 noatime,rw - ext3 /dev/root errors=continue,rw"
 	entry, err := osutil.ParseMountInfoEntry(real)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entry.String(), tc.Equals, canonical)
 
 	c.Assert(entry.MountOptions, tc.DeepEquals, map[string]string{"rw": "", "noatime": ""})
@@ -67,14 +67,14 @@ func (s *mountinfoSuite) TestParseMountInfoEntry2(c *tc.C) {
 	// One optional field.
 	entry, err = osutil.ParseMountInfoEntry(
 		"36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw,errors=continue")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entry.MountOptions, tc.DeepEquals, map[string]string{"rw": "", "noatime": ""})
 	c.Assert(entry.OptionalFields, tc.DeepEquals, []string{"master:1"})
 	c.Assert(entry.FsType, tc.Equals, "ext3")
 	// Two optional fields.
 	entry, err = osutil.ParseMountInfoEntry(
 		"36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 slave:2 - ext3 /dev/root rw,errors=continue")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entry.MountOptions, tc.DeepEquals, map[string]string{"rw": "", "noatime": ""})
 	c.Assert(entry.OptionalFields, tc.DeepEquals, []string{"master:1", "slave:2"})
 	c.Assert(entry.FsType, tc.Equals, "ext3")
@@ -85,7 +85,7 @@ func (s *mountinfoSuite) TestParseMountInfoEntry3(c *tc.C) {
 	real := `36 35 98:0 /mnt\0401 /mnt\0402 noatime,rw\040 mas\040ter:1 - ext\0403 /dev/ro\040ot rw\040,errors=continue`
 	canonical := `36 35 98:0 /mnt\0401 /mnt\0402 noatime,rw\040 mas\040ter:1 - ext\0403 /dev/ro\040ot errors=continue,rw\040`
 	entry, err := osutil.ParseMountInfoEntry(real)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entry.String(), tc.Equals, canonical)
 
 	c.Assert(entry.MountID, tc.Equals, 36)
@@ -134,7 +134,7 @@ func (s *mountinfoSuite) TestParseMountInfoEntry5(c *tc.C) {
 	real := "2074 27 0:54 / /tmp/strange\rdir rw,relatime shared:1039 - tmpfs tmpfs rw"
 	canonical := "2074 27 0:54 / /tmp/strange\rdir relatime,rw shared:1039 - tmpfs tmpfs rw"
 	entry, err := osutil.ParseMountInfoEntry(real)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entry.String(), tc.Equals, canonical)
 	c.Assert(entry.MountDir, tc.Equals, "/tmp/strange\rdir")
 }
@@ -142,7 +142,7 @@ func (s *mountinfoSuite) TestParseMountInfoEntry5(c *tc.C) {
 // Test that empty mountinfo is parsed without errors.
 func (s *mountinfoSuite) TestReadMountInfo1(c *tc.C) {
 	entries, err := osutil.ReadMountInfo(strings.NewReader(""))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entries, tc.HasLen, 0)
 }
 
@@ -154,7 +154,7 @@ const mountInfoSample = "" +
 // Test that mountinfo is parsed without errors.
 func (s *mountinfoSuite) TestReadMountInfo2(c *tc.C) {
 	entries, err := osutil.ReadMountInfo(strings.NewReader(mountInfoSample))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entries, tc.HasLen, 3)
 }
 
@@ -162,9 +162,9 @@ func (s *mountinfoSuite) TestReadMountInfo2(c *tc.C) {
 func (s *mountinfoSuite) TestLoadMountInfo1(c *tc.C) {
 	fname := filepath.Join(c.MkDir(), "mountinfo")
 	err := os.WriteFile(fname, []byte(mountInfoSample), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	entries, err := osutil.LoadMountInfo(fname)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(entries, tc.HasLen, 3)
 }
 

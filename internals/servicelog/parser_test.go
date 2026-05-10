@@ -47,7 +47,7 @@ func (s *parserSuite) TestParse(c *tc.C) {
 	c.Check(err, tc.ErrorMatches, "invalid log service name")
 
 	entry, err := servicelog.Parse([]byte("2021-05-26T12:37:00Z [bar] baz"))
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	checkEntry(c, entry, servicelog.Entry{
 		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
 		Service: "bar",
@@ -55,7 +55,7 @@ func (s *parserSuite) TestParse(c *tc.C) {
 	})
 
 	entry, err = servicelog.Parse([]byte("2020-12-25T00:01:02.123456Z [x] a longer message\n"))
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	checkEntry(c, entry, servicelog.Entry{
 		Time:    time.Date(2020, 12, 25, 0, 1, 2, 123456000, time.UTC),
 		Service: "x",

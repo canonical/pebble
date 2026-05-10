@@ -60,21 +60,21 @@ func (s *ManagerSuite) SetUpSuite(c *tc.C) {
 
 func (s *ManagerSuite) SetUpTest(c *tc.C) {
 	err := reaper.Start()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	s.overlord = overlord.Fake()
 	layersDir := filepath.Join(c.MkDir(), "layers")
 	err = os.Mkdir(layersDir, 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.planMgr, err = planstate.NewManager(layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.overlord.AddManager(s.planMgr)
 	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.planMgr)
 	s.planMgr.AddChangeListener(s.manager.PlanChanged)
 	s.overlord.AddManager(s.manager)
 	s.overlord.AddManager(s.overlord.TaskRunner())
 	err = s.overlord.StartUp()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.overlord.Loop()
 }
 
@@ -82,7 +82,7 @@ func (s *ManagerSuite) TearDownTest(c *tc.C) {
 	s.overlord.Stop()
 
 	err := reaper.Stop()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *ManagerSuite) TestChecks(c *tc.C) {
@@ -214,10 +214,10 @@ func (s *ManagerSuite) TestCheckCanceled(c *tc.C) {
 
 	// Ensure command was terminated (output file didn't grow in size)
 	b1, err := os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	time.Sleep(20 * time.Millisecond)
 	b2, err := os.ReadFile(tempFile)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(b2), tc.Equals, len(b1))
 
 	// Ensure it didn't trigger failure action
@@ -233,7 +233,7 @@ func (s *ManagerSuite) TestFailures(c *tc.C) {
 	})
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -281,7 +281,7 @@ func (s *ManagerSuite) TestFailures(c *tc.C) {
 
 	// Should reset number of failures if command then succeeds
 	err = os.Remove(testPath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
 		return check.Status == checkstate.CheckStatusUp && check.ChangeID != recoverChangeID
 	})
@@ -297,7 +297,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *tc.C) {
 
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -360,7 +360,7 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *tc.C) {
 		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(checks, tc.HasLen, 3)
 	var changeIDs []string
 	for _, check := range checks {
@@ -392,7 +392,7 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *tc.C) {
 		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 6},
 	})
 	checks, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(checks, tc.HasLen, 2)
 	var newChangeIDs []string
 	for _, check := range checks {
@@ -448,7 +448,7 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *tc.C) {
 		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(checks, tc.HasLen, 2)
 	var changeIDs []string
 	for _, check := range checks {
@@ -477,7 +477,7 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *tc.C) {
 		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(checks, tc.HasLen, 2)
 	var newChangeIDs []string
 	for _, check := range checks {
@@ -541,7 +541,7 @@ func waitCheck(c *tc.C, mgr *checkstate.CheckManager, name string, f func(check 
 	for start := time.Now(); time.Since(start) < timeout; {
 		var err error
 		checks, err = mgr.Checks()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		for _, check := range checks {
 			if check.Name == name && f(check) {
 				return check
@@ -562,7 +562,7 @@ func waitChecks(c *tc.C, mgr *checkstate.CheckManager, expected []*checkstate.Ch
 	for start := time.Now(); time.Since(start) < 10*time.Second; {
 		var err error
 		checks, err = mgr.Checks()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		for _, check := range checks {
 			check.ChangeID = ""     // clear change ID to avoid comparing it
 			check.PrevChangeID = "" // clear prev change ID to avoid comparing it
@@ -601,7 +601,7 @@ func changeData(c *tc.C, st *state.State, changeID string) map[string]string {
 	chg := st.Change(changeID)
 	var data map[string]string
 	err := chg.Get("notice-data", &data)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return data
 }
 
@@ -634,7 +634,7 @@ func (s *ManagerSuite) TestStartChecks(c *tc.C) {
 		},
 	}
 	err := s.planMgr.AppendLayer(origLayer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
@@ -642,7 +642,7 @@ func (s *ManagerSuite) TestStartChecks(c *tc.C) {
 		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var originalChangeIDs []string
 	for _, check := range checks {
 		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
@@ -654,10 +654,10 @@ func (s *ManagerSuite) TestStartChecks(c *tc.C) {
 		{Name: "chk2", Startup: "disabled", Status: "up", Threshold: 3},
 		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(changed, tc.DeepEquals, []string{"chk2"})
 	checks, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// chk1 and chk3 should still have the same change ID, chk2 should have a new one.
 	c.Assert(checks[0].ChangeID, tc.Equals, originalChangeIDs[0])
 	c.Assert(checks[1].ChangeID, tc.Not(tc.Equals), originalChangeIDs[1])
@@ -685,7 +685,7 @@ func (s *ManagerSuite) TestStartChecksNotFound(c *tc.C) {
 		},
 	}
 	err := s.planMgr.AppendLayer(origLayer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
@@ -726,7 +726,7 @@ func (s *ManagerSuite) TestStopChecks(c *tc.C) {
 		},
 	}
 	err := s.planMgr.AppendLayer(origLayer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// tc.Run an Ensure pass to kick the check tasks into Doing status.
 	st := s.overlord.State()
@@ -739,7 +739,7 @@ func (s *ManagerSuite) TestStopChecks(c *tc.C) {
 	})
 
 	checks, err := s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var chk1ChangeID, chk3ChangeID string
 	for _, check := range checks {
 		switch check.Name {
@@ -768,7 +768,7 @@ func (s *ManagerSuite) TestStopChecks(c *tc.C) {
 	}
 
 	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(changed, tc.DeepEquals, []string{"chk1"})
 
 	// tc.Run an Ensure pass to actually stop the checks.
@@ -782,7 +782,7 @@ func (s *ManagerSuite) TestStopChecks(c *tc.C) {
 
 	// chk3 should still have the same change ID, chk1 and chk2 should not have one.
 	checks, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(checks[0].ChangeID, tc.Equals, "")
 	c.Assert(checks[1].ChangeID, tc.Equals, "")
 	c.Assert(checks[2].ChangeID, tc.Equals, chk3ChangeID)
@@ -816,7 +816,7 @@ func (s *ManagerSuite) TestStopChecksNotFound(c *tc.C) {
 		},
 	}
 	err := s.planMgr.AppendLayer(origLayer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
@@ -857,7 +857,7 @@ func (s *ManagerSuite) TestReplan(c *tc.C) {
 		},
 	}
 	err := s.planMgr.AppendLayer(origLayer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
@@ -883,9 +883,9 @@ func (s *ManagerSuite) TestReplan(c *tc.C) {
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
 		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	checks, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// chk3 should still have the same change ID, chk1 should have a new one,
 	// and chk2 should not have one.
 	c.Assert(checks[0].ChangeID, tc.Not(tc.Equals), originalChangeIDs[0])
@@ -955,7 +955,7 @@ pebble_check_failure_count{check="chk1"} 0
 func (s *ManagerSuite) TestMetricsCheckFailure(c *tc.C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -1046,17 +1046,17 @@ func (s *ManagerSuite) TestRefreshCheck(c *tc.C) {
 		},
 	}
 	err := s.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	originalChangeID := checks[0].ChangeID
 
 	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(*checkInfo, tc.DeepEquals, checkstate.CheckInfo{
 		Name:      "chk1",
@@ -1073,7 +1073,7 @@ func (s *ManagerSuite) TestRefreshCheck(c *tc.C) {
 func (s *ManagerSuite) TestRefreshCheckFailure(c *tc.C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	chk1 := &plan.Check{
 		Name:      "chk1",
 		Override:  "replace",
@@ -1088,13 +1088,13 @@ func (s *ManagerSuite) TestRefreshCheckFailure(c *tc.C) {
 		},
 	}
 	err = s.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	checks, err := s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	originalChangeID := checks[0].ChangeID
 	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
 	c.Assert(err, tc.ErrorMatches, "exit status 1; details")
@@ -1124,25 +1124,25 @@ func (s *ManagerSuite) TestRefreshStoppedCheck(c *tc.C) {
 		},
 	}
 	err := s.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	_, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	changed, err := s.manager.StopChecks([]string{"chk1"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(changed, tc.DeepEquals, []string{"chk1"})
 	_, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(*checkInfo, tc.DeepEquals, checkstate.CheckInfo{
 		Name:      "chk1",
 		Level:     "",
@@ -1156,7 +1156,7 @@ func (s *ManagerSuite) TestRefreshStoppedCheck(c *tc.C) {
 func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *tc.C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	chk1 := &plan.Check{
 		Name:      "chk1",
 		Override:  "replace",
@@ -1171,22 +1171,22 @@ func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *tc.C) {
 		},
 	}
 	err = s.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	_, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	changed, err := s.manager.StopChecks([]string{"chk1"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(changed, tc.DeepEquals, []string{"chk1"})
 	_, err = s.manager.Checks()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	checkInfo, err := s.manager.RefreshCheck(context.Background(), chk1)
 	c.Assert(err, tc.ErrorMatches, "exit status 1; details")
@@ -1203,7 +1203,7 @@ func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *tc.C) {
 func (s *ManagerSuite) TestChecksSuccesses(c *tc.C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -1227,7 +1227,7 @@ func (s *ManagerSuite) TestChecksSuccesses(c *tc.C) {
 
 	// Remove the file to make the check start failing.
 	err = os.Remove(testPath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	failedCheck := waitCheck(c, s.manager, "chk1", func(chk *checkstate.CheckInfo) bool {
 		return chk.Status == checkstate.CheckStatusDown
 	})
@@ -1240,7 +1240,7 @@ func (s *ManagerSuite) TestChecksSuccesses(c *tc.C) {
 
 	// Reinstate the file to make the check succeed and go into "perform" mode again.
 	err = os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	waitCheck(c, s.manager, "chk1", func(chk *checkstate.CheckInfo) bool {
 		c.Assert(chk.Successes, tc.Not(tc.Equals), 0)
 		return chk.Successes >= 2 && chk.Successes < numSuccesses
@@ -1250,7 +1250,7 @@ func (s *ManagerSuite) TestChecksSuccesses(c *tc.C) {
 func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *tc.C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.manager.PlanChanged(&plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
@@ -1279,7 +1279,7 @@ func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *tc.C) {
 	recoverChangeID := check.ChangeID
 
 	err = os.Remove(testPath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	check = waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
 		return check.Status == checkstate.CheckStatusUp && check.ChangeID != recoverChangeID
 	})

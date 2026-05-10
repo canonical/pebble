@@ -52,7 +52,7 @@ func (s *PebbleSuite) TestRm(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "/foo/bar.baz"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -78,7 +78,7 @@ func (s *PebbleSuite) TestRmRecursive(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "-r", "/foo/bar"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")

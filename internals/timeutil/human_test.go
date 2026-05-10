@@ -33,7 +33,7 @@ func TestHumanSuite(t *testing.T) {
 
 func (s *humanSuite) SetUpSuite(c *tc.C) {
 	loc, err := time.LoadLocation("Europe/London")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	s.beforeDSTbegins = time.Date(2017, 3, 26, 0, 59, 0, 0, loc)
 	// note this is actually 2:01am DST
@@ -64,7 +64,7 @@ func (s *humanSuite) TestHumanTimeDST(c *tc.C) {
 
 func (s *humanSuite) TestHumanTimeDSTMore(c *tc.C) {
 	loc, err := time.LoadLocation("Europe/London")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	d0 := time.Date(2018, 3, 23, 13, 14, 15, 0, loc)
 	df := time.Date(2018, 3, 25, 13, 14, 15, 0, loc)
 	c.Check(timeutil.HumanTimeSince(d0, df, 300), tc.Equals, "2 days ago, at 13:14 GMT")

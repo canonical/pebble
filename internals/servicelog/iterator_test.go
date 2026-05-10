@@ -40,7 +40,7 @@ func (s *iteratorSuite) TestReads(c *tc.C) {
 	rb := servicelog.NewRingBuffer(100)
 	for range 10 {
 		n, err := fmt.Fprint(rb, "0123456789")
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(n, tc.Equals, 10)
 	}
 
@@ -66,7 +66,7 @@ func (s *iteratorSuite) TestConcurrentReaders(c *tc.C) {
 	rb := servicelog.NewRingBuffer(10000)
 	for range 1000 {
 		n, err := fmt.Fprintln(rb, "123456789")
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(n, tc.Equals, 10)
 	}
 
@@ -128,7 +128,7 @@ func (s *iteratorSuite) TestMore(c *tc.C) {
 				return
 			}
 			_, err := fmt.Fprintf(rb, "%d", i)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 	})
 
@@ -159,9 +159,9 @@ func (s *iteratorSuite) TestMore(c *tc.C) {
 			c.Assert(ok, tc.Equals, true)
 			buf := &bytes.Buffer{}
 			_, err := io.Copy(buf, it)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			i, err := strconv.Atoi(buf.String())
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			resultSum += i
 		}
 	})
@@ -174,20 +174,20 @@ func (s *iteratorSuite) TestMore(c *tc.C) {
 func (s *iteratorSuite) TestWriteTo(c *tc.C) {
 	rb := servicelog.NewRingBuffer(1000)
 	n0, err := fmt.Fprintln(rb, "testing testing testing")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	buf := &bytes.Buffer{}
 	it := rb.TailIterator()
 	for it.Next(nil) {
 		n1, err := it.WriteTo(buf)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(int(n1), tc.Equals, n0)
 	}
 	err = it.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = rb.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *iteratorSuite) TestLongReaders(c *tc.C) {
@@ -223,12 +223,12 @@ func (s *iteratorSuite) TestLongReaders(c *tc.C) {
 
 	for i := range 10 {
 		n, err := fmt.Fprintf(rb, "%d", i)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(n, tc.Equals, 1)
 	}
 
 	err := rb.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	wg.Wait()
 
 	c.Assert(int(readCount), tc.Equals, 10*numReaders)
@@ -243,7 +243,7 @@ func (s *iteratorSuite) TestTruncation(c *tc.C) {
 	buffer := &bytes.Buffer{}
 	for iter.Next(nil) {
 		_, err := io.Copy(buffer, iter)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 	c.Assert(buffer.String(), tc.Equals, "\n(... output truncated ...)\n0123456789")
 }
@@ -271,18 +271,18 @@ func (s *iteratorSuite) TestClosed(c *tc.C) {
 	fmt.Fprint(rb, "0123456789")
 	iter0 := rb.TailIterator()
 	err := rb.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	iter1 := rb.TailIterator()
 
 	buffer0 := &bytes.Buffer{}
 	n, err := iter0.WriteTo(buffer0)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, int64(10))
 	c.Assert(iter0.Close(), tc.IsNil)
 
 	buffer1 := &bytes.Buffer{}
 	n, err = iter1.WriteTo(buffer1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, int64(10))
 	c.Assert(iter1.Close(), tc.IsNil)
 }
@@ -292,7 +292,7 @@ func (s *iteratorSuite) TestClosedIteration(c *tc.C) {
 	fmt.Fprint(rb, "0123456789")
 	iter := rb.TailIterator()
 	err := rb.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	done := make(chan struct{})
 	buffer := &bytes.Buffer{}
@@ -302,7 +302,7 @@ func (s *iteratorSuite) TestClosedIteration(c *tc.C) {
 		if err == io.EOF {
 			err = nil
 		}
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(n, tc.Equals, 1)
 		buffer.WriteByte(one[0])
 	}

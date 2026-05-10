@@ -42,7 +42,7 @@ func (s *PebbleSuite) TestStartChecks(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"start-checks", "chk1", "chk2", "chk3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "Checks started: chk1, chk2\n")
 	c.Check(s.Stderr(), tc.Equals, "")

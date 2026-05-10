@@ -61,7 +61,7 @@ var (
 
 func (*suite) TestTCPAddAndFlush(c *tc.C) {
 	listener, err := net.Listen("tcp", "localhost:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer listener.Close()
 
 	msgChan := make(chan string, 1)
@@ -73,7 +73,7 @@ func (*suite) TestTCPAddAndFlush(c *tc.C) {
 	serverStopped := make(chan struct{})
 	go func() {
 		err := srv.run()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		close(serverStopped)
 	}()
 
@@ -82,7 +82,7 @@ func (*suite) TestTCPAddAndFlush(c *tc.C) {
 		Hostname: "test-machine",
 		SDID:     "test-sdid",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer client.Close()
 
 	client.SetLabels("svc1", map[string]string{
@@ -109,7 +109,7 @@ func (*suite) TestTCPAddAndFlush(c *tc.C) {
 	// Add entries from different services
 	for _, entry := range exampleEntries {
 		err = client.Add(entry)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	// `Add` and `SetLabels` shouldn't be order-dependent
@@ -121,11 +121,11 @@ func (*suite) TestTCPAddAndFlush(c *tc.C) {
 	client.SetLabels("svc4", map[string]string{})
 
 	err = client.Flush(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Close the client connection so the server stops reading
 	err = client.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	select {
 	case msg := <-msgChan:
@@ -144,7 +144,7 @@ line3`)
 
 	// Check server stops correctly
 	err = srv.close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	select {
 	case <-serverStopped:
 	case <-time.After(1 * time.Second):
@@ -156,7 +156,7 @@ func (*suite) TestTCPFlushCancelContext(c *tc.C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://fake:514",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer client.Close()
 
 	err = client.Add(servicelog.Entry{
@@ -164,7 +164,7 @@ func (*suite) TestTCPFlushCancelContext(c *tc.C) {
 		Service: "svc1",
 		Message: "message from svc1",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	flushReturned := make(chan struct{})
 	go func() {
@@ -189,11 +189,11 @@ func (*suite) TestBufferFull(c *tc.C) {
 		Location:          "udp://fake:514",
 		MaxRequestEntries: 3,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	// Check that the client's buffer is as expected
@@ -248,11 +248,11 @@ func (*suite) TestTCPFlushEmpty(c *tc.C) {
 	client, err := syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://fake:514",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Flushing with no entries should be a no-op
 	err = client.Flush(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (*suite) TestInvalidLocation(c *tc.C) {
@@ -266,12 +266,12 @@ func (*suite) TestInvalidLocation(c *tc.C) {
 	_, err = syslog.NewClient(&syslog.ClientOptions{
 		Location: "tcp://localhost:514",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, err = syslog.NewClient(&syslog.ClientOptions{
 		Location: "udp://localhost:514",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 type testSyslogServer struct {
@@ -304,7 +304,7 @@ func (s *testSyslogServer) run() error {
 
 func (*suite) TestUDPAddAndFlush(c *tc.C) {
 	conn, err := net.ListenPacket("udp", "localhost:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer conn.Close()
 
 	msgChan := make(chan string, 1)
@@ -328,7 +328,7 @@ func (*suite) TestUDPAddAndFlush(c *tc.C) {
 		Hostname: "test-machine",
 		SDID:     "test-sdid",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer client.Close()
 
 	client.SetLabels("svc1", map[string]string{
@@ -337,11 +337,11 @@ func (*suite) TestUDPAddAndFlush(c *tc.C) {
 	})
 	for _, entry := range exampleEntries {
 		err = client.Add(entry)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	err = client.Flush(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	expectedLogMsg := []string{
 		`<13>1 2023-12-31T12:00:00Z test-machine svc1 - - [test-sdid@28978 env="test" version="0.0.1"] message from svc1`,

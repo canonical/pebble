@@ -33,13 +33,13 @@ func (cs *clientSuite) TestSignals(c *tc.C) {
 		Signal:   "SIGHUP",
 		Services: []string{"s1", "s2"},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "POST")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/signals")
 
 	var body map[string]any
 	err = json.NewDecoder(cs.req.Body).Decode(&body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(body, tc.DeepEquals, map[string]any{
 		"signal":   "SIGHUP",
 		"services": []any{"s1", "s2"},

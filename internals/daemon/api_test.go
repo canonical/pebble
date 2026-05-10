@@ -84,7 +84,7 @@ func (s *apiSuite) daemon(c *tc.C) *Daemon {
 		panic("called daemon() twice")
 	}
 	d, err := New(&Options{Dir: s.pebbleDir})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	d.addRoutes()
 
 	c.Assert(d.overlord.StartUp(), tc.IsNil)
@@ -123,7 +123,7 @@ func (s *apiSuite) TestSysInfo(c *tc.C) {
 	state.Lock()
 	_, err := restart.Manager(state, "ffffffff-ffff-ffff-ffff-ffffffffffff", nil)
 	state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	sysInfoCmd.GET(sysInfoCmd, nil, nil).ServeHTTP(rec, nil)
 	c.Check(rec.Code, tc.Equals, 200)
@@ -163,7 +163,7 @@ func fakeEnv(key, value string) (restore func()) {
 
 func createTestClientCertificate(c *tc.C) *x509.Certificate {
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
@@ -174,9 +174,9 @@ func createTestClientCertificate(c *tc.C) *x509.Certificate {
 	}
 
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, privateKey.Public(), privateKey)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return cert
 }

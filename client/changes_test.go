@@ -37,7 +37,7 @@ func (cs *clientSuite) TestClientChange(c *tc.C) {
 }}`
 
 	chg, err := cs.cli.Change("uno")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(chg, tc.DeepEquals, &client.Change{
 		ID:      "uno",
 		Kind:    "foo",
@@ -70,7 +70,7 @@ func (cs *clientSuite) TestClientWaitChange(c *tc.C) {
 }}`
 
 	chg, err := cs.cli.WaitChange("foo", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.URL.String(), tc.Equals, "http://localhost/v1/changes/foo/wait")
 	c.Check(chg, tc.DeepEquals, &client.Change{
 		ID:      "uno",
@@ -111,10 +111,10 @@ func (cs *clientSuite) TestClientChangeData(c *tc.C) {
 }}`
 
 	chg, err := cs.cli.Change("uno")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var n int
 	err = chg.Get("n", &n)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 42)
 
 	err = chg.Get("missing", &n)
@@ -133,9 +133,9 @@ func (cs *clientSuite) TestClientChangeRestartingState(c *tc.C) {
 }`
 
 	chg, err := cs.cli.Change("uno")
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(chg, tc.NotNil)
 	c.Check(chg.ID, tc.Equals, "uno")
-	c.Check(err, tc.IsNil)
 	c.Check(cs.cli.Maintenance(), tc.ErrorMatches, `system is restarting`)
 }
 
@@ -151,7 +151,7 @@ func (cs *clientSuite) TestClientChangeError(c *tc.C) {
 }}`
 
 	chg, err := cs.cli.Change("uno")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(chg, tc.DeepEquals, &client.Change{
 		ID:      "uno",
 		Kind:    "foo",
@@ -197,7 +197,7 @@ func (cs *clientSuite) TestClientChanges(c *tc.C) {
 		nil,
 	} {
 		chg, err := cs.cli.Changes(i)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(chg, tc.DeepEquals, []*client.Change{{
 			ID:      "uno",
 			Kind:    "foo",
@@ -229,12 +229,12 @@ func (cs *clientSuite) TestClientChangesData(c *tc.C) {
 }]}`
 
 	chgs, err := cs.cli.Changes(&client.ChangesOptions{Selector: client.ChangesAll})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	chg := chgs[0]
 	var n int
 	err = chg.Get("n", &n)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(n, tc.Equals, 42)
 
 	err = chg.Get("missing", &n)
@@ -253,7 +253,7 @@ func (cs *clientSuite) TestClientAbort(c *tc.C) {
 }}`
 
 	chg, err := cs.cli.Abort("uno")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "POST")
 	c.Check(chg, tc.DeepEquals, &client.Change{
 		ID:      "uno",
@@ -267,7 +267,7 @@ func (cs *clientSuite) TestClientAbort(c *tc.C) {
 	})
 
 	body, err := io.ReadAll(cs.req.Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(string(body), tc.Equals, "{\"action\":\"abort\"}\n")
 }

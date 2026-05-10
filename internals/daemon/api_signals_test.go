@@ -39,7 +39,7 @@ services:
 	// Start test service
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -52,7 +52,7 @@ services:
 			c.Fatalf("timed out waiting for service to start")
 		}
 		services, err := serviceMgr.Services([]string{"test1"})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if len(services) == 1 && services[0].Current == servstate.StatusActive {
 			break
 		}
@@ -62,7 +62,7 @@ services:
 	// First ensure a bad signal name returns an error
 	payload = bytes.NewBufferString(`{"signal": "FOOBAR", "services": ["test1"]}`)
 	req, err = http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp = v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec = httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -74,7 +74,7 @@ services:
 	// Send SIGTERM to service via API
 	payload = bytes.NewBufferString(`{"signal": "SIGTERM", "services": ["test1"]}`)
 	req, err = http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp = v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec = httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -90,7 +90,7 @@ services:
 			c.Fatalf("timed out waiting for service to go into backoff")
 		}
 		services, err := serviceMgr.Services([]string{"test1"})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if len(services) == 1 && services[0].Current == servstate.StatusError {
 			break
 		}
@@ -101,7 +101,7 @@ services:
 func (s *apiSuite) TestSignalsBadBody(c *tc.C) {
 	payload := bytes.NewBufferString("@")
 	req, err := http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -114,7 +114,7 @@ func (s *apiSuite) TestSignalsBadBody(c *tc.C) {
 func (s *apiSuite) TestSignalsNoServices(c *tc.C) {
 	payload := bytes.NewBufferString(`{"signal": "SIGTERM"}`)
 	req, err := http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -128,7 +128,7 @@ func (s *apiSuite) TestSignalsServiceNotRunning(c *tc.C) {
 	s.daemon(c)
 	payload := bytes.NewBufferString(`{"signal": "SIGTERM", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)

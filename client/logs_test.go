@@ -37,7 +37,7 @@ func (cs *clientSuite) TestLogsNoOptions(c *tc.C) {
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "GET")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), tc.HasLen, 0)
@@ -57,7 +57,7 @@ func (cs *clientSuite) TestLogsServices(c *tc.C) {
 		WriteLog: writeLog,
 		Services: []string{"snappass"},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "GET")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
@@ -78,7 +78,7 @@ func (cs *clientSuite) TestLogsN(c *tc.C) {
 		WriteLog: writeLog,
 		N:        2,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "GET")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
@@ -100,7 +100,7 @@ func (cs *clientSuite) TestLogsAll(c *tc.C) {
 		WriteLog: writeLog,
 		N:        -1,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "GET")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
@@ -124,7 +124,7 @@ func (cs *clientSuite) TestLogsLong(c *tc.C) {
 		WriteLog: writeLog,
 		N:        -1,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "GET")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
 	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
@@ -140,7 +140,7 @@ func (cs *clientSuite) TestLogsLong(c *tc.C) {
 func (cs *clientSuite) TestFollowLogs(c *tc.C) {
 	readsChan := make(chan string)
 	cli, err := client.New(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cli.SetDoer(doerFunc(func(req *http.Request) (*http.Response, error) {
 		c.Check(req.Method, tc.Equals, "GET")
 		c.Check(req.URL.Path, tc.Equals, "/v1/logs")
@@ -165,7 +165,7 @@ func (cs *clientSuite) TestFollowLogs(c *tc.C) {
 	err = cli.FollowLogs(context.Background(), &client.LogsOptions{
 		WriteLog: writeLog,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(out.String(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two

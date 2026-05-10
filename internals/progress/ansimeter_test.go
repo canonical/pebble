@@ -239,7 +239,7 @@ func (ansiSuite) TestWrite(c *tc.C) {
 	p.Start("123456789x", 10)
 	for i := range 10 {
 		n, err := fmt.Fprintf(p, "%d", i)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(n, tc.Equals, 1)
 	}
 

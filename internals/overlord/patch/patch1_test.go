@@ -47,22 +47,22 @@ var stateBeforePatch1 = []byte(`
 func (s *patch1Suite) SetUpTest(c *tc.C) {
 	s.statePath = filepath.Join(c.MkDir(), "state.json")
 	err := os.WriteFile(s.statePath, stateBeforePatch1, 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *patch1Suite) TestPatch1(c *tc.C) {
 	r, err := os.Open(s.statePath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer r.Close()
 	st, err := state.ReadState(nil, r)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// go from patch-level 0 to patch-level 1
 	restorer := patch.FakeLevel(1, 1)
 	defer restorer()
 
 	err = patch.Apply(st)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -70,15 +70,15 @@ func (s *patch1Suite) TestPatch1(c *tc.C) {
 	// ensure we only moved forward to patch-level 1
 	var patchLevel int
 	err = st.Get("patch-level", &patchLevel)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(patchLevel, tc.Equals, 1)
 
 	err = st.Get("patch-sublevel", &patchLevel)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(patchLevel, tc.Equals, 0)
 
 	var something string
 	err = st.Get("something-in-test", &something)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(something, tc.Equals, "new")
 }

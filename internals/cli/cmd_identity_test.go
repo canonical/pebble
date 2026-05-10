@@ -40,7 +40,7 @@ func (s *PebbleSuite) TestIdentity(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "bob"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 access: read
@@ -65,7 +65,7 @@ func (s *PebbleSuite) TestIdentityJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "json", "bob"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"access":"read","local":{"user-id":42}}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -86,7 +86,7 @@ func (s *PebbleSuite) TestIdentityYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "yaml", "bob"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 access: read

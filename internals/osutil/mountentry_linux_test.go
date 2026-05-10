@@ -80,7 +80,7 @@ func (s *entrySuite) TestEqual(c *tc.C) {
 // Test that typical fstab entry is parsed correctly.
 func (s *entrySuite) TestParseMountEntry1(c *tc.C) {
 	e, err := osutil.ParseMountEntry("UUID=394f32c0-1f94-4005-9717-f9ab4a4b570b /               ext4    errors=remount-ro 0       1")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.Name, tc.Equals, "UUID=394f32c0-1f94-4005-9717-f9ab4a4b570b")
 	c.Assert(e.Dir, tc.Equals, "/")
 	c.Assert(e.Type, tc.Equals, "ext4")
@@ -89,7 +89,7 @@ func (s *entrySuite) TestParseMountEntry1(c *tc.C) {
 	c.Assert(e.CheckPassNumber, tc.Equals, 1)
 
 	e, err = osutil.ParseMountEntry("none /tmp tmpfs")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.Name, tc.Equals, "none")
 	c.Assert(e.Dir, tc.Equals, "/tmp")
 	c.Assert(e.Type, tc.Equals, "tmpfs")
@@ -101,7 +101,7 @@ func (s *entrySuite) TestParseMountEntry1(c *tc.C) {
 // Test that hash inside a field value is supported.
 func (s *entrySuite) TestHashInFieldValue(c *tc.C) {
 	e, err := osutil.ParseMountEntry("mhddfs#/mnt/dir1,/mnt/dir2 /mnt/dir fuse defaults,allow_other 0 0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.Name, tc.Equals, "mhddfs#/mnt/dir1,/mnt/dir2")
 	c.Assert(e.Dir, tc.Equals, "/mnt/dir")
 	c.Assert(e.Type, tc.Equals, "fuse")
@@ -113,7 +113,7 @@ func (s *entrySuite) TestHashInFieldValue(c *tc.C) {
 // Test that options are parsed correctly
 func (s *entrySuite) TestParseMountEntry2(c *tc.C) {
 	e, err := osutil.ParseMountEntry("name dir type options,comma,separated 0 0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.Name, tc.Equals, "name")
 	c.Assert(e.Dir, tc.Equals, "dir")
 	c.Assert(e.Type, tc.Equals, "type")
@@ -125,7 +125,7 @@ func (s *entrySuite) TestParseMountEntry2(c *tc.C) {
 // Test that whitespace escape codes are honored
 func (s *entrySuite) TestParseMountEntry3(c *tc.C) {
 	e, err := osutil.ParseMountEntry(`na\040me d\011ir ty\012pe optio\134ns 0 0`)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.Name, tc.Equals, "na me")
 	c.Assert(e.Dir, tc.Equals, "d\tir")
 	c.Assert(e.Type, tc.Equals, "ty\npe")
@@ -155,17 +155,17 @@ func (s *entrySuite) TestParseMountEntry5(c *tc.C) {
 // Test that last two integer fields default to zero if not present.
 func (s *entrySuite) TestParseMountEntry6(c *tc.C) {
 	e, err := osutil.ParseMountEntry("name dir type options")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.DumpFrequency, tc.Equals, 0)
 	c.Assert(e.CheckPassNumber, tc.Equals, 0)
 
 	e, err = osutil.ParseMountEntry("name dir type options 5")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.DumpFrequency, tc.Equals, 5)
 	c.Assert(e.CheckPassNumber, tc.Equals, 0)
 
 	e, err = osutil.ParseMountEntry("name dir type options 5 7")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(e.DumpFrequency, tc.Equals, 5)
 	c.Assert(e.CheckPassNumber, tc.Equals, 7)
 }
@@ -173,10 +173,10 @@ func (s *entrySuite) TestParseMountEntry6(c *tc.C) {
 // Test (string) options -> (int) flag conversion code.
 func (s *entrySuite) TestMountOptsToFlags(c *tc.C) {
 	flags, err := osutil.MountOptsToFlags(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(flags, tc.Equals, 0)
 	flags, err = osutil.MountOptsToFlags([]string{"ro", "nodev", "nosuid"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(flags, tc.Equals, syscall.MS_RDONLY|syscall.MS_NODEV|syscall.MS_NOSUID)
 	_, err = osutil.MountOptsToFlags([]string{"bogus"})
 	c.Assert(err, tc.ErrorMatches, `unsupported mount option: "bogus"`)
@@ -184,7 +184,7 @@ func (s *entrySuite) TestMountOptsToFlags(c *tc.C) {
 	// translate to kernel level mount flags. This is similar to systemd or
 	// udisks that use fstab options to convey additional data.
 	flags, err = osutil.MountOptsToFlags([]string{"x-snapd.foo"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(flags, tc.Equals, 0)
 }
 

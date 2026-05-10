@@ -46,7 +46,7 @@ func (s *PebbleSuite) TestPull(c *tc.C) {
 		w.WriteHeader(http.StatusOK)
 
 		fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		fw.Write([]byte("Hello, world!"))
 
 		mh := textproto.MIMEHeader{}
@@ -54,7 +54,7 @@ func (s *PebbleSuite) TestPull(c *tc.C) {
 		mh.Set("Content-Disposition", `form-data; name="response"`)
 
 		part, err := mw.CreatePart(mh)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		fmt.Fprintf(part, `{
 			"type": "sync",
 			"status-code": 200,
@@ -71,13 +71,13 @@ func (s *PebbleSuite) TestPull(c *tc.C) {
 
 	args := []string{"pull", "/foo/bar.dat", filePath}
 	rest, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
 
 	b, err := os.ReadFile(filePath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(b, tc.DeepEquals, []byte("Hello, world!"))
 }
 
@@ -106,7 +106,7 @@ func (s *PebbleSuite) TestPullFailsAPI(c *tc.C) {
 		w.WriteHeader(http.StatusOK)
 
 		fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		fw.Write([]byte("Hello, world!"))
 
 		mh := textproto.MIMEHeader{}
@@ -114,7 +114,7 @@ func (s *PebbleSuite) TestPullFailsAPI(c *tc.C) {
 		mh.Set("Content-Disposition", `form-data; name="response"`)
 
 		part, err := mw.CreatePart(mh)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		fmt.Fprintf(part, ` {
 			"type": "sync",
 			"result": [{
@@ -168,7 +168,7 @@ func (s *PebbleSuite) TestPullFailsCreateFile(c *tc.C) {
 		w.WriteHeader(http.StatusOK)
 
 		fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		fw.Write([]byte("Hello, world!"))
 
 		mh := textproto.MIMEHeader{}
@@ -176,7 +176,7 @@ func (s *PebbleSuite) TestPullFailsCreateFile(c *tc.C) {
 		mh.Set("Content-Disposition", `form-data; name="response"`)
 
 		part, err := mw.CreatePart(mh)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		fmt.Fprintf(part, `{
 			"type": "sync",
 			"result": [{

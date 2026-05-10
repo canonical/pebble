@@ -38,7 +38,7 @@ func (s *PebbleSuite) TestLogsText(c *tc.C) {
 `[1:])
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"logs"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
@@ -62,7 +62,7 @@ func (s *PebbleSuite) TestLogsJSON(c *tc.C) {
 `[1:])
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 {"time":"2021-05-03T03:55:49.36Z","service":"thing","message":"log 1"}
@@ -90,7 +90,7 @@ func (s *PebbleSuite) TestLogsN(c *tc.C) {
 `[1:])
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "-n2"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
@@ -112,7 +112,7 @@ func (s *PebbleSuite) TestLogsAll(c *tc.C) {
 `[1:])
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "-nall"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
@@ -142,7 +142,7 @@ func (s *PebbleSuite) TestLogsFollow(c *tc.C) {
 `[1:])
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "-f"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1

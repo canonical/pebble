@@ -167,7 +167,7 @@ func (s *managerSuite) TestTimelyShutdown(c *tc.C) {
 	c.Assert(m.gatherers, tc.HasLen, 10)
 
 	err := svc1.stop()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	client.SetFlushTime(10 * time.Second)
 	// Stop all gatherers and check this happens quickly

@@ -83,19 +83,19 @@ func (sd *sdNotifyTestSuite) TestSdNotifyIntegration(c *tc.C) {
 			Name: sockPath,
 			Net:  "unixgram",
 		})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		defer conn.Close()
 
 		ch := make(chan string)
 		go func() {
 			var buf [128]byte
 			n, err := conn.Read(buf[:])
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			ch <- string(buf[:n])
 		}()
 
 		err = systemd.SdNotify("something")
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(<-ch, tc.Equals, "something")
 	}
 }

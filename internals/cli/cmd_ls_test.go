@@ -54,7 +54,7 @@ func (s *PebbleSuite) TestLsDirectory(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "-d", "/"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 
 	c.Check(s.Stdout(), tc.Equals, "/\n")
@@ -97,7 +97,7 @@ func (s *PebbleSuite) TestLsLongFormat(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "-l", "/"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 
 	// The [12] is to allow date 21 or 22, so the tests succeed on timezones
@@ -132,7 +132,7 @@ func (s *PebbleSuite) TestLsPattern(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "/foo/bar.*"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -194,7 +194,7 @@ func (s *PebbleSuite) TestLsJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "json", "/"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"files":[{"path":"/foo","name":"foo","type":"directory","permissions":"777","last-modified":"2016-04-21T01:02:03Z","user-id":0,"user":"root","group-id":0,"group":"root"},{"path":"/bar","name":"bar","type":"file","size":1024,"permissions":"644","last-modified":"2021-04-21T01:02:03Z","user-id":600,"user":"toor","group-id":600,"group":"toor"},{"path":"/baz","name":"baz","type":"file","size":0,"permissions":"600","last-modified":"2023-01-01T00:00:00Z"}]}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -222,7 +222,7 @@ func (s *PebbleSuite) TestLsYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "yaml", "-d", "/"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 files:
@@ -247,7 +247,7 @@ func (s *PebbleSuite) TestLsEmptyJSON(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "json", "/empty"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"files":[]}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -261,7 +261,7 @@ func (s *PebbleSuite) TestLsEmptyYAML(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "yaml", "/empty"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "files: []\n")
 	c.Check(s.Stderr(), tc.Equals, "")

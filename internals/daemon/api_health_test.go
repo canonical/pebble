@@ -255,7 +255,7 @@ func (s *apiSuite) testHealthStateLockNotHeld(c *tc.C, level string, expectErr b
 		SocketPath: s.pebbleDir + ".pebble.socket",
 	}
 	daemon, err := New(daemonOpts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(daemon.Init(), tc.IsNil)
 	c.Assert(daemon.Start(), tc.IsNil)
 	defer func() {
@@ -306,7 +306,7 @@ func (s *apiSuite) testHealthStateLockNotHeld(c *tc.C, level string, expectErr b
 func serveHealth(c *tc.C, method, url string, body io.Reader) (int, map[string]any) {
 	recorder := httptest.NewRecorder()
 	request, err := http.NewRequest(method, url, body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	server := v1Health(&Command{d: &Daemon{}}, request, nil)
 	server.ServeHTTP(recorder, request)
@@ -314,6 +314,6 @@ func serveHealth(c *tc.C, method, url string, body io.Reader) (int, map[string]a
 	c.Assert(recorder.Result().Header.Get("Content-Type"), tc.Equals, "application/json")
 	var response map[string]any
 	err = json.NewDecoder(recorder.Result().Body).Decode(&response)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return recorder.Result().StatusCode, response["result"].(map[string]any)
 }

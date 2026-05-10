@@ -337,7 +337,7 @@ func (s *logsSuite) TestLoggingTooFast(c *tc.C) {
 		},
 	}
 	req, err := http.NewRequest("GET", "/v1/logs", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 	rec := &responseRecorder{onWrite: func() {
 		firstWrite <- struct{}{}
@@ -398,7 +398,7 @@ func (s *logsSuite) TestMultipleServicesFollow(c *tc.C) {
 	// Start a cancellable request
 	ctx, cancel := context.WithCancel(context.Background())
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true&n=2", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 
 	// writeChan is sent to whenever a response write occurs
@@ -490,7 +490,7 @@ func (r *followRecorder) Flush() {
 
 func (s *logsSuite) recordResponse(c *tc.C, url string, svcMgr serviceManager) *httptest.ResponseRecorder {
 	req, err := http.NewRequest("GET", url, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -508,10 +508,10 @@ func decodeLog(c *tc.C, reader *bufio.Reader) (testLogEntry, bool) {
 	if err == io.EOF {
 		return testLogEntry{}, false
 	}
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var entry testLogEntry
 	err = json.Unmarshal(logBytes, &entry)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return entry, true
 }
 
@@ -538,7 +538,7 @@ func checkError(c *tc.C, body []byte, status int, errorMatch string) {
 		}
 	}
 	err := json.Unmarshal(body, &rsp)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rsp.Type, tc.Equals, "error")
 	c.Check(rsp.StatusCode, tc.Equals, status)
 	c.Check(rsp.Status, tc.Equals, http.StatusText(status))

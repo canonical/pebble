@@ -55,7 +55,7 @@ func (s *spanSuite) TearDownTest(c *tc.C) {
 
 func (s *spanSuite) fakeTimeNow(c *tc.C) {
 	t, err := time.Parse(time.RFC3339, "2020-01-01T01:01:00.0Z")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	s.fakeTime = t
 	// Increase fakeTime by 1 millisecond on each call, and report it as current time
 	s.AddCleanup(timing.FakeTimeNow(func() time.Time {

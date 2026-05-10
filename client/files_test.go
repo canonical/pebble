@@ -75,7 +75,7 @@ func (cs *clientSuite) TestListFiles(c *tc.C) {
 	result, err := cs.cli.ListFiles(&client.ListFilesOptions{
 		Path: "/",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(result, tc.HasLen, 2)
 
 	c.Check(result[0].Path(), tc.Equals, "/bin")
@@ -124,7 +124,7 @@ func (cs *clientSuite) TestListDirectoryItself(c *tc.C) {
 		Path:   "/bin",
 		Itself: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(result, tc.HasLen, 1)
 	c.Check(result[0].Name(), tc.Equals, "bin")
 	c.Check(result[0].Size(), tc.Equals, int64(0))
@@ -161,7 +161,7 @@ func (cs *clientSuite) TestListFilesWithPattern(c *tc.C) {
 		Path:    "/",
 		Pattern: "[a-z][a-z][a-z]",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(result, tc.HasLen, 1)
 }
 
@@ -237,7 +237,7 @@ func (cs *clientSuite) TestCalculateFileMode(c *tc.C) {
 
 	for _, expected := range expectedResults {
 		mode, err := client.CalculateFileMode(expected.fileType, expected.permissions)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(mode, tc.Equals, expected.mode)
 	}
 }
@@ -256,7 +256,7 @@ func (cs *clientSuite) TestMakeDir(c *tc.C) {
 		Path:        "/foo/bar",
 		MakeParents: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/files")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
@@ -264,7 +264,7 @@ func (cs *clientSuite) TestMakeDir(c *tc.C) {
 	var payload makeDirPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, makeDirPayload{
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{{
@@ -282,7 +282,7 @@ func (cs *clientSuite) TestMakeDirWithPermissions(c *tc.C) {
 		MakeParents: true,
 		Permissions: os.FileMode(0o644),
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/files")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
@@ -290,7 +290,7 @@ func (cs *clientSuite) TestMakeDirWithPermissions(c *tc.C) {
 	var payload makeDirPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, makeDirPayload{
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{{
@@ -309,7 +309,7 @@ func (cs *clientSuite) TestMakeDirWithSpecialPermissions(c *tc.C) {
 		MakeParents: true,
 		Permissions: os.FileMode(0o1077),
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/files")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
@@ -317,7 +317,7 @@ func (cs *clientSuite) TestMakeDirWithSpecialPermissions(c *tc.C) {
 	var payload makeDirPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, makeDirPayload{
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{{
@@ -341,7 +341,7 @@ func (cs *clientSuite) TestMakeDirFails(c *tc.C) {
 	var payload makeDirPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, makeDirPayload{
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{{
@@ -377,7 +377,7 @@ func (cs *clientSuite) TestMakeDirFailsOnDirectory(c *tc.C) {
 	var payload makeDirPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, makeDirPayload{
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{{
@@ -417,7 +417,7 @@ func (cs *clientSuite) TestMakeDirFailsWithMultipleAPIResults(c *tc.C) {
 	var payload makeDirPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, makeDirPayload{
 		Action: "make-dirs",
 		Dirs: []makeDirsItem{{
@@ -442,7 +442,7 @@ func (cs *clientSuite) TestRemovePath(c *tc.C) {
 	err := cs.cli.RemovePath(&client.RemovePathOptions{
 		Path: "/foo/bar",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/files")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
@@ -450,7 +450,7 @@ func (cs *clientSuite) TestRemovePath(c *tc.C) {
 	var payload removePathsPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, removePathsPayload{
 		Action: "remove",
 		Paths: []removePathsItem{{
@@ -466,7 +466,7 @@ func (cs *clientSuite) TestRemovePathRecursive(c *tc.C) {
 		Path:      "/foo/bar",
 		Recursive: true,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/files")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
@@ -474,7 +474,7 @@ func (cs *clientSuite) TestRemovePathRecursive(c *tc.C) {
 	var payload removePathsPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, removePathsPayload{
 		Action: "remove",
 		Paths: []removePathsItem{{
@@ -497,7 +497,7 @@ func (cs *clientSuite) TestRemovePathFails(c *tc.C) {
 	var payload removePathsPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, removePathsPayload{
 		Action: "remove",
 		Paths: []removePathsItem{{
@@ -534,7 +534,7 @@ func (cs *clientSuite) TestRemovePathFailsOnPath(c *tc.C) {
 	var payload removePathsPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, removePathsPayload{
 		Action: "remove",
 		Paths: []removePathsItem{{
@@ -575,7 +575,7 @@ func (cs *clientSuite) TestRemovePathFailsWithMultipleAPIResults(c *tc.C) {
 	var payload removePathsPayload
 	decoder := json.NewDecoder(cs.req.Body)
 	err = decoder.Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(payload, tc.DeepEquals, removePathsPayload{
 		Action: "remove",
 		Paths: []removePathsItem{{
@@ -606,27 +606,27 @@ func (cs *clientSuite) TestPush(c *tc.C) {
 		Path:   "/file.dat",
 		Source: strings.NewReader("Hello, world!"),
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	mr, err := cs.req.MultipartReader()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/files")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 
 	// Check metadata part
 	metadata, err := mr.NextPart()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(metadata.Header.Get("Content-Type"), tc.Equals, "application/json")
 	c.Assert(metadata.FormName(), tc.Equals, "request")
 
 	buf := bytes.NewBuffer(make([]byte, 0))
 	_, err = buf.ReadFrom(metadata)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Decode metadata
 	var payload writeFilesPayload
 	err = json.NewDecoder(buf).Decode(&payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(payload, tc.DeepEquals, writeFilesPayload{
 		Action: "write",
 		Files: []writeFilesItem{{
@@ -636,14 +636,14 @@ func (cs *clientSuite) TestPush(c *tc.C) {
 
 	// Check file part
 	file, err := mr.NextPart()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(file.Header.Get("Content-Type"), tc.Equals, "application/octet-stream")
 	c.Assert(file.FormName(), tc.Equals, "files")
 	c.Assert(path.Base(file.FileName()), tc.Equals, "file.dat")
 
 	buf.Reset()
 	_, err = buf.ReadFrom(file)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(buf.String(), tc.Equals, "Hello, world!")
 
 	// Check end of multipart request
@@ -721,7 +721,7 @@ func (cs *clientSuite) TestPull(c *tc.C) {
 	cs.status = http.StatusOK
 
 	fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fw.Write([]byte("Hello, world!"))
 
 	mh := textproto.MIMEHeader{}
@@ -729,7 +729,7 @@ func (cs *clientSuite) TestPull(c *tc.C) {
 	mh.Set("Content-Disposition", `form-data; name="response"`)
 
 	part, err := mw.CreatePart(mh)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(part, `{
 		"type": "sync",
 		"status-code": 200,
@@ -746,7 +746,7 @@ func (cs *clientSuite) TestPull(c *tc.C) {
 		Path:   "/foo/bar.dat",
 		Target: &targetBuf,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(targetBuf.String(), tc.Equals, "Hello, world!")
 }
 
@@ -795,13 +795,13 @@ func (cs *clientSuite) TestPullFailsWithMultipartErrorResponse(c *tc.C) {
 
 	// Write the error response as first part
 	responsePart, err := mw.CreateFormField("response")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	errorResp := `{"type":"sync","status-code":404,"status":"tc.Not Found","result":[{"error":{"message":"file not found","kind":"not-found"}}]}`
 	_, err = responsePart.Write([]byte(errorResp))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = mw.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Set up mock response
 	cs.header = http.Header{}
@@ -847,7 +847,7 @@ func (cs *clientSuite) TestPullFailsOnWrite(c *tc.C) {
 	cs.status = http.StatusOK
 
 	fw, err := mw.CreateFormFile("files", "/foo/bar.dat")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fw.Write([]byte("Hello, world!"))
 
 	mh := textproto.MIMEHeader{}
@@ -855,7 +855,7 @@ func (cs *clientSuite) TestPullFailsOnWrite(c *tc.C) {
 	mh.Set("Content-Disposition", `form-data; name="response"`)
 
 	part, err := mw.CreatePart(mh)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(part, `{
 		"type": "sync",
 		"status-code": 200,
@@ -890,7 +890,7 @@ func (cs *clientSuite) TestPullFailsWithInvalidJSON(c *tc.C) {
 	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
 	_, err := mw.CreatePart(filesHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Encode response part
 	responseHeader := textproto.MIMEHeader{}
@@ -898,7 +898,7 @@ func (cs *clientSuite) TestPullFailsWithInvalidJSON(c *tc.C) {
 	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
 
 	responsePart, err := mw.CreatePart(responseHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(responsePart, `NJSON stands for tc.Not-JSON`)
 
 	mw.Close()
@@ -928,7 +928,7 @@ func (cs *clientSuite) TestPullFailsWithMetadataError(c *tc.C) {
 	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
 	_, err := mw.CreatePart(filesHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Encode response part
 	responseHeader := textproto.MIMEHeader{}
@@ -936,7 +936,7 @@ func (cs *clientSuite) TestPullFailsWithMetadataError(c *tc.C) {
 	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
 
 	responsePart, err := mw.CreatePart(responseHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(responsePart, `{"type": "error", "result": {"message": "could not foo"}}`)
 
 	mw.Close()
@@ -964,7 +964,7 @@ func (cs *clientSuite) TestPullFailsWithNonSyncResponse(c *tc.C) {
 	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
 	_, err := mw.CreatePart(filesHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Encode response part
 	responseHeader := textproto.MIMEHeader{}
@@ -972,7 +972,7 @@ func (cs *clientSuite) TestPullFailsWithNonSyncResponse(c *tc.C) {
 	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
 
 	responsePart, err := mw.CreatePart(responseHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(responsePart, `{"type": "sfdeljknesv"}`)
 
 	mw.Close()
@@ -1000,7 +1000,7 @@ func (cs *clientSuite) TestPullFailsWithInvalidResult(c *tc.C) {
 	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
 	_, err := mw.CreatePart(filesHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Encode response part
 	responseHeader := textproto.MIMEHeader{}
@@ -1008,7 +1008,7 @@ func (cs *clientSuite) TestPullFailsWithInvalidResult(c *tc.C) {
 	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
 
 	responsePart, err := mw.CreatePart(responseHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(responsePart, `{"type": "sync", "result": "not what you expected"}`)
 
 	mw.Close()
@@ -1036,7 +1036,7 @@ func (cs *clientSuite) TestPullFailsWithMultipleResults(c *tc.C) {
 	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
 	_, err := mw.CreatePart(filesHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Encode response part
 	responseHeader := textproto.MIMEHeader{}
@@ -1044,7 +1044,7 @@ func (cs *clientSuite) TestPullFailsWithMultipleResults(c *tc.C) {
 	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
 
 	responsePart, err := mw.CreatePart(responseHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(responsePart, `{"type": "sync", "result": [{"path": ""},{"path": ""}]}`)
 
 	mw.Close()
@@ -1072,7 +1072,7 @@ func (cs *clientSuite) TestPullFailsWithClientError(c *tc.C) {
 	filesHeader.Set("Content-Disposition", `form-data; name="files"`)
 
 	_, err := mw.CreatePart(filesHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Encode response part
 	responseHeader := textproto.MIMEHeader{}
@@ -1080,7 +1080,7 @@ func (cs *clientSuite) TestPullFailsWithClientError(c *tc.C) {
 	responseHeader.Set("Content-Disposition", `form-data; name="response"`)
 
 	responsePart, err := mw.CreatePart(responseHeader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fmt.Fprintf(responsePart, `{
 		"type": "sync",
 		"result": [{

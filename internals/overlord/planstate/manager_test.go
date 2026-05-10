@@ -31,21 +31,21 @@ func (ps *planSuite) TestLoadInvalidPebbleDir(c *tc.C) {
 	var numChanges atomic.Uint32
 
 	ps.planMgr, err = planstate.NewManager("/invalid/path")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
 		numChanges.Add(1)
 	})
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(out), tc.Equals, "{}\n")
 	// A new, empty plan was created so change listeners must be called
 	c.Assert(numChanges.Load(), tc.Equals, uint32(1))
 	err = ps.planMgr.Load(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// Plan was already loaded, so no change listeners will be called
 	c.Assert(numChanges.Load(), tc.Equals, uint32(1))
 }
@@ -84,7 +84,7 @@ func (ps *planSuite) TestLoadLayers(c *tc.C) {
 	var numChanges atomic.Uint32
 
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
 		numChanges.Add(1)
 	})
@@ -94,11 +94,11 @@ func (ps *planSuite) TestLoadLayers(c *tc.C) {
 	}
 	// Load the plan from the <pebble-dir>/layers directory
 	err = ps.planMgr.Load(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(numChanges.Load(), tc.Equals, uint32(1))
 	plan := ps.planMgr.Plan()
 	out, err := yaml.Marshal(plan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(plan.Layers), tc.Equals, 2)
 	c.Assert(string(out), tc.Equals, `
 services:
@@ -118,7 +118,7 @@ test-field:
 `[1:])
 	// Attempt to reload should not take effect
 	err = ps.planMgr.Load(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(numChanges.Load(), tc.Equals, uint32(1))
 }
 
@@ -127,7 +127,7 @@ func (ps *planSuite) TestAppendLayers(c *tc.C) {
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Append a layer when there are no layers.
 	layer := ps.parseLayer(c, 0, "label1", `
@@ -141,7 +141,7 @@ test-field:
         a: something
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 1000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -192,7 +192,7 @@ test-field:
         a: else
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 2000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -218,7 +218,7 @@ test-field:
         a: something
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 3000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -244,7 +244,7 @@ func (ps *planSuite) TestCombineLayers(c *tc.C) {
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// "Combine" layer with no layers should just append.
 	layer := ps.parseLayer(c, 0, "label1", `
@@ -258,7 +258,7 @@ test-field:
         a: something
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 1000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -284,7 +284,7 @@ test-field:
         a: else
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 2000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -316,7 +316,7 @@ test-field:
         a: else
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 1000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -348,7 +348,7 @@ test-field:
         a: something
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 2000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -386,7 +386,7 @@ test-field:
         a: nothing
 `)
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(layer.Order, tc.Equals, 3000)
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -430,7 +430,7 @@ test-field:
 func (ps *planSuite) TestSetServiceArgs(c *tc.C) {
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// This is the original plan
 	layer := ps.parseLayer(c, 0, "label1", `
@@ -446,7 +446,7 @@ services:
         command: foo
 `)
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Set arguments to services.
 	serviceArgs := map[string][]string{
@@ -454,7 +454,7 @@ services:
 		"svc2": {"--bar"},
 	}
 	err = ps.planMgr.SetServiceArgs(serviceArgs)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(ps.planYAML(c), tc.Equals, `
 services:
@@ -472,7 +472,7 @@ services:
 
 func (ps *planSuite) TestChangeListenerAndLocking(c *tc.C) {
 	manager, err := planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	calls := 0
 	manager.AddChangeListener(func(p *plan.Plan) {
@@ -494,7 +494,7 @@ services:
         command: echo svc1
 `)
 		err = manager.Load(nil)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		layer1 := ps.parseLayer(c, 0, "label1", `
 services:
@@ -503,10 +503,10 @@ services:
         command: /bin/sh
 `)
 		err = manager.AppendLayer(layer1, false)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		err = manager.CombineLayer(layer1, false)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		layer2 := ps.parseLayer(c, 0, "label2", `
 services:
@@ -515,12 +515,12 @@ services:
         command: /bin/sh
 `)
 		err = manager.CombineLayer(layer2, false)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		err = manager.SetServiceArgs(map[string][]string{
 			"svc1": {"-abc", "--xyz"},
 		})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		close(done)
 	}()
@@ -539,14 +539,14 @@ func (ps *planSuite) TestAppendLayersWithoutInner(c *tc.C) {
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	layer := ps.parseLayer(c, 0, "foo/bar", "")
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layer = ps.parseLayer(c, 0, "baz", "")
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layer = ps.parseLayer(c, 0, "foo/baz", "")
 	err = ps.planMgr.AppendLayer(layer, false)
 	c.Assert(err, tc.ErrorMatches, ".*cannot insert sub-directory.*")
@@ -557,7 +557,7 @@ func (ps *planSuite) TestAppendLayersWithInner(c *tc.C) {
 	defer plan.UnregisterSectionExtension(testField)
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	appendLabels := []string{
 		"foo",
@@ -573,7 +573,7 @@ func (ps *planSuite) TestAppendLayersWithInner(c *tc.C) {
 	for _, label := range appendLabels {
 		layer := ps.parseLayer(c, 0, label, "")
 		err = ps.planMgr.AppendLayer(layer, true)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	layersResult := []struct {
@@ -625,9 +625,9 @@ workloads:
 
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = ps.planMgr.Load(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// An attempt to mutate layers must fail
 	layer := ps.parseLayer(c, 0, "workload2", `
@@ -641,7 +641,7 @@ workloads:
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
 	err = ps.planMgr.AppendLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (ps *planSuite) TestCombineWorkloadLayer(c *tc.C) {
@@ -656,9 +656,9 @@ workloads:
 
 	var err error
 	ps.planMgr, err = planstate.NewManager(ps.layersDir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = ps.planMgr.Load(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// An attempt to mutate layers must fail
 	layer := ps.parseLayer(c, 0, "workload2", `
@@ -672,5 +672,5 @@ workloads:
 	// We are adding a new layer but we are not mutating existing workloads
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
 	err = ps.planMgr.CombineLayer(layer, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }

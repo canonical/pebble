@@ -72,7 +72,7 @@ func (ts *timeutilSuite) TestParseClock(c *tc.C) {
 		if t.errStr != "" {
 			c.Check(err, tc.ErrorMatches, t.errStr)
 		} else {
-			c.Check(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			c.Check(ti.Hour, tc.Equals, t.hour)
 			c.Check(ti.Minute, tc.Equals, t.minute)
 		}
@@ -188,7 +188,7 @@ func (ts *timeutilSuite) TestParseLegacySchedule(c *tc.C) {
 		if t.errStr != "" {
 			c.Check(err, tc.ErrorMatches, t.errStr, tc.Commentf("%q returned unexpected error: %s", t.in, err))
 		} else {
-			c.Check(err, tc.IsNil, tc.Commentf("%q returned error: %s", t.in, err))
+			c.Assert(err, tc.ErrorIsNil, tc.Commentf("%q returned error: %s", t.in, err))
 			c.Check(schedule, tc.DeepEquals, t.expected, tc.Commentf("%q failed", t.in))
 		}
 
@@ -199,9 +199,9 @@ func parse(c *tc.C, s string) (time.Duration, time.Duration) {
 	l := strings.Split(s, "-")
 	c.Assert(l, tc.HasLen, 2)
 	a, err := time.ParseDuration(l[0])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	b, err := time.ParseDuration(l[1])
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return a, b
 }
 
@@ -289,17 +289,17 @@ func (ts *timeutilSuite) TestLegacyScheduleNext(c *tc.C) {
 		},
 	} {
 		last, err := time.ParseInLocation(shortForm, t.last, time.Local)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		fakeNow, err := time.ParseInLocation(shortForm, t.now, time.Local)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		restorer := timeutil.MockTimeNow(func() time.Time {
 			return fakeNow
 		})
 		defer restorer()
 
 		sched, err := timeutil.ParseLegacySchedule(t.schedule)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		minDist, maxDist := parse(c, t.next)
 
 		next := timeutil.Next(sched, last, maxDuration)
@@ -487,7 +487,7 @@ func (ts *timeutilSuite) TestParseSchedule(c *tc.C) {
 		if t.errStr != "" {
 			c.Check(err, tc.ErrorMatches, t.errStr, tc.Commentf("%q returned unexpected error: %s", t.in, err))
 		} else {
-			c.Check(err, tc.IsNil, tc.Commentf("%q returned error: %s", t.in, err))
+			c.Assert(err, tc.ErrorIsNil, tc.Commentf("%q returned error: %s", t.in, err))
 			c.Check(schedule, tc.DeepEquals, t.expected, tc.Commentf("%q failed", t.in))
 		}
 	}
@@ -758,17 +758,17 @@ func (ts *timeutilSuite) TestScheduleNext(c *tc.C) {
 		c.Logf("trying %+v", t)
 
 		last, err := time.ParseInLocation(shortForm, t.last, time.Local)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		fakeNow, err := time.ParseInLocation(shortForm, t.now, time.Local)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		restorer := timeutil.MockTimeNow(func() time.Time {
 			return fakeNow
 		})
 		defer restorer()
 
 		sched, err := timeutil.ParseSchedule(t.schedule)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// keep track of previous result for tests where event time is
 		// randomized
@@ -929,10 +929,10 @@ func (ts *timeutilSuite) TestScheduleIncludes(c *tc.C) {
 		c.Logf("trying %+v", t)
 
 		now, err := time.ParseInLocation(shortForm, t.now, time.Local)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		sched, err := timeutil.ParseSchedule(t.schedule)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		c.Check(timeutil.Includes(sched, now), tc.Equals, t.expecting,
 			tc.Commentf("unexpected result for schedule %v and time %v", t.schedule, now))
@@ -954,7 +954,7 @@ func (ts *timeutilSuite) TestClockSpans(c *tc.C) {
 	} {
 		c.Logf("trying %+v", t)
 		spans, err := timeutil.ParseClockSpan(t.clockspan)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		spanStrings := make([]string, len(t.flattenend))
 		flattened := spans.ClockSpans()
@@ -1028,10 +1028,10 @@ func (ts *timeutilSuite) TestWeekSpans(c *tc.C) {
 	} {
 		c.Logf("trying %+v", t)
 		ws, err := timeutil.ParseWeekSpan(t.week)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		when, err := time.ParseInLocation(shortForm, t.when, time.Local)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Logf("when: %v %s", when, when.Weekday())
 
 		c.Check(ws.Match(when), tc.Equals, t.match)

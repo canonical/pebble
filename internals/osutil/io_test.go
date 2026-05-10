@@ -45,13 +45,13 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFile(c *tc.C) {
 
 	p := filepath.Join(tmpdir, "foo")
 	err := osutil.AtomicWriteFile(p, []byte("canary"), 0644, 0)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Check(p, testutil.FileEquals, "canary")
 
 	// no files left behind!
 	d, err := os.ReadDir(tmpdir)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(d), tc.Equals, 1)
 }
 
@@ -60,10 +60,10 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFilePermissions(c *tc.C) {
 
 	p := filepath.Join(tmpdir, "foo")
 	err := osutil.AtomicWriteFile(p, []byte(""), 0600, 0)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st, err := os.Stat(p)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(st.Mode()&os.ModePerm, tc.Equals, os.FileMode(0600))
 }
 
@@ -104,7 +104,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileAbsoluteSymlinks(c *tc.C) {
 	defer os.Chmod(rodir, 0700)
 
 	err := osutil.AtomicWriteFile(p, []byte("hi"), 0600, osutil.AtomicWriteFollow)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(p, testutil.FileEquals, "hi")
 }
@@ -116,10 +116,10 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileChmod(c *tc.C) {
 
 	path := filepath.Join(tmpdir, "foo")
 	err := osutil.AtomicWriteFile(path, []byte{}, 0777, osutil.AtomicWriteChmod)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st, err := os.Stat(path)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(st.Mode()&os.ModePerm, tc.Equals, os.FileMode(0777))
 }
 
@@ -149,7 +149,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileRelativeSymlinks(c *tc.C) {
 	defer os.Chmod(rodir, 0700)
 
 	err := osutil.AtomicWriteFile(p, []byte("hi"), 0600, osutil.AtomicWriteFollow)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(p, testutil.FileEquals, "hi")
 }
@@ -179,7 +179,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileNoOverwriteTmpExisting(c *tc.
 
 	p := filepath.Join(tmpdir, "foo")
 	err := os.WriteFile(p+"."+strings.Repeat("a", 12)+"~", []byte(""), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = osutil.AtomicWriteFile(p, []byte(""), 0600, 0)
 	c.Assert(err, tc.ErrorMatches, "open .*: file exists")
@@ -199,11 +199,11 @@ func (ts *AtomicWriteTestSuite) TestAtomicFileChownError(c *tc.C) {
 	p := filepath.Join(d, "foo")
 
 	aw, err := osutil.NewAtomicFile(p, 0644, 0, eUid, eGid)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer aw.Cancel()
 
 	_, err = aw.Write([]byte("hello"))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Check(aw.Commit(), tc.Equals, eErr)
 }
@@ -212,7 +212,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicFileCancelError(c *tc.C) {
 	d := c.MkDir()
 	p := filepath.Join(d, "foo")
 	aw, err := osutil.NewAtomicFile(p, 0644, 0, osutil.NoChown, osutil.NoChown)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(aw.File.Close(), tc.IsNil)
 	// Depending on golang version the error is one of the two.
@@ -223,7 +223,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicFileCancelBadError(c *tc.C) {
 	d := c.MkDir()
 	p := filepath.Join(d, "foo")
 	aw, err := osutil.NewAtomicFile(p, 0644, 0, osutil.NoChown, osutil.NoChown)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer aw.Close()
 
 	osutil.SetAtomicFileRenamed(aw, true)
@@ -235,7 +235,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicFileCancelNoClose(c *tc.C) {
 	d := c.MkDir()
 	p := filepath.Join(d, "foo")
 	aw, err := osutil.NewAtomicFile(p, 0644, 0, osutil.NoChown, osutil.NoChown)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(aw.Close(), tc.IsNil)
 
 	c.Check(aw.Cancel(), tc.IsNil)
@@ -246,7 +246,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicFileCancel(c *tc.C) {
 	p := filepath.Join(d, "foo")
 
 	aw, err := osutil.NewAtomicFile(p, 0644, 0, osutil.NoChown, osutil.NoChown)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	fn := aw.File.Name()
 	c.Check(osutil.CanStat(fn), tc.Equals, true)
 	c.Check(aw.Cancel(), tc.IsNil)

@@ -1447,7 +1447,7 @@ func (s *S) TestParseLayer(c *tc.C) {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
 					lanes, err := p.StartOrder([]string{name})
-					c.Assert(err, tc.IsNil)
+					c.Assert(err, tc.ErrorIsNil)
 					for _, names := range lanes {
 						if len(names) > 0 {
 							c.Assert(names, tc.DeepEquals, order)
@@ -1457,7 +1457,7 @@ func (s *S) TestParseLayer(c *tc.C) {
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
 					lanes, err := p.StopOrder([]string{name})
-					c.Assert(err, tc.IsNil)
+					c.Assert(err, tc.ErrorIsNil)
 					for _, names := range lanes {
 						if len(names) > 0 {
 							c.Assert(names, tc.DeepEquals, order)
@@ -1480,7 +1480,7 @@ func (s *S) TestParseLayer(c *tc.C) {
 			if test.error != "" {
 				c.Assert(err, tc.ErrorMatches, test.error)
 			} else {
-				c.Assert(err, tc.IsNil)
+				c.Assert(err, tc.ErrorIsNil)
 			}
 		}
 	}
@@ -1496,7 +1496,7 @@ services:
         after:
             - srv2
 `))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layer2, err := plan.ParseLayer(2, "label2", []byte(`
 services:
     srv2:
@@ -1505,9 +1505,9 @@ services:
         after:
             - srv1
 `))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	combined, err := plan.CombineLayers(layer1, layer2)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layers := []*plan.Layer{layer1, layer2}
 	p := &plan.Plan{
 		Layers:     layers,
@@ -1524,13 +1524,13 @@ services:
 
 func (s *S) TestMissingOverride(c *tc.C) {
 	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layer2, err := plan.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         command: cmd
 `))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	_, err = plan.CombineLayers(layer1, layer2)
 	c.Check(err, tc.ErrorMatches, `layer "label2" must define \"override\" for service "srv1"`)
 	_, ok := err.(*plan.FormatError)
@@ -1540,15 +1540,15 @@ services:
 func (s *S) TestMissingCommand(c *tc.C) {
 	// Combine fails if no command in combined plan
 	layer1, err := plan.ParseLayer(1, "label1", []byte("{}"))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layer2, err := plan.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         override: merge
 `))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	combined, err := plan.CombineLayers(layer1, layer2)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layers := []*plan.Layer{layer1, layer2}
 	p := &plan.Plan{
 		Layers:     layers,
@@ -1569,15 +1569,15 @@ services:
         override: merge
         command: foo --bar
 `))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	layer2, err = plan.ParseLayer(2, "label2", []byte(`
 services:
     srv1:
         override: merge
 `))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	combined, err = plan.CombineLayers(layer1, layer2)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(combined.Services["srv1"].Command, tc.Equals, "foo --bar")
 }
 
@@ -1589,11 +1589,11 @@ func (s *S) TestReadDir(c *tc.C) {
 		pebbleDir := filepath.Join(tempDir, fmt.Sprintf("pebble-%03d", testIndex))
 		layersDir := filepath.Join(pebbleDir, "layers")
 		err := os.MkdirAll(layersDir, 0755)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		for i, yml := range test.input {
 			err := os.WriteFile(filepath.Join(layersDir, fmt.Sprintf("%03d-layer-%d.yaml", i, i)), reindent(yml), 0644)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 		sup, err := plan.ReadDir(layersDir, nil)
 		if err == nil {
@@ -1606,7 +1606,7 @@ func (s *S) TestReadDir(c *tc.C) {
 				for name, order := range test.start {
 					p := plan.Plan{Services: result.Services}
 					lanes, err := p.StartOrder([]string{name})
-					c.Assert(err, tc.IsNil)
+					c.Assert(err, tc.ErrorIsNil)
 					for _, names := range lanes {
 						if len(names) > 0 {
 							c.Assert(names, tc.DeepEquals, order)
@@ -1616,7 +1616,7 @@ func (s *S) TestReadDir(c *tc.C) {
 				for name, order := range test.stop {
 					p := plan.Plan{Services: result.Services}
 					lanes, err := p.StopOrder([]string{name})
-					c.Assert(err, tc.IsNil)
+					c.Assert(err, tc.ErrorIsNil)
 					for _, names := range lanes {
 						if len(names) > 0 {
 							c.Assert(names, tc.DeepEquals, order)
@@ -1629,7 +1629,7 @@ func (s *S) TestReadDir(c *tc.C) {
 			if test.error != "" {
 				c.Assert(err, tc.ErrorMatches, test.error)
 			} else {
-				c.Assert(err, tc.IsNil)
+				c.Assert(err, tc.ErrorIsNil)
 			}
 		}
 	}
@@ -1649,16 +1649,16 @@ func (s *S) TestReadDirBadNames(c *tc.C) {
 	pebbleDir := c.MkDir()
 	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.Mkdir(layersDir, 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	for _, fname := range readDirBadNames {
 		fpath := filepath.Join(layersDir, fname)
 		err := os.WriteFile(fpath, []byte("<ignore>"), 0644)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		_, err = plan.ReadDir(layersDir, nil)
 		c.Assert(err.Error(), tc.Equals, fmt.Sprintf("invalid layer filename: %q (must look like \"123-some-label.yaml\")", fname))
 		err = os.Remove(fpath)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 }
 
@@ -1671,20 +1671,20 @@ func (s *S) TestReadDirDupNames(c *tc.C) {
 	pebbleDir := c.MkDir()
 	layersDir := filepath.Join(pebbleDir, "layers")
 	err := os.Mkdir(layersDir, 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	for _, fnames := range readDirDupNames {
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
 			err := os.WriteFile(fpath, []byte("summary: ignore"), 0644)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 		_, err = plan.ReadDir(layersDir, nil)
 		c.Assert(err.Error(), tc.Equals, fmt.Sprintf("invalid layer filename: %q not unique (have %q already)", fnames[1], fnames[0]))
 		for _, fname := range fnames {
 			fpath := filepath.Join(layersDir, fname)
 			err = os.Remove(fpath)
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 		}
 	}
 }
@@ -1720,9 +1720,9 @@ func (s *S) TestMarshalLayer(c *tc.C) {
 				override: replace
 				command: srv3cmd`)
 	layer, err := plan.ParseLayer(1, "layer1", layerBytes)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	out, err := yaml.Marshal(layer)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(out), tc.Equals, string(layerBytes))
 }
 
@@ -1789,7 +1789,7 @@ func (s *S) TestParseCommand(c *tc.C) {
 			if test.error != "" {
 				c.Assert(err, tc.ErrorMatches, test.error)
 			} else {
-				c.Assert(err, tc.IsNil)
+				c.Assert(err, tc.ErrorIsNil)
 			}
 			continue
 		}
@@ -1804,7 +1804,7 @@ func (s *S) TestParseCommand(c *tc.C) {
 		// the same and cmdArgs is the new default arguments in [ ... ]
 		service.Command = newCommand
 		base, extra, err = service.ParseCommand()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(base, tc.DeepEquals, test.expectedBase)
 		c.Assert(extra, tc.DeepEquals, test.cmdArgs)
 	}
@@ -1910,7 +1910,7 @@ func (s *S) TestMergeServiceContextNoContext(c *tc.C) {
 	// This test ensures an empty service name results in no lookup, and
 	// simply leaves the provided context unchanged.
 	merged, err := plan.MergeServiceContext(nil, "", overrides)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(merged, tc.DeepEquals, overrides)
 }
 
@@ -1931,7 +1931,7 @@ func (s *S) TestMergeServiceContextNoOverrides(c *tc.C) {
 		WorkingDir:  "/working/svc",
 	}}}
 	merged, err := plan.MergeServiceContext(p, "svc1", plan.ContextOptions{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(merged, tc.DeepEquals, plan.ContextOptions{
 		Environment: map[string]string{"x": "y"},
 		UserID:      &userID,
@@ -1963,7 +1963,7 @@ func (s *S) TestMergeServiceContextOverrides(c *tc.C) {
 		WorkingDir:  "/working/dir",
 	}
 	merged, err := plan.MergeServiceContext(p, "svc1", overrides)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(merged, tc.DeepEquals, plan.ContextOptions{
 		Environment: map[string]string{"x": "a", "w": "z"},
 		UserID:      &userID,
@@ -2015,12 +2015,12 @@ func (s *S) TestStartStopOrderSingleLane(c *tc.C) {
 	p := plan.Plan{Services: layer.Services}
 
 	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(lanes), tc.Equals, 1)
 	c.Assert(lanes[0], tc.DeepEquals, []string{"srv1", "srv2", "srv3"})
 
 	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(lanes), tc.Equals, 1)
 	c.Assert(lanes[0], tc.DeepEquals, []string{"srv3", "srv2", "srv1"})
 }
@@ -2056,14 +2056,14 @@ func (s *S) TestStartStopOrderMultipleLanes(c *tc.C) {
 	p := plan.Plan{Services: layer.Services}
 
 	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(lanes), tc.Equals, 3)
 	c.Assert(lanes[0], tc.DeepEquals, []string{"srv1"})
 	c.Assert(lanes[1], tc.DeepEquals, []string{"srv2"})
 	c.Assert(lanes[2], tc.DeepEquals, []string{"srv3"})
 
 	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(lanes), tc.Equals, 3)
 	c.Assert(lanes[0], tc.DeepEquals, []string{"srv1"})
 	c.Assert(lanes[1], tc.DeepEquals, []string{"srv2"})
@@ -2109,14 +2109,14 @@ func (s *S) TestStartStopOrderMultipleLanesRandomOrder(c *tc.C) {
 	p := plan.Plan{Services: layer.Services}
 
 	lanes, err := p.StartOrder([]string{"srv1", "srv2", "srv3", "srv4"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(lanes), tc.Equals, 3)
 	c.Assert(lanes[0], tc.DeepEquals, []string{"srv1", "srv4"})
 	c.Assert(lanes[1], tc.DeepEquals, []string{"srv2"})
 	c.Assert(lanes[2], tc.DeepEquals, []string{"srv3"})
 
 	lanes, err = p.StopOrder([]string{"srv1", "srv2", "srv3", "srv4"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(len(lanes), tc.Equals, 3)
 	c.Assert(lanes[0], tc.DeepEquals, []string{"srv4", "srv1"})
 	c.Assert(lanes[1], tc.DeepEquals, []string{"srv2"})
@@ -2179,16 +2179,16 @@ func (s *S) TestSectionOrder(c *tc.C) {
 		srv1:
 			override: replace
 			command: cmd`))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	combined, err := plan.CombineLayers(layer)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	plan := plan.Plan{
 		Services:   combined.Services,
 		Checks:     combined.Checks,
 		LogTargets: combined.LogTargets,
 	}
 	data, err := yaml.Marshal(plan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(data), tc.Equals, string(reindent(`
 	services:
 		srv1:
@@ -2214,9 +2214,9 @@ func (s *S) TestSectionOrder(c *tc.C) {
 func createLayerPath(c *tc.C, base string, name string) {
 	path := filepath.Join(base, name)
 	err := os.MkdirAll(filepath.Dir(path), 0777)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// Let's mix in the layer name into the command so we can
 	// verify the correct layer has the correct file content.
 	_, err = file.Write(reindent(fmt.Sprintf(`
@@ -2224,9 +2224,9 @@ func createLayerPath(c *tc.C, base string, name string) {
 		srv:
 			override: replace
 			command: %s`, name)))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = file.Close()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 var readDirTests = []struct {
@@ -2377,7 +2377,7 @@ func (s *S) TestReadDirWithBasePlan(c *tc.C) {
 	tempDir := c.MkDir()
 	layersDir := filepath.Join(tempDir, "layers")
 	err := os.MkdirAll(layersDir, 0755)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// Override the base service.
 	layer1 := `
 	services:
@@ -2388,7 +2388,7 @@ func (s *S) TestReadDirWithBasePlan(c *tc.C) {
 				DB_PORT: "5432"
 	`
 	err = os.WriteFile(filepath.Join(layersDir, "001-override.yaml"), reindent(layer1), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Add a new service that depends on the base service.
 	layer2 := `
@@ -2399,10 +2399,10 @@ func (s *S) TestReadDirWithBasePlan(c *tc.C) {
 			requires: [database]
 	`
 	err = os.WriteFile(filepath.Join(layersDir, "002-app.yaml"), reindent(layer2), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	finalPlan, err := plan.ReadDir(layersDir, basePlan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(len(finalPlan.Layers), tc.Equals, 3)
 	c.Assert(finalPlan.Layers[0].Label, tc.Equals, "pebble-base")
@@ -2423,7 +2423,7 @@ func (s *S) TestReadDirWithBasePlan(c *tc.C) {
 	webSvc := finalPlan.Services["web-app"]
 	c.Assert(webSvc, tc.NotNil)
 	lanes, err := finalPlan.StartOrder([]string{"web-app"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(lanes[0], tc.DeepEquals, []string{"database", "web-app"})
 }
 
@@ -2441,7 +2441,7 @@ func (s *S) TestReadDirWithBasePlanOnly(c *tc.C) {
 	nonExistentDir := filepath.Join(c.MkDir(), "does-not-exist")
 
 	finalPlan, err := plan.ReadDir(nonExistentDir, basePlan)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(len(finalPlan.Layers), tc.Equals, 1)
 	c.Assert(finalPlan.Layers[0].Label, tc.Equals, "pebble-base")
@@ -2464,7 +2464,7 @@ func (s *S) TestReadDirBasePlanValidation(c *tc.C) {
 
 	tempDir := c.MkDir()
 	err := os.WriteFile(filepath.Join(tempDir, "001-empty.yaml"), []byte("{}"), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, err = plan.ReadDir(tempDir, basePlan)
 	c.Assert(err, tc.ErrorMatches, `plan must define "command" for service "broken-svc"`)

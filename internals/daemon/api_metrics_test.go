@@ -38,7 +38,7 @@ services:
 	// Start test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -51,7 +51,7 @@ services:
 			c.Fatalf("timed out waiting for service to start")
 		}
 		services, err := serviceMgr.Services([]string{"test1"})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if len(services) == 1 && services[0].Current == servstate.StatusActive {
 			break
 		}
@@ -61,7 +61,7 @@ services:
 	// Get metrics.
 	metricsCmd := apiCmd("/v1/metrics")
 	metricsReq, err := http.NewRequest("GET", "/v1/metrics", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	metricsRec := httptest.NewRecorder()
 	metricsRsp := v1GetMetrics(metricsCmd, metricsReq, nil)
 	metricsRsp.ServeHTTP(metricsRec, metricsReq)

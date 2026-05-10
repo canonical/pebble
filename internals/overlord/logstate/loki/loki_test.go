@@ -110,7 +110,7 @@ func (*suite) TestRequest(c *tc.C) {
 		c.Assert(r.Header.Get("User-Agent"), tc.Equals, "pebble/1.23.0")
 
 		reqBody, err := io.ReadAll(r.Body)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(string(reqBody), tc.DeepEquals, string(expected))
 	}))
 	defer server.Close()
@@ -125,11 +125,11 @@ func (*suite) TestRequest(c *tc.C) {
 	client.SetLabels("svc4", map[string]string{})
 	for _, entry := range input {
 		err := client.Add(entry)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	err := client.Flush(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (*suite) TestFlushCancelContext(c *tc.C) {
@@ -150,7 +150,7 @@ func (*suite) TestFlushCancelContext(c *tc.C) {
 		Service: "svc1",
 		Message: "this is a log line\n",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	flushReturned := make(chan struct{})
 	go func() {
@@ -188,7 +188,7 @@ func (*suite) TestServerTimeout(c *tc.C) {
 		Service: "svc1",
 		Message: "this is a log line\n",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = client.Flush(context.Background())
 	c.Assert(err, tc.ErrorMatches, ".*context deadline exceeded.*")
@@ -203,7 +203,7 @@ func (*suite) TestBufferFull(c *tc.C) {
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	// Check that the client's buffer is as expected
@@ -250,7 +250,7 @@ func (*suite) TestLabels(c *tc.C) {
 	received := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := io.ReadAll(r.Body)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(string(reqBody), tc.Equals, string(expected))
 		close(received)
 	}))
@@ -268,7 +268,7 @@ func (*suite) TestLabels(c *tc.C) {
 		Time:    time.Date(2023, 10, 3, 4, 20, 33, 0, time.UTC),
 		Message: "hello",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	expected = compactJSON(`
 {"streams": [{
@@ -283,7 +283,7 @@ func (*suite) TestLabels(c *tc.C) {
 }]}`)
 
 	err = client.Flush(context.Background())
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	select {
 	case <-received:
 	case <-time.After(1 * time.Second):

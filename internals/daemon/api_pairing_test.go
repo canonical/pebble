@@ -40,13 +40,13 @@ pairing:
 	// Enable pairing window
 	pairingMgr := d.overlord.PairingManager()
 	err := pairingMgr.EnablePairing(10 * time.Second)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{clientCert},
 	}
@@ -73,7 +73,7 @@ func (s *apiSuite) TestPairingPairManagerError(c *tc.C) {
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{clientCert},
 	}
@@ -99,7 +99,7 @@ func (s *apiSuite) TestPairingPairInvalidJSON(c *tc.C) {
 	payload := bytes.NewBufferString(`invalid json`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
@@ -122,7 +122,7 @@ func (s *apiSuite) TestPairingPairInvalidAction(c *tc.C) {
 	payload := bytes.NewBufferString(`{"action": "invalid"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
@@ -145,7 +145,7 @@ func (s *apiSuite) TestPairingPairNonHTTPS(c *tc.C) {
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
@@ -168,7 +168,7 @@ func (s *apiSuite) TestPairingPairMissingTLSState(c *tc.C) {
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
@@ -191,7 +191,7 @@ func (s *apiSuite) TestPairingPairZeroPeerCertificates(c *tc.C) {
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{},
 	}

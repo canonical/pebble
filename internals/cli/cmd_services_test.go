@@ -40,7 +40,7 @@ func (s *PebbleSuite) TestServices(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 Service  Startup  Current   Since
@@ -63,7 +63,7 @@ func (s *PebbleSuite) TestPlanNoServices(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "Plan has no services.\n")
@@ -81,7 +81,7 @@ func (s *PebbleSuite) TestPlanNoServicesJSON(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"services":{}}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -99,7 +99,7 @@ func (s *PebbleSuite) TestPlanNoServicesYAML(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "yaml"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "services: {}\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -117,7 +117,7 @@ func (s *PebbleSuite) TestNoMatchingServices(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "foo", "bar"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "No matching services.\n")
@@ -138,7 +138,7 @@ func (s *PebbleSuite) TestServicesNames(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "foo", "bar", "--abs-time"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 Service  Startup   Current   Since
@@ -164,7 +164,7 @@ func (s *PebbleSuite) TestServicesJSON(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `{"services":{"svc1":{"name":"svc1","startup":"enabled","current":"inactive","current-since":"2022-04-28T17:05:23+12:00"},"svc2":{"name":"svc2","startup":"enabled","current":"inactive"},"svc3":{"name":"svc3","startup":"enabled","current":"backoff"}}}`+"\n")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -186,7 +186,7 @@ func (s *PebbleSuite) TestServicesYAML(c *tc.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "yaml"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 services:

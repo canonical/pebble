@@ -56,13 +56,13 @@ func (s *noticesSuite) TestMarshal(c *tc.C) {
 	n := noticeToMap(c, notices[0])
 
 	firstOccurred, err := time.Parse(time.RFC3339, n["first-occurred"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(!firstOccurred.Before(start), tc.Equals, true) // firstOccurred >= start
 	lastOccurred, err := time.Parse(time.RFC3339, n["last-occurred"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(lastOccurred.After(firstOccurred), tc.Equals, true) // lastOccurred > firstOccurred
 	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(lastRepeated.After(firstOccurred), tc.Equals, true) // lastRepeated > firstOccurred
 
 	delete(n, "first-occurred")
@@ -95,7 +95,7 @@ func (s *noticesSuite) TestUnmarshal(c *tc.C) {
 	}`)
 	var notice *state.Notice
 	err := json.Unmarshal(noticeJSON, &notice)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// The Notice fields aren't exported, so we need to marshal it into JSON
 	// and then unmarshal it into a map to test.
@@ -128,7 +128,7 @@ func (s *noticesSuite) TestString(c *tc.C) {
 	}`)
 	var notice *state.Notice
 	err := json.Unmarshal(noticeJSON, &notice)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(notice.String(), tc.Equals, "Notice 1 (1000:custom:foo.com/bar)")
 
@@ -143,7 +143,7 @@ func (s *noticesSuite) TestString(c *tc.C) {
 		"occurrences": 2
 	}`)
 	err = json.Unmarshal(noticeJSON, &notice)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(notice.String(), tc.Equals, "Notice 2 (public:warning:scary)")
 }
@@ -195,9 +195,9 @@ func (s *noticesSuite) testRepeatAfter(c *tc.C, first, second, delay time.Durati
 	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
 	firstOccurred, err := time.Parse(time.RFC3339, n["first-occurred"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// LastRepeated won't yet be updated as we only waited 1us (repeat-after is long)
 	c.Assert(lastRepeated.Equal(firstOccurred), tc.Equals, true)
@@ -212,7 +212,7 @@ func (s *noticesSuite) testRepeatAfter(c *tc.C, first, second, delay time.Durati
 	c.Assert(notices, tc.HasLen, 1)
 	n = noticeToMap(c, notices[0])
 	newLastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(newLastRepeated.After(lastRepeated), tc.Equals, true)
 }
 
@@ -358,7 +358,7 @@ func (s *noticesSuite) TestNoticesFilterAfter(c *tc.C) {
 	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
 	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/y", nil)
@@ -422,7 +422,7 @@ func (s *noticesSuite) TestCheckpoint(c *tc.C) {
 	c.Assert(backend.checkpoints, tc.HasLen, 1)
 
 	st2, err := state.ReadState(nil, bytes.NewReader(backend.checkpoints[0]))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st2.Lock()
 	defer st2.Unlock()
 
@@ -527,7 +527,7 @@ func (s *noticesSuite) TestWaitNoticesExisting(c *tc.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	notices, err := st.WaitNotices(ctx, &state.NoticeFilter{Keys: []string{"example.com/x"}})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
 	c.Check(n["user-id"], tc.Equals, nil)
@@ -551,7 +551,7 @@ func (s *noticesSuite) TestWaitNoticesNew(c *tc.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	notices, err := st.WaitNotices(ctx, &state.NoticeFilter{Keys: []string{"example.com/y"}})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
 	c.Assert(n["key"], tc.Equals, "example.com/y")
@@ -575,10 +575,10 @@ func (s *noticesSuite) TestReadStateWaitNotices(c *tc.C) {
 	defer st.Unlock()
 
 	marshalled, err := st.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2, err := state.ReadState(nil, bytes.NewBuffer(marshalled))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st2.Lock()
 	defer st2.Unlock()
 
@@ -608,12 +608,12 @@ func (s *noticesSuite) TestWaitNoticesLongPoll(c *tc.C) {
 	var after time.Time
 	for total := 0; total < 10; {
 		notices, err := st.WaitNotices(ctx, &state.NoticeFilter{After: after})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(len(notices) > 0, tc.Equals, true)
 		total += len(notices)
 		n := noticeToMap(c, notices[len(notices)-1])
 		lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		after = lastRepeated
 	}
 }
@@ -634,7 +634,7 @@ func (s *noticesSuite) TestWaitNoticesConcurrent(c *tc.C) {
 			defer cancel()
 			key := fmt.Sprintf("a.b/%d", i)
 			notices, err := st.WaitNotices(ctx, &state.NoticeFilter{Keys: []string{key}})
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			c.Assert(notices, tc.HasLen, 1)
 			n := noticeToMap(c, notices[0])
 			c.Assert(n["key"], tc.Equals, key)
@@ -664,14 +664,14 @@ func (s *noticesSuite) TestWaitNoticesConcurrent(c *tc.C) {
 // noticeToMap converts a Notice to a map using a JSON marshal-unmarshal round trip.
 func noticeToMap(c *tc.C, notice *state.Notice) map[string]any {
 	buf, err := json.Marshal(notice)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var n map[string]any
 	err = json.Unmarshal(buf, &n)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return n
 }
 
 func addNotice(c *tc.C, st *state.State, userID *uint32, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
 	_, err := st.AddNotice(userID, noticeType, key, options)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }

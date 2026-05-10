@@ -262,7 +262,7 @@ func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *tc.C) {
 		if t.error != "" {
 			c.Assert(err, tc.ErrorMatches, t.error)
 		} else {
-			c.Assert(err, tc.IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			section, ok := combined.Sections[workloads.WorkloadsField]
 			c.Assert(ok, tc.Equals, true)
 			c.Assert(section, tc.NotNil)
@@ -288,6 +288,6 @@ func parseCombineLayers(yamls []string) (*plan.Layer, error) {
 
 func layerYAML(c *tc.C, layer *plan.Layer) string {
 	yml, err := yaml.Marshal(layer)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return strings.TrimSpace(string(yml))
 }

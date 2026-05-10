@@ -240,5 +240,5 @@ func (s *accessSuite) TestPairingAccessWithPairingWindow(c *tc.C) {
 	defer restore()
 
 	err = pairingAccess.CheckAccess(nil, r, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }

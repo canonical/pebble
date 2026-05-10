@@ -56,7 +56,7 @@ func (s *restartSuite) TestManager(c *tc.C) {
 	defer st.Unlock()
 
 	mgr, err := restart.Manager(st, "boot-id-1", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(mgr, tc.FitsTypeOf, &restart.RestartManager{})
 }
 
@@ -69,7 +69,7 @@ func (s *restartSuite) TestRequestRestartDaemon(c *tc.C) {
 	h := &testHandler{}
 
 	manager, err := restart.Manager(st, "boot-id-1", h)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(h.rebootAsExpected, tc.Equals, true)
 
 	ok, t := manager.Pending()
@@ -92,7 +92,7 @@ func (s *restartSuite) TestRequestRestartDaemonNoHandler(c *tc.C) {
 	defer st.Unlock()
 
 	manager, err := restart.Manager(st, "boot-id-1", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	restart.Request(st, restart.RestartDaemon)
 
@@ -108,7 +108,7 @@ func (s *restartSuite) TestRequestRestartSystemAndVerifyReboot(c *tc.C) {
 
 	h := &testHandler{}
 	manager, err := restart.Manager(st, "boot-id-1", h)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(h.rebootAsExpected, tc.Equals, true)
 
 	ok, t := manager.Pending()
@@ -129,7 +129,7 @@ func (s *restartSuite) TestRequestRestartSystemAndVerifyReboot(c *tc.C) {
 
 	h1 := &testHandler{}
 	_, err = restart.Manager(st, "boot-id-1", h1)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(h1.rebootAsExpected, tc.Equals, false)
 	c.Check(h1.rebootDidNotHappen, tc.Equals, true)
 	fromBootID = ""
@@ -138,7 +138,7 @@ func (s *restartSuite) TestRequestRestartSystemAndVerifyReboot(c *tc.C) {
 
 	h2 := &testHandler{}
 	_, err = restart.Manager(st, "boot-id-2", h2)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(h2.rebootAsExpected, tc.Equals, true)
 	c.Check(st.Get("system-restart-from-boot-id", &fromBootID), tc.ErrorIs, state.ErrNoState)
 }

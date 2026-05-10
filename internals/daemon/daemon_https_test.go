@@ -59,13 +59,13 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *tc.C) {
 	}
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/health", port), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, err := httpsClient.Do(request)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(response.StatusCode, tc.Equals, http.StatusOK)
 	var m map[string]any
 	err = json.NewDecoder(response.Body).Decode(&m)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(m, tc.DeepEquals, map[string]any{
 		"type":        "sync",
 		"status-code": float64(http.StatusOK),
@@ -76,7 +76,7 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *tc.C) {
 	})
 
 	err = d.Stop(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Daemon already stopped, no need to do it again during defer.
 	cleanupServer = false
@@ -114,15 +114,15 @@ func (s *daemonSuite) TestHTTPSUserAccessFail(c *tc.C) {
 	}
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, err := httpsClient.Do(request)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Access fails because the TLS client identity is not known.
 	c.Assert(response.StatusCode, tc.Equals, http.StatusUnauthorized)
 
 	err = d.Stop(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Daemon already stopped, no need to do it again during defer.
 	cleanupServer = false
@@ -170,27 +170,27 @@ pairing:
 	// Enable pairing window
 	pairingMgr := d.overlord.PairingManager()
 	err := pairingMgr.EnablePairing(10 * time.Second)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Pair the client identity by making a POST to v1/pairing API
 	pairingPayload := bytes.NewBufferString(`{"action": "pair"}`)
 	pairingRequest, err := http.NewRequest("POST", fmt.Sprintf("https://localhost:%d/v1/pairing", port), pairingPayload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	pairingResponse, err := httpsClient.Do(pairingRequest)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(pairingResponse.StatusCode, tc.Equals, http.StatusOK)
 
 	// Now try accessing checks - should succeed
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, err := httpsClient.Do(request)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Access succeeds because the TLS client identity is now paired
 	c.Assert(response.StatusCode, tc.Equals, http.StatusOK)
 
 	err = d.Stop(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Daemon already stopped, no need to do it again during defer.
 	cleanupServer = false
@@ -201,7 +201,7 @@ pairing:
 
 func createTestClientTLSKeypair(c *tc.C) *tls.Certificate {
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	template := x509.Certificate{
 		SerialNumber: big.NewInt(1),
@@ -213,10 +213,10 @@ func createTestClientTLSKeypair(c *tc.C) *tls.Certificate {
 
 	// Self-signed certificate.
 	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, privateKey.Public(), privateKey)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	return &tls.Certificate{
 		Certificate: [][]byte{certDER},

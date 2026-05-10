@@ -76,11 +76,11 @@ func (s *apiSuite) TestIdentities(c *tc.C) {
 			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/identities", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cmd := apiCmd("/v1/identities")
 	rsp, ok := cmd.GET(cmd, req, nil).(*resp)
 	c.Assert(ok, tc.Equals, true)
@@ -91,7 +91,7 @@ func (s *apiSuite) TestIdentities(c *tc.C) {
 	c.Assert(ok, tc.Equals, true)
 
 	data, err := json.MarshalIndent(identities, "", "    ")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(string(data), tc.Equals, `
 {
     "bob": {
@@ -128,7 +128,7 @@ func (s *apiSuite) TestAddIdentities(c *tc.C) {
 	s.daemon(c)
 
 	jsonCert, err := json.Marshal(validPEMX509Cert)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	body := fmt.Sprintf(`
 {
     "action": "add",
@@ -234,7 +234,7 @@ func (s *apiSuite) TestUpdateIdentities(c *tc.C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	body := `
@@ -316,7 +316,7 @@ func (s *apiSuite) TestReplaceIdentities(c *tc.C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	body := `
@@ -382,7 +382,7 @@ func (s *apiSuite) TestRemoveIdentities(c *tc.C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	body := `
@@ -454,10 +454,10 @@ func (s *apiSuite) TestUnmarshalErrors(c *tc.C) {
 
 	// Marshal a certificate request to test valid PEM but invalid X.509.
 	jsonCertReq, err := json.Marshal(testPEMPKCS10Req)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// Marshal a certificate with extra data after the PEM block.
 	jsonCertExtra, err := json.Marshal(validPEMX509Cert + "42")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tests := []struct {
 		data  string
@@ -506,7 +506,7 @@ func (s *apiSuite) TestUnmarshalErrors(c *tc.C) {
 
 func (s *apiSuite) postIdentities(c *tc.C, body string) *resp {
 	req, err := http.NewRequest("POST", "/v1/identities", strings.NewReader(body))
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cmd := apiCmd("/v1/identities")
 	rsp, ok := cmd.POST(cmd, req, nil).(*resp)
 	c.Assert(ok, tc.Equals, true)

@@ -35,6 +35,6 @@ func TestBootIdSuite(t *testing.T) {
 
 func (s *bootIdSuite) TestSmoke(c *tc.C) {
 	id, err := osutil.BootID()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(id, tc.HasLen, 36)
 }

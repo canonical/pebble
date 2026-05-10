@@ -40,7 +40,7 @@ func (cs *clientSuite) TestChecksGet(c *tc.C) {
 		Names: []string{"chk1", "chk3", "chk5"},
 	}
 	checks, err := cs.cli.Checks(&opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(checks, tc.DeepEquals,
 		[]*client.CheckInfo{{
 			Name:   "chk1",
@@ -73,7 +73,7 @@ func (cs *clientSuite) TestStartChecks(c *tc.C) {
 		Names: []string{"chk1", "chk2"},
 	}
 	results, err := cs.cli.StartChecks(&opts)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(results.Changed, tc.DeepEquals, []string{"chk1", "chk2"})
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/checks")
@@ -98,7 +98,7 @@ func (cs *clientSuite) TestStopChecks(c *tc.C) {
 		Names: []string{"chk1", "chk2"},
 	}
 	results, err := cs.cli.StopChecks(&opts)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(results.Changed, tc.DeepEquals, []string{"chk1"})
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/checks")
@@ -131,7 +131,7 @@ func (cs *clientSuite) TestRefreshCheck(c *tc.C) {
 		Name: "chk1",
 	}
 	results, err := cs.cli.RefreshCheck(&opts)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(results.Info, tc.DeepEquals, client.CheckInfo{
 		Name:      "chk1",
 		Startup:   "enabled",
@@ -171,7 +171,7 @@ func (cs *clientSuite) TestRefreshCheckError(c *tc.C) {
 		Name: "chk1",
 	}
 	results, err := cs.cli.RefreshCheck(&opts)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(results.Info, tc.DeepEquals, client.CheckInfo{
 		Name:      "chk1",
 		Startup:   "enabled",

@@ -41,7 +41,7 @@ func (cs *clientSuite) TestNotice(c *tc.C) {
 		"expire-after": "168h"
 	}}`
 	notice, err := cs.cli.Notice("123")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "GET")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/notices/123")
 	uid := uint32(1000)
@@ -89,7 +89,7 @@ func (cs *clientSuite) TestNotices(c *tc.C) {
 		"occurrences": 1
 	}]}`
 	notices, err := cs.cli.Notices(&client.NoticesOptions{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "GET")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{})
@@ -128,7 +128,7 @@ func (cs *clientSuite) TestNoticesFilters(c *tc.C) {
 		Keys:   []string{"foo.com/bar", "example.com/x"},
 		After:  time.Date(2023, 9, 5, 16, 43, 32, 123_456_789, time.UTC),
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "GET")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{
@@ -149,16 +149,16 @@ func (cs *clientSuite) TestNotify(c *tc.C) {
 		RepeatAfter: time.Hour,
 		Data:        map[string]string{"k": "9"},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(noticeID, tc.Equals, "7")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/notices")
 
 	body, err := io.ReadAll(cs.req.Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var m map[string]any
 	err = json.Unmarshal(body, &m)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(m, tc.DeepEquals, map[string]any{
 		"action":       "add",
 		"type":         "custom",
@@ -174,16 +174,16 @@ func (cs *clientSuite) TestNotifyMinimal(c *tc.C) {
 		Type: client.CustomNotice,
 		Key:  "a.b/c",
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(noticeID, tc.Equals, "1")
 	c.Assert(cs.req.Method, tc.Equals, "POST")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/notices")
 
 	body, err := io.ReadAll(cs.req.Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var m map[string]any
 	err = json.Unmarshal(body, &m)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(m, tc.DeepEquals, map[string]any{
 		"action": "add",
 		"type":   "custom",
@@ -203,7 +203,7 @@ func (cs *clientSuite) TestWaitNotices(c *tc.C) {
 		"occurrences": 1
 	}]}`
 	notices, err := cs.cli.WaitNotices(context.Background(), 10*time.Second, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(cs.req.Method, tc.Equals, "GET")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/notices")
 	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{
@@ -225,6 +225,6 @@ func (cs *clientSuite) TestWaitNotices(c *tc.C) {
 func (cs *clientSuite) TestWaitNoticesTimeout(c *tc.C) {
 	cs.rsp = `{"type": "sync", "result": []}`
 	notices, err := cs.cli.WaitNotices(context.Background(), time.Second, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(notices, tc.HasLen, 0)
 }

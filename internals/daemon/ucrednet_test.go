@@ -55,19 +55,19 @@ func (s *ucrednetSuite) TestAcceptConnRemoteAddrString(c *tc.C) {
 	sock := filepath.Join(d, "sock")
 
 	l, err := net.Listen("unix", sock)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	wl := &ucrednetListener{Listener: l}
 
 	defer wl.Close()
 
 	go func() {
 		cli, err := net.Dial("unix", sock)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		cli.Close()
 	}()
 
 	conn, err := wl.Accept()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer conn.Close()
 
 	remoteAddr := conn.RemoteAddr().String()
@@ -75,12 +75,12 @@ func (s *ucrednetSuite) TestAcceptConnRemoteAddrString(c *tc.C) {
 	u, err := ucrednetGet(remoteAddr)
 	c.Check(u.Pid, tc.Equals, int32(100))
 	c.Check(u.Uid, tc.Equals, uint32(42))
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *ucrednetSuite) TestNonUnix(c *tc.C) {
 	l, err := net.Listen("tcp", "localhost:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	wl := &ucrednetListener{Listener: l}
 	defer wl.Close()
@@ -89,12 +89,12 @@ func (s *ucrednetSuite) TestNonUnix(c *tc.C) {
 
 	go func() {
 		cli, err := net.Dial("tcp", addr)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		cli.Close()
 	}()
 
 	conn, err := wl.Accept()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer conn.Close()
 
 	remoteAddr := conn.RemoteAddr().String()
@@ -110,7 +110,7 @@ func (s *ucrednetSuite) TestAcceptErrors(c *tc.C) {
 	sock := filepath.Join(d, "sock")
 
 	l, err := net.Listen("unix", sock)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(l.Close(), tc.IsNil)
 
 	wl := &ucrednetListener{Listener: l}
@@ -125,14 +125,14 @@ func (s *ucrednetSuite) TestUcredErrors(c *tc.C) {
 	sock := filepath.Join(d, "sock")
 
 	l, err := net.Listen("unix", sock)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	wl := &ucrednetListener{Listener: l}
 	defer wl.Close()
 
 	go func() {
 		cli, err := net.Dial("unix", sock)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		cli.Close()
 	}()
 
@@ -146,7 +146,7 @@ func (s *ucrednetSuite) TestIdempotentClose(c *tc.C) {
 	sock := filepath.Join(d, "sock")
 
 	l, err := net.Listen("unix", sock)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	wl := &ucrednetListener{Listener: l}
 
 	c.Assert(wl.Close(), tc.IsNil)
@@ -179,7 +179,7 @@ func (s *ucrednetSuite) TestGetNothing(c *tc.C) {
 
 func (s *ucrednetSuite) TestGet(c *tc.C) {
 	u, err := ucrednetGet("pid=100;uid=42;socket=/run/.pebble.socket;")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(u.Pid, tc.Equals, int32(100))
 	c.Check(u.Uid, tc.Equals, uint32(42))
 	c.Check(u.Socket, tc.Equals, "/run/.pebble.socket")
@@ -193,7 +193,7 @@ func (s *ucrednetSuite) TestGetSneak(c *tc.C) {
 
 func (s *ucrednetSuite) TestGetWithZeroPid(c *tc.C) {
 	u, err := ucrednetGet("pid=0;uid=42;socket=/run/.pebble.socket;")
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(u.Pid, tc.Equals, int32(0))
 	c.Check(u.Uid, tc.Equals, uint32(42))
 	c.Check(u.Socket, tc.Equals, "/run/.pebble.socket")

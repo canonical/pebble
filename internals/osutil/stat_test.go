@@ -34,7 +34,7 @@ func TestStatTestSuite(t *testing.T) {
 func (ts *StatTestSuite) TestCanStat(c *tc.C) {
 	fname := filepath.Join(c.MkDir(), "foo")
 	err := os.WriteFile(fname, []byte(fname), 0644)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(CanStat(fname), tc.Equals, true)
 	c.Assert(CanStat("/i-do-not-exist"), tc.Equals, false)
@@ -43,7 +43,7 @@ func (ts *StatTestSuite) TestCanStat(c *tc.C) {
 func (ts *StatTestSuite) TestCanStatOddPerms(c *tc.C) {
 	fname := filepath.Join(c.MkDir(), "foo")
 	err := os.WriteFile(fname, []byte(fname), 0100)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(CanStat(fname), tc.Equals, true)
 }
@@ -51,7 +51,7 @@ func (ts *StatTestSuite) TestCanStatOddPerms(c *tc.C) {
 func (ts *StatTestSuite) TestIsDir(c *tc.C) {
 	dname := filepath.Join(c.MkDir(), "bar")
 	err := os.Mkdir(dname, 0700)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(IsDir(dname), tc.Equals, true)
 	c.Assert(IsDir("/i-do-not-exist"), tc.Equals, false)
@@ -60,7 +60,7 @@ func (ts *StatTestSuite) TestIsDir(c *tc.C) {
 func (ts *StatTestSuite) TestIsSymlink(c *tc.C) {
 	sname := filepath.Join(c.MkDir(), "symlink")
 	err := os.Symlink("/", sname)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Assert(IsSymlink(sname), tc.Equals, true)
 	c.Assert(IsSymlink(c.MkDir()), tc.Equals, false)
@@ -184,7 +184,7 @@ func (s *StatTestSuite) TestExistsIsDir(c *tc.C) {
 		exists, isDir, err := ExistsIsDir(filepath.Join(base, t.path))
 		c.Check(exists, tc.Equals, t.exists, comm)
 		c.Check(isDir, tc.Equals, t.isDir, comm)
-		c.Check(err, tc.IsNil, comm)
+		c.Assert(err, tc.ErrorIsNil, comm)
 	}
 
 	if os.Getuid() == 0 {
@@ -224,7 +224,7 @@ func (s *StatTestSuite) TestIsExec(c *tc.C) {
 		c.Check(err == nil || os.IsNotExist(err), tc.Equals, true)
 
 		err = os.WriteFile(p, []byte(""), test.mode)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(IsExec(p), tc.Equals, test.is)
 	}
 }

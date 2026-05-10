@@ -58,7 +58,7 @@ func (s *PebbleSuite) TestMkdir(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"mkdir", "/foo"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -97,7 +97,7 @@ func (s *PebbleSuite) TestMkdirMakeParents(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"mkdir", "-p", "/foo/bar"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -128,7 +128,7 @@ func (s *PebbleSuite) TestMkdirPermissions(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"mkdir", "-m", "755", "/foo/bar"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -159,7 +159,7 @@ func (s *PebbleSuite) TestMkdirOwnerIDs(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"mkdir", "--uid", "1000", "--gid", "1000", "/foo/bar"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")
@@ -190,7 +190,7 @@ func (s *PebbleSuite) TestMkdirOwnerNames(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"mkdir", "--user", "root", "--group", "wheel", "/foo/bar"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "")

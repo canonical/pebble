@@ -37,7 +37,7 @@ func (cs *clientSuite) TestHealthGet(c *tc.C) {
 		Names: []string{"chk1", "chk3"},
 	}
 	health, err := cs.cli.Health(&opts)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(health, tc.Equals, true)
 	c.Assert(cs.req.Method, tc.Equals, "GET")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/health")
@@ -58,7 +58,7 @@ func (cs *clientSuite) TestHealthDefaultOptions(c *tc.C) {
 	}`
 
 	health, err := cs.cli.Health(&client.HealthOptions{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(health, tc.Equals, false)
 	c.Assert(cs.req.Method, tc.Equals, "GET")
 	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/health")

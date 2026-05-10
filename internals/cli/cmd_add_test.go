@@ -72,16 +72,16 @@ services:
 		tempDir := c.MkDir()
 		layerPath := filepath.Join(tempDir, "layer.yaml")
 		err := os.WriteFile(layerPath, []byte(layerYAML), 0755)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		unreadableLayerPath := filepath.Join(tempDir, "unreadable-layer.yaml")
 		err = os.WriteFile(unreadableLayerPath, []byte(layerYAML), 0055)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// The trigger layer will trigger an error in the mocked API response
 		triggerLayerPath := filepath.Join(tempDir, "trigger-layer.yaml")
 		err = os.WriteFile(triggerLayerPath, []byte(triggerLayerContent), 0755)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		var args []string
 		for _, path := range []string{layerPath, unreadableLayerPath, triggerLayerPath} {
@@ -93,7 +93,7 @@ services:
 			rest, err := cli.ParserForTest().ParseArgs(args)
 
 			if path == layerPath {
-				c.Assert(err, tc.IsNil)
+				c.Assert(err, tc.ErrorIsNil)
 				c.Assert(rest, tc.HasLen, 0)
 				c.Check(s.Stdout(), tc.Matches, `Layer "foo" added successfully.*\n`)
 				c.Check(s.Stderr(), tc.Equals, "")

@@ -46,7 +46,7 @@ func (j *journalTestSuite) TestStreamFileHeader(c *tc.C) {
 	defer restore()
 
 	listener, err := net.ListenUnix("unix", &net.UnixAddr{Name: fakePath})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer listener.Close()
 
 	doneCh := make(chan struct{}, 1)
@@ -56,19 +56,19 @@ func (j *journalTestSuite) TestStreamFileHeader(c *tc.C) {
 
 		// see https://github.com/systemd/systemd/blob/97a33b126c845327a3a19d6e66f05684823868fb/src/journal/journal-send.c#L424
 		conn, err := listener.AcceptUnix()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		defer conn.Close()
 
 		expectedHdrLen := len("foobar") + 1 + 1 + 2 + 2 + 2 + 2 + 2
 		hdrBuf := make([]byte, expectedHdrLen)
 		hdrLen, err := conn.Read(hdrBuf)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(hdrLen, tc.Equals, expectedHdrLen)
 		c.Check(hdrBuf, tc.DeepEquals, []byte("foobar\n\n6\n0\n0\n0\n0\n"))
 
 		data := make([]byte, 4096)
 		sz, err := conn.Read(data)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Assert(sz > 0, tc.Equals, true)
 		c.Check(data[0:sz], tc.DeepEquals, []byte("hello from unit tests"))
 
@@ -76,11 +76,11 @@ func (j *journalTestSuite) TestStreamFileHeader(c *tc.C) {
 	}()
 
 	jout, err := NewJournalStreamFile("foobar", syslog.LOG_INFO, false)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(jout, tc.NotNil)
 
 	_, err = jout.WriteString("hello from unit tests")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	defer jout.Close()
 
 	<-doneCh

@@ -82,12 +82,12 @@ func (s *responseSuite) TestFileResponseSetsContentDisposition(c *tc.C) {
 
 	path := filepath.Join(c.MkDir(), filename)
 	err := os.WriteFile(path, nil, os.ModePerm)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	rec := httptest.NewRecorder()
 	rsp := fileResponse(path)
 	req, err := http.NewRequest("GET", "", nil)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	rsp.ServeHTTP(rec, req)
 
@@ -101,7 +101,7 @@ func (s *responseSuite) TestFileResponseSetsContentDisposition(c *tc.C) {
 func (s *responseSuite) TestRespJSONWithNullResult(c *tc.C) {
 	rj := &respJSON{Result: nil}
 	data, err := json.Marshal(rj)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(data), tc.Equals, `{"type":"","status-code":0}`)
 }
 
@@ -111,7 +111,7 @@ func (s *responseSuite) TestErrorResponderPrintfsWithArgs(c *tc.C) {
 	rec := httptest.NewRecorder()
 	rsp := teapot("system memory below %d%%.", 1)
 	req, err := http.NewRequest("GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp.ServeHTTP(rec, req)
 
 	var v struct{ Result errorResult }
@@ -126,7 +126,7 @@ func (s *responseSuite) TestErrorResponderDoesNotPrintfAlways(c *tc.C) {
 	rec := httptest.NewRecorder()
 	rsp := teapot("system memory below 1%.")
 	req, err := http.NewRequest("GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp.ServeHTTP(rec, req)
 
 	var v struct{ Result errorResult }

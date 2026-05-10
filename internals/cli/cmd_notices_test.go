@@ -60,7 +60,7 @@ func (s *PebbleSuite) TestNotices(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--abs-time"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 ID   User    Type     Key    First                 Repeated              Occurrences
@@ -113,7 +113,7 @@ func (s *PebbleSuite) TestNoticesFiltersUsers(c *tc.C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--users", "all", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
@@ -156,7 +156,7 @@ func (s *PebbleSuite) TestNoticesFiltersUID(c *tc.C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--uid", "1000", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
@@ -201,7 +201,7 @@ func (s *PebbleSuite) TestNoticesAfter(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--abs-time"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
@@ -228,7 +228,7 @@ func (s *PebbleSuite) TestNoticesNoNotices(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "No matching notices.\n")
@@ -262,7 +262,7 @@ func (s *PebbleSuite) TestNoticesTimeout(c *tc.C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--timeout", "1s"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
@@ -289,7 +289,7 @@ func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--timeout", "1s"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rest, tc.HasLen, 0)
 	c.Check(s.Stdout(), tc.Equals, "")
 	c.Check(s.Stderr(), tc.Equals, "No matching notices after waiting 1s.\n")

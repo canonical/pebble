@@ -249,7 +249,7 @@ func (ts *taskRunnerSuite) TestSequenceTests(c *tc.C) {
 				lanes := strings.SplitSeq(parts[2], ",")
 				for lane := range lanes {
 					n, err := strconv.Atoi(lane)
-					c.Assert(err, tc.IsNil)
+					c.Assert(err, tc.ErrorIsNil)
 					tasks[parts[0]].JoinLane(n)
 				}
 			}

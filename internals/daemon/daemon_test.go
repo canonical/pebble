@@ -115,7 +115,7 @@ func (s *daemonSuite) newDaemon(c *tc.C) *Daemon {
 		HTTPSAddress: s.httpsAddress,
 		TLSOptions:   tlsstate.Options{Signer: newIDKey(c)},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	d.addRoutes()
 	return d
 }
@@ -130,7 +130,7 @@ func newIDKey(c *tc.C) *idkey {
 	k := &idkey{}
 	var err error
 	_, k.PrivateKey, err = ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return k
 }
 
@@ -183,11 +183,11 @@ func (s *daemonSuite) TestExternalManager(c *tc.C) {
 		HTTPAddress:       s.httpAddress,
 		OverlordExtension: &fakeExtension{},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = d.overlord.StartUp()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = d.overlord.StateEngine().Ensure()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	extension, ok := d.overlord.Extension().(*fakeExtension)
 	c.Assert(ok, tc.Equals, true)
 	manager := extension.mgr
@@ -201,7 +201,7 @@ func (s *daemonSuite) TestNoExtension(c *tc.C) {
 		SocketPath:  s.socketPath,
 		HTTPAddress: s.httpAddress,
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	extension := d.overlord.Extension()
 	c.Assert(extension, tc.IsNil)
@@ -214,7 +214,7 @@ func (s *daemonSuite) TestWrongExtension(c *tc.C) {
 		HTTPAddress:       s.httpAddress,
 		OverlordExtension: &fakeExtension{},
 	})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, ok := d.overlord.Extension().(*otherFakeExtension)
 	c.Assert(ok, tc.Equals, false)
@@ -256,7 +256,7 @@ func (s *daemonSuite) TestExplicitPaths(c *tc.C) {
 	defer d.Stop(nil)
 
 	info, err := os.Stat(s.socketPath)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(info.Mode(), tc.Equals, os.ModeSocket|0666)
 }
 
@@ -279,7 +279,7 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *tc.C) {
 		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 		req, err := http.NewRequestWithContext(ctx, method, "", nil)
 		req.Header.Add("User-Agent", fakeUserAgent)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
@@ -294,7 +294,7 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *tc.C) {
 	}
 
 	req, err := http.NewRequest("POTATO", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 	rec := httptest.NewRecorder()
@@ -312,7 +312,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *tc.C) {
 
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 	rec := httptest.NewRecorder()
@@ -322,7 +322,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *tc.C) {
 		Maintenance *errorResult `json:"maintenance"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rst.Maintenance, tc.IsNil)
 
 	d.overlord.RestartManager().FakePending(restart.RestartSystem)
@@ -330,7 +330,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *tc.C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, tc.Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rst.Maintenance, tc.DeepEquals, &errorResult{
 		Kind:    errorKindSystemRestart,
 		Message: "system is restarting",
@@ -341,7 +341,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *tc.C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, tc.Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rst.Maintenance, tc.DeepEquals, &errorResult{
 		Kind:    errorKindDaemonRestart,
 		Message: "daemon is restarting",
@@ -357,7 +357,7 @@ func (s *daemonSuite) TestFillsWarnings(c *tc.C) {
 	}
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 	rec := httptest.NewRecorder()
@@ -367,7 +367,7 @@ func (s *daemonSuite) TestFillsWarnings(c *tc.C) {
 		LatestWarning *time.Time `json:"latest-warning"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(rst.LatestWarning, tc.IsNil)
 
 	now := time.Now()
@@ -380,7 +380,7 @@ func (s *daemonSuite) TestFillsWarnings(c *tc.C) {
 	cmd.ServeHTTP(rec, req)
 	c.Check(rec.Code, tc.Equals, 200)
 	err = json.Unmarshal(rec.Body.Bytes(), &rst)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rst.LatestWarning, tc.NotNil)
 	c.Check(rst.LatestWarning.Sub(now) < time.Second, tc.Equals, true)
 }
@@ -411,7 +411,7 @@ func (s *daemonSuite) testAccessChecker(c *tc.C, tests []accessCheckerTestCase, 
 		},
 	})
 	d.state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	responseFunc := func(c *Command, r *http.Request, s *UserState) Response {
 		return SyncResponse(true)
@@ -420,7 +420,7 @@ func (s *daemonSuite) testAccessChecker(c *tc.C, tests []accessCheckerTestCase, 
 	doTestReqFunc := func(cmd *Command, method string) *httptest.ResponseRecorder {
 		ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 		req, err := http.NewRequestWithContext(ctx, method, "", nil)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		req.RemoteAddr = remoteAddr
 		rec := httptest.NewRecorder()
 		cmd.ServeHTTP(rec, req)
@@ -593,7 +593,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *tc.C) {
 	// Admin access for UID 0.
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
@@ -607,7 +607,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *tc.C) {
 	userSeen = nil
 	ctx = context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err = http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid())
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
@@ -621,7 +621,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *tc.C) {
 	userSeen = nil
 	ctx = context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err = http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", os.Getuid()+1)
 	rec = httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
@@ -686,7 +686,7 @@ func (s *daemonSuite) TestStartStop(c *tc.C) {
 	d := s.newDaemon(c)
 
 	l1, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l1, accept: generalAccept}
@@ -706,14 +706,14 @@ func (s *daemonSuite) TestStartStop(c *tc.C) {
 	<-generalDone
 
 	err = d.Stop(nil)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *daemonSuite) TestRestartWiring(c *tc.C) {
 	d := s.newDaemon(c)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
@@ -761,7 +761,7 @@ func (s *daemonSuite) TestGracefulStop(c *tc.C) {
 	})
 
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
@@ -785,11 +785,11 @@ func (s *daemonSuite) TestGracefulStop(c *tc.C) {
 
 	go func() {
 		res, err := http.Get(fmt.Sprintf("http://%s/endp", generalL.Addr()))
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(res.StatusCode, tc.Equals, 200)
 		body, err := io.ReadAll(res.Body)
 		res.Body.Close()
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(string(body), tc.Equals, "OKOK")
 		close(alright)
 	}()
@@ -802,7 +802,7 @@ func (s *daemonSuite) TestGracefulStop(c *tc.C) {
 	<-responding
 	err = d.Stop(nil)
 	doRespond <- false
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	select {
 	case <-alright:
@@ -815,7 +815,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *tc.C) {
 	d := s.newDaemon(c)
 
 	l, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	generalAccept := make(chan struct{})
 	d.generalListener = &witnessAcceptListener{Listener: l, accept: generalAccept}
@@ -895,7 +895,7 @@ func (s *daemonSuite) TestRestartSystemWiring(c *tc.C) {
 	defer st.Unlock()
 	var rebootAt time.Time
 	err = st.Get("daemon-system-restart-at", &rebootAt)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	approxAt := now.Add(time.Minute)
 	c.Check(rebootAt.After(approxAt) || rebootAt.Equal(approxAt), tc.Equals, true)
 }
@@ -917,7 +917,7 @@ func (s *daemonSuite) TestRebootHelper(c *tc.C) {
 
 	for _, t := range tests {
 		err := rebootHandler(t.delay)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(cmd.Calls(), tc.DeepEquals, [][]string{
 			{"shutdown", "-r", t.delayArg, "reboot scheduled to update the system"},
 		})
@@ -928,7 +928,7 @@ func (s *daemonSuite) TestRebootHelper(c *tc.C) {
 
 func makeDaemonListeners(c *tc.C, d *Daemon) {
 	generalL, err := net.Listen("tcp", "127.0.0.1:0")
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	generalAccept := make(chan struct{})
 	generalClosed := make(chan struct{})
@@ -962,7 +962,7 @@ func (s *daemonSuite) TestRestartShutdownWithSigtermInBetween(c *tc.C) {
 	ch <- syscall.SIGTERM
 	// stop will check if we got a sigterm in between (which we did)
 	err := d.Stop(ch)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 // This test tests that when there is a shutdown we close the sigterm
@@ -1001,11 +1001,11 @@ func (s *daemonSuite) TestRestartShutdown(c *tc.C) {
 
 func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *tc.C) {
 	curBootID, err := osutil.BootID()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339))
 	err = os.WriteFile(s.statePath, fakeState, 0600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootRetryWaitTimeout := rebootRetryWaitTimeout
@@ -1027,7 +1027,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *tc.C) {
 	d.state.Lock()
 	err = d.state.Get("daemon-system-restart-tentative", &n)
 	d.state.Unlock()
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(n, tc.Equals, 1)
 
 	c.Assert(d.Start(), tc.IsNil)
@@ -1053,7 +1053,7 @@ func (s *daemonSuite) TestRestartExpectedRebootIsMissing(c *tc.C) {
 func (s *daemonSuite) TestRestartExpectedRebootOK(c *tc.C) {
 	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s"},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, "boot-id-0", time.Now().UTC().Format(time.RFC3339))
 	err := os.WriteFile(s.statePath, fakeState, 0600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
@@ -1073,11 +1073,11 @@ func (s *daemonSuite) TestRestartExpectedRebootOK(c *tc.C) {
 func (s *daemonSuite) TestRestartExpectedRebootGiveUp(c *tc.C) {
 	// we give up trying to restart the system after 3 retry attempts
 	curBootID, err := osutil.BootID()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	fakeState := fmt.Appendf(nil, `{"data":{"patch-level":%d,"patch-sublevel":%d,"some":"data","system-restart-from-boot-id":%q,"daemon-system-restart-at":"%s","daemon-system-restart-tentative":3},"changes":null,"tasks":null,"last-change-id":0,"last-task-id":0,"last-lane-id":0}`, patch.Level, patch.Sublevel, curBootID, time.Now().UTC().Format(time.RFC3339))
 	err = os.WriteFile(s.statePath, fakeState, 0600)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cmd := testutil.FakeCommand(c, "shutdown", "")
 	defer cmd.Restore()
@@ -1169,7 +1169,7 @@ func (s *daemonSuite) TestRestartIntoSocketModePendingChanges(c *tc.C) {
 	}
 	// when the daemon got a pending change it just restarts
 	err := d.Stop(nil)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(d.requestedRestart, tc.Equals, restart.RestartDaemon)
 }
 
@@ -1183,13 +1183,13 @@ services:
 `)
 	d := s.newDaemon(c)
 	err := d.Init()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(d.Start(), tc.IsNil)
 
 	// Start the test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -1288,7 +1288,7 @@ func (s *daemonSuite) TestConnTrackerCanShutdown(c *tc.C) {
 func doTestReq(c *tc.C, cmd *Command, method string) *httptest.ResponseRecorder {
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, method, "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 	rec := httptest.NewRecorder()
 	cmd.ServeHTTP(rec, req)
@@ -1345,13 +1345,13 @@ func (s *daemonSuite) TestHTTPAPI(c *tc.C) {
 	port := d.httpListener.Addr().(*net.TCPAddr).Port
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/health", port), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, err := http.DefaultClient.Do(request)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(response.StatusCode, tc.Equals, http.StatusOK)
 	var m map[string]any
 	err = json.NewDecoder(response.Body).Decode(&m)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(m, tc.DeepEquals, map[string]any{
 		"type":        "sync",
 		"status-code": float64(http.StatusOK),
@@ -1362,13 +1362,13 @@ func (s *daemonSuite) TestHTTPAPI(c *tc.C) {
 	})
 
 	request, err = http.NewRequest("GET", fmt.Sprintf("http://localhost:%d/v1/checks", port), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	response, err = http.DefaultClient.Do(request)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(response.StatusCode, tc.Equals, http.StatusUnauthorized)
 
 	err = d.Stop(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Daemon already stopped, no need to do it again during defer.
 	cleanupServer = false
@@ -1390,13 +1390,13 @@ services:
 `)
 	d := s.newDaemon(c)
 	err := d.Init()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(d.Start(), tc.IsNil)
 
 	// Start the test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -1418,7 +1418,7 @@ services:
 
 	// Stop the daemon (which should shut down the service manager and stop services).
 	err = d.Stop(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Ensure the "stop" change was created, along with its "stop" tasks.
 	d.state.Lock()
@@ -1449,13 +1449,13 @@ services:
 `)
 	d := s.newDaemon(c)
 	err := d.Init()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(d.Start(), tc.IsNil)
 
 	// Start the test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -1467,7 +1467,7 @@ services:
 	// left to stop the service before okayDelay.
 	for range 25 {
 		svcInfo, err := d.overlord.ServiceManager().Services([]string{"test1"})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if len(svcInfo) > 0 && svcInfo[0].Current == servstate.StatusActive {
 			break
 		}
@@ -1477,7 +1477,7 @@ services:
 	// Stop the daemon, which should stop services in starting state. At this point,
 	// it should still be within the okayDelay.
 	err = d.Stop(nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Ensure a "stop" change is created, along with its "stop" tasks.
 	d.state.Lock()
@@ -1599,13 +1599,13 @@ func (s *daemonSuite) TestAPIAccessLevels(c *tc.C) {
 			urlStr,
 			io.NopCloser(strings.NewReader(test.body)),
 		)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		request.RemoteAddr = remoteAddr
 		recorder := httptest.NewRecorder()
 
 		// Get only the path (without the query) to look up the command.
 		requestURL, err := url.Parse(urlStr)
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		cmd := apiCmd(requestURL.Path)
 
 		cmd.ServeHTTP(recorder, request)
@@ -1632,7 +1632,7 @@ func (s *daemonSuite) TestSecurityLoggingAuthzFail(c *tc.C) {
 		"http://_/v1/services",
 		io.NopCloser(strings.NewReader("")),
 	)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	request.RemoteAddr = "pid=100;uid=42;socket=;"
 	recorder := httptest.NewRecorder()
 
@@ -1829,7 +1829,7 @@ func (s *utilsSuite) TestExitOnPanic(c *tc.C) {
 	wrapped := exitOnPanic(normalHandler, &stderr, exit)
 	wrapped.ServeHTTP(recorder, httptest.NewRequest("GET", "/normal", nil))
 	body, err := io.ReadAll(recorder.Result().Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(body), tc.Equals, "/normal")
 	c.Check(stderr.String(), tc.Equals, "")
 	c.Check(exited, tc.Equals, false)
@@ -1844,7 +1844,7 @@ func (s *utilsSuite) TestExitOnPanic(c *tc.C) {
 	wrapped = exitOnPanic(panicHandler, &stderr, exit)
 	wrapped.ServeHTTP(recorder, httptest.NewRequest("GET", "/panic", nil))
 	body, err = io.ReadAll(recorder.Result().Body)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(string(body), tc.Equals, "before")
 	c.Check(stderr.String(), tc.Matches, "(?s)panic: PANIC!.*goroutine.*")
 	c.Check(exited, tc.Equals, true)
@@ -1905,7 +1905,7 @@ func (s *daemonSuite) TestServeHTTPUserStateLocal(c *tc.C) {
 		},
 	})
 	d.state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Capture the UserState passed to the response function.
 	var capturedUser *UserState
@@ -1921,7 +1921,7 @@ func (s *daemonSuite) TestServeHTTPUserStateLocal(c *tc.C) {
 	// Make request with the Local user's UID.
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 
 	rec := httptest.NewRecorder()
@@ -1958,7 +1958,7 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnly(c *tc.C) {
 	// Make request with just a UID (not root, not daemon UID)
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=5000;socket=;"
 
 	rec := httptest.NewRecorder()
@@ -1991,7 +1991,7 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyRoot(c *tc.C) {
 	// Make request as root (UID 0).
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "pid=100;uid=0;socket=;"
 
 	rec := httptest.NewRecorder()
@@ -2025,7 +2025,7 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *tc.C) {
 	daemonUID := uint32(os.Getuid())
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = fmt.Sprintf("pid=100;uid=%d;socket=;", daemonUID)
 
 	rec := httptest.NewRecorder()
@@ -2047,7 +2047,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *tc.C) {
 	// Generate sha512-crypt hash for password "test".
 	crypt := sha512_crypt.New()
 	hashedPassword, err := crypt.Generate([]byte("test"), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
@@ -2058,7 +2058,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *tc.C) {
 		},
 	})
 	d.state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Capture the UserState passed to the response function.
 	var capturedUser *UserState
@@ -2074,7 +2074,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *tc.C) {
 	// Make request with tc.Basic auth credentials over Unix Socket.
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeUnixSocket)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.SetBasicAuth("basicuser", "test")
 	req.RemoteAddr = "pid=100;uid=1000;socket=;"
 
@@ -2096,7 +2096,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *tc.C) {
 	// Generate sha512-crypt hash for password "test".
 	crypt := sha512_crypt.New()
 	hashedPassword, err := crypt.Generate([]byte("test"), nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	identitiesMgr := d.overlord.IdentitiesManager()
 	d.state.Lock()
@@ -2107,7 +2107,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *tc.C) {
 		},
 	})
 	d.state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Capture the UserState passed to the response function.
 	var capturedUser *UserState
@@ -2123,7 +2123,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *tc.C) {
 	// Make request with tc.Basic auth credentials over HTTP (not HTTPS).
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.SetBasicAuth("basicuser", "test")
 	req.RemoteAddr = "192.168.1.100:8888"
 
@@ -2155,7 +2155,7 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 	block, _ := pem.Decode([]byte(certPEM))
 	c.Assert(block, tc.NotNil)
 	cert, err := x509.ParseCertificate(block.Bytes)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Set up a Cert identity.
 	identitiesMgr := d.overlord.IdentitiesManager()
@@ -2167,7 +2167,7 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 		},
 	})
 	d.state.Unlock()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Capture the UserState passed to the response function.
 	var capturedUser *UserState
@@ -2183,7 +2183,7 @@ jwXVTUH4HLpbhK0RAaEPOL4h5jm36CrWTkxzpbdCrIu4NgPLQKJ6Cw==
 	// Make request with mTLS client certificate.
 	ctx := context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS)
 	req, err := http.NewRequestWithContext(ctx, "GET", "", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.RemoteAddr = "192.168.1.100:8443"
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{cert},

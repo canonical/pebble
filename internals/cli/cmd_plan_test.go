@@ -37,7 +37,7 @@ func (s *PebbleSuite) TestGetPlan(c *tc.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"plan"})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Assert(rest, tc.HasLen, 0)
 	c.Assert(s.Stdout(), tc.Equals, `
 services:

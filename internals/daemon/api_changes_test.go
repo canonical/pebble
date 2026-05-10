@@ -60,7 +60,7 @@ func (s *apiSuite) TestStateChangesDefaultToInProgress(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
@@ -69,7 +69,7 @@ func (s *apiSuite) TestStateChangesDefaultToInProgress(c *tc.C) {
 	c.Assert(rsp.Result, tc.HasLen, 1)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*`)
 }
@@ -89,7 +89,7 @@ func (s *apiSuite) TestStateChangesInProgress(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?select=in-progress", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
@@ -98,7 +98,7 @@ func (s *apiSuite) TestStateChangesInProgress(c *tc.C) {
 	c.Assert(rsp.Result, tc.HasLen, 1)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}.*`)
 }
@@ -118,7 +118,7 @@ func (s *apiSuite) TestStateChangesAll(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?select=all", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
@@ -126,7 +126,7 @@ func (s *apiSuite) TestStateChangesAll(c *tc.C) {
 	c.Assert(rsp.Result, tc.HasLen, 2)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}.*`)
 	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"remove","summary":"remove..","status":"Error","tasks":\[{"id":"\w+","kind":"unlink","summary":"1...","status":"Error","log":\["2016-04-21T01:02:03Z ERROR rm failed"],"progress":{"label":"","done":1,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:03Z"}.*],"ready":true,"err":"[^"]+".*`)
@@ -147,7 +147,7 @@ func (s *apiSuite) TestStateChangesReady(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?select=ready", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
@@ -155,7 +155,7 @@ func (s *apiSuite) TestStateChangesReady(c *tc.C) {
 	c.Assert(rsp.Result, tc.HasLen, 1)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"remove","summary":"remove..","status":"Error","tasks":\[{"id":"\w+","kind":"unlink","summary":"1...","status":"Error","log":\["2016-04-21T01:02:03Z ERROR rm failed"],"progress":{"label":"","done":1,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:03Z"}.*],"ready":true,"err":"[^"]+".*`)
 }
@@ -175,7 +175,7 @@ func (s *apiSuite) TestStateChangesForServiceName(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?for=funky-service-name&select=all", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
@@ -188,7 +188,7 @@ func (s *apiSuite) TestStateChangesForServiceName(c *tc.C) {
 	c.Check(res[0].Kind, tc.Equals, `install`)
 
 	_, err = rsp.MarshalJSON()
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 func (s *apiSuite) TestStateChange(c *tc.C) {
@@ -211,7 +211,7 @@ func (s *apiSuite) TestStateChange(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/change/"+ids[0], nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -224,7 +224,7 @@ func (s *apiSuite) TestStateChange(c *tc.C) {
 
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(body["result"], tc.DeepEquals, map[string]any{
 		"id":         ids[0],
 		"kind":       "install",
@@ -284,7 +284,7 @@ func (s *apiSuite) TestStateChangeAbort(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/changes/"+ids[0], buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -300,7 +300,7 @@ func (s *apiSuite) TestStateChangeAbort(c *tc.C) {
 
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(body["result"], tc.DeepEquals, map[string]any{
 		"id":         ids[0],
 		"kind":       "install",
@@ -352,7 +352,7 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *tc.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/changes/"+ids[0], buf)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
@@ -365,7 +365,7 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *tc.C) {
 
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(body["result"], tc.DeepEquals, map[string]any{
 		"message": fmt.Sprintf("cannot abort change %s with nothing pending", ids[0]),
 	})
@@ -374,7 +374,7 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *tc.C) {
 func (s *apiSuite) TestWaitChangeNotFound(c *tc.C) {
 	s.daemon(c)
 	req, err := http.NewRequest("GET", "/v1/changes/x/wait", nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
 	c.Check(rsp.Status, tc.Equals, 404)
 }
@@ -404,7 +404,7 @@ func (s *apiSuite) TestWaitChangeSuccess(c *tc.C) {
 
 	var body map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	result := body["result"].(map[string]any)
 	c.Check(result["id"].(string), tc.Equals, changeID)
 	c.Check(result["kind"].(string), tc.Equals, "exec")
@@ -461,7 +461,7 @@ func (s *apiSuite) testWaitChange(ctx context.Context, c *tc.C, query string, ma
 	// Execute
 	s.vars = map[string]string{"id": change.ID()}
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/changes/"+change.ID()+"/wait"+query, nil)
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)

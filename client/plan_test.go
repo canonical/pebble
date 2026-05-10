@@ -57,7 +57,7 @@ services:
 			Label:     "foo",
 			LayerData: []byte(layerYAML),
 		})
-		c.Assert(err, tc.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		c.Check(cs.req.Method, tc.Equals, "POST")
 		c.Check(cs.req.URL.Path, tc.Equals, "/v1/layers")
 		c.Check(cs.req.URL.Query(), tc.HasLen, 0)
@@ -81,7 +81,7 @@ func (cs *clientSuite) TestPlanBytes(c *tc.C) {
 		"result": "services:\n    foo:\n        override: replace\n        command: cmd\n"
 	}`
 	data, err := cs.cli.PlanBytes(&client.PlanOptions{})
-	c.Assert(err, tc.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	c.Check(cs.req.Method, tc.Equals, "GET")
 	c.Check(cs.req.URL.Path, tc.Equals, "/v1/plan")
 	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{"format": []string{"yaml"}})
