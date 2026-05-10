@@ -85,7 +85,9 @@ func (s *iteratorSuite) TestConcurrentReaders(c *tc.C) {
 				buf := [10]byte{}
 				n, err := it.Read(buf[:])
 				if err != nil && err != io.EOF {
-					c.Fatalf("read did not return nil or io.EOF")
+					c.Log("read did not return nil or io.EOF")
+					c.Fail()
+					return
 				}
 				c.Assert(n, tc.Equals, 10)
 				c.Assert(string(buf[:]), tc.Equals, "123456789\n")

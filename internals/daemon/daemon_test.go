@@ -704,17 +704,11 @@ func (s *daemonSuite) TestStartStop(c *tc.C) {
 
 	c.Assert(d.Start(), tc.IsNil)
 
-	generalDone := make(chan struct{})
-	go func() {
-		select {
-		case <-generalAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("general listener accept was not called")
-		}
-		close(generalDone)
-	}()
-
-	<-generalDone
+	select {
+	case <-generalAccept:
+	case <-time.After(2 * time.Second):
+		c.Fatal("general listener accept was not called")
+	}
 
 	err = d.Stop(nil)
 	c.Assert(err, tc.ErrorIsNil)
@@ -732,17 +726,11 @@ func (s *daemonSuite) TestRestartWiring(c *tc.C) {
 	c.Assert(d.Start(), tc.IsNil)
 	defer d.Stop(nil)
 
-	generalDone := make(chan struct{})
-	go func() {
-		select {
-		case <-generalAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("general accept was not called")
-		}
-		close(generalDone)
-	}()
-
-	<-generalDone
+	select {
+	case <-generalAccept:
+	case <-time.After(2 * time.Second):
+		c.Fatal("general accept was not called")
+	}
 
 	st := d.overlord.State()
 	st.Lock()
@@ -780,17 +768,11 @@ func (s *daemonSuite) TestGracefulStop(c *tc.C) {
 
 	c.Assert(d.Start(), tc.IsNil)
 
-	generalAccepting := make(chan struct{})
-	go func() {
-		select {
-		case <-generalAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("general accept was not called")
-		}
-		close(generalAccepting)
-	}()
-
-	<-generalAccepting
+	select {
+	case <-generalAccept:
+	case <-time.After(2 * time.Second):
+		c.Fatal("general accept was not called")
+	}
 
 	alright := make(chan struct{})
 
@@ -836,17 +818,11 @@ func (s *daemonSuite) TestRestartSystemWiring(c *tc.C) {
 
 	st := d.overlord.State()
 
-	generalDone := make(chan struct{})
-	go func() {
-		select {
-		case <-generalAccept:
-		case <-time.After(2 * time.Second):
-			c.Fatal("general accept was not called")
-		}
-		close(generalDone)
-	}()
-
-	<-generalDone
+	select {
+	case <-generalAccept:
+	case <-time.After(2 * time.Second):
+		c.Fatal("general accept was not called")
+	}
 
 	oldRebootNoticeWait := rebootNoticeWait
 	oldRebootWaitTimeout := rebootWaitTimeout
