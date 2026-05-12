@@ -36,7 +36,7 @@ jobs:
           gocov-xml < coverage.json > .coverage/coverage.xml
 
       - name: TICS GitHub Action
-        uses: tiobe/tics-github-action@a53037a6bb9f71b6a97cdeb0ac41632266804b9e  # 3.8.0
+        uses: tiobe/tics-github-action@3300ccc8de3c938cb83dc940ec4d07096c1bf185  # 3.9.1
         with:
           mode: qserver
           viewerUrl: https://canonical.tiobe.com/tiobeweb/TICS/api/cfg?name=GoProjects
