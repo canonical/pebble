@@ -143,7 +143,6 @@ func New(opts *Options) (*Overlord, error) {
 		extension:   opts.Extension,
 		loopProceed: make(chan struct{}),
 	}
-	o.loopTomb.Go(o.loop)
 
 	if !filepath.IsAbs(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q must be absolute", o.pebbleDir)
@@ -284,6 +283,7 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, fmt.Errorf("cannot load plan: %w", err)
 	}
 
+	o.loopTomb.Go(o.loop)
 	return o, nil
 }
 
