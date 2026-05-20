@@ -21,7 +21,7 @@ import textwrap
 
 # Project name
 # TODO: Update with the official name of your project or product (e.g., "Ubuntu Server")
-project = "Project"
+project = "Pebble"
 
 # Author name; used in the default copyright statement in the page footer
 author = "Canonical Ltd."
@@ -55,26 +55,26 @@ html_context = {
     # TODO: Change to your product website URL, dropping the 'https://' prefix (e.g.,
     #       'ubuntu.com/lxd'). If there's no such website, remove the {{ product_page }}
     #       link from the _templates/header.html file.
-    "product_page": "",
+    "product_page": "github.com/canonical/pebble",
     # Product tag image; the orange part of your logo, shown in the page header
     # TODO: To add a tag image, uncomment and update as needed.
     # 'product_tag': '_static/tag.png',
     # Your Discourse instance URL
     # TODO: Change to your Discourse instance URL or leave empty.
-    "discourse": "",
+    "discourse": "https://discourse.charmhub.io",
     # Your Mattermost channel URL
     # TODO: Change to your Mattermost channel URL or leave empty.
     "mattermost": "",
     # Your Matrix channel URL
     # TODO: Change to your Matrix channel URL or leave empty.
-    "matrix": "",
+    "matrix": "https://matrix.to/#/#charmhub-charmdev:ubuntu.com",
     # Your documentation GitHub repository URL If set, links for viewing the
     # documentation source files and creating GitHub issues are added at the bottom of
     # each page.
     # TODO: Change to your documentation GitHub repository URL or leave empty.
-    "github_url": "",
+    "github_url": "https://github.com/canonical/pebble",
     # Docs branch in the repo; used in links for viewing the source files
-    "repo_default_branch": "main",
+    "repo_default_branch": "master",
     # Docs location in the repo; used in links for viewing the source files
     "repo_folder": "/docs/",
     # TODO: To enable or disable the Previous / Next buttons at the bottom of pages
@@ -91,9 +91,9 @@ html_context = {
         # TODO: Specify your project's license.
         # For the name, we recommend using the standard shorthand identifier from
         # https://spdx.org/licenses
-        "name": "",
+        "name": "GPL-3.0",
         # TODO: Link directly to your project's license statement.
-        "url": "",
+        "url": "https://github.com/canonical/pebble/blob/master/COPYING",
     },
 }
 
@@ -111,7 +111,7 @@ html_context = {
 # Project slug
 # TODO: If your documentation is hosted on https://documentation.ubuntu.com/,
 #       uncomment and set to the RTD slug.
-# slug = ''
+slug = "pebble"
 
 #######################
 # Sitemap configuration: https://sphinx-sitemap.readthedocs.io/
@@ -139,8 +139,9 @@ sitemap_excludes = [
 # Template and asset locations #
 ################################
 
-# html_static_path = ["_static"]
-# templates_path = ["_templates"]
+html_extra_path = ["_extra"]
+html_static_path = ["_static"]
+templates_path = ["_templates"]
 
 #############
 # Redirects #
@@ -152,7 +153,7 @@ sitemap_excludes = [
 # To set up redirects in the Read the Docs project dashboard:
 # https://docs.readthedocs.io/en/stable/guides/redirects.html
 
-rediraffe_redirects = "redirects.txt"
+rediraffe_redirects = {}  # Set to "redirects.txt" to enable client-side redirects.
 
 # Strips '/index.html' from destination URLs when building with 'dirhtml'
 rediraffe_dir_only = True
@@ -168,8 +169,7 @@ rediraffe_dir_only = True
 # <first sentence of home page>".
 llms_txt_description = textwrap.dedent(
     """\
-    This is the documentation for the Sphinx Stack, a template repository that helps you
-    set up, build, and publish Sphinx documentation.
+    This is the documentation for Pebble, a lightweight Linux service manager.
     """
 )
 
@@ -183,16 +183,13 @@ if os.environ.get("READTHEDOCS"):
 
 # A regex list of URLs that are ignored by 'make linkcheck'
 linkcheck_ignore = [
-    "http://127.0.0.1:8000",
-    "https://github.com",
-    r"https://matrix\.to/.*",
-    "https://example.com",
-    # SourceForge domains often block linkcheck
-    r"https://.*\.sourceforge\.(net|io)/.*",
+    "https://www.gnu.org/licenses/gpl-3.0.en.html",  # This link seems flaky.
 ]
 
 # A regex list of URLs where anchors are ignored by 'make linkcheck'
-linkcheck_anchors_ignore_for_url = [r"https://github\.com/.*"]
+linkcheck_anchors_ignore_for_url = [
+    r"https://github\.com/.*"
+]
 
 # How long the link checker will wait for a response for each request
 # TODO: Decrease to improve run time or increase if links frequently time out.
@@ -241,19 +238,19 @@ extensions = [
 
 # Excludes files or directories from processing
 exclude_patterns = [
-    "doc-cheat-sheet*",
     ".venv*",
 ]
 
 # Adds custom CSS files, located remotely or in 'html_static_path'.
-# html_css_files = [
-#     "https://assets.ubuntu.com/v1/d86746ef-cookie_banner.css",
-# ]
+html_css_files = [
+    "https://assets.ubuntu.com/v1/d86746ef-cookie_banner.css",
+    "swagger-override.css",
+]
 
 # Adds custom JavaScript files, located remotely or in 'html_static_path'.
-# html_js_files = [
-#     "https://assets.ubuntu.com/v1/287a5e8f-bundle.js",
-# ]
+html_js_files = [
+    "https://assets.ubuntu.com/v1/287a5e8f-bundle.js",
+]
 
 # Appends extra markup to the end of every document written in reST
 # rst_epilog = """
@@ -276,19 +273,21 @@ exclude_patterns = [
 # Specifies a reST snippet to be prepended to each .rst file
 # This defines a :center: role that centers table cell content.
 # This defines a :h2: role that styles content for use with PDF generation.
-rst_prolog = """
-.. role:: center
-   :class: align-center
-.. role:: h2
-    :class: hclass2
-.. role:: woke-ignore
-    :class: woke-ignore
-.. role:: vale-ignore
-    :class: vale-ignore
-"""
+# rst_prolog = """
+# .. role:: center
+#    :class: align-center
+# .. role:: h2
+#     :class: hclass2
+# .. role:: woke-ignore
+#     :class: woke-ignore
+# .. role:: vale-ignore
+#     :class: vale-ignore
+# """
 
 # Configuration for Intersphinx projects
 #
-# intersphinx_mapping = {
-#     "snap": ("https://snapcraft.io/docs/", None),
-# }
+intersphinx_mapping = {
+    "operator": ("https://documentation.ubuntu.com/ops/latest/", None),
+    "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
+    "rockcraft": ("https://documentation.ubuntu.com/rockcraft/latest/", None),
+}
