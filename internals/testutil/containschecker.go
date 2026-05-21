@@ -19,17 +19,17 @@ import (
 	"reflect"
 	"strings"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type containsChecker struct {
-	*check.CheckerInfo
+	*tc.CheckerInfo
 }
 
 // Contains is a Checker that looks for a elem in a container.
 // The elem can be any object. The container can be an array, slice or string.
-var Contains check.Checker = &containsChecker{
-	&check.CheckerInfo{Name: "Contains", Params: []string{"container", "elem"}},
+var Contains tc.Checker = &containsChecker{
+	&tc.CheckerInfo{Name: "Contains", Params: []string{"container", "elem"}},
 }
 
 func commonEquals(container, elem any, result *bool, error *string) bool {
@@ -107,14 +107,14 @@ func (c *containsChecker) Check(params []any, names []string) (result bool, erro
 }
 
 type deepContainsChecker struct {
-	*check.CheckerInfo
+	*tc.CheckerInfo
 }
 
 // DeepContains is a Checker that looks for a elem in a container using
 // DeepEqual.  The elem can be any object. The container can be an array, slice
 // or string.
-var DeepContains check.Checker = &deepContainsChecker{
-	&check.CheckerInfo{Name: "DeepContains", Params: []string{"container", "elem"}},
+var DeepContains tc.Checker = &deepContainsChecker{
+	&tc.CheckerInfo{Name: "DeepContains", Params: []string{"container", "elem"}},
 }
 
 func (c *deepContainsChecker) Check(params []any, names []string) (result bool, error string) {
@@ -147,14 +147,14 @@ func (c *deepContainsChecker) Check(params []any, names []string) (result bool, 
 }
 
 type deepUnsortedMatchChecker struct {
-	*check.CheckerInfo
+	*tc.CheckerInfo
 }
 
 // DeepUnsortedMatches checks if two containers contain the same elements in
 // the same number (but possibly different order) using DeepEqual. The container
 // can be an array, a slice or a map.
-var DeepUnsortedMatches check.Checker = &deepUnsortedMatchChecker{
-	&check.CheckerInfo{Name: "DeepUnsortedMatches", Params: []string{"container1", "container2"}},
+var DeepUnsortedMatches tc.Checker = &deepUnsortedMatchChecker{
+	&tc.CheckerInfo{Name: "DeepUnsortedMatches", Params: []string{"container1", "container2"}},
 }
 
 func (c *deepUnsortedMatchChecker) Check(params []any, _ []string) (bool, string) {

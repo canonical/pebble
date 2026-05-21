@@ -22,12 +22,12 @@ import (
 	"net/url"
 	"strings"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 )
 
-func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
+func (cs *clientSuite) TestLogsNoOptions(c *tc.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.36Z","service":"thing","message":"log 1\n"}
 {"time":"2021-05-03T03:55:49.654123Z","service":"snappass","message":"log two\n"}
@@ -37,18 +37,18 @@ func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: writeLog,
 	})
-	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "GET")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
-	c.Check(cs.req.URL.Query(), check.HasLen, 0)
-	c.Check(out.String(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cs.req.Method, tc.Equals, "GET")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), tc.HasLen, 0)
+	c.Check(out.String(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
 2021-05-03T03:55:50.076Z [thing] the third
 `[1:])
 }
 
-func (cs *clientSuite) TestLogsServices(c *check.C) {
+func (cs *clientSuite) TestLogsServices(c *tc.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
 `[1:]
@@ -57,18 +57,18 @@ func (cs *clientSuite) TestLogsServices(c *check.C) {
 		WriteLog: writeLog,
 		Services: []string{"snappass"},
 	})
-	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "GET")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
-	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cs.req.Method, tc.Equals, "GET")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
 		"services": []string{"snappass"},
 	})
-	c.Check(out.String(), check.Equals, `
+	c.Check(out.String(), tc.Equals, `
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
-func (cs *clientSuite) TestLogsN(c *check.C) {
+func (cs *clientSuite) TestLogsN(c *tc.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
@@ -78,19 +78,19 @@ func (cs *clientSuite) TestLogsN(c *check.C) {
 		WriteLog: writeLog,
 		N:        2,
 	})
-	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "GET")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
-	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cs.req.Method, tc.Equals, "GET")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
 		"n": []string{"2"},
 	})
-	c.Check(out.String(), check.Equals, `
+	c.Check(out.String(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
-func (cs *clientSuite) TestLogsAll(c *check.C) {
+func (cs *clientSuite) TestLogsAll(c *tc.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
@@ -100,19 +100,19 @@ func (cs *clientSuite) TestLogsAll(c *check.C) {
 		WriteLog: writeLog,
 		N:        -1,
 	})
-	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "GET")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
-	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cs.req.Method, tc.Equals, "GET")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
 		"n": []string{"-1"},
 	})
-	c.Check(out.String(), check.Equals, `
+	c.Check(out.String(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
-func (cs *clientSuite) TestLogsLong(c *check.C) {
+func (cs *clientSuite) TestLogsLong(c *tc.C) {
 	const maxMessageSize = 4 * 1024
 	shortLog1 := `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}`
 	longLog := (`{"time":"2021-05-03T03:55:49.460994155Z","service":"verbose","message":"` +
@@ -124,27 +124,27 @@ func (cs *clientSuite) TestLogsLong(c *check.C) {
 		WriteLog: writeLog,
 		N:        -1,
 	})
-	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "GET")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/logs")
-	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cs.req.Method, tc.Equals, "GET")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/logs")
+	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{
 		"n": []string{"-1"},
 	})
 	shortExpected1 := "2021-05-03T03:55:49.360Z [thing] log 1\n"
 	longExpected := "2021-05-03T03:55:49.460Z [verbose] " + strings.Repeat("a", maxMessageSize) + "\n"
 	shortExpected2 := "2021-05-03T03:55:49.654Z [snappass] log two\n"
 	expected := shortExpected1 + longExpected + shortExpected2
-	c.Check(out.String(), check.Equals, expected)
+	c.Check(out.String(), tc.Equals, expected)
 }
 
-func (cs *clientSuite) TestFollowLogs(c *check.C) {
+func (cs *clientSuite) TestFollowLogs(c *tc.C) {
 	readsChan := make(chan string)
 	cli, err := client.New(nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cli.SetDoer(doerFunc(func(req *http.Request) (*http.Response, error) {
-		c.Check(req.Method, check.Equals, "GET")
-		c.Check(req.URL.Path, check.Equals, "/v1/logs")
-		c.Check(req.URL.Query(), check.DeepEquals, url.Values{
+		c.Check(req.Method, tc.Equals, "GET")
+		c.Check(req.URL.Path, tc.Equals, "/v1/logs")
+		c.Check(req.URL.Query(), tc.DeepEquals, url.Values{
 			"follow": []string{"true"},
 		})
 		rsp := &http.Response{
@@ -165,21 +165,21 @@ func (cs *clientSuite) TestFollowLogs(c *check.C) {
 	err = cli.FollowLogs(context.Background(), &client.LogsOptions{
 		WriteLog: writeLog,
 	})
-	c.Assert(err, check.IsNil)
-	c.Check(out.String(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(out.String(), tc.Equals, `
 2021-05-03T03:55:49.360Z [thing] log 1
 2021-05-03T03:55:49.654Z [snappass] log two
 `[1:])
 }
 
-func (cs *clientSuite) TestLogsWriteLogError(c *check.C) {
+func (cs *clientSuite) TestLogsWriteLogError(c *tc.C) {
 	cs.rsp = `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}` + "\n"
 	err := cs.cli.Logs(&client.LogsOptions{
 		WriteLog: func(entry client.LogEntry) error {
 			return fmt.Errorf("ERROR!")
 		},
 	})
-	c.Assert(err, check.ErrorMatches, "cannot output log: ERROR!")
+	c.Assert(err, tc.ErrorMatches, "cannot output log: ERROR!")
 }
 
 type doerFunc func(*http.Request) (*http.Response, error)

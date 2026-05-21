@@ -22,7 +22,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 // FakeCmd allows faking commands for testing.
@@ -59,7 +59,7 @@ printf '\f\n\r' >> %[1]q
 // non-empty then it is used as is and the caller is responsible for how the
 // script behaves (exit code and any extra behavior). If script is empty then
 // the command exits successfully without any other side-effect.
-func FakeCommand(c *check.C, basename, script string) *FakeCmd {
+func FakeCommand(c *tc.C, basename, script string) *FakeCmd {
 	var wholeScript bytes.Buffer
 	var binDir, exeFile, logFile string
 	if filepath.IsAbs(basename) {

@@ -21,18 +21,21 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
 type noticesSuite struct{}
 
-var _ = Suite(&noticesSuite{})
+func TestNoticesSuite(t *testing.T) {
+	tc.Run(t, &noticesSuite{})
+}
 
-func (s *noticesSuite) TestMarshal(c *C) {
+func (s *noticesSuite) TestMarshal(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -46,26 +49,26 @@ func (s *noticesSuite) TestMarshal(c *C) {
 	})
 
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 
 	// Convert it to a map so we're not testing the JSON string directly
 	// (order of fields doesn't matter).
 	n := noticeToMap(c, notices[0])
 
 	firstOccurred, err := time.Parse(time.RFC3339, n["first-occurred"].(string))
-	c.Assert(err, IsNil)
-	c.Assert(!firstOccurred.Before(start), Equals, true) // firstOccurred >= start
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(!firstOccurred.Before(start), tc.Equals, true) // firstOccurred >= start
 	lastOccurred, err := time.Parse(time.RFC3339, n["last-occurred"].(string))
-	c.Assert(err, IsNil)
-	c.Assert(lastOccurred.After(firstOccurred), Equals, true) // lastOccurred > firstOccurred
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(lastOccurred.After(firstOccurred), tc.Equals, true) // lastOccurred > firstOccurred
 	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, IsNil)
-	c.Assert(lastRepeated.After(firstOccurred), Equals, true) // lastRepeated > firstOccurred
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(lastRepeated.After(firstOccurred), tc.Equals, true) // lastRepeated > firstOccurred
 
 	delete(n, "first-occurred")
 	delete(n, "last-occurred")
 	delete(n, "last-repeated")
-	c.Assert(n, DeepEquals, map[string]any{
+	c.Assert(n, tc.DeepEquals, map[string]any{
 		"id":           "1",
 		"user-id":      1000.0,
 		"type":         "custom",
@@ -76,7 +79,7 @@ func (s *noticesSuite) TestMarshal(c *C) {
 	})
 }
 
-func (s *noticesSuite) TestUnmarshal(c *C) {
+func (s *noticesSuite) TestUnmarshal(c *tc.C) {
 	noticeJSON := []byte(`{
 		"id": "1",
 		"user-id": 1000,
@@ -92,12 +95,12 @@ func (s *noticesSuite) TestUnmarshal(c *C) {
 	}`)
 	var notice *state.Notice
 	err := json.Unmarshal(noticeJSON, &notice)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// The Notice fields aren't exported, so we need to marshal it into JSON
 	// and then unmarshal it into a map to test.
 	n := noticeToMap(c, notice)
-	c.Assert(n, DeepEquals, map[string]any{
+	c.Assert(n, tc.DeepEquals, map[string]any{
 		"id":             "1",
 		"user-id":        1000.0,
 		"type":           "custom",
@@ -112,7 +115,7 @@ func (s *noticesSuite) TestUnmarshal(c *C) {
 	})
 }
 
-func (s *noticesSuite) TestString(c *C) {
+func (s *noticesSuite) TestString(c *tc.C) {
 	noticeJSON := []byte(`{
 		"id": "1",
 		"user-id": 1000,
@@ -125,9 +128,9 @@ func (s *noticesSuite) TestString(c *C) {
 	}`)
 	var notice *state.Notice
 	err := json.Unmarshal(noticeJSON, &notice)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Assert(notice.String(), Equals, "Notice 1 (1000:custom:foo.com/bar)")
+	c.Assert(notice.String(), tc.Equals, "Notice 1 (1000:custom:foo.com/bar)")
 
 	noticeJSON = []byte(`{
 		"id": "2",
@@ -140,12 +143,12 @@ func (s *noticesSuite) TestString(c *C) {
 		"occurrences": 2
 	}`)
 	err = json.Unmarshal(noticeJSON, &notice)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Assert(notice.String(), Equals, "Notice 2 (public:warning:scary)")
+	c.Assert(notice.String(), tc.Equals, "Notice 2 (public:warning:scary)")
 }
 
-func (s *noticesSuite) TestOccurrences(c *C) {
+func (s *noticesSuite) TestOccurrences(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -157,28 +160,28 @@ func (s *noticesSuite) TestOccurrences(c *C) {
 	addNotice(c, st, nil, state.ChangeUpdateNotice, "123", nil)
 
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 2)
+	c.Assert(notices, tc.HasLen, 2)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["id"], Equals, "1")
-	c.Check(n["occurrences"], Equals, 3.0)
+	c.Check(n["id"], tc.Equals, "1")
+	c.Check(n["occurrences"], tc.Equals, 3.0)
 	n = noticeToMap(c, notices[1])
-	c.Check(n["id"], Equals, "2")
-	c.Check(n["occurrences"], Equals, 1.0)
+	c.Check(n["id"], tc.Equals, "2")
+	c.Check(n["occurrences"], tc.Equals, 1.0)
 }
 
-func (s *noticesSuite) TestRepeatAfterFirst(c *C) {
+func (s *noticesSuite) TestRepeatAfterFirst(c *tc.C) {
 	s.testRepeatAfter(c, 10*time.Second, 0, 10*time.Second)
 }
 
-func (s *noticesSuite) TestRepeatAfterSecond(c *C) {
+func (s *noticesSuite) TestRepeatAfterSecond(c *tc.C) {
 	s.testRepeatAfter(c, 0, 10*time.Second, 10*time.Second)
 }
 
-func (s *noticesSuite) TestRepeatAfterBoth(c *C) {
+func (s *noticesSuite) TestRepeatAfterBoth(c *tc.C) {
 	s.testRepeatAfter(c, 10*time.Second, 10*time.Second, 10*time.Second)
 }
 
-func (s *noticesSuite) testRepeatAfter(c *C, first, second, delay time.Duration) {
+func (s *noticesSuite) testRepeatAfter(c *tc.C, first, second, delay time.Duration) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -189,15 +192,15 @@ func (s *noticesSuite) testRepeatAfter(c *C, first, second, delay time.Duration)
 	time.Sleep(time.Microsecond)
 
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
 	firstOccurred, err := time.Parse(time.RFC3339, n["first-occurred"].(string))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// LastRepeated won't yet be updated as we only waited 1us (repeat-after is long)
-	c.Assert(lastRepeated.Equal(firstOccurred), Equals, true)
+	c.Assert(lastRepeated.Equal(firstOccurred), tc.Equals, true)
 
 	// Add a notice (with faked time) after a long time and ensure it has repeated
 	future := time.Now().Add(delay)
@@ -206,14 +209,14 @@ func (s *noticesSuite) testRepeatAfter(c *C, first, second, delay time.Duration)
 		Time:        future,
 	})
 	notices = st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n = noticeToMap(c, notices[0])
 	newLastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, IsNil)
-	c.Assert(newLastRepeated.After(lastRepeated), Equals, true)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(newLastRepeated.After(lastRepeated), tc.Equals, true)
 }
 
-func (s *noticesSuite) TestNoticesFilterUserID(c *C) {
+func (s *noticesSuite) TestNoticesFilterUserID(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -230,30 +233,30 @@ func (s *noticesSuite) TestNoticesFilterUserID(c *C) {
 
 	// No filter
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 4)
+	c.Assert(notices, tc.HasLen, 4)
 
 	// User ID unset
 	notices = st.Notices(&state.NoticeFilter{})
-	c.Assert(notices, HasLen, 4)
+	c.Assert(notices, tc.HasLen, 4)
 
 	// User ID set
 	notices = st.Notices(&state.NoticeFilter{UserID: &uid2})
-	c.Assert(notices, HasLen, 3)
+	c.Assert(notices, tc.HasLen, 3)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, float64(uid2))
-	c.Check(n["type"], Equals, "change-update")
-	c.Check(n["key"], Equals, "123")
+	c.Check(n["user-id"], tc.Equals, float64(uid2))
+	c.Check(n["type"], tc.Equals, "change-update")
+	c.Check(n["key"], tc.Equals, "123")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["user-id"], Equals, float64(uid2))
-	c.Check(n["type"], Equals, "warning")
-	c.Check(n["key"], Equals, "Warning 1!")
+	c.Check(n["user-id"], tc.Equals, float64(uid2))
+	c.Check(n["type"], tc.Equals, "warning")
+	c.Check(n["key"], tc.Equals, "Warning 1!")
 	n = noticeToMap(c, notices[2])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "warning")
-	c.Check(n["key"], Equals, "Warning 2!")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "warning")
+	c.Check(n["key"], tc.Equals, "Warning 2!")
 }
 
-func (s *noticesSuite) TestNoticesFilterType(c *C) {
+func (s *noticesSuite) TestNoticesFilterType(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -268,41 +271,41 @@ func (s *noticesSuite) TestNoticesFilterType(c *C) {
 
 	// No filter
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 4)
+	c.Assert(notices, tc.HasLen, 4)
 
 	// No types
 	notices = st.Notices(&state.NoticeFilter{})
-	c.Assert(notices, HasLen, 4)
+	c.Assert(notices, tc.HasLen, 4)
 
 	// One type
 	notices = st.Notices(&state.NoticeFilter{Types: []state.NoticeType{state.WarningNotice}})
-	c.Assert(notices, HasLen, 2)
+	c.Assert(notices, tc.HasLen, 2)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "warning")
-	c.Check(n["key"], Equals, "Warning 1!")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "warning")
+	c.Check(n["key"], tc.Equals, "Warning 1!")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "warning")
-	c.Check(n["key"], Equals, "Warning 2!")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "warning")
+	c.Check(n["key"], tc.Equals, "Warning 2!")
 
 	// Multiple types
 	notices = st.Notices(&state.NoticeFilter{Types: []state.NoticeType{
 		state.ChangeUpdateNotice,
 		state.CustomNotice,
 	}})
-	c.Assert(notices, HasLen, 2)
+	c.Assert(notices, tc.HasLen, 2)
 	n = noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "foo.com/bar")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "foo.com/bar")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "change-update")
-	c.Check(n["key"], Equals, "123")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "change-update")
+	c.Check(n["key"], tc.Equals, "123")
 }
 
-func (s *noticesSuite) TestNoticesFilterKey(c *C) {
+func (s *noticesSuite) TestNoticesFilterKey(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -315,65 +318,65 @@ func (s *noticesSuite) TestNoticesFilterKey(c *C) {
 
 	// No filter
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 3)
+	c.Assert(notices, tc.HasLen, 3)
 
 	// No keys
 	notices = st.Notices(&state.NoticeFilter{})
-	c.Assert(notices, HasLen, 3)
+	c.Assert(notices, tc.HasLen, 3)
 
 	// One key
 	notices = st.Notices(&state.NoticeFilter{Keys: []string{"example.com/x"}})
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "example.com/x")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "example.com/x")
 
 	// Multiple keys
 	notices = st.Notices(&state.NoticeFilter{Keys: []string{
 		"foo.com/bar",
 		"foo.com/baz",
 	}})
-	c.Assert(notices, HasLen, 2)
+	c.Assert(notices, tc.HasLen, 2)
 	n = noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "foo.com/bar")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "foo.com/bar")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "foo.com/baz")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "foo.com/baz")
 }
 
-func (s *noticesSuite) TestNoticesFilterAfter(c *C) {
+func (s *noticesSuite) TestNoticesFilterAfter(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/x", nil)
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
 	lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	time.Sleep(time.Microsecond)
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/y", nil)
 
-	// After unset
+	// tc.After unset
 	notices = st.Notices(nil)
-	c.Assert(notices, HasLen, 2)
+	c.Assert(notices, tc.HasLen, 2)
 
-	// After set
+	// tc.After set
 	notices = st.Notices(&state.NoticeFilter{After: lastRepeated})
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n = noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "foo.com/y")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "foo.com/y")
 }
 
-func (s *noticesSuite) TestNotice(c *C) {
+func (s *noticesSuite) TestNotice(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -388,56 +391,56 @@ func (s *noticesSuite) TestNotice(c *C) {
 	addNotice(c, st, &uid3, state.CustomNotice, "foo.com/z", nil)
 
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 3)
+	c.Assert(notices, tc.HasLen, 3)
 	n := noticeToMap(c, notices[1])
 	noticeId, ok := n["id"].(string)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, tc.Equals, true)
 
 	notice := st.Notice(noticeId)
-	c.Assert(notice, NotNil)
+	c.Assert(notice, tc.NotNil)
 	n = noticeToMap(c, notice)
-	c.Check(n["user-id"], Equals, 123.0)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "foo.com/y")
+	c.Check(n["user-id"], tc.Equals, 123.0)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "foo.com/y")
 }
 
-func (s *noticesSuite) TestEmptyState(c *C) {
+func (s *noticesSuite) TestEmptyState(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
 	notices := st.Notices(nil)
-	c.Check(notices, HasLen, 0)
+	c.Check(notices, tc.HasLen, 0)
 }
 
-func (s *noticesSuite) TestCheckpoint(c *C) {
+func (s *noticesSuite) TestCheckpoint(c *tc.C) {
 	backend := &fakeStateBackend{}
 	st := state.New(backend)
 	st.Lock()
 	addNotice(c, st, nil, state.CustomNotice, "foo.com/bar", nil)
 	st.Unlock()
-	c.Assert(backend.checkpoints, HasLen, 1)
+	c.Assert(backend.checkpoints, tc.HasLen, 1)
 
 	st2, err := state.ReadState(nil, bytes.NewReader(backend.checkpoints[0]))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st2.Lock()
 	defer st2.Unlock()
 
 	notices := st2.Notices(nil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "foo.com/bar")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "foo.com/bar")
 }
 
-func (s *noticesSuite) TestDeleteExpired(c *C) {
+func (s *noticesSuite) TestDeleteExpired(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
-	c.Assert(st.NumNotices(), Equals, 0)
-	c.Assert(st.LatestWarningTime().IsZero(), Equals, true)
+	c.Assert(st.NumNotices(), tc.Equals, 0)
+	c.Assert(st.LatestWarningTime().IsZero(), tc.Equals, true)
 
 	now := time.Now()
 	old := now.Add(-8 * 24 * time.Hour)
@@ -479,40 +482,40 @@ func (s *noticesSuite) TestDeleteExpired(c *C) {
 		Time: now,
 	})
 
-	c.Check(st.NumNotices(), Equals, 8)
-	c.Check(st.LatestWarningTime().Equal(old), Equals, true)
+	c.Check(st.NumNotices(), tc.Equals, 8)
+	c.Check(st.LatestWarningTime().Equal(old), tc.Equals, true)
 	// Prune everything that has expired by now
 	st.Prune(now, 0, 0, 0, 100)
-	c.Check(st.NumNotices(), Equals, 5)
-	c.Check(st.LatestWarningTime().IsZero(), Equals, true)
+	c.Check(st.NumNotices(), tc.Equals, 5)
+	c.Check(st.LatestWarningTime().IsZero(), tc.Equals, true)
 
 	notices := st.Notices(nil)
-	c.Assert(notices, HasLen, 5)
+	c.Assert(notices, tc.HasLen, 5)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["key"], Equals, "foo.com/six")
+	c.Check(n["key"], tc.Equals, "foo.com/six")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["key"], Equals, "foo.com/six-later")
+	c.Check(n["key"], tc.Equals, "foo.com/six-later")
 	n = noticeToMap(c, notices[2])
-	c.Check(n["key"], Equals, "foo.com/five")
+	c.Check(n["key"], tc.Equals, "foo.com/five")
 	n = noticeToMap(c, notices[3])
-	c.Check(n["key"], Equals, "foo.com/almost-now")
+	c.Check(n["key"], tc.Equals, "foo.com/almost-now")
 	n = noticeToMap(c, notices[4])
-	c.Check(n["key"], Equals, "foo.com/now")
+	c.Check(n["key"], tc.Equals, "foo.com/now")
 
 	// Now we force the prune to be count based, and it should prefer to remove six and six-later
 	// five, almost-now, and now all have occurred more recently
 	st.Prune(now, 0, 0, 0, 3)
 	notices = st.Notices(nil)
-	c.Assert(notices, HasLen, 3)
+	c.Assert(notices, tc.HasLen, 3)
 	n = noticeToMap(c, notices[0])
-	c.Check(n["key"], Equals, "foo.com/five")
+	c.Check(n["key"], tc.Equals, "foo.com/five")
 	n = noticeToMap(c, notices[1])
-	c.Check(n["key"], Equals, "foo.com/almost-now")
+	c.Check(n["key"], tc.Equals, "foo.com/almost-now")
 	n = noticeToMap(c, notices[2])
-	c.Check(n["key"], Equals, "foo.com/now")
+	c.Check(n["key"], tc.Equals, "foo.com/now")
 }
 
-func (s *noticesSuite) TestWaitNoticesExisting(c *C) {
+func (s *noticesSuite) TestWaitNoticesExisting(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -524,15 +527,15 @@ func (s *noticesSuite) TestWaitNoticesExisting(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	notices, err := st.WaitNotices(ctx, &state.NoticeFilter{Keys: []string{"example.com/x"}})
-	c.Assert(err, IsNil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Check(n["user-id"], Equals, nil)
-	c.Check(n["type"], Equals, "custom")
-	c.Check(n["key"], Equals, "example.com/x")
+	c.Check(n["user-id"], tc.Equals, nil)
+	c.Check(n["type"], tc.Equals, "custom")
+	c.Check(n["key"], tc.Equals, "example.com/x")
 }
 
-func (s *noticesSuite) TestWaitNoticesNew(c *C) {
+func (s *noticesSuite) TestWaitNoticesNew(c *tc.C) {
 	st := state.New(nil)
 
 	go func() {
@@ -548,13 +551,13 @@ func (s *noticesSuite) TestWaitNoticesNew(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	notices, err := st.WaitNotices(ctx, &state.NoticeFilter{Keys: []string{"example.com/y"}})
-	c.Assert(err, IsNil)
-	c.Assert(notices, HasLen, 1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(notices, tc.HasLen, 1)
 	n := noticeToMap(c, notices[0])
-	c.Assert(n["key"], Equals, "example.com/y")
+	c.Assert(n["key"], tc.Equals, "example.com/y")
 }
 
-func (s *noticesSuite) TestWaitNoticesTimeout(c *C) {
+func (s *noticesSuite) TestWaitNoticesTimeout(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -562,31 +565,31 @@ func (s *noticesSuite) TestWaitNoticesTimeout(c *C) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	notices, err := st.WaitNotices(ctx, nil)
-	c.Assert(err, ErrorMatches, "context deadline exceeded")
-	c.Assert(notices, HasLen, 0)
+	c.Assert(err, tc.ErrorMatches, "context deadline exceeded")
+	c.Assert(notices, tc.HasLen, 0)
 }
 
-func (s *noticesSuite) TestReadStateWaitNotices(c *C) {
+func (s *noticesSuite) TestReadStateWaitNotices(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
 	marshalled, err := st.MarshalJSON()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2, err := state.ReadState(nil, bytes.NewBuffer(marshalled))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st2.Lock()
 	defer st2.Unlock()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 	notices, err := st2.WaitNotices(ctx, nil)
-	c.Assert(errors.Is(err, context.DeadlineExceeded), Equals, true)
-	c.Assert(notices, HasLen, 0)
+	c.Assert(errors.Is(err, context.DeadlineExceeded), tc.Equals, true)
+	c.Assert(notices, tc.HasLen, 0)
 }
 
-func (s *noticesSuite) TestWaitNoticesLongPoll(c *C) {
+func (s *noticesSuite) TestWaitNoticesLongPoll(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -605,17 +608,17 @@ func (s *noticesSuite) TestWaitNoticesLongPoll(c *C) {
 	var after time.Time
 	for total := 0; total < 10; {
 		notices, err := st.WaitNotices(ctx, &state.NoticeFilter{After: after})
-		c.Assert(err, IsNil)
-		c.Assert(len(notices) > 0, Equals, true)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(len(notices) > 0, tc.Equals, true)
 		total += len(notices)
 		n := noticeToMap(c, notices[len(notices)-1])
 		lastRepeated, err := time.Parse(time.RFC3339, n["last-repeated"].(string))
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		after = lastRepeated
 	}
 }
 
-func (s *noticesSuite) TestWaitNoticesConcurrent(c *C) {
+func (s *noticesSuite) TestWaitNoticesConcurrent(c *tc.C) {
 	const numWaiters = 100
 
 	st := state.New(nil)
@@ -631,10 +634,10 @@ func (s *noticesSuite) TestWaitNoticesConcurrent(c *C) {
 			defer cancel()
 			key := fmt.Sprintf("a.b/%d", i)
 			notices, err := st.WaitNotices(ctx, &state.NoticeFilter{Keys: []string{key}})
-			c.Assert(err, IsNil)
-			c.Assert(notices, HasLen, 1)
+			c.Assert(err, tc.ErrorIsNil)
+			c.Assert(notices, tc.HasLen, 1)
 			n := noticeToMap(c, notices[0])
-			c.Assert(n["key"], Equals, key)
+			c.Assert(n["key"], tc.Equals, key)
 		}(i)
 	}
 
@@ -659,16 +662,16 @@ func (s *noticesSuite) TestWaitNoticesConcurrent(c *C) {
 }
 
 // noticeToMap converts a Notice to a map using a JSON marshal-unmarshal round trip.
-func noticeToMap(c *C, notice *state.Notice) map[string]any {
+func noticeToMap(c *tc.C, notice *state.Notice) map[string]any {
 	buf, err := json.Marshal(notice)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var n map[string]any
 	err = json.Unmarshal(buf, &n)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return n
 }
 
-func addNotice(c *C, st *state.State, userID *uint32, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
+func addNotice(c *tc.C, st *state.State, userID *uint32, noticeType state.NoticeType, key string, options *state.AddNoticeOptions) {
 	_, err := st.AddNotice(userID, noticeType, key, options)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }

@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/servicelog"
@@ -33,13 +33,11 @@ import (
 
 type suite struct{}
 
-var _ = Suite(&suite{})
-
-func Test(t *testing.T) {
-	TestingT(t)
+func TestSuite(t *testing.T) {
+	tc.Run(t, &suite{})
 }
 
-func (*suite) TestRequest(c *C) {
+func (*suite) TestRequest(c *tc.C) {
 	input := []servicelog.Entry{{
 		Time:    time.Date(2023, 12, 31, 12, 34, 50, 0, time.UTC),
 		Service: "svc1",
@@ -107,13 +105,13 @@ func (*suite) TestRequest(c *C) {
 }]}`)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, Equals, http.MethodPost)
-		c.Assert(r.Header.Get("Content-Type"), Equals, "application/json; charset=utf-8")
-		c.Assert(r.Header.Get("User-Agent"), Equals, "pebble/1.23.0")
+		c.Assert(r.Method, tc.Equals, http.MethodPost)
+		c.Assert(r.Header.Get("Content-Type"), tc.Equals, "application/json; charset=utf-8")
+		c.Assert(r.Header.Get("User-Agent"), tc.Equals, "pebble/1.23.0")
 
 		reqBody, err := io.ReadAll(r.Body)
-		c.Assert(err, IsNil)
-		c.Assert(string(reqBody), DeepEquals, string(expected))
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(string(reqBody), tc.DeepEquals, string(expected))
 	}))
 	defer server.Close()
 
@@ -127,14 +125,14 @@ func (*suite) TestRequest(c *C) {
 	client.SetLabels("svc4", map[string]string{})
 	for _, entry := range input {
 		err := client.Add(entry)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	err := client.Flush(context.Background())
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
-func (*suite) TestFlushCancelContext(c *C) {
+func (*suite) TestFlushCancelContext(c *tc.C) {
 	serverCtx, killServer := context.WithCancel(context.Background())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -152,7 +150,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 		Service: "svc1",
 		Message: "this is a log line\n",
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	flushReturned := make(chan struct{})
 	go func() {
@@ -161,7 +159,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 		defer cancel()
 
 		err := client.Flush(ctx)
-		c.Check(err, ErrorMatches, ".*context deadline exceeded.*")
+		c.Check(err, tc.ErrorMatches, ".*context deadline exceeded.*")
 		close(flushReturned)
 	}()
 
@@ -173,7 +171,7 @@ func (*suite) TestFlushCancelContext(c *C) {
 	}
 }
 
-func (*suite) TestServerTimeout(c *C) {
+func (*suite) TestServerTimeout(c *tc.C) {
 	stopRequest := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		<-stopRequest
@@ -190,13 +188,13 @@ func (*suite) TestServerTimeout(c *C) {
 		Service: "svc1",
 		Message: "this is a log line\n",
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = client.Flush(context.Background())
-	c.Assert(err, ErrorMatches, ".*context deadline exceeded.*")
+	c.Assert(err, tc.ErrorMatches, ".*context deadline exceeded.*")
 }
 
-func (*suite) TestBufferFull(c *C) {
+func (*suite) TestBufferFull(c *tc.C) {
 	client := loki.NewClient(&loki.ClientOptions{
 		TargetName:        "tgt1",
 		Location:          "fake",
@@ -205,7 +203,7 @@ func (*suite) TestBufferFull(c *C) {
 
 	addEntry := func(s string) {
 		err := client.Add(servicelog.Entry{Message: s})
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 
 	// Check that the client's buffer is as expected
@@ -218,14 +216,14 @@ func (*suite) TestBufferFull(c *C) {
 		for i := range expected {
 			// 'nil' means c.buffer[i] should be zero
 			if expected[i] == nil {
-				c.Assert(buffer[i], DeepEquals, loki.EntryWithService{},
-					Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
+				c.Assert(buffer[i], tc.DeepEquals, loki.EntryWithService{},
+					tc.Commentf("buffer[%d] should be zero, obtained %v", i, buffer[i]))
 				continue
 			}
 
 			// Otherwise, check buffer message matches string
 			msg := expected[i].(string)
-			c.Assert(loki.GetMessage(buffer[i]), Equals, msg)
+			c.Assert(loki.GetMessage(buffer[i]), tc.Equals, msg)
 		}
 	}
 
@@ -246,14 +244,14 @@ func (*suite) TestBufferFull(c *C) {
 	checkBuffer([]any{"5", "6", "7", nil, nil, nil})
 }
 
-func (*suite) TestLabels(c *C) {
+func (*suite) TestLabels(c *tc.C) {
 	var expected []byte
 
 	received := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := io.ReadAll(r.Body)
-		c.Assert(err, IsNil)
-		c.Assert(string(reqBody), Equals, string(expected))
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(string(reqBody), tc.Equals, string(expected))
 		close(received)
 	}))
 	defer server.Close()
@@ -270,7 +268,7 @@ func (*suite) TestLabels(c *C) {
 		Time:    time.Date(2023, 10, 3, 4, 20, 33, 0, time.UTC),
 		Message: "hello",
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	expected = compactJSON(`
 {"streams": [{
@@ -285,7 +283,7 @@ func (*suite) TestLabels(c *C) {
 }]}`)
 
 	err = client.Flush(context.Background())
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	select {
 	case <-received:
 	case <-time.After(1 * time.Second):

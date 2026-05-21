@@ -19,27 +19,24 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"testing"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/osutil/sys"
-	"github.com/canonical/pebble/internals/testutil"
 )
 
-type userSuite struct {
-	testutil.BaseTest
+type userSuite struct{}
+
+func TestUserSuite(t *testing.T) {
+	tc.Run(t, &userSuite{})
 }
 
-var _ = check.Suite(&userSuite{})
-
-func (s *userSuite) SetUpTest(c *check.C) {
+func (s *userSuite) SetUpTest(c *tc.C) {
 }
 
-func (s *userSuite) TearDownTest(c *check.C) {
-}
-
-func (s *userSuite) TestRealUser(c *check.C) {
+func (s *userSuite) TestRealUser(c *tc.C) {
 	oldUser := os.Getenv("SUDO_USER")
 	defer func() { os.Setenv("SUDO_USER", oldUser) }()
 
@@ -66,12 +63,12 @@ func (s *userSuite) TestRealUser(c *check.C) {
 
 		os.Setenv("SUDO_USER", t.SudoUsername)
 		cur, err := osutil.RealUser()
-		c.Assert(err, check.IsNil)
-		c.Check(cur.Username, check.Equals, t.CurrentUsername)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(cur.Username, tc.Equals, t.CurrentUsername)
 	}
 }
 
-func (s *userSuite) TestUidGid(c *check.C) {
+func (s *userSuite) TestUidGid(c *tc.C) {
 	for k, t := range map[string]struct {
 		User *user.User
 		Uid  sys.UserID
@@ -83,26 +80,26 @@ func (s *userSuite) TestUidGid(c *check.C) {
 		"bad gid": {&user.User{Uid: "10", Gid: "x"}, sys.FlagID, sys.FlagID, "cannot parse group id x"},
 	} {
 		uid, gid, err := osutil.UidGid(t.User)
-		c.Check(uid, check.Equals, t.Uid, check.Commentf(k))
-		c.Check(gid, check.Equals, t.Gid, check.Commentf(k))
+		c.Check(uid, tc.Equals, t.Uid, tc.Commentf(k))
+		c.Check(gid, tc.Equals, t.Gid, tc.Commentf(k))
 		if t.Err == "" {
-			c.Check(err, check.IsNil, check.Commentf(k))
+			c.Assert(err, tc.ErrorIsNil, tc.Commentf(k))
 		} else {
-			c.Check(err, check.ErrorMatches, ".*"+t.Err+".*", check.Commentf(k))
+			c.Check(err, tc.ErrorMatches, ".*"+t.Err+".*", tc.Commentf(k))
 		}
 	}
 }
 
-func (s *userSuite) TestNormalizeUidGid(c *check.C) {
+func (s *userSuite) TestNormalizeUidGid(c *tc.C) {
 	test := func(uid, gid *int, username, group string, expectedUid, expectedGid *int, errMatch string) {
 		uid, gid, err := osutil.NormalizeUidGid(uid, gid, username, group)
 		if err != nil {
-			c.Check(err, check.ErrorMatches, errMatch)
+			c.Check(err, tc.ErrorMatches, errMatch)
 		} else {
-			c.Check(errMatch, check.Equals, "")
+			c.Check(errMatch, tc.Equals, "")
 		}
-		c.Check(uid, check.DeepEquals, expectedUid)
-		c.Check(gid, check.DeepEquals, expectedGid)
+		c.Check(uid, tc.DeepEquals, expectedUid)
+		c.Check(gid, tc.DeepEquals, expectedGid)
 	}
 	ptr := func(n int) *int {
 		return &n
@@ -110,21 +107,21 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 
 	var userErr error
 	restoreUser := osutil.FakeUserLookup(func(name string) (*user.User, error) {
-		c.Check(name, check.Equals, "USER")
+		c.Check(name, tc.Equals, "USER")
 		return &user.User{Uid: "10", Gid: "20"}, userErr
 	})
 	defer restoreUser()
 
 	var userIdErr error
 	restoreUserId := osutil.FakeUserLookupId(func(uid string) (*user.User, error) {
-		c.Check(uid, check.Equals, "10")
+		c.Check(uid, tc.Equals, "10")
 		return &user.User{Uid: "10", Gid: "20"}, userIdErr
 	})
 	defer restoreUserId()
 
 	var groupErr error
 	restoreGroup := osutil.FakeUserLookupGroup(func(name string) (*user.Group, error) {
-		c.Check(name, check.Equals, "GROUP")
+		c.Check(name, tc.Equals, "GROUP")
 		return &user.Group{Gid: "30"}, groupErr
 	})
 	defer restoreGroup()
@@ -155,10 +152,10 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 	test(ptr(1), nil, "", "GROUP", nil, nil, "GROUP ERROR!")
 }
 
-func (s *userSuite) TestIsCurrent(c *check.C) {
+func (s *userSuite) TestIsCurrent(c *tc.C) {
 	isCurrent, err := osutil.IsCurrent(os.Getuid(), os.Getgid())
-	c.Assert(err, check.IsNil)
-	c.Check(isCurrent, check.Equals, true)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(isCurrent, tc.Equals, true)
 
 	// Different uid and gid
 	restore := osutil.FakeUserCurrent(func() (*user.User, error) {
@@ -169,8 +166,8 @@ func (s *userSuite) TestIsCurrent(c *check.C) {
 	})
 	defer restore()
 	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getpid())
-	c.Assert(err, check.IsNil)
-	c.Check(isCurrent, check.Equals, false)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(isCurrent, tc.Equals, false)
 
 	// Different uid only
 	_ = osutil.FakeUserCurrent(func() (*user.User, error) {
@@ -180,8 +177,8 @@ func (s *userSuite) TestIsCurrent(c *check.C) {
 		}, nil
 	})
 	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getpid())
-	c.Assert(err, check.IsNil)
-	c.Check(isCurrent, check.Equals, false)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(isCurrent, tc.Equals, false)
 
 	// Different gid only
 	_ = osutil.FakeUserCurrent(func() (*user.User, error) {
@@ -191,6 +188,6 @@ func (s *userSuite) TestIsCurrent(c *check.C) {
 		}, nil
 	})
 	isCurrent, err = osutil.IsCurrent(os.Getuid(), os.Getgid())
-	c.Assert(err, check.IsNil)
-	c.Check(isCurrent, check.Equals, false)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(isCurrent, tc.Equals, false)
 }

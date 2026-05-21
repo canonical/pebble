@@ -16,34 +16,37 @@ package osutil
 
 import (
 	"fmt"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type outputErrSuite struct{}
 
-var _ = Suite(&outputErrSuite{})
+func TestOutputErrSuite(t *testing.T) {
+	tc.Run(t, &outputErrSuite{})
+}
 
-func (ts *outputErrSuite) TestOutputErrOutputWithoutNewlines(c *C) {
+func (ts *outputErrSuite) TestOutputErrOutputWithoutNewlines(c *tc.C) {
 	output := "test output"
 	err := fmt.Errorf("test error")
 	formattedErr := OutputErr([]byte(output), err)
-	c.Check(formattedErr, ErrorMatches, output)
+	c.Check(formattedErr, tc.ErrorMatches, output)
 }
 
-func (ts *outputErrSuite) TestOutputErrOutputWithNewlines(c *C) {
+func (ts *outputErrSuite) TestOutputErrOutputWithNewlines(c *tc.C) {
 	output := "output line1\noutput line2"
 	err := fmt.Errorf("test error")
 	formattedErr := OutputErr([]byte(output), err)
-	c.Check(formattedErr.Error(), Equals, `
+	c.Check(formattedErr.Error(), tc.Equals, `
 -----
 output line1
 output line2
 -----`)
 }
 
-func (ts *outputErrSuite) TestOutputErrNoOutput(c *C) {
+func (ts *outputErrSuite) TestOutputErrNoOutput(c *tc.C) {
 	err := fmt.Errorf("test error")
 	formattedErr := OutputErr([]byte{}, err)
-	c.Check(formattedErr, Equals, err)
+	c.Check(formattedErr, tc.Equals, err)
 }

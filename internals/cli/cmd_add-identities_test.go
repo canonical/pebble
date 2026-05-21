@@ -22,13 +22,13 @@ import (
 	"os"
 	"path/filepath"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestAddIdentitiesSingle(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestAddIdentitiesSingle(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "add", map[string]any{
 			"bob": map[string]any{
 				"access": "admin",
@@ -52,17 +52,17 @@ identities:
         local: {user-id: 42}
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"add-identities", "--from", path})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Added 1 new identity.\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Added 1 new identity.\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestAddIdentitiesMultiple(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestAddIdentitiesMultiple(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		s.checkPostIdentities(c, r, "add", map[string]any{
 			"bob": map[string]any{
 				"access": "admin",
@@ -95,25 +95,25 @@ identities:
         local: {user-id: 1000}
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"add-identities", "--from", path})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "Added 2 new identities.\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Added 2 new identities.\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestAddIdentitiesUnmarshalError(c *C) {
+func (s *PebbleSuite) TestAddIdentitiesUnmarshalError(c *tc.C) {
 	path := filepath.Join(c.MkDir(), "identities.yaml")
 	err := os.WriteFile(path, []byte("}not yaml{"), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, err = cli.ParserForTest().ParseArgs([]string{"add-identities", "--from", path})
-	c.Assert(err, ErrorMatches, `cannot unmarshal identities: .*`)
+	c.Assert(err, tc.ErrorMatches, `cannot unmarshal identities: .*`)
 }
 
-func (s *PebbleSuite) TestAddIdentitiesNoIdentities(c *C) {
+func (s *PebbleSuite) TestAddIdentitiesNoIdentities(c *tc.C) {
 	path := filepath.Join(c.MkDir(), "identities.yaml")
 	data := `
 bob:
@@ -121,21 +121,21 @@ bob:
     local: {user-id: 42}
 `
 	err := os.WriteFile(path, []byte(data), 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	_, err = cli.ParserForTest().ParseArgs([]string{"add-identities", "--from", path})
-	c.Assert(err, ErrorMatches, `no identities to add.*`)
+	c.Assert(err, tc.ErrorMatches, `no identities to add.*`)
 }
 
-func (s *PebbleSuite) checkPostIdentities(c *C, r *http.Request, action string, identities map[string]any) {
-	c.Check(r.Method, Equals, "POST")
-	c.Check(r.URL.Path, Equals, "/v1/identities")
+func (s *PebbleSuite) checkPostIdentities(c *tc.C, r *http.Request, action string, identities map[string]any) {
+	c.Check(r.Method, tc.Equals, "POST")
+	c.Check(r.URL.Path, tc.Equals, "/v1/identities")
 	body, err := io.ReadAll(r.Body)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var m map[string]any
 	err = json.Unmarshal(body, &m)
-	c.Assert(err, IsNil)
-	c.Check(m, DeepEquals, map[string]any{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(m, tc.DeepEquals, map[string]any{
 		"action":     action,
 		"identities": identities,
 	})

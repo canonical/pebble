@@ -18,12 +18,12 @@ import (
 	"encoding/json"
 	"net/url"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 )
 
-func (cs *clientSuite) TestChecksGet(c *check.C) {
+func (cs *clientSuite) TestChecksGet(c *tc.C) {
 	cs.rsp = `{
 		"result": [
 			{"name": "chk1", "status": "up"},
@@ -40,8 +40,8 @@ func (cs *clientSuite) TestChecksGet(c *check.C) {
 		Names: []string{"chk1", "chk3", "chk5"},
 	}
 	checks, err := cs.cli.Checks(&opts)
-	c.Assert(err, check.IsNil)
-	c.Assert(checks, check.DeepEquals,
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(checks, tc.DeepEquals,
 		[]*client.CheckInfo{{
 			Name:   "chk1",
 			Status: client.CheckStatusUp,
@@ -53,15 +53,15 @@ func (cs *clientSuite) TestChecksGet(c *check.C) {
 			Name:   "chk5",
 			Status: client.CheckStatusInactive,
 		}})
-	c.Assert(cs.req.Method, check.Equals, "GET")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks")
-	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{
+	c.Assert(cs.req.Method, tc.Equals, "GET")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/checks")
+	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{
 		"level": {"alive"},
 		"names": {"chk1", "chk3", "chk5"},
 	})
 }
 
-func (cs *clientSuite) TestStartChecks(c *check.C) {
+func (cs *clientSuite) TestStartChecks(c *tc.C) {
 	cs.rsp = `{
 		"result": {"changed": ["chk1", "chk2"]},
 		"status": "OK",
@@ -73,20 +73,20 @@ func (cs *clientSuite) TestStartChecks(c *check.C) {
 		Names: []string{"chk1", "chk2"},
 	}
 	results, err := cs.cli.StartChecks(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(results.Changed, check.DeepEquals, []string{"chk1", "chk2"})
-	c.Assert(cs.req.Method, check.Equals, "POST")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(results.Changed, tc.DeepEquals, []string{"chk1", "chk2"})
+	c.Assert(cs.req.Method, tc.Equals, "POST")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/checks")
 
 	var body map[string]any
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
-	c.Check(body["action"], check.Equals, "start")
-	c.Check(body["checks"], check.DeepEquals, []any{"chk1", "chk2"})
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+	c.Check(body, tc.HasLen, 2)
+	c.Check(body["action"], tc.Equals, "start")
+	c.Check(body["checks"], tc.DeepEquals, []any{"chk1", "chk2"})
 
 }
 
-func (cs *clientSuite) TestStopChecks(c *check.C) {
+func (cs *clientSuite) TestStopChecks(c *tc.C) {
 	cs.rsp = `{
 		"result": {"changed": ["chk1"]},
 		"status": "OK",
@@ -98,19 +98,19 @@ func (cs *clientSuite) TestStopChecks(c *check.C) {
 		Names: []string{"chk1", "chk2"},
 	}
 	results, err := cs.cli.StopChecks(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(results.Changed, check.DeepEquals, []string{"chk1"})
-	c.Assert(cs.req.Method, check.Equals, "POST")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(results.Changed, tc.DeepEquals, []string{"chk1"})
+	c.Assert(cs.req.Method, tc.Equals, "POST")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/checks")
 
 	var body map[string]any
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
-	c.Check(body["action"], check.Equals, "stop")
-	c.Check(body["checks"], check.DeepEquals, []any{"chk1", "chk2"})
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+	c.Check(body, tc.HasLen, 2)
+	c.Check(body["action"], tc.Equals, "stop")
+	c.Check(body["checks"], tc.DeepEquals, []any{"chk1", "chk2"})
 }
 
-func (cs *clientSuite) TestRefreshCheck(c *check.C) {
+func (cs *clientSuite) TestRefreshCheck(c *tc.C) {
 	cs.rsp = `{
 		"result": {
 			"info": {
@@ -131,8 +131,8 @@ func (cs *clientSuite) TestRefreshCheck(c *check.C) {
 		Name: "chk1",
 	}
 	results, err := cs.cli.RefreshCheck(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(results.Info, check.DeepEquals, client.CheckInfo{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(results.Info, tc.DeepEquals, client.CheckInfo{
 		Name:      "chk1",
 		Startup:   "enabled",
 		Status:    "up",
@@ -140,16 +140,16 @@ func (cs *clientSuite) TestRefreshCheck(c *check.C) {
 		Threshold: 3,
 		ChangeID:  "42",
 	})
-	c.Check(results.Error, check.Equals, "")
-	c.Assert(cs.req.Method, check.Equals, "POST")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks/refresh")
+	c.Check(results.Error, tc.Equals, "")
+	c.Assert(cs.req.Method, tc.Equals, "POST")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/checks/refresh")
 	var body map[string]any
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 1)
-	c.Check(body["name"], check.Equals, "chk1")
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+	c.Check(body, tc.HasLen, 1)
+	c.Check(body["name"], tc.Equals, "chk1")
 }
 
-func (cs *clientSuite) TestRefreshCheckError(c *check.C) {
+func (cs *clientSuite) TestRefreshCheckError(c *tc.C) {
 	cs.rsp = `{
 		"result": {
 			"info": {
@@ -171,8 +171,8 @@ func (cs *clientSuite) TestRefreshCheckError(c *check.C) {
 		Name: "chk1",
 	}
 	results, err := cs.cli.RefreshCheck(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(results.Info, check.DeepEquals, client.CheckInfo{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(results.Info, tc.DeepEquals, client.CheckInfo{
 		Name:      "chk1",
 		Startup:   "enabled",
 		Status:    "up",
@@ -180,7 +180,7 @@ func (cs *clientSuite) TestRefreshCheckError(c *check.C) {
 		Threshold: 3,
 		ChangeID:  "42",
 	})
-	c.Check(results.Error, check.Equals, "some error")
-	c.Assert(cs.req.Method, check.Equals, "POST")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/checks/refresh")
+	c.Check(results.Error, tc.Equals, "some error")
+	c.Assert(cs.req.Method, tc.Equals, "POST")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/checks/refresh")
 }

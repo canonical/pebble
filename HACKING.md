@@ -116,14 +116,11 @@ Pebble imports should be arranged in three groups:
 
 Imports should be sorted alphabetically within each group.
 
-We use the [`gopkg.in/check.v1`](https://pkg.go.dev/gopkg.in/check.v1) package for testing. Inside a test file, import this as follows:
+We use the [`github.com/canonical/tc`](https://pkg.go.dev/github.com/canonical/tc) package for testing. Inside a test file, import it as:
 
 ```go
-. "gopkg.in/check.v1"
+"github.com/canonical/tc"
 ```
-
-so that identifiers from that package will be added to the local namespace.
-
 
 Here is an example of correctly arranged imports:
 
@@ -133,8 +130,8 @@ import (
 	"net"
 	"os"
 
+	"github.com/canonical/tc"
 	"github.com/gorilla/mux"
-	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/systemd"
 	"github.com/canonical/pebble/internals/testutil"
@@ -175,25 +172,19 @@ $ go test ./cmd/pebble
 ok      github.com/canonical/pebble/cmd/pebble  0.115s
 ```
 
-To run a single suite or a single test, pass the suite or test name to the [gocheck](https://labix.org/gocheck) test runner:
+To run a single suite or a single test, use the `-run` flag with the Go test runner:
 
 ```
-$ go test ./cmd/pebble -v -check.v -check.f PebbleSuite
-=== RUN   Test
-PASS: cmd_add_test.go:38: PebbleSuite.TestAdd   0.002s
-PASS: format_test.go:52: PebbleSuite.TestCanUnicode 0.000s
-...
-PASS: cmd_version_test.go:26: PebbleSuite.TestVersionCommand    0.000s
-OK: 20 passed
---- PASS: Test (0.02s)
+$ go test ./cmd/pebble -v -run TestPebbleSuite
+=== RUN   TestPebbleSuite
+--- PASS: TestPebbleSuite (0.02s)
 PASS
 ok      github.com/canonical/pebble/cmd/pebble  0.022s
 
-$ go test ./cmd/pebble -v -check.v -check.f PebbleSuite.TestAdd
-=== RUN   Test
-PASS: cmd_add_test.go:38: PebbleSuite.TestAdd   0.002s
-OK: 1 passed
---- PASS: Test (0.00s)
+$ go test ./cmd/pebble -v -run TestPebbleSuite/TestAdd
+=== RUN   TestPebbleSuite
+    --- PASS: TestPebbleSuite/TestAdd (0.002s)
+--- PASS: TestPebbleSuite (0.00s)
 PASS
 ok      github.com/canonical/pebble/cmd/pebble  0.007s
 ```

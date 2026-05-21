@@ -19,15 +19,15 @@ import (
 	"net/http"
 	"net/url"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestChecks(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+func (s *PebbleSuite) TestChecks(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
 		switch r.URL.Path {
 		case "/v1/checks":
 			fmt.Fprint(w, `
@@ -87,9 +87,9 @@ func (s *PebbleSuite) TestChecks(c *check.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup   Status    Successes  Failures  Change
 chk1   -      enabled   up        5          0/3       1
 chk2   -      enabled   down      6          1/1       2 (second)
@@ -98,14 +98,14 @@ chk4   -      enabled   down      0          6/2       4 (Get "http://localhost:
 chk5   -      enabled   down      ?          3/2       5 (error with some\nline breaks\nin it\n)
 chk6   -      disabled  inactive  -          -         -
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPlanNoChecks(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+func (s *PebbleSuite) TestPlanNoChecks(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -113,17 +113,17 @@ func (s *PebbleSuite) TestPlanNoChecks(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "Plan has no health checks.\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "Plan has no health checks.\n")
 }
 
-func (s *PebbleSuite) TestNoMatchingChecks(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"level": {"alive"}, "names": {"chk1", "chk3"}})
+func (s *PebbleSuite) TestNoMatchingChecks(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"level": {"alive"}, "names": {"chk1", "chk3"}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -131,17 +131,17 @@ func (s *PebbleSuite) TestNoMatchingChecks(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "No matching health checks.\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "No matching health checks.\n")
 }
 
-func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"level": {"alive"}, "names": {"chk1", "chk3"}})
+func (s *PebbleSuite) TestChecksFiltering(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"level": {"alive"}, "names": {"chk1", "chk3"}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -152,36 +152,36 @@ func (s *PebbleSuite) TestChecksFiltering(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--level=alive", "chk1", "chk3"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup  Status  Successes  Failures  Change
 chk1   -      enabled  up      15         0/3       -
 chk3   alive  enabled  down    16         42/3      -
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChecksFails(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+func (s *PebbleSuite) TestChecksFails(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
     "type": "error",
     "result": {"message": "could not bar"}
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, check.ErrorMatches, "could not bar")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not bar")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChecksPrevChangeLog(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
+func (s *PebbleSuite) TestChecksPrevChangeLog(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
 		switch r.URL.Path {
 		case "/v1/checks":
 			fmt.Fprint(w, `{
@@ -204,18 +204,18 @@ func (s *PebbleSuite) TestChecksPrevChangeLog(c *check.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup  Status  Successes  Failures  Change
 chk1   -      enabled  down    0          3/3       2 (connection refused)
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChecksPrevChangeLogTruncated(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
+func (s *PebbleSuite) TestChecksPrevChangeLogTruncated(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
 		switch r.URL.Path {
 		case "/v1/checks":
 			fmt.Fprint(w, `{
@@ -238,20 +238,20 @@ func (s *PebbleSuite) TestChecksPrevChangeLogTruncated(c *check.C) {
 		}
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 Check  Level  Startup  Status  Successes  Failures  Change
 chk1   -      enabled  down    0          3/3       2 (Get "http://localhost:8000/": dial tc... run "pebble tasks 1" for more)
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChecksJSON(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+func (s *PebbleSuite) TestChecksJSON(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -263,17 +263,17 @@ func (s *PebbleSuite) TestChecksJSON(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"checks":{"chk1":{"name":"chk1","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1"},"chk2":{"name":"chk2","level":"alive","startup":"enabled","status":"down","failures":1,"threshold":1,"change-id":"2"}}}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"checks":{"chk1":{"name":"chk1","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1"},"chk2":{"name":"chk2","level":"alive","startup":"enabled","status":"down","failures":1,"threshold":1,"change-id":"2"}}}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChecksYAML(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{})
+func (s *PebbleSuite) TestChecksYAML(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -284,9 +284,9 @@ func (s *PebbleSuite) TestChecksYAML(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 checks:
     chk1:
         name: chk1
@@ -297,38 +297,38 @@ checks:
         threshold: 3
         change-id: "1"
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoChecksJSON(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+func (s *PebbleSuite) TestNoChecksJSON(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		fmt.Fprint(w, `{"type": "sync", "status-code": 200, "result": []}`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"checks":{}}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"checks":{}}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoChecksYAML(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/checks")
+func (s *PebbleSuite) TestNoChecksYAML(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/checks")
 		fmt.Fprint(w, `{"type": "sync", "status-code": 200, "result": []}`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "checks: {}\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "checks: {}\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChecksInvalidFormat(c *check.C) {
+func (s *PebbleSuite) TestChecksInvalidFormat(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"checks", "--format", "foobar"})
-	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+	c.Assert(err, tc.ErrorMatches, "Invalid value.*for option.*--format.*")
 }

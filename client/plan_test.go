@@ -18,12 +18,12 @@ import (
 	"encoding/json"
 	"net/url"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 )
 
-func (cs *clientSuite) TestAddLayer(c *check.C) {
+func (cs *clientSuite) TestAddLayer(c *tc.C) {
 	for _, option := range []struct {
 		combine bool
 		inner   bool
@@ -57,13 +57,13 @@ services:
 			Label:     "foo",
 			LayerData: []byte(layerYAML),
 		})
-		c.Assert(err, check.IsNil)
-		c.Check(cs.req.Method, check.Equals, "POST")
-		c.Check(cs.req.URL.Path, check.Equals, "/v1/layers")
-		c.Check(cs.req.URL.Query(), check.HasLen, 0)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(cs.req.Method, tc.Equals, "POST")
+		c.Check(cs.req.URL.Path, tc.Equals, "/v1/layers")
+		c.Check(cs.req.URL.Query(), tc.HasLen, 0)
 		var body map[string]any
-		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-		c.Assert(body, check.DeepEquals, map[string]any{
+		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+		c.Assert(body, tc.DeepEquals, map[string]any{
 			"action":  "add",
 			"combine": option.combine,
 			"label":   "foo",
@@ -74,18 +74,18 @@ services:
 	}
 }
 
-func (cs *clientSuite) TestPlanBytes(c *check.C) {
+func (cs *clientSuite) TestPlanBytes(c *tc.C) {
 	cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
 		"result": "services:\n    foo:\n        override: replace\n        command: cmd\n"
 	}`
 	data, err := cs.cli.PlanBytes(&client.PlanOptions{})
-	c.Assert(err, check.IsNil)
-	c.Check(cs.req.Method, check.Equals, "GET")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/plan")
-	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"format": []string{"yaml"}})
-	c.Assert(string(data), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cs.req.Method, tc.Equals, "GET")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/plan")
+	c.Check(cs.req.URL.Query(), tc.DeepEquals, url.Values{"format": []string{"yaml"}})
+	c.Assert(string(data), tc.Equals, `
 services:
     foo:
         override: replace

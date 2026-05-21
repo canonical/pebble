@@ -19,16 +19,16 @@ import (
 	"net/http"
 	"net/url"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestServices(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+func (s *PebbleSuite) TestServices(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -40,22 +40,22 @@ func (s *PebbleSuite) TestServices(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 Service  Startup  Current   Since
 svc1     enabled  inactive  2022-04-28
 svc2     enabled  inactive  -
 svc3     enabled  backoff   -
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPlanNoServices(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+func (s *PebbleSuite) TestPlanNoServices(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -63,17 +63,17 @@ func (s *PebbleSuite) TestPlanNoServices(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "Plan has no services.\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "Plan has no services.\n")
 }
 
-func (s *PebbleSuite) TestPlanNoServicesJSON(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+func (s *PebbleSuite) TestPlanNoServicesJSON(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -81,17 +81,17 @@ func (s *PebbleSuite) TestPlanNoServicesJSON(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"services":{}}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"services":{}}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPlanNoServicesYAML(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+func (s *PebbleSuite) TestPlanNoServicesYAML(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -99,17 +99,17 @@ func (s *PebbleSuite) TestPlanNoServicesYAML(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "services: {}\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "services: {}\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoMatchingServices(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {"foo,bar"}})
+func (s *PebbleSuite) TestNoMatchingServices(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"foo,bar"}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -117,17 +117,17 @@ func (s *PebbleSuite) TestNoMatchingServices(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "foo", "bar"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "No matching services.\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "No matching services.\n")
 }
 
-func (s *PebbleSuite) TestServicesNames(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {"foo,bar"}})
+func (s *PebbleSuite) TestServicesNames(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {"foo,bar"}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -138,21 +138,21 @@ func (s *PebbleSuite) TestServicesNames(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "foo", "bar", "--abs-time"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 Service  Startup   Current   Since
 bar      disabled  active    2022-04-28T17:05:23+12:00
 foo      enabled   inactive  -
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestServicesJSON(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+func (s *PebbleSuite) TestServicesJSON(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -164,17 +164,17 @@ func (s *PebbleSuite) TestServicesJSON(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"services":{"svc1":{"name":"svc1","startup":"enabled","current":"inactive","current-since":"2022-04-28T17:05:23+12:00"},"svc2":{"name":"svc2","startup":"enabled","current":"inactive"},"svc3":{"name":"svc3","startup":"enabled","current":"backoff"}}}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"services":{"svc1":{"name":"svc1","startup":"enabled","current":"inactive","current-since":"2022-04-28T17:05:23+12:00"},"svc2":{"name":"svc2","startup":"enabled","current":"inactive"},"svc3":{"name":"svc3","startup":"enabled","current":"backoff"}}}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestServicesYAML(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+func (s *PebbleSuite) TestServicesYAML(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
 		fmt.Fprint(w, `{
     "type": "sync",
     "status-code": 200,
@@ -186,9 +186,9 @@ func (s *PebbleSuite) TestServicesYAML(c *check.C) {
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 services:
     svc1:
         name: svc1
@@ -204,27 +204,27 @@ services:
         startup: enabled
         current: backoff
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestServicesInvalidFormat(c *check.C) {
+func (s *PebbleSuite) TestServicesInvalidFormat(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "foobar"})
-	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+	c.Assert(err, tc.ErrorMatches, "Invalid value.*for option.*--format.*")
 }
 
-func (s *PebbleSuite) TestServicesFail(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/services")
-		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+func (s *PebbleSuite) TestServicesFail(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), tc.DeepEquals, url.Values{"names": {""}})
 		fmt.Fprint(w, `{
     "type": "error",
     "result": {"message": "could not foo"}
 }`)
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services"})
-	c.Assert(err, check.ErrorMatches, "could not foo")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not foo")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

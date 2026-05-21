@@ -17,8 +17,9 @@ package servicelog
 import (
 	"bytes"
 	"fmt"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 const (
@@ -27,9 +28,11 @@ const (
 
 type formatterSuite struct{}
 
-var _ = Suite(&formatterSuite{})
+func TestFormatterSuite(t *testing.T) {
+	tc.Run(t, &formatterSuite{})
+}
 
-func (s *formatterSuite) TestFormat(c *C) {
+func (s *formatterSuite) TestFormat(c *tc.C) {
 	b := &bytes.Buffer{}
 	w := NewFormatWriter(b, "test")
 
@@ -37,20 +40,20 @@ func (s *formatterSuite) TestFormat(c *C) {
 	fmt.Fprintln(w, "second")
 	fmt.Fprintln(w, "third")
 
-	c.Assert(b.String(), Matches, fmt.Sprintf(`
+	c.Assert(b.String(), tc.Matches, fmt.Sprintf(`
 %[1]s \[test\] first
 %[1]s \[test\] second
 %[1]s \[test\] third
 `[1:], timeFormatRegex))
 }
 
-func (s *formatterSuite) TestFormatSingleWrite(c *C) {
+func (s *formatterSuite) TestFormatSingleWrite(c *tc.C) {
 	b := &bytes.Buffer{}
 	w := NewFormatWriter(b, "test")
 
 	fmt.Fprintf(w, "first\nsecond\nthird\n")
 
-	c.Assert(b.String(), Matches, fmt.Sprintf(`
+	c.Assert(b.String(), tc.Matches, fmt.Sprintf(`
 %[1]s \[test\] first
 %[1]s \[test\] second
 %[1]s \[test\] third

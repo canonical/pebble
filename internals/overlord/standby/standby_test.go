@@ -1,6 +1,6 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 /*
- * Copyright (C) 2018 Canonical Ltd
+ * Copyright (tc.C) 2018 Canonical Ltd
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 3 as
@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate/servstatetest"
@@ -29,59 +29,63 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-// Hook up v1 into the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
-
 type standbySuite struct {
 	state *state.State
 
 	canStandby bool
 }
 
-var _ = Suite(&standbySuite{})
-
-func (s *standbySuite) SetUpTest(c *C) {
-	s.state = state.New(nil)
+func TestStandbySuite(t *testing.T) {
+	tc.Run(t, &standbySuite{})
 }
 
-func (s *standbySuite) TestCanStandbyNoChanges(c *C) {
+func (s *standbySuite) SetUpTest(c *tc.C) {
+	s.state = state.New(nil)
+
+	c.Cleanup(func() {
+		s.state = nil
+		s.canStandby = false
+	})
+}
+
+func (s *standbySuite) TestCanStandbyNoChanges(c *tc.C) {
 	m := standby.New(s.state)
-	c.Check(m.CanStandby(), Equals, false)
+	c.Check(m.CanStandby(), tc.Equals, false)
 
 	m.SetStartTime(time.Time{})
-	c.Check(m.CanStandby(), Equals, true)
+	c.Check(m.CanStandby(), tc.Equals, true)
 }
 
-func (s *standbySuite) TestCanStandbyPendingChanges(c *C) {
+func (s *standbySuite) TestCanStandbyPendingChanges(c *tc.C) {
 	st := s.state
 	st.Lock()
 	chg := st.NewChange("foo", "fake change")
 	chg.AddTask(st.NewTask("bar", "fake task"))
-	c.Assert(chg.Status(), Equals, state.DoStatus)
+	c.Assert(chg.Status(), tc.Equals, state.DoStatus)
 	st.Unlock()
 
 	m := standby.New(s.state)
 	m.SetStartTime(time.Time{})
-	c.Check(m.CanStandby(), Equals, false)
+	c.Check(m.CanStandby(), tc.Equals, false)
 }
 
-func (s *standbySuite) TestCanStandbyPendingClean(c *C) {
+func (s *standbySuite) TestCanStandbyPendingClean(c *tc.C) {
 	st := s.state
 	st.Lock()
 	t := st.NewTask("bar", "fake task")
 	chg := st.NewChange("foo", "fake change")
 	chg.AddTask(t)
 	t.SetStatus(state.DoneStatus)
-	c.Assert(chg.Status(), Equals, state.DoneStatus)
-	c.Assert(t.IsClean(), Equals, false)
+	c.Assert(chg.Status(), tc.Equals, state.DoneStatus)
+	c.Assert(t.IsClean(), tc.Equals, false)
 	st.Unlock()
 
 	m := standby.New(s.state)
 	m.SetStartTime(time.Time{})
-	c.Check(m.CanStandby(), Equals, false)
+	c.Check(m.CanStandby(), tc.Equals, false)
 }
 
-func (s *standbySuite) TestCanStandbyOnlyDonePendingChanges(c *C) {
+func (s *standbySuite) TestCanStandbyOnlyDonePendingChanges(c *tc.C) {
 	st := s.state
 	st.Lock()
 	t := st.NewTask("bar", "fake task")
@@ -89,29 +93,29 @@ func (s *standbySuite) TestCanStandbyOnlyDonePendingChanges(c *C) {
 	chg.AddTask(t)
 	t.SetStatus(state.DoneStatus)
 	t.SetClean()
-	c.Assert(chg.Status(), Equals, state.DoneStatus)
-	c.Assert(t.IsClean(), Equals, true)
+	c.Assert(chg.Status(), tc.Equals, state.DoneStatus)
+	c.Assert(t.IsClean(), tc.Equals, true)
 	st.Unlock()
 
 	m := standby.New(s.state)
 	m.SetStartTime(time.Time{})
-	c.Check(m.CanStandby(), Equals, true)
+	c.Check(m.CanStandby(), tc.Equals, true)
 }
 
 func (s *standbySuite) CanStandby() bool {
 	return s.canStandby
 }
 
-func (s *standbySuite) TestCanStandbyWithOpinion(c *C) {
+func (s *standbySuite) TestCanStandbyWithOpinion(c *tc.C) {
 	m := standby.New(s.state)
 	m.AddOpinion(s)
 	m.SetStartTime(time.Time{})
 
 	s.canStandby = true
-	c.Check(m.CanStandby(), Equals, true)
+	c.Check(m.CanStandby(), tc.Equals, true)
 
 	s.canStandby = false
-	c.Check(m.CanStandby(), Equals, false)
+	c.Check(m.CanStandby(), tc.Equals, false)
 }
 
 type opine func() bool
@@ -120,7 +124,7 @@ func (f opine) CanStandby() bool {
 	return f()
 }
 
-func (s *standbySuite) TestStartChecks(c *C) {
+func (s *standbySuite) TestStartChecks(c *tc.C) {
 	n := 0
 	ch1 := make(chan bool, 1)
 	ch2 := make(chan struct{})
@@ -128,12 +132,12 @@ func (s *standbySuite) TestStartChecks(c *C) {
 	defer standby.FakeStandbyWait(time.Millisecond)()
 	s.state.Lock()
 	_, err := restart.Manager(s.state, "boot-id-0", servstatetest.FakeRestartHandler(func(t restart.RestartType) {
-		c.Check(t, Equals, restart.RestartSocket)
+		c.Check(t, tc.Equals, restart.RestartSocket)
 		n++
 		<-ch2
 	}))
 	s.state.Unlock()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	m := standby.New(s.state)
 	m.AddOpinion(opine(func() bool {
@@ -143,25 +147,25 @@ func (s *standbySuite) TestStartChecks(c *C) {
 
 	m.Start()
 	ch1 <- false
-	c.Check(n, Equals, 0)
+	c.Check(n, tc.Equals, 0)
 	ch1 <- false
-	c.Check(n, Equals, 0)
+	c.Check(n, tc.Equals, 0)
 
 	ch1 <- true
 	ch2 <- struct{}{}
-	c.Check(n, Equals, 1)
+	c.Check(n, tc.Equals, 1)
 
 	m.Stop()
 }
 
-func (s *standbySuite) TestStopWaits(c *C) {
+func (s *standbySuite) TestStopWaits(c *tc.C) {
 	defer standby.FakeStandbyWait(time.Millisecond)()
 	s.state.Lock()
 	_, err := restart.Manager(s.state, "boot-id-0", servstatetest.FakeRestartHandler(func(t restart.RestartType) {
 		c.Fatal("request restart should have not been called")
 	}))
 	s.state.Unlock()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ch := make(chan struct{})
 	opineReady := make(chan struct{})

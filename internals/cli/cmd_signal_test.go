@@ -18,17 +18,17 @@ import (
 	"fmt"
 	"net/http"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestSignalShortName(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestSignalShortName(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/signals")
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
 			"services": []any{"s1"},
 		})
@@ -40,16 +40,16 @@ func (s *PebbleSuite) TestSignalShortName(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "HUP", "s1"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
 }
 
-func (s *PebbleSuite) TestSignalFullName(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestSignalFullName(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/signals")
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
 			"services": []any{"s2"},
 		})
@@ -61,16 +61,16 @@ func (s *PebbleSuite) TestSignalFullName(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "SIGHUP", "s2"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
 }
 
-func (s *PebbleSuite) TestSignalMultipleServices(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestSignalMultipleServices(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/signals")
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
 			"services": []any{"s1", "s2"},
 		})
@@ -82,21 +82,21 @@ func (s *PebbleSuite) TestSignalMultipleServices(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"signal", "SIGHUP", "s1", "s2"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
 }
 
-func (s *PebbleSuite) TestSignalErrorLowercase(c *check.C) {
+func (s *PebbleSuite) TestSignalErrorLowercase(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"signal", "hup", "s1"})
-	c.Assert(err, check.ErrorMatches, "signal name must be uppercase, for example HUP")
+	c.Assert(err, tc.ErrorMatches, "signal name must be uppercase, for example HUP")
 }
 
-func (s *PebbleSuite) TestSignalServerError(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestSignalServerError(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		body := DecodedRequestBody(c, r)
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/signals")
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/signals")
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"signal":   "SIGHUP",
 			"services": []any{"s1"},
 		})
@@ -109,5 +109,5 @@ func (s *PebbleSuite) TestSignalServerError(c *check.C) {
 	})
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"signal", "HUP", "s1"})
-	c.Assert(err, check.ErrorMatches, `invalid signal name "SIGFOO"`)
+	c.Assert(err, tc.ErrorMatches, `invalid signal name "SIGFOO"`)
 }

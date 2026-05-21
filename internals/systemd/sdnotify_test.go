@@ -18,8 +18,9 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/systemd"
 )
@@ -29,34 +30,41 @@ type sdNotifyTestSuite struct {
 	restoreGetenv func()
 }
 
-var _ = Suite(&sdNotifyTestSuite{})
+func TestSdNotifyTestSuite(t *testing.T) {
+	tc.Run(t, &sdNotifyTestSuite{})
+}
 
-func (sd *sdNotifyTestSuite) SetUpTest(c *C) {
+func (sd *sdNotifyTestSuite) SetUpTest(c *tc.C) {
 	sd.env = map[string]string{}
 	sd.restoreGetenv = systemd.FakeOsGetenv(func(k string) string {
 		return sd.env[k]
 	})
+
+	c.Cleanup(func() {
+		sd.env = nil
+		sd.restoreGetenv = nil
+	})
 }
 
-func (sd *sdNotifyTestSuite) TearDownTest(c *C) {
+func (sd *sdNotifyTestSuite) TearDownTest(c *tc.C) {
 	sd.restoreGetenv()
 }
 
-func (sd *sdNotifyTestSuite) TestSocketAvailable(c *C) {
+func (sd *sdNotifyTestSuite) TestSocketAvailable(c *tc.C) {
 	socketPath := filepath.Join(c.MkDir(), "notify.socket")
-	c.Assert(systemd.SocketAvailable(), Equals, false)
+	c.Assert(systemd.SocketAvailable(), tc.Equals, false)
 	sd.env["NOTIFY_SOCKET"] = socketPath
-	c.Assert(systemd.SocketAvailable(), Equals, false)
+	c.Assert(systemd.SocketAvailable(), tc.Equals, false)
 	f, _ := os.Create(socketPath)
 	f.Close()
-	c.Assert(systemd.SocketAvailable(), Equals, true)
+	c.Assert(systemd.SocketAvailable(), tc.Equals, true)
 }
 
-func (sd *sdNotifyTestSuite) TestSdNotifyMissingNotifyState(c *C) {
-	c.Check(systemd.SdNotify(""), ErrorMatches, "cannot use empty notify state")
+func (sd *sdNotifyTestSuite) TestSdNotifyMissingNotifyState(c *tc.C) {
+	c.Check(systemd.SdNotify(""), tc.ErrorMatches, "cannot use empty notify state")
 }
 
-func (sd *sdNotifyTestSuite) TestSdNotifyWrongNotifySocket(c *C) {
+func (sd *sdNotifyTestSuite) TestSdNotifyWrongNotifySocket(c *tc.C) {
 	for _, t := range []struct {
 		env    string
 		errStr string
@@ -65,11 +73,11 @@ func (sd *sdNotifyTestSuite) TestSdNotifyWrongNotifySocket(c *C) {
 		{"xxx", `cannot use \$NOTIFY_SOCKET value: "xxx"`},
 	} {
 		sd.env["NOTIFY_SOCKET"] = t.env
-		c.Check(systemd.SdNotify("something"), ErrorMatches, t.errStr)
+		c.Check(systemd.SdNotify("something"), tc.ErrorMatches, t.errStr)
 	}
 }
 
-func (sd *sdNotifyTestSuite) TestSdNotifyIntegration(c *C) {
+func (sd *sdNotifyTestSuite) TestSdNotifyIntegration(c *tc.C) {
 	for _, sockPath := range []string{
 		filepath.Join(c.MkDir(), "socket"),
 		"@socket",
@@ -80,19 +88,19 @@ func (sd *sdNotifyTestSuite) TestSdNotifyIntegration(c *C) {
 			Name: sockPath,
 			Net:  "unixgram",
 		})
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		defer conn.Close()
 
 		ch := make(chan string)
 		go func() {
 			var buf [128]byte
 			n, err := conn.Read(buf[:])
-			c.Assert(err, IsNil)
+			c.Assert(err, tc.ErrorIsNil)
 			ch <- string(buf[:n])
 		}()
 
 		err = systemd.SdNotify("something")
-		c.Assert(err, IsNil)
-		c.Check(<-ch, Equals, "something")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(<-ch, tc.Equals, "something")
 	}
 }

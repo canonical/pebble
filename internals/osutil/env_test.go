@@ -15,16 +15,20 @@
 package osutil_test
 
 import (
-	. "gopkg.in/check.v1"
+	"testing"
+
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/osutil"
 )
 
 type envSuite struct{}
 
-var _ = Suite(&envSuite{})
+func TestEnvSuite(t *testing.T) {
+	tc.Run(t, &envSuite{})
+}
 
-func (s *envSuite) TestEnviron(c *C) {
+func (s *envSuite) TestEnviron(c *tc.C) {
 	restore := osutil.FakeEnviron(func() []string {
 		return []string{"FOO=bar", "BAR=", "TEMP"}
 	})
@@ -32,8 +36,8 @@ func (s *envSuite) TestEnviron(c *C) {
 
 	env := osutil.Environ()
 
-	c.Assert(len(env), Equals, 3)
-	c.Assert(env, DeepEquals, map[string]string{
+	c.Assert(len(env), tc.Equals, 3)
+	c.Assert(env, tc.DeepEquals, map[string]string{
 		"FOO":  "bar",
 		"BAR":  "",
 		"TEMP": "",

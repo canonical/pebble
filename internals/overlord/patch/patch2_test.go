@@ -16,8 +16,9 @@ package patch_test
 
 import (
 	"bytes"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/patch"
@@ -26,9 +27,11 @@ import (
 
 type patch2Suite struct{}
 
-var _ = Suite(&patch2Suite{})
+func TestPatch2Suite(t *testing.T) {
+	tc.Run(t, &patch2Suite{})
+}
 
-func (s *patch2Suite) TestLegacyIdentities(c *C) {
+func (s *patch2Suite) TestLegacyIdentities(c *tc.C) {
 	restore := patch.FakeLevel(2, 1)
 	defer restore()
 
@@ -52,16 +55,16 @@ func (s *patch2Suite) TestLegacyIdentities(c *C) {
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = patch.Apply(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
-	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
+	c.Assert(mgr.Identities(), tc.DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
 			Access: identities.ReadAccess,
@@ -77,14 +80,14 @@ func (s *patch2Suite) TestLegacyIdentities(c *C) {
 	// ensure we moved forward to patch-level 2 (sublevel 0)
 	var patchLevel int
 	err = st.Get("patch-level", &patchLevel)
-	c.Assert(err, IsNil)
-	c.Assert(patchLevel, Equals, 2)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(patchLevel, tc.Equals, 2)
 	err = st.Get("patch-sublevel", &patchLevel)
-	c.Assert(err, IsNil)
-	c.Assert(patchLevel, Equals, 0)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(patchLevel, tc.Equals, 0)
 }
 
-func (s *patch2Suite) TestNewAndLegacyIdentities(c *C) {
+func (s *patch2Suite) TestNewAndLegacyIdentities(c *tc.C) {
 	restore := patch.FakeLevel(2, 1)
 	defer restore()
 
@@ -114,16 +117,16 @@ func (s *patch2Suite) TestNewAndLegacyIdentities(c *C) {
 }`)
 
 	st, err := state.ReadState(nil, bytes.NewReader(data))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = patch.Apply(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	mgr, err := identities.NewManager(st)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
-	c.Assert(mgr.Identities(), DeepEquals, map[string]*identities.Identity{
+	c.Assert(mgr.Identities(), tc.DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
 			Access: identities.ReadAccess,

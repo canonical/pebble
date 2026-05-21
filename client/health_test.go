@@ -17,12 +17,12 @@ package client_test
 import (
 	"net/url"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 )
 
-func (cs *clientSuite) TestHealthGet(c *check.C) {
+func (cs *clientSuite) TestHealthGet(c *tc.C) {
 	cs.rsp = `{
 		"type": "sync",
 		"status-code": 200,
@@ -37,17 +37,17 @@ func (cs *clientSuite) TestHealthGet(c *check.C) {
 		Names: []string{"chk1", "chk3"},
 	}
 	health, err := cs.cli.Health(&opts)
-	c.Assert(err, check.IsNil)
-	c.Assert(health, check.Equals, true)
-	c.Assert(cs.req.Method, check.Equals, "GET")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/health")
-	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(health, tc.Equals, true)
+	c.Assert(cs.req.Method, tc.Equals, "GET")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/health")
+	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{
 		"level": {"alive"},
 		"names": {"chk1", "chk3"},
 	})
 }
 
-func (cs *clientSuite) TestHealthDefaultOptions(c *check.C) {
+func (cs *clientSuite) TestHealthDefaultOptions(c *tc.C) {
 	cs.rsp = `{
 		"type": "sync",
 		"status-code": 502,
@@ -58,9 +58,9 @@ func (cs *clientSuite) TestHealthDefaultOptions(c *check.C) {
 	}`
 
 	health, err := cs.cli.Health(&client.HealthOptions{})
-	c.Assert(err, check.IsNil)
-	c.Assert(health, check.Equals, false)
-	c.Assert(cs.req.Method, check.Equals, "GET")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/health")
-	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{})
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(health, tc.Equals, false)
+	c.Assert(cs.req.Method, tc.Equals, "GET")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/health")
+	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{})
 }

@@ -19,12 +19,12 @@ import (
 	"net/url"
 	"time"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 )
 
-func (cs *clientSuite) TestStartStop(c *check.C) {
+func (cs *clientSuite) TestStartStop(c *tc.C) {
 	cs.rsp = `{
 		"result": {},
 		"status": "OK",
@@ -48,20 +48,20 @@ func (cs *clientSuite) TestStartStop(c *check.C) {
 		}
 
 		changeId, err := startStop(&opts)
-		c.Check(err, check.IsNil)
-		c.Check(changeId, check.Equals, "42")
-		c.Check(cs.req.Method, check.Equals, "POST")
-		c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(changeId, tc.Equals, "42")
+		c.Check(cs.req.Method, tc.Equals, "POST")
+		c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")
 
 		var body map[string]any
-		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-		c.Check(body, check.HasLen, 2)
-		c.Check(body["action"], check.Equals, action)
-		c.Check(body["services"], check.DeepEquals, []any{"one", "two"})
+		c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+		c.Check(body, tc.HasLen, 2)
+		c.Check(body["action"], tc.Equals, action)
+		c.Check(body["services"], tc.DeepEquals, []any{"one", "two"})
 	}
 }
 
-func (cs *clientSuite) TestAutostart(c *check.C) {
+func (cs *clientSuite) TestAutostart(c *tc.C) {
 	cs.rsp = `{
 		"result": {},
 		"status": "OK",
@@ -73,18 +73,18 @@ func (cs *clientSuite) TestAutostart(c *check.C) {
 	opts := client.ServiceOptions{}
 
 	changeId, err := cs.cli.AutoStart(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(changeId, check.Equals, "42")
-	c.Check(cs.req.Method, check.Equals, "POST")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(changeId, tc.Equals, "42")
+	c.Check(cs.req.Method, tc.Equals, "POST")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")
 
 	var body map[string]any
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
-	c.Check(body["action"], check.Equals, "autostart")
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+	c.Check(body, tc.HasLen, 2)
+	c.Check(body["action"], tc.Equals, "autostart")
 }
 
-func (cs *clientSuite) TestServicesGet(c *check.C) {
+func (cs *clientSuite) TestServicesGet(c *tc.C) {
 	cs.rsp = `{
 		"result": [
 			{"name": "svc1", "startup": "enabled", "current": "inactive"},
@@ -99,19 +99,19 @@ func (cs *clientSuite) TestServicesGet(c *check.C) {
 		Names: []string{"svc1", "svc2"},
 	}
 	services, err := cs.cli.Services(&opts)
-	c.Assert(err, check.IsNil)
-	c.Assert(services, check.DeepEquals, []*client.ServiceInfo{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(services, tc.DeepEquals, []*client.ServiceInfo{
 		{Name: "svc1", Startup: client.StartupEnabled, Current: client.StatusInactive},
 		{Name: "svc2", Startup: client.StartupDisabled, Current: client.StatusActive, CurrentSince: time.Date(2022, 4, 28, 17, 5, 23, 0, time.UTC)},
 	})
-	c.Assert(cs.req.Method, check.Equals, "GET")
-	c.Assert(cs.req.URL.Path, check.Equals, "/v1/services")
-	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{
+	c.Assert(cs.req.Method, tc.Equals, "GET")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/services")
+	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{
 		"names": {"svc1,svc2"},
 	})
 }
 
-func (cs *clientSuite) TestRestart(c *check.C) {
+func (cs *clientSuite) TestRestart(c *tc.C) {
 	cs.rsp = `{
 		"result": {},
 		"status": "OK",
@@ -125,19 +125,19 @@ func (cs *clientSuite) TestRestart(c *check.C) {
 	}
 
 	changeId, err := cs.cli.Restart(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(changeId, check.Equals, "42")
-	c.Check(cs.req.Method, check.Equals, "POST")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(changeId, tc.Equals, "42")
+	c.Check(cs.req.Method, tc.Equals, "POST")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")
 
 	var body map[string]any
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
-	c.Check(body["action"], check.Equals, "restart")
-	c.Check(body["services"], check.DeepEquals, []any{"one", "two"})
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+	c.Check(body, tc.HasLen, 2)
+	c.Check(body["action"], tc.Equals, "restart")
+	c.Check(body["services"], tc.DeepEquals, []any{"one", "two"})
 }
 
-func (cs *clientSuite) TestReplan(c *check.C) {
+func (cs *clientSuite) TestReplan(c *tc.C) {
 	cs.rsp = `{
 		"result": {},
 		"status": "OK",
@@ -149,13 +149,13 @@ func (cs *clientSuite) TestReplan(c *check.C) {
 	opts := client.ServiceOptions{}
 
 	changeId, err := cs.cli.Replan(&opts)
-	c.Check(err, check.IsNil)
-	c.Check(changeId, check.Equals, "42")
-	c.Check(cs.req.Method, check.Equals, "POST")
-	c.Check(cs.req.URL.Path, check.Equals, "/v1/services")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(changeId, tc.Equals, "42")
+	c.Check(cs.req.Method, tc.Equals, "POST")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/services")
 
 	var body map[string]any
-	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
-	c.Check(body, check.HasLen, 2)
-	c.Check(body["action"], check.Equals, "replan")
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), tc.IsNil)
+	c.Check(body, tc.HasLen, 2)
+	c.Check(body["action"], tc.Equals, "replan")
 }

@@ -16,16 +16,11 @@ package testutil_test
 
 import (
 	"reflect"
-	"testing"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
-func Test(t *testing.T) {
-	check.TestingT(t)
-}
-
-func testInfo(c *check.C, checker check.Checker, name string, paramNames []string) {
+func testInfo(c *tc.C, checker tc.Checker, name string, paramNames []string) {
 	info := checker.Info()
 	if info.Name != name {
 		c.Fatalf("Got name %s, expected %s", info.Name, name)
@@ -35,7 +30,7 @@ func testInfo(c *check.C, checker check.Checker, name string, paramNames []strin
 	}
 }
 
-func testCheck(c *check.C, checker check.Checker, result bool, error string, params ...any) ([]any, []string) {
+func testCheck(c *tc.C, checker tc.Checker, result bool, error string, params ...any) ([]any, []string) {
 	info := checker.Info()
 	if len(params) != len(info.Params) {
 		c.Fatalf("unexpected param count in test; expected %d got %d", len(info.Params), len(params))

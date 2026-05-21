@@ -16,17 +16,20 @@ package servicelog_test
 
 import (
 	"fmt"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
 type lastLinesSuite struct{}
 
-var _ = Suite(&lastLinesSuite{})
+func TestLastLinesSuite(t *testing.T) {
+	tc.Run(t, &lastLinesSuite{})
+}
 
-func (s *lastLinesSuite) TestLastLinesTruncate(c *C) {
+func (s *lastLinesSuite) TestLastLinesTruncate(c *tc.C) {
 	buffer := servicelog.NewRingBuffer(1024)
 	defer buffer.Close()
 
@@ -35,22 +38,22 @@ func (s *lastLinesSuite) TestLastLinesTruncate(c *C) {
 	}
 	fmt.Fprintf(buffer, "2000-01-01T00:00:00Z [foo] line 10\n")
 	lines, err := servicelog.LastLines(buffer, 5, "=> ", false)
-	c.Assert(err, IsNil)
-	c.Assert(lines, Equals, "=> (...)\n=> line 6\n=> line 7\n=> line 8\n=> line 9\n=> 2000-01-01T00:00:00Z [foo] line 10")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(lines, tc.Equals, "=> (...)\n=> line 6\n=> line 7\n=> line 8\n=> line 9\n=> 2000-01-01T00:00:00Z [foo] line 10")
 }
 
-func (s *lastLinesSuite) TestLastLinesNoIndent(c *C) {
+func (s *lastLinesSuite) TestLastLinesNoIndent(c *tc.C) {
 	buffer := servicelog.NewRingBuffer(1024)
 	defer buffer.Close()
 
 	fmt.Fprintf(buffer, "foo\n")
 	fmt.Fprintf(buffer, "2000-01-01T00:00:00Z [foo] bar\n")
 	lines, err := servicelog.LastLines(buffer, 10, "", false)
-	c.Assert(err, IsNil)
-	c.Assert(lines, Equals, "foo\n2000-01-01T00:00:00Z [foo] bar")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(lines, tc.Equals, "foo\n2000-01-01T00:00:00Z [foo] bar")
 }
 
-func (s *lastLinesSuite) TestLastLinesStripPrefix(c *C) {
+func (s *lastLinesSuite) TestLastLinesStripPrefix(c *tc.C) {
 	buffer := servicelog.NewRingBuffer(1024)
 	defer buffer.Close()
 
@@ -58,6 +61,6 @@ func (s *lastLinesSuite) TestLastLinesStripPrefix(c *C) {
 	fmt.Fprintf(buffer, "2000-01-01T00:00:00.000Z [svc1] bar\n")
 	fmt.Fprintf(buffer, "2022-12-25T23:59:59.999Z [service2] log msg\n")
 	lines, err := servicelog.LastLines(buffer, 10, "", true)
-	c.Assert(err, IsNil)
-	c.Assert(lines, Equals, "foo\nbar\nlog msg")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(lines, tc.Equals, "foo\nbar\nlog msg")
 }

@@ -20,95 +20,98 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type StatTestSuite struct{}
 
-var _ = Suite(&StatTestSuite{})
+func TestStatTestSuite(t *testing.T) {
+	tc.Run(t, &StatTestSuite{})
+}
 
-func (ts *StatTestSuite) TestCanStat(c *C) {
+func (ts *StatTestSuite) TestCanStat(c *tc.C) {
 	fname := filepath.Join(c.MkDir(), "foo")
 	err := os.WriteFile(fname, []byte(fname), 0644)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Assert(CanStat(fname), Equals, true)
-	c.Assert(CanStat("/i-do-not-exist"), Equals, false)
+	c.Assert(CanStat(fname), tc.Equals, true)
+	c.Assert(CanStat("/i-do-not-exist"), tc.Equals, false)
 }
 
-func (ts *StatTestSuite) TestCanStatOddPerms(c *C) {
+func (ts *StatTestSuite) TestCanStatOddPerms(c *tc.C) {
 	fname := filepath.Join(c.MkDir(), "foo")
 	err := os.WriteFile(fname, []byte(fname), 0100)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Assert(CanStat(fname), Equals, true)
+	c.Assert(CanStat(fname), tc.Equals, true)
 }
 
-func (ts *StatTestSuite) TestIsDir(c *C) {
+func (ts *StatTestSuite) TestIsDir(c *tc.C) {
 	dname := filepath.Join(c.MkDir(), "bar")
 	err := os.Mkdir(dname, 0700)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Assert(IsDir(dname), Equals, true)
-	c.Assert(IsDir("/i-do-not-exist"), Equals, false)
+	c.Assert(IsDir(dname), tc.Equals, true)
+	c.Assert(IsDir("/i-do-not-exist"), tc.Equals, false)
 }
 
-func (ts *StatTestSuite) TestIsSymlink(c *C) {
+func (ts *StatTestSuite) TestIsSymlink(c *tc.C) {
 	sname := filepath.Join(c.MkDir(), "symlink")
 	err := os.Symlink("/", sname)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Assert(IsSymlink(sname), Equals, true)
-	c.Assert(IsSymlink(c.MkDir()), Equals, false)
+	c.Assert(IsSymlink(sname), tc.Equals, true)
+	c.Assert(IsSymlink(c.MkDir()), tc.Equals, false)
 }
 
-func (ts *StatTestSuite) TestIsExecInPath(c *C) {
+func (ts *StatTestSuite) TestIsExecInPath(c *tc.C) {
 	oldPath := os.Getenv("PATH")
 	defer os.Setenv("PATH", oldPath)
 	d := c.MkDir()
 	os.Setenv("PATH", d)
-	c.Check(IsExecInPath("xyzzy"), Equals, false)
+	c.Check(IsExecInPath("xyzzy"), tc.Equals, false)
 
 	fname := filepath.Join(d, "xyzzy")
-	c.Assert(os.WriteFile(fname, []byte{}, 0644), IsNil)
-	c.Check(IsExecInPath("xyzzy"), Equals, false)
+	c.Assert(os.WriteFile(fname, []byte{}, 0644), tc.IsNil)
+	c.Check(IsExecInPath("xyzzy"), tc.Equals, false)
 
-	c.Assert(os.Chmod(fname, 0755), IsNil)
-	c.Check(IsExecInPath("xyzzy"), Equals, true)
+	c.Assert(os.Chmod(fname, 0755), tc.IsNil)
+	c.Check(IsExecInPath("xyzzy"), tc.Equals, true)
 }
 
-func (s *StatTestSuite) TestLookPathDefaultGivesCorrectPath(c *C) {
+func (s *StatTestSuite) TestLookPathDefaultGivesCorrectPath(c *tc.C) {
 	lookPath = func(name string) (string, error) { return "/bin/true", nil }
-	c.Assert(LookPathDefault("true", "/bin/foo"), Equals, "/bin/true")
+	c.Assert(LookPathDefault("true", "/bin/foo"), tc.Equals, "/bin/true")
 }
 
-func (s *StatTestSuite) TestLookPathDefaultReturnsDefaultWhenNotFound(c *C) {
+func (s *StatTestSuite) TestLookPathDefaultReturnsDefaultWhenNotFound(c *tc.C) {
 	lookPath = func(name string) (string, error) { return "", fmt.Errorf("Not found") }
-	c.Assert(LookPathDefault("bar", "/bin/bla"), Equals, "/bin/bla")
+	c.Assert(LookPathDefault("bar", "/bin/bla"), tc.Equals, "/bin/bla")
 }
 
-func makeTestPath(c *C, path string, mode os.FileMode) string {
+func makeTestPath(c *tc.C, path string, mode os.FileMode) string {
 	return makeTestPathInDir(c, c.MkDir(), path, mode)
 }
 
-func makeTestPathInDir(c *C, dir string, path string, mode os.FileMode) string {
+func makeTestPathInDir(c *tc.C, dir string, path string, mode os.FileMode) string {
 	mkdir := strings.HasSuffix(path, "/")
 	path = filepath.Join(dir, path)
 
 	if mkdir {
 		// request for directory
-		c.Assert(os.MkdirAll(path, mode), IsNil)
+		c.Assert(os.MkdirAll(path, mode), tc.IsNil)
 	} else {
 		// request for a file
-		c.Assert(os.MkdirAll(filepath.Dir(path), 0755), IsNil)
-		c.Assert(os.WriteFile(path, nil, mode), IsNil)
+		c.Assert(os.MkdirAll(filepath.Dir(path), 0755), tc.IsNil)
+		c.Assert(os.WriteFile(path, nil, mode), tc.IsNil)
 	}
 
 	return path
 }
 
-func (s *StatTestSuite) TestIsWritableDir(c *C) {
+func (s *StatTestSuite) TestIsWritableDir(c *tc.C) {
 	if os.Getuid() == 0 {
 		c.Skip("requires running as non-root user")
 	}
@@ -133,11 +136,11 @@ func (s *StatTestSuite) TestIsWritableDir(c *C) {
 		{"file", 0400, false},
 	} {
 		writable := IsWritable(makeTestPath(c, t.path, t.mode))
-		c.Check(writable, Equals, t.isWritable, Commentf("incorrect result for %q (%s), got %v, expected %v", t.path, t.mode, writable, t.isWritable))
+		c.Check(writable, tc.Equals, t.isWritable, tc.Commentf("incorrect result for %q (%s), got %v, expected %v", t.path, t.mode, writable, t.isWritable))
 	}
 }
 
-func (s *StatTestSuite) TestIsDirNotExist(c *C) {
+func (s *StatTestSuite) TestIsDirNotExist(c *tc.C) {
 	for _, e := range []error{
 		os.ErrNotExist,
 		syscall.ENOENT,
@@ -149,18 +152,18 @@ func (s *StatTestSuite) TestIsDirNotExist(c *C) {
 		&os.SyscallError{Err: syscall.ENOENT},
 		&os.SyscallError{Err: syscall.ENOTDIR},
 	} {
-		c.Check(IsDirNotExist(e), Equals, true, Commentf("%#v (%v)", e, e))
+		c.Check(IsDirNotExist(e), tc.Equals, true, tc.Commentf("%#v (%v)", e, e))
 	}
 
 	for _, e := range []error{
 		nil,
 		fmt.Errorf("hello"),
 	} {
-		c.Check(IsDirNotExist(e), Equals, false)
+		c.Check(IsDirNotExist(e), tc.Equals, false)
 	}
 }
 
-func (s *StatTestSuite) TestExistsIsDir(c *C) {
+func (s *StatTestSuite) TestExistsIsDir(c *tc.C) {
 	for _, t := range []struct {
 		make   string
 		path   string
@@ -174,35 +177,35 @@ func (s *StatTestSuite) TestExistsIsDir(c *C) {
 		{"foo/", "foo", true, true},
 	} {
 		base := c.MkDir()
-		comm := Commentf("path:%q make:%q", t.path, t.make)
+		comm := tc.Commentf("path:%q make:%q", t.path, t.make)
 		if t.make != "" {
 			makeTestPathInDir(c, base, t.make, 0755)
 		}
 		exists, isDir, err := ExistsIsDir(filepath.Join(base, t.path))
-		c.Check(exists, Equals, t.exists, comm)
-		c.Check(isDir, Equals, t.isDir, comm)
-		c.Check(err, IsNil, comm)
+		c.Check(exists, tc.Equals, t.exists, comm)
+		c.Check(isDir, tc.Equals, t.isDir, comm)
+		c.Assert(err, tc.ErrorIsNil, comm)
 	}
 
 	if os.Getuid() == 0 {
 		c.Skip("requires running as non-root user")
 	}
 	p := makeTestPath(c, "foo/bar", 0)
-	c.Assert(os.Chmod(filepath.Dir(p), 0), IsNil)
+	c.Assert(os.Chmod(filepath.Dir(p), 0), tc.IsNil)
 	defer os.Chmod(filepath.Dir(p), 0755)
 	exists, isDir, err := ExistsIsDir(p)
-	c.Check(exists, Equals, false)
-	c.Check(isDir, Equals, false)
-	c.Check(err, NotNil)
+	c.Check(exists, tc.Equals, false)
+	c.Check(isDir, tc.Equals, false)
+	c.Check(err, tc.NotNil)
 }
 
-func (s *StatTestSuite) TestIsExec(c *C) {
-	c.Check(IsExec("non-existent"), Equals, false)
-	c.Check(IsExec("."), Equals, false)
+func (s *StatTestSuite) TestIsExec(c *tc.C) {
+	c.Check(IsExec("non-existent"), tc.Equals, false)
+	c.Check(IsExec("."), tc.Equals, false)
 	dir := c.MkDir()
-	c.Check(IsExec(dir), Equals, false)
+	c.Check(IsExec(dir), tc.Equals, false)
 
-	for _, tc := range []struct {
+	for _, test := range []struct {
 		mode os.FileMode
 		is   bool
 	}{
@@ -215,13 +218,13 @@ func (s *StatTestSuite) TestIsExec(c *C) {
 		{0001, true},
 		{0755, true},
 	} {
-		c.Logf("tc: %v %v", tc.mode, tc.is)
+		c.Logf("tc: %v %v", test.mode, test.is)
 		p := filepath.Join(dir, "foo")
 		err := os.Remove(p)
-		c.Check(err == nil || os.IsNotExist(err), Equals, true)
+		c.Check(err == nil || os.IsNotExist(err), tc.Equals, true)
 
-		err = os.WriteFile(p, []byte(""), tc.mode)
-		c.Assert(err, IsNil)
-		c.Check(IsExec(p), Equals, tc.is)
+		err = os.WriteFile(p, []byte(""), test.mode)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Check(IsExec(p), tc.Equals, test.is)
 	}
 }

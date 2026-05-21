@@ -18,7 +18,7 @@ import (
 	"os"
 	"runtime"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
@@ -47,7 +47,7 @@ func setEnviron(env map[string]string) func() {
 	}
 }
 
-func (s *PebbleSuite) TestCanUnicode(c *check.C) {
+func (s *PebbleSuite) TestCanUnicode(c *tc.C) {
 	// setenv is per thread
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -72,18 +72,18 @@ func (s *PebbleSuite) TestCanUnicode(c *check.C) {
 		{lang: "C.utf8", expected: true}, // deals with a bit of rando weirdness
 	} {
 		restore := setEnviron(map[string]string{"LANG": t.lang, "LC_ALL": t.lcAll, "LC_MESSAGES": t.lcMsg})
-		c.Check(cli.CanUnicode("never"), check.Equals, false)
-		c.Check(cli.CanUnicode("always"), check.Equals, true)
+		c.Check(cli.CanUnicode("never"), tc.Equals, false)
+		c.Check(cli.CanUnicode("always"), tc.Equals, true)
 		restoreIsTTY := cli.FakeIsStdoutTTY(true)
-		c.Check(cli.CanUnicode("auto"), check.Equals, t.expected)
+		c.Check(cli.CanUnicode("auto"), tc.Equals, t.expected)
 		cli.FakeIsStdoutTTY(false)
-		c.Check(cli.CanUnicode("auto"), check.Equals, false)
+		c.Check(cli.CanUnicode("auto"), tc.Equals, false)
 		restoreIsTTY()
 		restore()
 	}
 }
 
-func (s *PebbleSuite) TestColorTable(c *check.C) {
+func (s *PebbleSuite) TestColorTable(c *tc.C) {
 	// setenv is per thread
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
@@ -106,9 +106,9 @@ func (s *PebbleSuite) TestColorTable(c *check.C) {
 	} {
 		restoreIsTTY := cli.FakeIsStdoutTTY(t.isTTY)
 		restoreEnv := setEnviron(map[string]string{"NO_COLOR": t.noColor, "TERM": t.term})
-		c.Check(cli.ColorTable("never"), check.DeepEquals, cli.NoEscColorTable, check.Commentf(t.desc))
-		c.Check(cli.ColorTable("always"), check.DeepEquals, cli.ColorColorTable, check.Commentf(t.desc))
-		c.Check(cli.ColorTable("auto"), check.DeepEquals, t.expected, check.Commentf(t.desc))
+		c.Check(cli.ColorTable("never"), tc.DeepEquals, cli.NoEscColorTable, tc.Commentf(t.desc))
+		c.Check(cli.ColorTable("always"), tc.DeepEquals, cli.ColorColorTable, tc.Commentf(t.desc))
+		c.Check(cli.ColorTable("auto"), tc.DeepEquals, t.expected, tc.Commentf(t.desc))
 		restoreEnv()
 		restoreIsTTY()
 	}

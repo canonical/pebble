@@ -20,12 +20,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestAdd(c *check.C) {
+func (s *PebbleSuite) TestAdd(c *tc.C) {
 	for _, combine := range []bool{false, true} {
 		triggerLayerContent := "trigger layer"
 		layerYAML := `
@@ -35,14 +35,14 @@ services:
     command: cmd
 `[1:]
 
-		s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-			c.Check(r.Method, check.Equals, "POST")
-			c.Check(r.URL.Path, check.Equals, "/v1/layers")
+		s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+			c.Check(r.Method, tc.Equals, "POST")
+			c.Check(r.URL.Path, tc.Equals, "/v1/layers")
 
 			body := DecodedRequestBody(c, r)
 
 			layerContent, ok := body["layer"]
-			c.Assert(ok, check.Equals, true)
+			c.Assert(ok, tc.Equals, true)
 
 			if layerContent == triggerLayerContent {
 				fmt.Fprint(w, `{
@@ -52,7 +52,7 @@ services:
 	}
 }`)
 			} else {
-				c.Check(body, check.DeepEquals, map[string]any{
+				c.Check(body, tc.DeepEquals, map[string]any{
 					"action":  "add",
 					"combine": combine,
 					"label":   "foo",
@@ -72,16 +72,16 @@ services:
 		tempDir := c.MkDir()
 		layerPath := filepath.Join(tempDir, "layer.yaml")
 		err := os.WriteFile(layerPath, []byte(layerYAML), 0755)
-		c.Assert(err, check.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		unreadableLayerPath := filepath.Join(tempDir, "unreadable-layer.yaml")
 		err = os.WriteFile(unreadableLayerPath, []byte(layerYAML), 0055)
-		c.Assert(err, check.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// The trigger layer will trigger an error in the mocked API response
 		triggerLayerPath := filepath.Join(tempDir, "trigger-layer.yaml")
 		err = os.WriteFile(triggerLayerPath, []byte(triggerLayerContent), 0755)
-		c.Assert(err, check.IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		var args []string
 		for _, path := range []string{layerPath, unreadableLayerPath, triggerLayerPath} {
@@ -93,23 +93,23 @@ services:
 			rest, err := cli.ParserForTest().ParseArgs(args)
 
 			if path == layerPath {
-				c.Assert(err, check.IsNil)
-				c.Assert(rest, check.HasLen, 0)
-				c.Check(s.Stdout(), check.Matches, `Layer "foo" added successfully.*\n`)
-				c.Check(s.Stderr(), check.Equals, "")
+				c.Assert(err, tc.ErrorIsNil)
+				c.Assert(rest, tc.HasLen, 0)
+				c.Check(s.Stdout(), tc.Matches, `Layer "foo" added successfully.*\n`)
+				c.Check(s.Stderr(), tc.Equals, "")
 				s.ResetStdStreams()
 			} else if path == triggerLayerPath {
-				c.Assert(err, check.ErrorMatches, "triggered")
+				c.Assert(err, tc.ErrorMatches, "triggered")
 			} else if path == unreadableLayerPath {
 				if os.Getuid() != 0 {
-					c.Assert(os.IsPermission(err), check.Equals, true)
+					c.Assert(os.IsPermission(err), tc.Equals, true)
 				}
 			}
 		}
 
 		args = append(args, "extra", "arguments", "invalid")
 		_, err = cli.ParserForTest().ParseArgs(args)
-		c.Assert(err, check.Equals, cli.ErrExtraArgs)
+		c.Assert(err, tc.Equals, cli.ErrExtraArgs)
 		s.ResetStdStreams()
 	}
 }

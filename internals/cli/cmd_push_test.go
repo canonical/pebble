@@ -25,7 +25,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/cli"
@@ -46,29 +46,29 @@ type writeFilesItem struct {
 	Group       string `json:"group"`
 }
 
-func (s *PebbleSuite) TestPush(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.URL.Path, Equals, "/v1/files")
-		c.Assert(r.Method, Equals, "POST")
+func (s *PebbleSuite) TestPush(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
+		c.Assert(r.Method, tc.Equals, "POST")
 
 		mr, err := r.MultipartReader()
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Check metadata part
 		metadata, err := mr.NextPart()
-		c.Assert(err, IsNil)
-		c.Assert(metadata.Header.Get("Content-Type"), Equals, "application/json")
-		c.Assert(metadata.FormName(), Equals, "request")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(metadata.Header.Get("Content-Type"), tc.Equals, "application/json")
+		c.Assert(metadata.FormName(), tc.Equals, "request")
 
 		buf := bytes.NewBuffer(make([]byte, 0))
 		_, err = buf.ReadFrom(metadata)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Decode metadata
 		var payload writeFilesPayload
 		err = json.NewDecoder(buf).Decode(&payload)
-		c.Assert(err, IsNil)
-		c.Assert(payload, DeepEquals, writeFilesPayload{
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(payload, tc.DeepEquals, writeFilesPayload{
 			Action: "write",
 			Files: []writeFilesItem{{
 				Path:        "/tmp/file.bin",
@@ -78,19 +78,19 @@ func (s *PebbleSuite) TestPush(c *C) {
 
 		// Check file part
 		file, err := mr.NextPart()
-		c.Assert(err, IsNil)
-		c.Assert(file.Header.Get("Content-Type"), Equals, "application/octet-stream")
-		c.Assert(file.FormName(), Equals, "files")
-		c.Assert(path.Base(file.FileName()), Equals, "file.bin")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(file.Header.Get("Content-Type"), tc.Equals, "application/octet-stream")
+		c.Assert(file.FormName(), tc.Equals, "files")
+		c.Assert(path.Base(file.FileName()), tc.Equals, "file.bin")
 
 		buf.Reset()
 		_, err = buf.ReadFrom(file)
-		c.Assert(err, IsNil)
-		c.Assert(buf.String(), Equals, "Hello, world!")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(buf.String(), tc.Equals, "Hello, world!")
 
 		// Check end of multipart request
 		_, err = mr.NextPart()
-		c.Assert(err, Equals, io.EOF)
+		c.Assert(err, tc.Equals, io.EOF)
 
 		fmt.Fprintln(w, `{"type": "sync", "result": [{"path": "/tmp/file.bin"}]}`)
 	})
@@ -99,59 +99,59 @@ func (s *PebbleSuite) TestPush(c *C) {
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
 	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	args := []string{"push", filePath, "/tmp/file.bin"}
 	rest, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, IsNil)
-	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPushExtraArgs(c *C) {
+func (s *PebbleSuite) TestPushExtraArgs(c *tc.C) {
 	args := []string{"push", "file.dat", "/tmp/file.bin", "extra", "args"}
 	_, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, Equals, cli.ErrExtraArgs)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPushFailsToOpen(c *C) {
+func (s *PebbleSuite) TestPushFailsToOpen(c *tc.C) {
 	args := []string{"push", "/non/existing/path", "/tmp/file.bin"}
 	_, err := cli.ParserForTest().ParseArgs(args)
-	c.Assert(err, Not(IsNil))
+	c.Assert(err, tc.Not(tc.IsNil))
 	e, ok := err.(*os.PathError)
-	c.Assert(ok, Equals, true)
-	c.Assert(e.Path, Equals, "/non/existing/path")
-	c.Assert(e.Err, Equals, syscall.ENOENT)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(e.Path, tc.Equals, "/non/existing/path")
+	c.Assert(e.Err, tc.Equals, syscall.ENOENT)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestPushAPIFails(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Assert(r.URL.Path, Equals, "/v1/files")
-		c.Assert(r.Method, Equals, "POST")
+func (s *PebbleSuite) TestPushAPIFails(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.URL.Path, tc.Equals, "/v1/files")
+		c.Assert(r.Method, tc.Equals, "POST")
 
 		mr, err := r.MultipartReader()
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Check metadata part
 		metadata, err := mr.NextPart()
-		c.Assert(err, IsNil)
-		c.Assert(metadata.Header.Get("Content-Type"), Equals, "application/json")
-		c.Assert(metadata.FormName(), Equals, "request")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(metadata.Header.Get("Content-Type"), tc.Equals, "application/json")
+		c.Assert(metadata.FormName(), tc.Equals, "request")
 
 		buf := bytes.NewBuffer(make([]byte, 0))
 		_, err = buf.ReadFrom(metadata)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		// Decode metadata
 		var payload writeFilesPayload
 		err = json.NewDecoder(buf).Decode(&payload)
-		c.Assert(err, IsNil)
-		c.Assert(payload, DeepEquals, writeFilesPayload{
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(payload, tc.DeepEquals, writeFilesPayload{
 			Action: "write",
 			Files: []writeFilesItem{{
 				Path:        "/tmp/file.bin",
@@ -161,19 +161,19 @@ func (s *PebbleSuite) TestPushAPIFails(c *C) {
 
 		// Check file part
 		file, err := mr.NextPart()
-		c.Assert(err, IsNil)
-		c.Assert(file.Header.Get("Content-Type"), Equals, "application/octet-stream")
-		c.Assert(file.FormName(), Equals, "files")
-		c.Assert(path.Base(file.FileName()), Equals, "file.bin")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(file.Header.Get("Content-Type"), tc.Equals, "application/octet-stream")
+		c.Assert(file.FormName(), tc.Equals, "files")
+		c.Assert(path.Base(file.FileName()), tc.Equals, "file.bin")
 
 		buf.Reset()
 		_, err = buf.ReadFrom(file)
-		c.Assert(err, IsNil)
-		c.Assert(buf.String(), Equals, "Hello, world!")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(buf.String(), tc.Equals, "Hello, world!")
 
 		// Check end of multipart request
 		_, err = mr.NextPart()
-		c.Assert(err, Equals, io.EOF)
+		c.Assert(err, tc.Equals, io.EOF)
 
 		fmt.Fprintln(w, `{
 			"type": "sync",
@@ -192,17 +192,17 @@ func (s *PebbleSuite) TestPushAPIFails(c *C) {
 	tempDir := c.MkDir()
 	filePath := filepath.Join(tempDir, "file.dat")
 	err := os.WriteFile(filePath, []byte("Hello, world!"), 0755)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	args := []string{"push", "-m", "600", filePath, "/tmp/file.bin"}
 	rest, err := cli.ParserForTest().ParseArgs(args)
 
 	clientErr, ok := err.(*client.Error)
-	c.Assert(ok, Equals, true)
-	c.Assert(clientErr.Message, Equals, "could not bar")
-	c.Assert(clientErr.Kind, Equals, "permission-denied")
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(clientErr.Message, tc.Equals, "could not bar")
+	c.Assert(clientErr.Kind, tc.Equals, "permission-denied")
 
-	c.Assert(rest, HasLen, 1)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

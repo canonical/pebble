@@ -23,11 +23,11 @@ import (
 	"net/http/httptest"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 // TestPairing checks that we can pair a client.
-func (s *apiSuite) TestPairing(c *C) {
+func (s *apiSuite) TestPairing(c *tc.C) {
 	clientCert := createTestClientCertificate(c)
 
 	pairingLayer := `
@@ -40,13 +40,13 @@ pairing:
 	// Enable pairing window
 	pairingMgr := d.overlord.PairingManager()
 	err := pairingMgr.EnablePairing(10 * time.Second)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{clientCert},
 	}
@@ -56,15 +56,15 @@ pairing:
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 200)
-	c.Check(rsp.Status, Equals, 200)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Result, IsNil)
+	c.Check(rec.Code, tc.Equals, 200)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, tc.IsNil)
 }
 
 // TestPairingPairManagerError checks that pairing fails if attemped without
 // the pairing window enabled.
-func (s *apiSuite) TestPairingPairManagerError(c *C) {
+func (s *apiSuite) TestPairingPairManagerError(c *tc.C) {
 	clientCert := createTestClientCertificate(c)
 
 	_ = s.daemon(c)
@@ -73,7 +73,7 @@ func (s *apiSuite) TestPairingPairManagerError(c *C) {
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{clientCert},
 	}
@@ -83,115 +83,115 @@ func (s *apiSuite) TestPairingPairManagerError(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 400)
-	c.Check(rsp.Status, Equals, 400)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 400)
+	c.Check(rsp.Status, tc.Equals, 400)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `cannot pair client:.*`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Matches, `cannot pair client:.*`)
 }
 
 // TestPairingPairInvalidJSON verifies that an invalid json payload will
 // be detected.
-func (s *apiSuite) TestPairingPairInvalidJSON(c *C) {
+func (s *apiSuite) TestPairingPairInvalidJSON(c *tc.C) {
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`invalid json`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 400)
-	c.Check(rsp.Status, Equals, 400)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 400)
+	c.Check(rsp.Status, tc.Equals, 400)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `cannot decode request body:.*`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Matches, `cannot decode request body:.*`)
 }
 
 // TestPairingPairInvalidJSON verifies that an invalid action string in the
 // payload will be detected.
-func (s *apiSuite) TestPairingPairInvalidAction(c *C) {
+func (s *apiSuite) TestPairingPairInvalidAction(c *tc.C) {
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "invalid"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 400)
-	c.Check(rsp.Status, Equals, 400)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 400)
+	c.Check(rsp.Status, tc.Equals, 400)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Equals, `invalid action "invalid", must be "pair"`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Equals, `invalid action "invalid", must be "pair"`)
 }
 
 // TestPairingPairNonHTTPS confirms that any non-HTTPS transport is not
 // supported.
-func (s *apiSuite) TestPairingPairNonHTTPS(c *C) {
+func (s *apiSuite) TestPairingPairNonHTTPS(c *tc.C) {
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTP))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 500)
-	c.Check(rsp.Status, Equals, 500)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 500)
+	c.Check(rsp.Status, tc.Equals, 500)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Equals, `cannot find TLS connection state`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Equals, `cannot find TLS connection state`)
 }
 
 // TestPairingPairMissingTLSState verifies that missing TLS state
 // will result in pairing failure.
-func (s *apiSuite) TestPairingPairMissingTLSState(c *C) {
+func (s *apiSuite) TestPairingPairMissingTLSState(c *tc.C) {
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req = req.WithContext(context.WithValue(context.Background(), TransportTypeKey{}, TransportTypeHTTPS))
 
 	rsp := v1PostPairing(pairingCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 500)
-	c.Check(rsp.Status, Equals, 500)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 500)
+	c.Check(rsp.Status, tc.Equals, 500)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Equals, `cannot find TLS connection state`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Equals, `cannot find TLS connection state`)
 }
 
 // TestPairingPairZeroPeerCertificates verifies that if the client does
 // not supply exactly one certificate, we will not proceed with pairing.
-func (s *apiSuite) TestPairingPairZeroPeerCertificates(c *C) {
+func (s *apiSuite) TestPairingPairZeroPeerCertificates(c *tc.C) {
 	pairingCmd := apiCmd("/v1/pairing")
 	payload := bytes.NewBufferString(`{"action": "pair"}`)
 
 	req, err := http.NewRequest("POST", "/v1/pairing", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	req.TLS = &tls.ConnectionState{
 		PeerCertificates: []*x509.Certificate{},
 	}
@@ -201,11 +201,11 @@ func (s *apiSuite) TestPairingPairZeroPeerCertificates(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 400)
-	c.Check(rsp.Status, Equals, 400)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 400)
+	c.Check(rsp.Status, tc.Equals, 400)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Equals, `cannot support client: single certificate expected, got 0`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Equals, `cannot support client: single certificate expected, got 0`)
 }

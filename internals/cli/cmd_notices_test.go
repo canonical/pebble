@@ -23,16 +23,16 @@ import (
 	"os"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestNotices(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+func (s *PebbleSuite) TestNotices(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 
 		fmt.Fprint(w, `{
 			"type": "sync",
@@ -60,23 +60,23 @@ func (s *PebbleSuite) TestNotices(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--abs-time"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 ID   User    Type     Key    First                 Repeated              Occurrences
 1    1000    custom   a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
 2    public  warning  Ware!  2023-09-06T17:18:00Z  2023-09-06T18:18:00Z  1
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	cliState := s.readNoticesCLIState(c)
-	c.Check(cliState, DeepEquals, map[string]any{
+	c.Check(cliState, tc.DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-06T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
-func (s *PebbleSuite) readNoticesCLIState(c *C) map[string]any {
+func (s *PebbleSuite) readNoticesCLIState(c *tc.C) map[string]any {
 	fullCLIState := s.readCLIState(c)
 	cliState := map[string]any{
 		"notices-last-listed": fullCLIState["notices-last-listed"],
@@ -85,11 +85,11 @@ func (s *PebbleSuite) readNoticesCLIState(c *C) map[string]any {
 	return cliState
 }
 
-func (s *PebbleSuite) TestNoticesFiltersUsers(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{
+func (s *PebbleSuite) TestNoticesFiltersUsers(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
 			"users": {"all"},
 			"types": {"custom", "warning"},
 			"keys":  {"a.b/c"},
@@ -113,26 +113,26 @@ func (s *PebbleSuite) TestNoticesFiltersUsers(c *C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--users", "all", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
 1    1000  custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	cliState := s.readNoticesCLIState(c)
-	c.Check(cliState, DeepEquals, map[string]any{
+	c.Check(cliState, tc.DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-05T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
-func (s *PebbleSuite) TestNoticesFiltersUID(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{
+func (s *PebbleSuite) TestNoticesFiltersUID(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
 			"user-id": {"1000"},
 			"types":   {"custom", "warning"},
 			"keys":    {"a.b/c"},
@@ -156,26 +156,26 @@ func (s *PebbleSuite) TestNoticesFiltersUID(c *C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--uid", "1000", "--type", "custom", "--key", "a.b/c", "--type", "warning"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
 1    1000  custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	cliState := s.readNoticesCLIState(c)
-	c.Check(cliState, DeepEquals, map[string]any{
+	c.Check(cliState, tc.DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-05T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
-func (s *PebbleSuite) TestNoticesAfter(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{
+func (s *PebbleSuite) TestNoticesAfter(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{
 			"after": {"2023-08-04T01:02:03Z"}, // from "notices-last-okayed" in notices.json
 		})
 
@@ -201,26 +201,26 @@ func (s *PebbleSuite) TestNoticesAfter(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--abs-time"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
 1    1000  custom  a.b/c  2023-09-05T17:18:00Z  2023-09-07T18:18:00Z  3
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	cliState := s.readNoticesCLIState(c)
-	c.Check(cliState, DeepEquals, map[string]any{
+	c.Check(cliState, tc.DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-07T18:18:00Z",
 		"notices-last-okayed": "2023-08-04T01:02:03Z",
 	})
 }
 
-func (s *PebbleSuite) TestNoticesNoNotices(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+func (s *PebbleSuite) TestNoticesNoNotices(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -228,21 +228,21 @@ func (s *PebbleSuite) TestNoticesNoNotices(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "No matching notices.\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "No matching notices.\n")
 
 	// Shouldn't have updated cli.json
 	_, err = os.Stat(s.cliStatePath)
-	c.Assert(errors.Is(err, fs.ErrNotExist), Equals, true)
+	c.Assert(errors.Is(err, fs.ErrNotExist), tc.Equals, true)
 }
 
-func (s *PebbleSuite) TestNoticesTimeout(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{"timeout": {"1s"}})
+func (s *PebbleSuite) TestNoticesTimeout(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"timeout": {"1s"}})
 
 		fmt.Fprint(w, `{
 			"type": "sync",
@@ -262,26 +262,26 @@ func (s *PebbleSuite) TestNoticesTimeout(c *C) {
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{
 		"notices", "--abs-time", "--timeout", "1s"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 ID   User  Type    Key    First                 Repeated              Occurrences
 1    1000  custom  a.b/c  2023-09-05T17:18:00Z  2023-09-05T18:18:00Z  3
 `[1:])
-	c.Check(s.Stderr(), Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	cliState := s.readNoticesCLIState(c)
-	c.Check(cliState, DeepEquals, map[string]any{
+	c.Check(cliState, tc.DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-05T18:18:00Z",
 		"notices-last-okayed": "0001-01-01T00:00:00Z",
 	})
 }
 
-func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "GET")
-		c.Check(r.URL.Path, Equals, "/v1/notices")
-		c.Check(r.URL.Query(), DeepEquals, url.Values{"timeout": {"1s"}})
+func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/notices")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"timeout": {"1s"}})
 		fmt.Fprint(w, `{
 			"type": "sync",
 			"status-code": 200,
@@ -289,12 +289,12 @@ func (s *PebbleSuite) TestNoticesNoNoticesTimeout(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"notices", "--timeout", "1s"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "No matching notices after waiting 1s.\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "No matching notices after waiting 1s.\n")
 
 	// Shouldn't have updated cli.json
 	_, err = os.Stat(s.cliStatePath)
-	c.Assert(errors.Is(err, fs.ErrNotExist), Equals, true)
+	c.Assert(errors.Is(err, fs.ErrNotExist), tc.Equals, true)
 }

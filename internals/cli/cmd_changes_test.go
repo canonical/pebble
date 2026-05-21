@@ -25,7 +25,7 @@ import (
 	"net/url"
 	"strings"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
@@ -93,57 +93,57 @@ var fakeChangeInProgressJSON = `{"type": "sync", "result": {
   "tasks": [{"kind": "bar", "summary": "some summary", "status": "Doing", "progress": {"done": 50, "total": 100}, "spawn-time": "2016-04-21T01:02:03Z", "ready-time": "2016-04-21T01:02:04Z", "log": ["a", "b", "c"]}]
 }}`
 
-func (s *PebbleSuite) TestChangesExtraArgs(c *check.C) {
+func (s *PebbleSuite) TestChangesExtraArgs(c *tc.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "extra", "args"})
-	c.Assert(err, check.Equals, cli.ErrExtraArgs)
-	c.Check(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Check(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChangesAllDigitsSuggestion(c *check.C) {
+func (s *PebbleSuite) TestChangesAllDigitsSuggestion(c *tc.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "42"})
-	c.Assert(err, check.ErrorMatches, `'pebble changes' command expects a service name, try 'pebble tasks 42'`)
-	c.Check(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, `'pebble changes' command expects a service name, try 'pebble tasks 42'`)
+	c.Check(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoChanges(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
+func (s *PebbleSuite) TestNoChanges(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
 		fmt.Fprintln(w, `{"type":"sync", "result": []}"`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "svc1"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "no changes found\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "no changes found\n")
 }
 
-func (s *PebbleSuite) TestGetChangesFails(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
+func (s *PebbleSuite) TestGetChangesFails(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"for": {"svc1"}, "select": {"all"}})
 		fmt.Fprintln(w, `{"type":"error", "result": {"message": "could not foo"}}"`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "svc1"})
-	c.Assert(err, check.ErrorMatches, "could not foo")
-	c.Check(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not foo")
+	c.Check(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChanges(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+func (s *PebbleSuite) TestChanges(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
 		fmt.Fprintln(w, fakeChangesJSON)
 	})
 
@@ -158,39 +158,39 @@ two +Do +2016-04-21 +2016-04-2[12] +...
 `[1:]
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Matches, expectedChanges)
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Matches, expectedChanges)
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChangesJSON(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+func (s *PebbleSuite) TestChangesJSON(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
 		fmt.Fprintln(w, fakeChangesJSON)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"changes":[{"id":"four","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"}],"ready":false,"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"},{"id":"three","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-01-21T01:02:03Z","ready-time":"2016-01-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-01-21T01:02:03Z"},{"id":"one","kind":"remove","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"},{"id":"two","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}]}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"changes":[{"id":"four","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"}],"ready":false,"spawn-time":"2015-02-21T01:02:03Z","ready-time":"2015-02-21T01:02:04Z"},{"id":"three","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-01-21T01:02:03Z","ready-time":"2016-01-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-01-21T01:02:03Z"},{"id":"one","kind":"remove","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-03-21T01:02:03Z","ready-time":"2016-03-21T01:02:04Z"},{"id":"two","kind":"install","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:04Z"}]}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChangesYAML(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+func (s *PebbleSuite) TestChangesYAML(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
 		fmt.Fprintln(w, fakeChangesJSON)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 changes:
     - id: four
       kind: install
@@ -264,66 +264,66 @@ changes:
       spawn-time: 2016-04-21T01:02:03Z
       ready-time: 2016-04-21T01:02:04Z
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoChangesJSON(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+func (s *PebbleSuite) TestNoChangesJSON(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
 		fmt.Fprintln(w, `{"type":"sync", "result": []}`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "json"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"changes":[]}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"changes":[]}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestNoChangesYAML(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+func (s *PebbleSuite) TestNoChangesYAML(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
 		fmt.Fprintln(w, `{"type":"sync", "result": []}`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "yaml"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "changes: []\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "changes: []\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChangesInvalidFormat(c *check.C) {
+func (s *PebbleSuite) TestChangesInvalidFormat(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"changes", "--format", "foobar"})
-	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+	c.Assert(err, tc.ErrorMatches, "Invalid value.*for option.*--format.*")
 }
 
-func (s *PebbleSuite) TestChangesUnknownMaintenance(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes")
-		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"select": {"all"}})
+func (s *PebbleSuite) TestChangesUnknownMaintenance(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes")
+		c.Check(r.URL.Query(), tc.DeepEquals, url.Values{"select": {"all"}})
 		json := strings.Replace(fakeChangesJSON, `"type": "sync"`, `"type": "sync", "maintenance": {"kind": "dachshund", "message": "unknown maintenance reason"}`, 1)
 		fmt.Fprintln(w, json)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"changes"})
-	c.Assert(err, check.ErrorMatches, "unknown maintenance reason")
-	c.Check(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Matches, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "unknown maintenance reason")
+	c.Check(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Matches, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChangeSimple(c *check.C) {
+func (s *PebbleSuite) TestChangeSimple(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if n < 2 {
-			c.Check(r.Method, check.Equals, "GET")
-			c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+			c.Check(r.Method, tc.Equals, "GET")
+			c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 			fmt.Fprintln(w, fakeChangeJSON)
 		} else {
 			c.Fatalf("expected to get 1 requests, now on %d", n+1)
@@ -335,32 +335,32 @@ func (s *PebbleSuite) TestChangeSimple(c *check.C) {
 Do +2016-04-21T01:02:03Z +- +some summary
 `
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Matches, expectedChange)
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Matches, expectedChange)
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChangeSimpleFails(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+func (s *PebbleSuite) TestChangeSimpleFails(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, `{"type": "error", "result": {"message": "could not bar"}}`)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
-	c.Assert(err, check.ErrorMatches, "could not bar")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Matches, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not bar")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Matches, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestChangeSimpleRebooting(c *check.C) {
+func (s *PebbleSuite) TestChangeSimpleRebooting(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if n < 2 {
-			c.Check(r.Method, check.Equals, "GET")
-			c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+			c.Check(r.Method, tc.Equals, "GET")
+			c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 			fmt.Fprintln(w, strings.Replace(fakeChangeJSON, `"type": "sync"`, `"type": "sync", "maintenance": {"kind": "system-restart", "message": "system is restarting"}`, 1))
 		} else {
 			c.Fatalf("expected to get 1 requests, now on %d", n+1)
@@ -370,52 +370,52 @@ func (s *PebbleSuite) TestChangeSimpleRebooting(c *check.C) {
 	})
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "42"})
-	c.Assert(err, check.IsNil)
-	c.Check(s.Stderr(), check.Equals, "WARNING: Pebble is about to reboot the system\n")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(s.Stderr(), tc.Equals, "WARNING: Pebble is about to reboot the system\n")
 }
 
-func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+func (s *PebbleSuite) TestChangeSimpleUnknownMaintenance(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, strings.Replace(fakeChangeJSON, `"type": "sync"`, `"type": "sync", "maintenance": {"kind": "dachshund", "message": "unknown maintenance reason"}`, 1))
 	})
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "42"})
-	c.Assert(err, check.ErrorMatches, "unknown maintenance reason")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "unknown maintenance reason")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestTasksLast(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
+func (s *PebbleSuite) TestTasksLast(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
 		if r.URL.Path == "/v1/changes" {
 			fmt.Fprintln(w, fakeChangesJSON)
 			return
 		}
-		c.Assert(r.URL.Path, check.Equals, "/v1/changes/two")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/changes/two")
 		fmt.Fprintln(w, fakeChangeJSON)
 	})
 	expectedChange := `(?ms)Status +Spawn +Ready +Summary
 Do +2016-04-21T01:02:03Z +- +some summary
 `
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "--last=install"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.DeepEquals, []string{})
-	c.Check(s.Stdout(), check.Matches, expectedChange)
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.DeepEquals, []string{})
+	c.Check(s.Stdout(), tc.Matches, expectedChange)
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	_, err = cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "--last=foobar"})
-	c.Assert(err, check.NotNil)
-	c.Assert(err, check.ErrorMatches, `no changes of type "foobar" found`)
+	c.Assert(err, tc.NotNil)
+	c.Assert(err, tc.ErrorMatches, `no changes of type "foobar" found`)
 }
 
-func (s *PebbleSuite) TestTasksLastQuestionmark(c *check.C) {
+func (s *PebbleSuite) TestTasksLastQuestionmark(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		n++
-		c.Check(r.Method, check.Equals, "GET")
-		c.Assert(r.URL.Path, check.Equals, "/v1/changes")
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Assert(r.URL.Path, tc.Equals, "/v1/changes")
 		switch n {
 		case 1, 2:
 			fmt.Fprintln(w, `{"type": "sync", "result": []}`)
@@ -427,57 +427,57 @@ func (s *PebbleSuite) TestTasksLastQuestionmark(c *check.C) {
 	})
 	for i := range 2 {
 		rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--last=foobar?"})
-		c.Assert(err, check.IsNil)
-		c.Assert(rest, check.DeepEquals, []string{})
-		c.Check(s.Stdout(), check.Matches, "")
-		c.Check(s.Stderr(), check.Equals, "")
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(rest, tc.DeepEquals, []string{})
+		c.Check(s.Stdout(), tc.Matches, "")
+		c.Check(s.Stderr(), tc.Equals, "")
 
 		_, err = cli.ParserForTest().ParseArgs([]string{"tasks", "--last=foobar"})
 		if i == 0 {
-			c.Assert(err, check.ErrorMatches, `no changes found`)
+			c.Assert(err, tc.ErrorMatches, `no changes found`)
 		} else {
-			c.Assert(err, check.ErrorMatches, `no changes of type "foobar" found`)
+			c.Assert(err, tc.ErrorMatches, `no changes of type "foobar" found`)
 		}
 	}
 
-	c.Check(n, check.Equals, 4)
+	c.Check(n, tc.Equals, 4)
 }
 
-func (s *PebbleSuite) TestTasksSyntaxError(c *check.C) {
+func (s *PebbleSuite) TestTasksSyntaxError(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "--last=install", "42"})
-	c.Assert(err, check.NotNil)
-	c.Assert(err, check.ErrorMatches, `cannot use change ID and type together`)
+	c.Assert(err, tc.NotNil)
+	c.Assert(err, tc.ErrorMatches, `cannot use change ID and type together`)
 
 	_, err = cli.ParserForTest().ParseArgs([]string{"tasks"})
-	c.Assert(err, check.NotNil)
-	c.Assert(err, check.ErrorMatches, `please provide change ID or type with --last=<type>`)
+	c.Assert(err, tc.NotNil)
+	c.Assert(err, tc.ErrorMatches, `please provide change ID or type with --last=<type>`)
 }
 
-func (s *PebbleSuite) TestTasksJSON(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+func (s *PebbleSuite) TestTasksJSON(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, fakeChangeJSON)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "json", "42"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"id":"uno","kind":"foo","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}`+"\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `{"id":"uno","kind":"foo","summary":"...","status":"Do","tasks":[{"id":"","kind":"bar","summary":"some summary","status":"Do","progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}`+"\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestTasksYAML(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "GET")
-		c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+func (s *PebbleSuite) TestTasksYAML(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "GET")
+		c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 		fmt.Fprintln(w, fakeChangeJSON)
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "yaml", "42"})
-	c.Assert(err, check.IsNil)
-	c.Check(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, `
 id: uno
 kind: foo
 summary: '...'
@@ -495,21 +495,21 @@ tasks:
 ready: false
 spawn-time: 2016-04-21T01:02:03Z
 `[1:])
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestTasksInvalidFormat(c *check.C) {
+func (s *PebbleSuite) TestTasksInvalidFormat(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--format", "foobar", "42"})
-	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
+	c.Assert(err, tc.ErrorMatches, "Invalid value.*for option.*--format.*")
 }
 
-func (s *PebbleSuite) TestChangeProgress(c *check.C) {
+func (s *PebbleSuite) TestChangeProgress(c *tc.C) {
 	n := 0
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		switch n {
 		case 0:
-			c.Check(r.Method, check.Equals, "GET")
-			c.Check(r.URL.Path, check.Equals, "/v1/changes/42")
+			c.Check(r.Method, tc.Equals, "GET")
+			c.Check(r.URL.Path, tc.Equals, "/v1/changes/42")
 			fmt.Fprintln(w, fakeChangeInProgressJSON)
 		default:
 			c.Fatalf("expected to get 1 requests, now on %d", n+1)
@@ -518,10 +518,10 @@ func (s *PebbleSuite) TestChangeProgress(c *check.C) {
 		n++
 	})
 	rest, err := cli.ParserForTest().ParseArgs([]string{"tasks", "--abs-time", "42"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.DeepEquals, []string{})
-	c.Check(s.Stdout(), check.Matches, `(?ms)Status +Spawn +Ready +Summary
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.DeepEquals, []string{})
+	c.Check(s.Stdout(), tc.Matches, `(?ms)Status +Spawn +Ready +Summary
 Doing +2016-04-21T01:02:03Z +2016-04-21T01:02:04Z +some summary \(50.00%\)
 `)
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

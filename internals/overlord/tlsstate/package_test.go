@@ -1,4 +1,4 @@
-// Copyright (C) 2025 Canonical Ltd
+// Copyright (tc.C) 2025 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -30,32 +30,31 @@ import (
 	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
-
-// Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
 
 type tlsSuite struct {
 	// The HTTPS server port number allocated during a test.
 	serverHTTPSPort int
 }
 
-var _ = Suite(&tlsSuite{})
+func TestTlsSuite(t *testing.T) {
+	tc.Run(t, &tlsSuite{})
+}
 
 // testTLSVerifiedClient performs a client TLS connection without server certificate
 // signature verification.
-func (ts *tlsSuite) testTLSInsecureClient(c *C, clock time.Time) ([]*x509.Certificate, error) {
+func (ts *tlsSuite) testTLSInsecureClient(c *tc.C, clock time.Time) ([]*x509.Certificate, error) {
 	return ts.testTLSClient(c, nil, clock)
 }
 
 // testTLSVerifiedClient performs a client TLS connection with server certificate
 // signature verification.
-func (ts *tlsSuite) testTLSVerifiedClient(c *C, ca *x509.Certificate, clock time.Time) ([]*x509.Certificate, error) {
+func (ts *tlsSuite) testTLSVerifiedClient(c *tc.C, ca *x509.Certificate, clock time.Time) ([]*x509.Certificate, error) {
 	return ts.testTLSClient(c, ca, clock)
 }
 
-func (ts *tlsSuite) testTLSClient(c *C, ca *x509.Certificate, clock time.Time) ([]*x509.Certificate, error) {
+func (ts *tlsSuite) testTLSClient(c *tc.C, ca *x509.Certificate, clock time.Time) ([]*x509.Certificate, error) {
 	var serverCerts []*x509.Certificate
 
 	certPool := x509.NewCertPool()
@@ -97,18 +96,18 @@ func (ts *tlsSuite) testTLSClient(c *C, ca *x509.Certificate, clock time.Time) (
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(response.Body)
-	c.Assert(err, IsNil)
-	c.Assert(string(body), Equals, "TLS 1.3!")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(string(body), tc.Equals, "TLS 1.3!")
 
 	return serverCerts, nil
 }
 
-func (ts *tlsSuite) testTLSServer(c *C, getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)) (shutdown func()) {
+func (ts *tlsSuite) testTLSServer(c *tc.C, getCertificate func(*tls.ClientHelloInfo) (*tls.Certificate, error)) (shutdown func()) {
 	// First start a listener so we buffer client requests while the HTTPS
 	// server routine is starting up.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 	}
 	// Get the allocated port.
 	ts.serverHTTPSPort = listener.Addr().(*net.TCPAddr).Port
@@ -155,11 +154,11 @@ type idkey struct {
 	ed25519.PrivateKey
 }
 
-func newIDKey(c *C) *idkey {
+func newIDKey(c tc.LikeTB) *idkey {
 	k := &idkey{}
 	var err error
 	_, k.PrivateKey, err = ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, IsNil)
+	tc.Assert(c, err, tc.IsNil)
 	return k
 }
 

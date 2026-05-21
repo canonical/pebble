@@ -19,42 +19,41 @@ import (
 	"fmt"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/progress"
 	"github.com/canonical/pebble/internals/progress/progresstest"
 )
 
-// Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
-
 type ProgressTestSuite struct {
 }
 
-var _ = Suite(&ProgressTestSuite{})
+func TestProgressTestSuite(t *testing.T) {
+	tc.Run(t, &ProgressTestSuite{})
+}
 
-func (ts *ProgressTestSuite) testNotify(c *C, t progress.Meter, desc, expected string) {
+func (ts *ProgressTestSuite) testNotify(c *tc.C, t progress.Meter, desc, expected string) {
 	var buf bytes.Buffer
 	defer progress.MockStdout(&buf)()
 
-	comment := Commentf(desc)
+	comment := tc.Commentf(desc)
 
 	t.Notify("blah blah")
 
-	c.Check(buf.String(), Equals, expected, comment)
+	c.Check(buf.String(), tc.Equals, expected, comment)
 }
 
-func (ts *ProgressTestSuite) TestQuietNotify(c *C) {
+func (ts *ProgressTestSuite) TestQuietNotify(c *tc.C) {
 	ts.testNotify(c, &progress.QuietMeter{}, "quiet", "blah blah\n")
 }
 
-func (ts *ProgressTestSuite) TestANSINotify(c *C) {
+func (ts *ProgressTestSuite) TestANSINotify(c *tc.C) {
 	expected := fmt.Sprint("\r", progress.ExitAttributeMode, progress.ClrEOL, "blah blah\n")
 	ts.testNotify(c, &progress.ANSIMeter{}, "ansi", expected)
 }
 
-func (ts *ProgressTestSuite) TestTestingNotify(c *C) {
+func (ts *ProgressTestSuite) TestTestingNotify(c *tc.C) {
 	p := &progresstest.Meter{}
 	ts.testNotify(c, p, "test", "")
-	c.Check(p.Notices, DeepEquals, []string{"blah blah"})
+	c.Check(p.Notices, tc.DeepEquals, []string{"blah blah"})
 }
