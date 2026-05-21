@@ -21,7 +21,7 @@ VALE_DIR         ?= $(DOCS_VENVDIR)/lib/python*/site-packages/vale
 VALE_CONFIG      ?= $(DEV_DIR)/vale.ini
 PA11Y_CMD        ?= $(DEV_DIR)/node_modules/pa11y/bin/pa11y.js --config $(DEV_DIR)/pa11y.json
 CONFIRM_SUDO     ?= N
-CHECK_PATH       ?= $(filter-out $(DOCS_VENVDIR),$(wildcard *))
+CHECK_PATH       ?= $(filter-out $(DOCS_VENVDIR) $(DOCS_BUILDDIR),$(wildcard *))
 
 # Put it first so that "make" without argument is like "make help".
 help:
