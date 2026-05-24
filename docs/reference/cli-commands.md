@@ -6,7 +6,7 @@ tocdepth: 2
 
 The `pebble` command has the following subcommands, organized into logical groups:
 
-* Run: [run](#reference_pebble_run_command)
+* Run: [run](#reference_pebble_run_command), [enter](#reference_pebble_enter_command)
 * Info: [help](#reference_pebble_help_command), [version](#reference_pebble_version_command)
 * Plan: [add](#reference_pebble_add_command), [plan](#reference_pebble_plan_command), [replan](#reference_pebble_replan_command)
 * Services: [services](#reference_pebble_services_command), [logs](#reference_pebble_logs_command), [start](#reference_pebble_start_command), [restart](#reference_pebble_restart_command), [signal](#reference_pebble_signal_command), [stop](#reference_pebble_stop_command)
@@ -165,6 +165,92 @@ arguments.
       --level=[alive|ready]       Check level to filter for
 ```
 <!-- END AUTOMATED OUTPUT FOR checks -->
+
+
+(reference_pebble_enter_command)=
+## enter
+
+The `enter` command is used to run Pebble as a container entrypoint, optionally invoking another Pebble subcommand inside the same environment.
+
+<!-- START AUTOMATED OUTPUT FOR enter -->
+```{terminal}
+pebble enter --help
+
+Usage:
+  pebble enter [enter-OPTIONS] [<subcommand>...]
+
+The enter command facilitates the use of Pebble as an entrypoint for containers.
+When used without a subcommand it mimics the behavior of the run command
+alone, while if used with a subcommand it runs that subcommand in the most
+appropriate environment taking into account its purpose.
+
+These subcommands are currently supported:
+
+help      (1)(2)
+version   (1)(2)
+plan      (1)(2)
+services  (1)(2)
+ls        (1)(2)
+exec      (1)
+start     (3)
+stop      (3)
+
+(1) Services are not started.
+(2) No logs on stdout unless -v/--verbose is used.
+(3) Services continue running after the subcommand succeeds.
+
+[enter command options]
+          --create-dirs   Create Pebble directory on startup if it doesn't exist
+          --hold          Do not start default services automatically
+          --http=         Start HTTP API listening on this address in
+                          "<address>:port" format (for example, ":4000",
+                          "192.0.2.0:4000", "[2001:db8::1]:4000")
+          --https=        Start HTTPS API listening on this address in
+                          "<address>:port" format (for example, ":8443",
+                          "192.0.2.0:8443", "[2001:db8::1]:8443")
+      -v, --verbose       Log all output from services to stdout (also
+                          PEBBLE_VERBOSE=1)
+          --args=         Provide additional arguments to a service
+          --identities=   Seed identities from file (like update-identities
+                          --replace)
+          --run           Start default services before executing subcommand
+```
+<!-- END AUTOMATED OUTPUT FOR enter -->
+
+### How it works
+
+`pebble enter` is intended to be the container's entrypoint. With no subcommand it behaves like [`pebble run`](#reference_pebble_run_command): the daemon starts and runs the configured services in the foreground until interrupted.
+
+When a subcommand is given, `enter` runs that subcommand against the same Pebble environment, choosing the right runtime behavior for it:
+
+* `help`, `version` — run without starting the service manager.
+* `plan`, `services`, `ls` — start the service manager but skip default-service autostart (so the inspection is quick and quiet); logs are suppressed on stdout unless `-v`/`--verbose` is passed.
+* `exec` — start the service manager (without autostarting default services) and run a one-shot remote command; logs are suppressed.
+* `start`, `stop` — start the service manager and keep it running after the subcommand returns, so the container stays up.
+
+This makes `enter` a convenient way to share one container image across run, inspection and exec entrypoints without invoking the daemon separately each time.
+
+### Examples
+
+Use Pebble as the container entrypoint, starting the daemon and configured services:
+
+```{terminal}
+pebble enter
+```
+
+Run a one-shot command inside the same Pebble environment used by the container:
+
+```{terminal}
+pebble enter exec -- echo hello
+```
+
+Inspect the plan without starting any services:
+
+```{terminal}
+pebble enter plan
+```
+
+For the environment variables that apply, see [Environment variables](environment-variables).
 
 
 (reference_pebble_exec_command)=
