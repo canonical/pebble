@@ -53,7 +53,7 @@ func v1GetChecks(c *Command, r *http.Request, _ *UserState) Response {
 	checkMgr := c.d.overlord.CheckManager()
 	checks, err := checkMgr.Checks()
 	if err != nil {
-		return InternalError("%v", err)
+		return ServerError("%v", err)
 	}
 
 	infos := []checkInfo{} // if no checks, return [] instead of null
@@ -104,7 +104,7 @@ func v1PostChecks(c *Command, r *http.Request, user *UserState) Response {
 		if _, ok := err.(*checkstate.ChecksNotFound); ok {
 			return BadRequest("cannot %s checks: %v", payload.Action, err)
 		} else {
-			return InternalError("cannot %s checks: %v", payload.Action, err)
+			return ServerError("cannot %s checks: %v", payload.Action, err)
 		}
 	}
 
