@@ -16,11 +16,14 @@ def get_all_commands() -> typing.List[str]:
         capture_output=True,
         check=True,
     )
-    return sorted(
+    commands = [
         line.split(maxsplit=1)[0]
         for line in process.stdout.splitlines()
         if line.startswith("    ")
-    )
+    ]
+    # We want to document 'enter' but it is not in the help list.
+    commands.append("enter")
+    return sorted(commands)
 
 
 def get_command_help_output(cmd: str) -> str:
