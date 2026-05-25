@@ -170,7 +170,7 @@ arguments.
 (reference_pebble_enter_command)=
 ## enter
 
-The `enter` command is used to run Pebble as a container entrypoint, optionally invoking another Pebble subcommand inside the same environment.
+The `enter` command is used to run Pebble as a container entrypoint, optionally invoking another Pebble command inside the same environment.
 
 <!-- START AUTOMATED OUTPUT FOR enter -->
 ```{terminal}
@@ -228,7 +228,7 @@ When a subcommand is given, `enter` runs that subcommand against the same Pebble
 * `exec` — start the service manager (without autostarting default services) and run a one-shot remote command; logs are suppressed.
 * `start`, `stop` — start the service manager and keep it running after the subcommand returns, so the container stays up.
 
-This makes `enter` a convenient way to share one container image across run, inspection and exec entrypoints without invoking the daemon separately each time.
+This makes `enter` a convenient way for a container image to provide inspection and exec modes that don't start the default services.
 
 ### Examples
 
