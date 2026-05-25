@@ -24,17 +24,16 @@ import (
 	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/state"
-	"github.com/canonical/pebble/internals/testutil"
 )
-
-func TestState(t *testing.T) { TestingT(t) }
 
 type stateSuite struct{}
 
-var _ = Suite(&stateSuite{})
+func TestStateSuite(t *testing.T) {
+	tc.Run(t, &stateSuite{})
+}
 
 type mgrState1 struct {
 	A string
@@ -48,13 +47,13 @@ type mgrState2 struct {
 	C *Count2
 }
 
-func (ss *stateSuite) TestLockUnlock(c *C) {
+func (ss *stateSuite) TestLockUnlock(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	st.Unlock()
 }
 
-func (ss *stateSuite) TestUnlocker(c *C) {
+func (ss *stateSuite) TestUnlocker(c *tc.C) {
 	st := state.New(nil)
 	unlocker := st.Unlocker()
 	st.Lock()
@@ -65,7 +64,7 @@ func (ss *stateSuite) TestUnlocker(c *C) {
 	relock()
 }
 
-func (ss *stateSuite) TestGetAndSet(c *C) {
+func (ss *stateSuite) TestGetAndSet(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -77,30 +76,30 @@ func (ss *stateSuite) TestGetAndSet(c *C) {
 
 	var mSt1B mgrState1
 	err := st.Get("mgr1", &mSt1B)
-	c.Assert(err, IsNil)
-	c.Check(&mSt1B, DeepEquals, mSt1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(&mSt1B, tc.DeepEquals, mSt1)
 
 	var mSt2B mgrState2
 	err = st.Get("mgr2", &mSt2B)
-	c.Assert(err, IsNil)
-	c.Check(&mSt2B, DeepEquals, mSt2)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(&mSt2B, tc.DeepEquals, mSt2)
 }
 
-func (ss *stateSuite) TestHas(c *C) {
+func (ss *stateSuite) TestHas(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
-	c.Check(st.Has("a"), Equals, false)
+	c.Check(st.Has("a"), tc.Equals, false)
 
 	st.Set("a", 1)
-	c.Check(st.Has("a"), Equals, true)
+	c.Check(st.Has("a"), tc.Equals, true)
 
 	st.Set("a", nil)
-	c.Check(st.Has("a"), Equals, false)
+	c.Check(st.Has("a"), tc.Equals, false)
 }
 
-func (ss *stateSuite) TestStrayTaskWithNoChange(c *C) {
+func (ss *stateSuite) TestStrayTaskWithNoChange(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -111,13 +110,13 @@ func (ss *stateSuite) TestStrayTaskWithNoChange(c *C) {
 	_ = st.NewTask("bar", "...")
 
 	// only the task with associate change is returned
-	c.Assert(st.Tasks(), HasLen, 1)
-	c.Assert(st.Tasks()[0].ID(), Equals, t1.ID())
+	c.Assert(st.Tasks(), tc.HasLen, 1)
+	c.Assert(st.Tasks()[0].ID(), tc.Equals, t1.ID())
 	// but count includes all tasks
-	c.Assert(st.TaskCount(), Equals, 2)
+	c.Assert(st.TaskCount(), tc.Equals, 2)
 }
 
-func (ss *stateSuite) TestSetPanic(c *C) {
+func (ss *stateSuite) TestSetPanic(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -125,20 +124,20 @@ func (ss *stateSuite) TestSetPanic(c *C) {
 	unsupported := struct {
 		Ch chan bool
 	}{}
-	c.Check(func() { st.Set("mgr9", unsupported) }, PanicMatches, `internal error: could not marshal value for state entry "mgr9": json: unsupported type:.*`)
+	c.Check(func() { st.Set("mgr9", unsupported) }, tc.PanicMatches, `internal error: could not marshal value for state entry "mgr9": json: unsupported type:.*`)
 }
 
-func (ss *stateSuite) TestGetNoState(c *C) {
+func (ss *stateSuite) TestGetNoState(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
 	var mSt1B mgrState1
 	err := st.Get("mgr9", &mSt1B)
-	c.Check(err, testutil.ErrorIs, state.ErrNoState)
+	c.Check(err, tc.ErrorIs, state.ErrNoState)
 }
 
-func (ss *stateSuite) TestSetToNilDeletes(c *C) {
+func (ss *stateSuite) TestSetToNilDeletes(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -146,32 +145,32 @@ func (ss *stateSuite) TestSetToNilDeletes(c *C) {
 	st.Set("a", map[string]int{"a": 1})
 	var v map[string]int
 	err := st.Get("a", &v)
-	c.Assert(err, IsNil)
-	c.Check(v, HasLen, 1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(v, tc.HasLen, 1)
 
 	st.Set("a", nil)
 
 	var v1 map[string]int
 	err = st.Get("a", &v1)
-	c.Check(err, testutil.ErrorIs, state.ErrNoState)
-	c.Check(v1, HasLen, 0)
+	c.Check(err, tc.ErrorIs, state.ErrNoState)
+	c.Check(v1, tc.HasLen, 0)
 }
 
-func (ss *stateSuite) TestNullMeansNoState(c *C) {
+func (ss *stateSuite) TestNullMeansNoState(c *tc.C) {
 	buf := bytes.NewBufferString(`{"data": {"a": null}}`)
 	st, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st.Lock()
 	defer st.Unlock()
 
 	var v1 map[string]int
 	err = st.Get("a", &v1)
-	c.Check(err, testutil.ErrorIs, state.ErrNoState)
-	c.Check(v1, HasLen, 0)
+	c.Check(err, tc.ErrorIs, state.ErrNoState)
+	c.Check(v1, tc.HasLen, 0)
 }
 
-func (ss *stateSuite) TestGetUnmarshalProblem(c *C) {
+func (ss *stateSuite) TestGetUnmarshalProblem(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -183,10 +182,10 @@ func (ss *stateSuite) TestGetUnmarshalProblem(c *C) {
 
 	var mSt1B mgrState1
 	err := st.Get("mgr9", &mSt1B)
-	c.Check(err, ErrorMatches, `internal error: could not unmarshal state entry "mgr9": json: cannot unmarshal .*`)
+	c.Check(err, tc.ErrorMatches, `internal error: could not unmarshal state entry "mgr9": json: cannot unmarshal .*`)
 }
 
-func (ss *stateSuite) TestCache(c *C) {
+func (ss *stateSuite) TestCache(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -194,18 +193,18 @@ func (ss *stateSuite) TestCache(c *C) {
 	type key1 struct{}
 	type key2 struct{}
 
-	c.Assert(st.Cached(key1{}), Equals, nil)
+	c.Assert(st.Cached(key1{}), tc.Equals, nil)
 
 	st.Cache(key1{}, "value1")
 	st.Cache(key2{}, "value2")
-	c.Assert(st.Cached(key1{}), Equals, "value1")
-	c.Assert(st.Cached(key2{}), Equals, "value2")
+	c.Assert(st.Cached(key1{}), tc.Equals, "value1")
+	c.Assert(st.Cached(key2{}), tc.Equals, "value2")
 
 	st.Cache(key1{}, nil)
-	c.Assert(st.Cached(key1{}), Equals, nil)
+	c.Assert(st.Cached(key1{}), tc.Equals, nil)
 
 	_, ok := st.Cached("key3").(string)
-	c.Assert(ok, Equals, false)
+	c.Assert(ok, tc.Equals, false)
 }
 
 type fakeStateBackend struct {
@@ -230,7 +229,7 @@ func (b *fakeStateBackend) NeedsCheckpoint() bool {
 	return true
 }
 
-func (ss *stateSuite) TestImplicitCheckpointAndRead(c *C) {
+func (ss *stateSuite) TestImplicitCheckpointAndRead(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
@@ -244,34 +243,34 @@ func (ss *stateSuite) TestImplicitCheckpointAndRead(c *C) {
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
-	c.Assert(st2.Modified(), Equals, false)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(st2.Modified(), tc.Equals, false)
 
 	st2.Lock()
 	defer st2.Unlock()
 
 	var v int
 	err = st2.Get("v", &v)
-	c.Assert(err, IsNil)
-	c.Check(v, Equals, 1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(v, tc.Equals, 1)
 
 	var mSt1B mgrState1
 	err = st2.Get("mgr1", &mSt1B)
-	c.Assert(err, IsNil)
-	c.Check(&mSt1B, DeepEquals, mSt1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(&mSt1B, tc.DeepEquals, mSt1)
 
 	var mSt2B mgrState2
 	err = st2.Get("mgr2", &mSt2B)
-	c.Assert(err, IsNil)
-	c.Check(&mSt2B, DeepEquals, mSt2)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(&mSt2B, tc.DeepEquals, mSt2)
 }
 
-func (ss *stateSuite) TestImplicitCheckpointRetry(c *C) {
+func (ss *stateSuite) TestImplicitCheckpointRetry(c *tc.C) {
 	restore := state.FakeCheckpointRetryDelay(2*time.Millisecond, 1*time.Second)
 	defer restore()
 
@@ -291,10 +290,10 @@ func (ss *stateSuite) TestImplicitCheckpointRetry(c *C) {
 	// implicit checkpoint will retry
 	st.Unlock()
 
-	c.Check(retries, Equals, 2)
+	c.Check(retries, tc.Equals, 2)
 }
 
-func (ss *stateSuite) TestImplicitCheckpointPanicsAfterFailedRetries(c *C) {
+func (ss *stateSuite) TestImplicitCheckpointPanicsAfterFailedRetries(c *tc.C) {
 	restore := state.FakeCheckpointRetryDelay(2*time.Millisecond, 80*time.Millisecond)
 	defer restore()
 
@@ -310,13 +309,13 @@ func (ss *stateSuite) TestImplicitCheckpointPanicsAfterFailedRetries(c *C) {
 
 	// implicit checkpoint will panic after all failed retries
 	t0 := time.Now()
-	c.Check(func() { st.Unlock() }, PanicMatches, "cannot checkpoint even after 80ms of retries every 2ms: boom")
+	c.Check(func() { st.Unlock() }, tc.PanicMatches, "cannot checkpoint even after 80ms of retries every 2ms: boom")
 	// we did at least a couple
-	c.Check(retries > 2, Equals, true, Commentf("expected more than 2 retries got %v", retries))
-	c.Check(time.Since(t0) > 80*time.Millisecond, Equals, true)
+	c.Check(retries > 2, tc.Equals, true, tc.Commentf("expected more than 2 retries got %v", retries))
+	c.Check(time.Since(t0) > 80*time.Millisecond, tc.Equals, true)
 }
 
-func (ss *stateSuite) TestImplicitCheckpointModifiedOnly(c *C) {
+func (ss *stateSuite) TestImplicitCheckpointModifiedOnly(c *tc.C) {
 	restore := state.FakeCheckpointRetryDelay(2*time.Millisecond, 1*time.Second)
 	defer restore()
 
@@ -327,16 +326,16 @@ func (ss *stateSuite) TestImplicitCheckpointModifiedOnly(c *C) {
 	st.Lock()
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	st.Lock()
 	st.Set("foo", "bar")
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 2)
+	c.Assert(b.checkpoints, tc.HasLen, 2)
 }
 
-func (ss *stateSuite) TestNewChangeAndChanges(c *C) {
+func (ss *stateSuite) TestNewChangeAndChanges(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -345,7 +344,7 @@ func (ss *stateSuite) TestNewChangeAndChanges(c *C) {
 	chg2 := st.NewChange("remove", "...")
 
 	chgs := st.Changes()
-	c.Check(chgs, HasLen, 2)
+	c.Check(chgs, tc.HasLen, 2)
 
 	expected := map[string]*state.Change{
 		chg1.ID(): chg1,
@@ -353,14 +352,14 @@ func (ss *stateSuite) TestNewChangeAndChanges(c *C) {
 	}
 
 	for _, chg := range chgs {
-		c.Check(chg, Equals, expected[chg.ID()])
-		c.Check(st.Change(chg.ID()), Equals, chg)
+		c.Check(chg, tc.Equals, expected[chg.ID()])
+		c.Check(st.Change(chg.ID()), tc.Equals, chg)
 	}
 
-	c.Check(st.Change("no-such-id"), IsNil)
+	c.Check(st.Change("no-such-id"), tc.IsNil)
 }
 
-func (ss *stateSuite) TestNewChangeWithNoticeData(c *C) {
+func (ss *stateSuite) TestNewChangeWithNoticeData(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -369,15 +368,15 @@ func (ss *stateSuite) TestNewChangeWithNoticeData(c *C) {
 	chg := st.NewChangeWithNoticeData("perform-check", "...", extraData)
 
 	chgs := st.Changes()
-	c.Check(chgs, HasLen, 1)
+	c.Check(chgs, tc.HasLen, 1)
 
 	var data map[string]string
 	err := chg.Get("notice-data", &data)
-	c.Assert(err, IsNil)
-	c.Check(data, DeepEquals, extraData)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(data, tc.DeepEquals, extraData)
 }
 
-func (ss *stateSuite) TestNewChangeWithNilNoticeData(c *C) {
+func (ss *stateSuite) TestNewChangeWithNilNoticeData(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -386,17 +385,17 @@ func (ss *stateSuite) TestNewChangeWithNilNoticeData(c *C) {
 	st.NewChangeWithNoticeData("replan", "...", nil)
 
 	for _, chg := range st.Changes() {
-		c.Assert(chg.Has("notice-data"), Equals, false)
+		c.Assert(chg.Has("notice-data"), tc.Equals, false)
 	}
 }
 
-func (ss *stateSuite) TestNewChangeAndCheckpoint(c *C) {
+func (ss *stateSuite) TestNewChangeAndCheckpoint(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
 
 	chg := st.NewChange("install", "summary")
-	c.Assert(chg, NotNil)
+	c.Assert(chg, tc.NotNil)
 	chgID := chg.ID()
 	chg.Set("a", 1)
 	chg.SetStatus(state.ErrorStatus)
@@ -407,34 +406,34 @@ func (ss *stateSuite) TestNewChangeAndCheckpoint(c *C) {
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
-	c.Assert(st2, NotNil)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
 	defer st2.Unlock()
 
 	chgs := st2.Changes()
 
-	c.Assert(chgs, HasLen, 1)
+	c.Assert(chgs, tc.HasLen, 1)
 
 	chg0 := chgs[0]
-	c.Check(chg0.ID(), Equals, chgID)
-	c.Check(chg0.Kind(), Equals, "install")
-	c.Check(chg0.Summary(), Equals, "summary")
-	c.Check(chg0.SpawnTime().Equal(spawnTime), Equals, true)
-	c.Check(chg0.ReadyTime().Equal(readyTime), Equals, true)
+	c.Check(chg0.ID(), tc.Equals, chgID)
+	c.Check(chg0.Kind(), tc.Equals, "install")
+	c.Check(chg0.Summary(), tc.Equals, "summary")
+	c.Check(chg0.SpawnTime().Equal(spawnTime), tc.Equals, true)
+	c.Check(chg0.ReadyTime().Equal(readyTime), tc.Equals, true)
 
 	var v int
 	err = chg0.Get("a", &v)
-	c.Check(err, IsNil)
-	c.Check(v, Equals, 1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(v, tc.Equals, 1)
 
-	c.Check(chg0.Status(), Equals, state.ErrorStatus)
+	c.Check(chg0.Status(), tc.Equals, state.ErrorStatus)
 
 	select {
 	case <-chg0.Ready():
@@ -443,13 +442,13 @@ func (ss *stateSuite) TestNewChangeAndCheckpoint(c *C) {
 	}
 }
 
-func (ss *stateSuite) TestNewChangeAndCheckpointTaskDerivedStatus(c *C) {
+func (ss *stateSuite) TestNewChangeAndCheckpointTaskDerivedStatus(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
 
 	chg := st.NewChange("install", "summary")
-	c.Assert(chg, NotNil)
+	c.Assert(chg, tc.NotNil)
 	chgID := chg.ID()
 
 	t1 := st.NewTask("download", "1...")
@@ -459,22 +458,22 @@ func (ss *stateSuite) TestNewChangeAndCheckpointTaskDerivedStatus(c *C) {
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2.Lock()
 	defer st2.Unlock()
 
 	chgs := st2.Changes()
 
-	c.Assert(chgs, HasLen, 1)
+	c.Assert(chgs, tc.HasLen, 1)
 
 	chg0 := chgs[0]
-	c.Check(chg0.ID(), Equals, chgID)
-	c.Check(chg0.Status(), Equals, state.DoneStatus)
+	c.Check(chg0.ID(), tc.Equals, chgID)
+	c.Check(chg0.Status(), tc.Equals, state.DoneStatus)
 
 	select {
 	case <-chg0.Ready():
@@ -483,13 +482,13 @@ func (ss *stateSuite) TestNewChangeAndCheckpointTaskDerivedStatus(c *C) {
 	}
 }
 
-func (ss *stateSuite) TestNewTaskAndCheckpoint(c *C) {
+func (ss *stateSuite) TestNewTaskAndCheckpoint(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
 
 	chg := st.NewChange("install", "summary")
-	c.Assert(chg, NotNil)
+	c.Assert(chg, tc.NotNil)
 
 	t1 := st.NewTask("download", "1...")
 	chg.AddTask(t1)
@@ -510,79 +509,79 @@ func (ss *stateSuite) TestNewTaskAndCheckpoint(c *C) {
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
-	c.Assert(st2, NotNil)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
 	defer st2.Unlock()
 
 	chgs := st2.Changes()
-	c.Assert(chgs, HasLen, 1)
+	c.Assert(chgs, tc.HasLen, 1)
 	chg0 := chgs[0]
 
 	tasks0 := make(map[string]*state.Task)
 	for _, t := range chg0.Tasks() {
 		tasks0[t.ID()] = t
 	}
-	c.Assert(tasks0, HasLen, 2)
+	c.Assert(tasks0, tc.HasLen, 2)
 
 	task0_1 := tasks0[t1ID]
-	c.Check(task0_1.ID(), Equals, t1ID)
-	c.Check(task0_1.Kind(), Equals, "download")
-	c.Check(task0_1.Summary(), Equals, "1...")
-	c.Check(task0_1.Change(), Equals, chg0)
+	c.Check(task0_1.ID(), tc.Equals, t1ID)
+	c.Check(task0_1.Kind(), tc.Equals, "download")
+	c.Check(task0_1.Summary(), tc.Equals, "1...")
+	c.Check(task0_1.Change(), tc.Equals, chg0)
 
 	var v int
 	err = task0_1.Get("a", &v)
-	c.Check(err, IsNil)
-	c.Check(v, Equals, 1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(v, tc.Equals, 1)
 
-	c.Check(task0_1.Status(), Equals, state.DoneStatus)
+	c.Check(task0_1.Status(), tc.Equals, state.DoneStatus)
 
 	_, cur, tot := task0_1.Progress()
-	c.Check(cur, Equals, 5)
-	c.Check(tot, Equals, 10)
+	c.Check(cur, tc.Equals, 5)
+	c.Check(tot, tc.Equals, 10)
 
-	c.Assert(task0_1.Lanes(), DeepEquals, []int{42, 43})
+	c.Assert(task0_1.Lanes(), tc.DeepEquals, []int{42, 43})
 
 	task0_2 := tasks0[t2ID]
-	c.Check(task0_2.WaitTasks(), DeepEquals, []*state.Task{task0_1})
+	c.Check(task0_2.WaitTasks(), tc.DeepEquals, []*state.Task{task0_1})
 
-	c.Check(task0_1.HaltTasks(), DeepEquals, []*state.Task{task0_2})
+	c.Check(task0_1.HaltTasks(), tc.DeepEquals, []*state.Task{task0_2})
 
 	tasks2 := make(map[string]*state.Task)
 	for _, t := range st2.Tasks() {
 		tasks2[t.ID()] = t
 	}
-	c.Assert(tasks2, HasLen, 2)
+	c.Assert(tasks2, tc.HasLen, 2)
 
-	c.Check(task0_1.AtTime().IsZero(), Equals, true)
-	c.Check(task0_2.AtTime().Equal(schedule), Equals, true)
+	c.Check(task0_1.AtTime().IsZero(), tc.Equals, true)
+	c.Check(task0_2.AtTime().Equal(schedule), tc.Equals, true)
 }
 
-func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *C) {
+func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
 
 	chg := st.NewChange("install", "summary")
-	c.Assert(chg, NotNil)
+	c.Assert(chg, tc.NotNil)
 
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
-	c.Assert(st2, NotNil)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
 	defer st2.Unlock()
@@ -599,10 +598,10 @@ func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *C) {
 		if f.Type.Kind() == reflect.Map {
 			maps = append(maps, f.Name)
 			fv := val.Elem().Field(i)
-			c.Check(fv.IsNil(), Equals, false, Commentf("Map field %s of state was not initialized by ReadState", f.Name))
+			c.Check(fv.IsNil(), tc.Equals, false, tc.Commentf("Map field %s of state was not initialized by ReadState", f.Name))
 		}
 	}
-	c.Check(maps, DeepEquals, []string{
+	c.Check(maps, tc.DeepEquals, []string{
 		"data",
 		"changes",
 		"tasks",
@@ -614,7 +613,7 @@ func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *C) {
 	})
 }
 
-func (ss *stateSuite) TestEmptyTaskAndChangeDataAndCheckpointReadAndSet(c *C) {
+func (ss *stateSuite) TestEmptyTaskAndChangeDataAndCheckpointReadAndSet(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
@@ -628,20 +627,20 @@ func (ss *stateSuite) TestEmptyTaskAndChangeDataAndCheckpointReadAndSet(c *C) {
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
-	c.Assert(st2, NotNil)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(st2, tc.NotNil)
 
 	st2.Lock()
 	defer st2.Unlock()
 
 	chg2 := st2.Change(chgID)
 	t1_2 := st2.Task(t1ID)
-	c.Assert(t1_2, NotNil)
+	c.Assert(t1_2, tc.NotNil)
 
 	// no crash
 	chg2.Set("c", 1)
@@ -649,16 +648,16 @@ func (ss *stateSuite) TestEmptyTaskAndChangeDataAndCheckpointReadAndSet(c *C) {
 	t1_2.Set("t", 1)
 }
 
-func (ss *stateSuite) TestEnsureBefore(c *C) {
+func (ss *stateSuite) TestEnsureBefore(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 
 	st.EnsureBefore(10 * time.Second)
 
-	c.Check(b.ensureBefore, Equals, 10*time.Second)
+	c.Check(b.ensureBefore, tc.Equals, 10*time.Second)
 }
 
-func (ss *stateSuite) TestCheckpointPreserveLastIds(c *C) {
+func (ss *stateSuite) TestCheckpointPreserveLastIds(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
@@ -667,29 +666,29 @@ func (ss *stateSuite) TestCheckpointPreserveLastIds(c *C) {
 	st.NewTask("download", "...")
 	st.NewTask("download", "...")
 
-	c.Assert(st.NewLane(), Equals, 1)
+	c.Assert(st.NewLane(), tc.Equals, 1)
 
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2.Lock()
 	defer st2.Unlock()
 
-	c.Assert(st2.NewTask("download", "...").ID(), Equals, "3")
-	c.Assert(st2.NewChange("install", "...").ID(), Equals, "2")
+	c.Assert(st2.NewTask("download", "...").ID(), tc.Equals, "3")
+	c.Assert(st2.NewChange("install", "...").ID(), tc.Equals, "2")
 
-	c.Assert(st2.NewLane(), Equals, 2)
+	c.Assert(st2.NewLane(), tc.Equals, 2)
 
 }
 
-func (ss *stateSuite) TestCheckpointPreserveCleanStatus(c *C) {
+func (ss *stateSuite) TestCheckpointPreserveCleanStatus(c *tc.C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
 	st.Lock()
@@ -703,12 +702,12 @@ func (ss *stateSuite) TestCheckpointPreserveCleanStatus(c *C) {
 	// implicit checkpoint
 	st.Unlock()
 
-	c.Assert(b.checkpoints, HasLen, 1)
+	c.Assert(b.checkpoints, tc.HasLen, 1)
 
 	buf := bytes.NewBuffer(b.checkpoints[0])
 
 	st2, err := state.ReadState(nil, buf)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	st2.Lock()
 	defer st2.Unlock()
@@ -716,11 +715,11 @@ func (ss *stateSuite) TestCheckpointPreserveCleanStatus(c *C) {
 	chg2 := st2.Change(chg.ID())
 	t2 := st2.Task(t.ID())
 
-	c.Assert(chg2.IsClean(), Equals, true)
-	c.Assert(t2.IsClean(), Equals, true)
+	c.Assert(chg2.IsClean(), tc.Equals, true)
+	c.Assert(t2.IsClean(), tc.Equals, true)
 }
 
-func (ss *stateSuite) TestNewTaskAndTasks(c *C) {
+func (ss *stateSuite) TestNewTaskAndTasks(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -738,7 +737,7 @@ func (ss *stateSuite) TestNewTaskAndTasks(c *C) {
 	chg2.AddTask(t22)
 
 	tasks := st.Tasks()
-	c.Check(tasks, HasLen, 4)
+	c.Check(tasks, tc.HasLen, 4)
 
 	expected := map[string]*state.Task{
 		t11.ID(): t11,
@@ -748,19 +747,19 @@ func (ss *stateSuite) TestNewTaskAndTasks(c *C) {
 	}
 
 	for _, t := range tasks {
-		c.Check(t, Equals, expected[t.ID()])
+		c.Check(t, tc.Equals, expected[t.ID()])
 	}
 }
 
-func (ss *stateSuite) TestTaskNoTask(c *C) {
+func (ss *stateSuite) TestTaskNoTask(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
 
-	c.Check(st.Task("1"), IsNil)
+	c.Check(st.Task("1"), tc.IsNil)
 }
 
-func (ss *stateSuite) TestNewTaskHiddenUntilLinked(c *C) {
+func (ss *stateSuite) TestNewTaskHiddenUntilLinked(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -768,12 +767,12 @@ func (ss *stateSuite) TestNewTaskHiddenUntilLinked(c *C) {
 	t1 := st.NewTask("check", "...")
 
 	tasks := st.Tasks()
-	c.Check(tasks, HasLen, 0)
+	c.Check(tasks, tc.HasLen, 0)
 
-	c.Check(st.Task(t1.ID()), IsNil)
+	c.Check(st.Task(t1.ID()), tc.IsNil)
 }
 
-func (ss *stateSuite) TestMethodEntrance(c *C) {
+func (ss *stateSuite) TestMethodEntrance(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 
 	// Reset modified flag.
@@ -804,22 +803,22 @@ func (ss *stateSuite) TestMethodEntrance(c *C) {
 
 	for i, f := range reads {
 		c.Logf("Testing read function #%d", i)
-		c.Assert(f, PanicMatches, "internal error: accessing state without lock")
-		c.Assert(st.Modified(), Equals, false)
+		c.Assert(f, tc.PanicMatches, "internal error: accessing state without lock")
+		c.Assert(st.Modified(), tc.Equals, false)
 	}
 
 	for i, f := range writes {
 		st.Lock()
 		st.Unlock()
-		c.Assert(st.Modified(), Equals, false)
+		c.Assert(st.Modified(), tc.Equals, false)
 
 		c.Logf("Testing write function #%d", i)
-		c.Assert(f, PanicMatches, "internal error: accessing state without lock")
-		c.Assert(st.Modified(), Equals, true)
+		c.Assert(f, tc.PanicMatches, "internal error: accessing state without lock")
+		c.Assert(st.Modified(), tc.Equals, true)
 	}
 }
 
-func (ss *stateSuite) TestPrune(c *C) {
+func (ss *stateSuite) TestPrune(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 	st.Lock()
 	defer st.Unlock()
@@ -840,13 +839,13 @@ func (ss *stateSuite) TestPrune(c *C) {
 	state.FakeChangeTimes(chg1, now.Add(-abortWait), unset)
 
 	n1ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg1.ID(), nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	chg2 := st.NewChange("prune", "...")
 	chg2.AddTask(t2)
-	c.Assert(chg2.Status(), Equals, state.DoStatus)
+	c.Assert(chg2.Status(), tc.Equals, state.DoStatus)
 	n2ID, err := st.AddNotice(nil, state.ChangeUpdateNotice, chg2.ID(), nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	state.FakeChangeTimes(chg2, now.Add(-pruneWait), now.Add(-pruneWait))
 
 	chg3 := st.NewChange("ready-but-recent", "...")
@@ -863,44 +862,44 @@ func (ss *stateSuite) TestPrune(c *C) {
 		// defaultNoticeExpireAfter = 7 * 24 * time.Hour
 		Time: now.Add(-8 * 24 * time.Hour),
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// unlinked task
 	t5 := st.NewTask("unliked", "...")
-	c.Check(st.Task(t5.ID()), IsNil)
+	c.Check(st.Task(t5.ID()), tc.IsNil)
 	state.FakeTaskTimes(t5, now.Add(-pruneWait), now.Add(-pruneWait))
 
 	past := time.Now().AddDate(-1, 0, 0)
 	st.Prune(past, pruneWait, abortWait, 100, 100)
 
-	c.Assert(st.Change(chg1.ID()), Equals, chg1)
-	c.Assert(st.Change(chg2.ID()), IsNil)
-	c.Assert(st.Change(chg3.ID()), Equals, chg3)
-	c.Assert(st.Change(chg4.ID()), Equals, chg4)
+	c.Assert(st.Change(chg1.ID()), tc.Equals, chg1)
+	c.Assert(st.Change(chg2.ID()), tc.IsNil)
+	c.Assert(st.Change(chg3.ID()), tc.Equals, chg3)
+	c.Assert(st.Change(chg4.ID()), tc.Equals, chg4)
 
-	c.Assert(st.Task(t1.ID()), Equals, t1)
-	c.Assert(st.Task(t2.ID()), IsNil)
-	c.Assert(st.Task(t3.ID()), Equals, t3)
-	c.Assert(st.Task(t4.ID()), Equals, t4)
+	c.Assert(st.Task(t1.ID()), tc.Equals, t1)
+	c.Assert(st.Task(t2.ID()), tc.IsNil)
+	c.Assert(st.Task(t3.ID()), tc.Equals, t3)
+	c.Assert(st.Task(t4.ID()), tc.Equals, t4)
 
-	c.Assert(chg1.Status(), Equals, state.HoldStatus)
-	c.Assert(chg3.Status(), Equals, state.DoStatus)
-	c.Assert(chg4.Status(), Equals, state.DoStatus)
+	c.Assert(chg1.Status(), tc.Equals, state.HoldStatus)
+	c.Assert(chg3.Status(), tc.Equals, state.DoStatus)
+	c.Assert(chg4.Status(), tc.Equals, state.DoStatus)
 
-	c.Assert(t1.Status(), Equals, state.HoldStatus)
-	c.Assert(t3.Status(), Equals, state.DoStatus)
-	c.Assert(t4.Status(), Equals, state.DoStatus)
+	c.Assert(t1.Status(), tc.Equals, state.HoldStatus)
+	c.Assert(t3.Status(), tc.Equals, state.DoStatus)
+	c.Assert(t4.Status(), tc.Equals, state.DoStatus)
 
-	c.Check(st.TaskCount(), Equals, 3)
+	c.Check(st.TaskCount(), tc.Equals, 3)
 
 	// n1 didn't expire, n2 was pruned because change 2 was removed, and
 	// n4 was pruned because its last occurance was old
-	c.Assert(st.Notice(n1ID), NotNil)
-	c.Assert(st.Notice(n2ID), IsNil)
-	c.Assert(st.Notice(n4ID), IsNil)
+	c.Assert(st.Notice(n1ID), tc.NotNil)
+	c.Assert(st.Notice(n2ID), tc.IsNil)
+	c.Assert(st.Notice(n4ID), tc.IsNil)
 }
 
-func (ss *stateSuite) TestRegisterPendingChangeByAttr(c *C) {
+func (ss *stateSuite) TestRegisterPendingChangeByAttr(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 	st.Lock()
 	defer st.Unlock()
@@ -929,27 +928,27 @@ func (ss *stateSuite) TestRegisterPendingChangeByAttr(c *C) {
 	t3.SetStatus(state.HoldStatus)
 
 	st.RegisterPendingChangeByAttr("pending-flag", func(chg *state.Change) bool {
-		c.Check(chg.ID(), Equals, chg2.ID())
+		c.Check(chg.ID(), tc.Equals, chg2.ID())
 		return true
 	})
 
 	past := time.Now().AddDate(-1, 0, 0)
 	st.Prune(past, pruneWait, abortWait, 100, 100)
 
-	c.Assert(st.Change(chg1.ID()), Equals, chg1)
-	c.Assert(st.Change(chg2.ID()), Equals, chg2)
-	c.Assert(st.Task(t1.ID()), Equals, t1)
-	c.Assert(st.Task(t2.ID()), Equals, t2)
-	c.Assert(st.Task(t3.ID()), Equals, t3)
-	c.Assert(st.Task(t4.ID()), Equals, t4)
+	c.Assert(st.Change(chg1.ID()), tc.Equals, chg1)
+	c.Assert(st.Change(chg2.ID()), tc.Equals, chg2)
+	c.Assert(st.Task(t1.ID()), tc.Equals, t1)
+	c.Assert(st.Task(t2.ID()), tc.Equals, t2)
+	c.Assert(st.Task(t3.ID()), tc.Equals, t3)
+	c.Assert(st.Task(t4.ID()), tc.Equals, t4)
 
-	c.Assert(t1.Status(), Equals, state.HoldStatus)
-	c.Assert(t2.Status(), Equals, state.HoldStatus)
-	c.Assert(t3.Status(), Equals, state.HoldStatus)
-	c.Assert(t4.Status(), Equals, state.DoStatus)
+	c.Assert(t1.Status(), tc.Equals, state.HoldStatus)
+	c.Assert(t2.Status(), tc.Equals, state.HoldStatus)
+	c.Assert(t3.Status(), tc.Equals, state.HoldStatus)
+	c.Assert(t4.Status(), tc.Equals, state.DoStatus)
 }
 
-func (ss *stateSuite) TestPruneEmptyChange(c *C) {
+func (ss *stateSuite) TestPruneEmptyChange(c *tc.C) {
 	// Empty changes are a bit special because they start out on Hold
 	// which is a Ready status, but the change itself is not considered Ready
 	// explicitly because that's how every change that will have tasks added
@@ -967,10 +966,10 @@ func (ss *stateSuite) TestPruneEmptyChange(c *C) {
 
 	past := time.Now().AddDate(-1, 0, 0)
 	st.Prune(past, pruneWait, abortWait, 100, 100)
-	c.Assert(st.Change(chg.ID()), IsNil)
+	c.Assert(st.Change(chg.ID()), tc.IsNil)
 }
 
-func (ss *stateSuite) TestPruneMaxChangesHappy(c *C) {
+func (ss *stateSuite) TestPruneMaxChangesHappy(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 	st.Lock()
 	defer st.Unlock()
@@ -990,7 +989,7 @@ func (ss *stateSuite) TestPruneMaxChangesHappy(c *C) {
 		when := time.Duration(i) * time.Second
 		state.FakeChangeTimes(chg, now.Add(-when), now.Add(-when))
 	}
-	c.Assert(st.Changes(), HasLen, 10)
+	c.Assert(st.Changes(), tc.HasLen, 10)
 
 	// and 5 more, all not ready
 	for i := 10; i < 15; i++ {
@@ -1005,18 +1004,18 @@ func (ss *stateSuite) TestPruneMaxChangesHappy(c *C) {
 	maxReadyChanges := 100
 	maxReadyNotices := 100
 	st.Prune(past, pruneWait, abortWait, maxReadyChanges, maxReadyNotices)
-	c.Assert(st.Changes(), HasLen, 15)
+	c.Assert(st.Changes(), tc.HasLen, 15)
 
 	// but with maxReadyChanges we remove the ready ones
 	maxReadyChanges = 5
 	maxReadyNotices = 5
 	st.Prune(past, pruneWait, abortWait, maxReadyChanges, maxReadyNotices)
-	c.Assert(st.Changes(), HasLen, 10)
+	c.Assert(st.Changes(), tc.HasLen, 10)
 	remaining := map[string]bool{}
 	for _, chg := range st.Changes() {
 		remaining[chg.Kind()] = true
 	}
-	c.Check(remaining, DeepEquals, map[string]bool{
+	c.Check(remaining, tc.DeepEquals, map[string]bool{
 		// ready and fresh
 		"chg0": true,
 		"chg1": true,
@@ -1032,7 +1031,7 @@ func (ss *stateSuite) TestPruneMaxChangesHappy(c *C) {
 	})
 }
 
-func (ss *stateSuite) TestPruneMaxChangesSomeNotReady(c *C) {
+func (ss *stateSuite) TestPruneMaxChangesSomeNotReady(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 	st.Lock()
 	defer st.Unlock()
@@ -1043,16 +1042,16 @@ func (ss *stateSuite) TestPruneMaxChangesSomeNotReady(c *C) {
 		t := st.NewTask("foo", "...")
 		chg.AddTask(t)
 	}
-	c.Assert(st.Changes(), HasLen, 10)
+	c.Assert(st.Changes(), tc.HasLen, 10)
 
 	// nothing can be pruned
 	past := time.Now().AddDate(-1, 0, 0)
 	maxChanges := 5
 	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges, maxChanges)
-	c.Assert(st.Changes(), HasLen, 10)
+	c.Assert(st.Changes(), tc.HasLen, 10)
 }
 
-func (ss *stateSuite) TestPruneMaxChangesHonored(c *C) {
+func (ss *stateSuite) TestPruneMaxChangesHonored(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 	st.Lock()
 	defer st.Unlock()
@@ -1063,7 +1062,7 @@ func (ss *stateSuite) TestPruneMaxChangesHonored(c *C) {
 		t := st.NewTask("foo", "not-readly")
 		chg.AddTask(t)
 	}
-	c.Assert(st.Changes(), HasLen, 10)
+	c.Assert(st.Changes(), tc.HasLen, 10)
 
 	// one extra change that just now entered ready state
 	chg := st.NewChange("chg99", "so-ready")
@@ -1079,10 +1078,10 @@ func (ss *stateSuite) TestPruneMaxChangesHonored(c *C) {
 	maxChanges := 10
 	past := time.Now().AddDate(-1, 0, 0)
 	st.Prune(past, 1*time.Hour, 3*time.Hour, maxChanges, maxChanges)
-	c.Assert(st.Changes(), HasLen, 11)
+	c.Assert(st.Changes(), tc.HasLen, 11)
 }
 
-func (ss *stateSuite) TestPruneHonorsStartOperationTime(c *C) {
+func (ss *stateSuite) TestPruneHonorsStartOperationTime(c *tc.C) {
 	st := state.New(&fakeStateBackend{})
 	st.Lock()
 	defer st.Unlock()
@@ -1104,29 +1103,29 @@ func (ss *stateSuite) TestPruneHonorsStartOperationTime(c *C) {
 	// it's less than abortWait limit.
 	opTime := now.Add(-startTime)
 	st.Prune(opTime, pruneWait, abortWait, 100, 100)
-	c.Assert(st.Changes(), HasLen, 1)
-	c.Check(chg.Status(), Equals, state.DoStatus)
+	c.Assert(st.Changes(), tc.HasLen, 1)
+	c.Check(chg.Status(), tc.Equals, state.DoStatus)
 
 	// start operation time is 9h ago, change is aborted.
 	startTime = 9 * time.Hour
 	opTime = time.Now().Add(-startTime)
 	st.Prune(opTime, pruneWait, abortWait, 100, 100)
-	c.Assert(st.Changes(), HasLen, 1)
-	c.Check(chg.Status(), Equals, state.HoldStatus)
+	c.Assert(st.Changes(), tc.HasLen, 1)
+	c.Check(chg.Status(), tc.Equals, state.HoldStatus)
 }
 
-func (ss *stateSuite) TestReadStateInitsTransientMapFields(c *C) {
+func (ss *stateSuite) TestReadStateInitsTransientMapFields(c *tc.C) {
 	st, err := state.ReadState(nil, bytes.NewBufferString("{}"))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Lock()
 	defer st.Unlock()
 
 	st.Cache("key", "value")
-	c.Assert(st.Cached("key"), Equals, "value")
+	c.Assert(st.Cached("key"), tc.Equals, "value")
 	st.RegisterPendingChangeByAttr("attr", func(*state.Change) bool { return false })
 }
 
-func (ss *stateSuite) TestTimingsSupport(c *C) {
+func (ss *stateSuite) TestTimingsSupport(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1134,28 +1133,28 @@ func (ss *stateSuite) TestTimingsSupport(c *C) {
 	var tims []int
 
 	err := st.GetMaybeTimings(&tims)
-	c.Assert(err, IsNil)
-	c.Check(tims, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(tims, tc.IsNil)
 
 	st.SaveTimings([]int{1, 2, 3})
 
 	err = st.GetMaybeTimings(&tims)
-	c.Assert(err, IsNil)
-	c.Check(tims, DeepEquals, []int{1, 2, 3})
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(tims, tc.DeepEquals, []int{1, 2, 3})
 }
 
-func (ss *stateSuite) TestNoStateErrorIs(c *C) {
+func (ss *stateSuite) TestNoStateErrorIs(c *tc.C) {
 	err := &state.NoStateError{Key: "foo"}
-	c.Assert(err, testutil.ErrorIs, &state.NoStateError{})
-	c.Assert(err, testutil.ErrorIs, &state.NoStateError{Key: "bar"})
-	c.Assert(err, testutil.ErrorIs, state.ErrNoState)
+	c.Assert(err, tc.ErrorIs, &state.NoStateError{})
+	c.Assert(err, tc.ErrorIs, &state.NoStateError{Key: "bar"})
+	c.Assert(err, tc.ErrorIs, state.ErrNoState)
 }
 
-func (ss *stateSuite) TestNoStateErrorString(c *C) {
+func (ss *stateSuite) TestNoStateErrorString(c *tc.C) {
 	err := &state.NoStateError{}
-	c.Assert(err.Error(), Equals, `no state entry for key`)
+	c.Assert(err.Error(), tc.Equals, `no state entry for key`)
 	err.Key = "foo"
-	c.Assert(err.Error(), Equals, `no state entry for key "foo"`)
+	c.Assert(err.Error(), tc.Equals, `no state entry for key "foo"`)
 }
 
 type taskAndStatus struct {
@@ -1163,7 +1162,7 @@ type taskAndStatus struct {
 	old, new state.Status
 }
 
-func (ss *stateSuite) TestTaskChangedHandler(c *C) {
+func (ss *stateSuite) TestTaskChangedHandler(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1194,7 +1193,7 @@ func (ss *stateSuite) TestTaskChangedHandler(c *C) {
 	// must not appear in list.
 	t1.SetStatus(state.DoingStatus)
 
-	c.Check(taskObservedChanges, DeepEquals, []taskAndStatus{
+	c.Check(taskObservedChanges, tc.DeepEquals, []taskAndStatus{
 		{
 			t:   t1,
 			old: state.DefaultStatus,
@@ -1213,7 +1212,7 @@ type changeAndStatus struct {
 	old, new state.Status
 }
 
-func (ss *stateSuite) TestChangeChangedHandler(c *C) {
+func (ss *stateSuite) TestChangeChangedHandler(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1246,7 +1245,7 @@ func (ss *stateSuite) TestChangeChangedHandler(c *C) {
 	// must not appear in list.
 	t1.SetStatus(state.DoneStatus)
 
-	c.Check(observedChanges, DeepEquals, []changeAndStatus{
+	c.Check(observedChanges, tc.DeepEquals, []changeAndStatus{
 		{
 			chg: chg,
 			old: state.DefaultStatus,
@@ -1260,7 +1259,7 @@ func (ss *stateSuite) TestChangeChangedHandler(c *C) {
 	})
 }
 
-func (ss *stateSuite) TestChangeSetStatusChangedHandler(c *C) {
+func (ss *stateSuite) TestChangeSetStatusChangedHandler(c *tc.C) {
 	st := state.New(nil)
 	st.Lock()
 	defer st.Unlock()
@@ -1292,7 +1291,7 @@ func (ss *stateSuite) TestChangeSetStatusChangedHandler(c *C) {
 	chg.SetStatus(state.DefaultStatus)
 	st.RemoveChangeStatusChangedHandler(oId)
 
-	c.Check(observedChanges, DeepEquals, []changeAndStatus{
+	c.Check(observedChanges, tc.DeepEquals, []changeAndStatus{
 		{
 			chg: chg,
 			old: state.DefaultStatus,

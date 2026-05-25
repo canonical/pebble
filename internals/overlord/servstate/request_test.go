@@ -15,12 +15,12 @@
 package servstate_test
 
 import (
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
-func (s *S) TestStart(c *C) {
+func (s *S) TestStart(c *tc.C) {
 	s.newServiceManager(c)
 	layer := `
 services:
@@ -41,25 +41,25 @@ services:
 	defer s.st.Unlock()
 
 	tset, err := servstate.Start(s.st, [][]string{{"one"}, {"two"}})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
-	c.Assert(len(tasks), Equals, 2)
+	c.Assert(len(tasks), tc.Equals, 2)
 
-	c.Assert(tasks[0].Kind(), Equals, "start")
+	c.Assert(tasks[0].Kind(), tc.Equals, "start")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "one")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "one")
 
-	c.Assert(tasks[1].Kind(), Equals, "start")
+	c.Assert(tasks[1].Kind(), tc.Equals, "start")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "two")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "two")
 
-	c.Assert(tasks[0].Lanes()[0], Not(Equals), tasks[1].Lanes()[0])
+	c.Assert(tasks[0].Lanes()[0], tc.Not(tc.Equals), tasks[1].Lanes()[0])
 }
 
-func (s *S) TestStartInTheSameLaneAfter(c *C) {
+func (s *S) TestStartInTheSameLaneAfter(c *tc.C) {
 	s.newServiceManager(c)
 	layer := `
 services:
@@ -84,25 +84,25 @@ services:
 	defer s.st.Unlock()
 
 	tset, err := servstate.Start(s.st, [][]string{{"one", "two"}})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
-	c.Assert(len(tasks), Equals, 2)
+	c.Assert(len(tasks), tc.Equals, 2)
 
-	c.Assert(tasks[0].Kind(), Equals, "start")
+	c.Assert(tasks[0].Kind(), tc.Equals, "start")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "one")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "one")
 
-	c.Assert(tasks[1].Kind(), Equals, "start")
+	c.Assert(tasks[1].Kind(), tc.Equals, "start")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "two")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "two")
 
-	c.Assert(tasks[0].Lanes()[0], Equals, tasks[1].Lanes()[0])
+	c.Assert(tasks[0].Lanes()[0], tc.Equals, tasks[1].Lanes()[0])
 }
 
-func (s *S) TestStartInTheSameLaneBefore(c *C) {
+func (s *S) TestStartInTheSameLaneBefore(c *tc.C) {
 	s.newServiceManager(c)
 	layer := `
 services:
@@ -127,41 +127,41 @@ services:
 	defer s.st.Unlock()
 
 	tset, err := servstate.Start(s.st, [][]string{{"one", "two"}})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
-	c.Assert(len(tasks), Equals, 2)
+	c.Assert(len(tasks), tc.Equals, 2)
 
-	c.Assert(tasks[0].Kind(), Equals, "start")
+	c.Assert(tasks[0].Kind(), tc.Equals, "start")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "one")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "one")
 
-	c.Assert(tasks[1].Kind(), Equals, "start")
+	c.Assert(tasks[1].Kind(), tc.Equals, "start")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "two")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "two")
 
-	c.Assert(tasks[0].Lanes()[0], Equals, tasks[1].Lanes()[0])
+	c.Assert(tasks[0].Lanes()[0], tc.Equals, tasks[1].Lanes()[0])
 }
 
-func (s *S) TestStop(c *C) {
+func (s *S) TestStop(c *tc.C) {
 	s.st.Lock()
 	defer s.st.Unlock()
 
 	tset, err := servstate.Stop(s.st, [][]string{{"one", "two"}})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tasks := tset.Tasks()
-	c.Assert(len(tasks), Equals, 2)
+	c.Assert(len(tasks), tc.Equals, 2)
 
-	c.Assert(tasks[0].Kind(), Equals, "stop")
+	c.Assert(tasks[0].Kind(), tc.Equals, "stop")
 	req, err := servstate.TaskServiceRequest(tasks[0])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "one")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "one")
 
-	c.Assert(tasks[1].Kind(), Equals, "stop")
+	c.Assert(tasks[1].Kind(), tc.Equals, "stop")
 	req, err = servstate.TaskServiceRequest(tasks[1])
-	c.Assert(err, IsNil)
-	c.Assert(req.Name, Equals, "two")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(req.Name, tc.Equals, "two")
 }

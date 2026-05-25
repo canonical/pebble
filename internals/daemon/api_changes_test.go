@@ -23,7 +23,7 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/state"
 )
@@ -45,7 +45,7 @@ func setupChanges(st *state.State) []string {
 	return []string{chg1.ID(), chg2.ID(), t1.ID(), t2.ID(), t3.ID()}
 }
 
-func (s *apiSuite) TestStateChangesDefaultToInProgress(c *check.C) {
+func (s *apiSuite) TestStateChangesDefaultToInProgress(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -60,21 +60,21 @@ func (s *apiSuite) TestStateChangesDefaultToInProgress(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Assert(rsp.Result, check.HasLen, 1)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Result, tc.HasLen, 1)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Check(string(res), check.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*`)
+	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*`)
 }
 
-func (s *apiSuite) TestStateChangesInProgress(c *check.C) {
+func (s *apiSuite) TestStateChangesInProgress(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -89,21 +89,21 @@ func (s *apiSuite) TestStateChangesInProgress(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?select=in-progress", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Assert(rsp.Result, check.HasLen, 1)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Result, tc.HasLen, 1)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Check(string(res), check.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}.*`)
+	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}.*`)
 }
 
-func (s *apiSuite) TestStateChangesAll(c *check.C) {
+func (s *apiSuite) TestStateChangesAll(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -118,21 +118,21 @@ func (s *apiSuite) TestStateChangesAll(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?select=all", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Assert(rsp.Result, check.HasLen, 2)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Result, tc.HasLen, 2)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Check(string(res), check.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}.*`)
-	c.Check(string(res), check.Matches, `.*{"id":"\w+","kind":"remove","summary":"remove..","status":"Error","tasks":\[{"id":"\w+","kind":"unlink","summary":"1...","status":"Error","log":\["2016-04-21T01:02:03Z ERROR rm failed"],"progress":{"label":"","done":1,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:03Z"}.*],"ready":true,"err":"[^"]+".*`)
+	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"install","summary":"install...","status":"Do","tasks":\[{"id":"\w+","kind":"download","summary":"1...","status":"Do","log":\["2016-04-21T01:02:03Z INFO l11","2016-04-21T01:02:03Z INFO l12"],"progress":{"label":"","done":0,"total":1},"spawn-time":"2016-04-21T01:02:03Z"}.*],"ready":false,"spawn-time":"2016-04-21T01:02:03Z"}.*`)
+	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"remove","summary":"remove..","status":"Error","tasks":\[{"id":"\w+","kind":"unlink","summary":"1...","status":"Error","log":\["2016-04-21T01:02:03Z ERROR rm failed"],"progress":{"label":"","done":1,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:03Z"}.*],"ready":true,"err":"[^"]+".*`)
 }
 
-func (s *apiSuite) TestStateChangesReady(c *check.C) {
+func (s *apiSuite) TestStateChangesReady(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -147,20 +147,20 @@ func (s *apiSuite) TestStateChangesReady(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?select=ready", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Assert(rsp.Result, check.HasLen, 1)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Result, tc.HasLen, 1)
 
 	res, err := rsp.MarshalJSON()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
-	c.Check(string(res), check.Matches, `.*{"id":"\w+","kind":"remove","summary":"remove..","status":"Error","tasks":\[{"id":"\w+","kind":"unlink","summary":"1...","status":"Error","log":\["2016-04-21T01:02:03Z ERROR rm failed"],"progress":{"label":"","done":1,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:03Z"}.*],"ready":true,"err":"[^"]+".*`)
+	c.Check(string(res), tc.Matches, `.*{"id":"\w+","kind":"remove","summary":"remove..","status":"Error","tasks":\[{"id":"\w+","kind":"unlink","summary":"1...","status":"Error","log":\["2016-04-21T01:02:03Z ERROR rm failed"],"progress":{"label":"","done":1,"total":1},"spawn-time":"2016-04-21T01:02:03Z","ready-time":"2016-04-21T01:02:03Z"}.*],"ready":true,"err":"[^"]+".*`)
 }
 
-func (s *apiSuite) TestStateChangesForServiceName(c *check.C) {
+func (s *apiSuite) TestStateChangesForServiceName(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -175,23 +175,23 @@ func (s *apiSuite) TestStateChangesForServiceName(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/changes?for=funky-service-name&select=all", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChanges(stateChangesCmd, req, nil).(*resp)
 
 	// Verify
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Assert(rsp.Result, check.FitsTypeOf, []*changeInfo(nil))
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Result, tc.FitsTypeOf, []*changeInfo(nil))
 
 	res := rsp.Result.([]*changeInfo)
-	c.Assert(res, check.HasLen, 1)
-	c.Check(res[0].Kind, check.Equals, `install`)
+	c.Assert(res, tc.HasLen, 1)
+	c.Check(res[0].Kind, tc.Equals, `install`)
 
 	_, err = rsp.MarshalJSON()
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
-func (s *apiSuite) TestStateChange(c *check.C) {
+func (s *apiSuite) TestStateChange(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -211,21 +211,21 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("GET", "/v1/change/"+ids[0], nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Result, check.NotNil)
+	c.Check(rec.Code, tc.Equals, 200)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, tc.NotNil)
 
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, check.IsNil)
-	c.Check(body["result"], check.DeepEquals, map[string]any{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(body["result"], tc.DeepEquals, map[string]any{
 		"id":         ids[0],
 		"kind":       "install",
 		"summary":    "install...",
@@ -260,7 +260,7 @@ func (s *apiSuite) TestStateChange(c *check.C) {
 	})
 }
 
-func (s *apiSuite) TestStateChangeAbort(c *check.C) {
+func (s *apiSuite) TestStateChangeAbort(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -284,24 +284,24 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/changes/"+ids[0], buf)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Ensure scheduled
-	c.Check(soon, check.Equals, 1)
+	c.Check(soon, tc.Equals, 1)
 
 	// Verify
-	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Result, check.NotNil)
+	c.Check(rec.Code, tc.Equals, 200)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, tc.NotNil)
 
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, check.IsNil)
-	c.Check(body["result"], check.DeepEquals, map[string]any{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(body["result"], tc.DeepEquals, map[string]any{
 		"id":         ids[0],
 		"kind":       "install",
 		"summary":    "install...",
@@ -333,7 +333,7 @@ func (s *apiSuite) TestStateChangeAbort(c *check.C) {
 	})
 }
 
-func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
+func (s *apiSuite) TestStateChangeAbortIsReady(c *tc.C) {
 	restore := state.FakeTime(time.Date(2016, 4, 21, 1, 2, 3, 0, time.UTC))
 	defer restore()
 
@@ -352,43 +352,43 @@ func (s *apiSuite) TestStateChangeAbortIsReady(c *check.C) {
 
 	// Execute
 	req, err := http.NewRequest("POST", "/v1/changes/"+ids[0], buf)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostChange(stateChangeCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
 	// Verify
-	c.Check(rec.Code, check.Equals, 400)
-	c.Check(rsp.Status, check.Equals, 400)
-	c.Check(rsp.Type, check.Equals, ResponseTypeError)
-	c.Check(rsp.Result, check.NotNil)
+	c.Check(rec.Code, tc.Equals, 400)
+	c.Check(rsp.Status, tc.Equals, 400)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
+	c.Check(rsp.Result, tc.NotNil)
 
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, check.IsNil)
-	c.Check(body["result"], check.DeepEquals, map[string]any{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(body["result"], tc.DeepEquals, map[string]any{
 		"message": fmt.Sprintf("cannot abort change %s with nothing pending", ids[0]),
 	})
 }
 
-func (s *apiSuite) TestWaitChangeNotFound(c *check.C) {
+func (s *apiSuite) TestWaitChangeNotFound(c *tc.C) {
 	s.daemon(c)
 	req, err := http.NewRequest("GET", "/v1/changes/x/wait", nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
-	c.Check(rsp.Status, check.Equals, 404)
+	c.Check(rsp.Status, tc.Equals, 404)
 }
 
-func (s *apiSuite) TestWaitChangeInvalidTimeout(c *check.C) {
+func (s *apiSuite) TestWaitChangeInvalidTimeout(c *tc.C) {
 	rec, rsp, _ := s.testWaitChange(context.Background(), c, "?timeout=BAD", nil)
-	c.Check(rec.Code, check.Equals, 400)
-	c.Check(rsp.Status, check.Equals, 400)
-	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 400)
+	c.Check(rsp.Status, tc.Equals, 400)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-	c.Check(result.Message, check.Matches, "invalid timeout.*")
+	c.Check(result.Message, tc.Matches, "invalid timeout.*")
 }
 
-func (s *apiSuite) TestWaitChangeSuccess(c *check.C) {
+func (s *apiSuite) TestWaitChangeSuccess(c *tc.C) {
 	rec, rsp, changeID := s.testWaitChange(context.Background(), c, "", func(st *state.State, change *state.Change) {
 		// Mark change ready after a short interval
 		time.Sleep(10 * time.Millisecond)
@@ -397,54 +397,54 @@ func (s *apiSuite) TestWaitChangeSuccess(c *check.C) {
 		st.Unlock()
 	})
 
-	c.Check(rec.Code, check.Equals, 200)
-	c.Check(rsp.Status, check.Equals, 200)
-	c.Check(rsp.Type, check.Equals, ResponseTypeSync)
-	c.Check(rsp.Result, check.NotNil)
+	c.Check(rec.Code, tc.Equals, 200)
+	c.Check(rsp.Status, tc.Equals, 200)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Result, tc.NotNil)
 
 	var body map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	result := body["result"].(map[string]any)
-	c.Check(result["id"].(string), check.Equals, changeID)
-	c.Check(result["kind"].(string), check.Equals, "exec")
-	c.Check(result["ready"].(bool), check.Equals, true)
+	c.Check(result["id"].(string), tc.Equals, changeID)
+	c.Check(result["kind"].(string), tc.Equals, "exec")
+	c.Check(result["ready"].(bool), tc.Equals, true)
 }
 
-func (s *apiSuite) TestWaitChangeCancel(c *check.C) {
+func (s *apiSuite) TestWaitChangeCancel(c *tc.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	rec, rsp, _ := s.testWaitChange(ctx, c, "", nil)
-	c.Check(rec.Code, check.Equals, 500)
-	c.Check(rsp.Status, check.Equals, 500)
-	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 500)
+	c.Check(rsp.Status, tc.Equals, 500)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-	c.Check(result.Message, check.Equals, "request cancelled")
+	c.Check(result.Message, tc.Equals, "request cancelled")
 }
 
-func (s *apiSuite) TestWaitChangeTimeout(c *check.C) {
+func (s *apiSuite) TestWaitChangeTimeout(c *tc.C) {
 	rec, rsp, _ := s.testWaitChange(context.Background(), c, "?timeout=10ms", nil)
-	c.Check(rec.Code, check.Equals, 504)
-	c.Check(rsp.Status, check.Equals, 504)
-	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 504)
+	c.Check(rsp.Status, tc.Equals, 504)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-	c.Check(result.Message, check.Matches, "timed out waiting for change .*")
+	c.Check(result.Message, tc.Matches, "timed out waiting for change .*")
 }
 
-func (s *apiSuite) TestWaitChangeTimeoutCancel(c *check.C) {
+func (s *apiSuite) TestWaitChangeTimeoutCancel(c *tc.C) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	rec, rsp, _ := s.testWaitChange(ctx, c, "?timeout=20ms", nil)
-	c.Check(rec.Code, check.Equals, 500)
-	c.Check(rsp.Status, check.Equals, 500)
-	c.Check(rsp.Type, check.Equals, ResponseTypeError)
+	c.Check(rec.Code, tc.Equals, 500)
+	c.Check(rsp.Status, tc.Equals, 500)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-	c.Check(result.Message, check.Equals, "request cancelled")
+	c.Check(result.Message, tc.Equals, "request cancelled")
 }
 
-func (s *apiSuite) testWaitChange(ctx context.Context, c *check.C, query string, markReady func(st *state.State, change *state.Change)) (*httptest.ResponseRecorder, *resp, string) {
+func (s *apiSuite) testWaitChange(ctx context.Context, c *tc.C, query string, markReady func(st *state.State, change *state.Change)) (*httptest.ResponseRecorder, *resp, string) {
 	// Setup
 	d := s.daemon(c)
 	st := d.overlord.State()
@@ -461,7 +461,7 @@ func (s *apiSuite) testWaitChange(ctx context.Context, c *check.C, query string,
 	// Execute
 	s.vars = map[string]string{"id": change.ID()}
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/changes/"+change.ID()+"/wait"+query, nil)
-	c.Assert(err, check.IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetChangeWait(apiCmd("/v1/changes/{id}/wait"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)

@@ -18,13 +18,13 @@ import (
 	"fmt"
 	"net/http"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestVersion(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestVersion(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, `{"type":"sync","status-code":200,"status":"OK","result":{"version":"7.89"}}`)
 	})
 
@@ -32,23 +32,23 @@ func (s *PebbleSuite) TestVersion(c *C) {
 	defer restore()
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"version"})
-	c.Assert(err, IsNil)
-	c.Check(s.Stdout(), Equals, "client  4.56\nserver  7.89\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(s.Stdout(), tc.Equals, "client  4.56\nserver  7.89\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestVersionClientOnly(c *C) {
+func (s *PebbleSuite) TestVersionClientOnly(c *tc.C) {
 	restore := fakeVersion("v1.2.3")
 	defer restore()
 
 	_, err := cli.ParserForTest().ParseArgs([]string{"version", "--client"})
-	c.Assert(err, IsNil)
-	c.Check(s.Stdout(), Equals, "v1.2.3\n")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(s.Stdout(), tc.Equals, "v1.2.3\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestVersionExtraArgs(c *C) {
+func (s *PebbleSuite) TestVersionExtraArgs(c *tc.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"version", "extra", "args"})
-	c.Assert(err, Equals, cli.ErrExtraArgs)
-	c.Assert(rest, HasLen, 1)
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Assert(rest, tc.HasLen, 1)
 }

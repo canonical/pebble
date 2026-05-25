@@ -1,4 +1,4 @@
-// Copyright (C) 2024 Canonical Ltd
+// Copyright (tc.C) 2024 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -22,15 +22,12 @@ import (
 	"strings"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
 )
-
-// Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
 
 type planSuite struct {
 	planMgr   *planstate.PlanManager
@@ -39,40 +36,48 @@ type planSuite struct {
 	writeLayerCounter int
 }
 
-var _ = Suite(&planSuite{})
+func TestPlanSuite(t *testing.T) {
+	tc.Run(t, &planSuite{})
+}
 
-func (ps *planSuite) SetUpTest(c *C) {
+func (ps *planSuite) SetUpTest(c *tc.C) {
 	ps.layersDir = filepath.Join(c.MkDir(), "layers")
 	err := os.Mkdir(ps.layersDir, 0755)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	//Reset write layer counter
 	ps.writeLayerCounter = 1
+
+	c.Cleanup(func() {
+		ps.layersDir = ""
+		ps.writeLayerCounter = 0
+		ps.planMgr = nil
+	})
 }
 
-func (ps *planSuite) writeLayer(c *C, layer string) {
+func (ps *planSuite) writeLayer(c *tc.C, layer string) {
 	filename := fmt.Sprintf("%03[1]d-layer-file-%[1]d.yaml", ps.writeLayerCounter)
 	err := os.WriteFile(filepath.Join(ps.layersDir, filename), []byte(layer), 0644)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ps.writeLayerCounter++
 }
 
-func (ps *planSuite) parseLayer(c *C, order int, label, layerYAML string) *plan.Layer {
+func (ps *planSuite) parseLayer(c *tc.C, order int, label, layerYAML string) *plan.Layer {
 	layer, err := plan.ParseLayer(order, label, []byte(layerYAML))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return layer
 }
 
-func (ps *planSuite) planLayersHasLen(c *C, expectedLen int) {
+func (ps *planSuite) planLayersHasLen(c *tc.C, expectedLen int) {
 	plan := ps.planMgr.Plan()
-	c.Assert(plan.Layers, HasLen, expectedLen)
+	c.Assert(plan.Layers, tc.HasLen, expectedLen)
 }
 
-func (ps *planSuite) planYAML(c *C) string {
+func (ps *planSuite) planYAML(c *tc.C) string {
 	plan := ps.planMgr.Plan()
 	yml, err := yaml.Marshal(plan)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return string(yml)
 }
 

@@ -18,32 +18,34 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"testing"
 
-	"gopkg.in/check.v1"
-
-	. "github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/tc"
 )
 
 type filePresenceCheckerSuite struct{}
 
-var _ = check.Suite(&filePresenceCheckerSuite{})
-
-func (*filePresenceCheckerSuite) TestFilePresent(c *check.C) {
-	d := c.MkDir()
-	filename := filepath.Join(d, "foo")
-	testInfo(c, FilePresent, "FilePresent", []string{"filename"})
-	testCheck(c, FilePresent, false, `filename must be a string`, 42)
-	testCheck(c, FilePresent, false, fmt.Sprintf(`file %q is absent but should exist`, filename), filename)
-	c.Assert(os.WriteFile(filename, nil, 0644), check.IsNil)
-	testCheck(c, FilePresent, true, "", filename)
+func TestFilePresenceCheckerSuite(t *testing.T) {
+	tc.Run(t, &filePresenceCheckerSuite{})
 }
 
-func (*filePresenceCheckerSuite) TestFileAbsent(c *check.C) {
+func (*filePresenceCheckerSuite) TestFilePresent(c *tc.C) {
 	d := c.MkDir()
 	filename := filepath.Join(d, "foo")
-	testInfo(c, FileAbsent, "FileAbsent", []string{"filename"})
-	testCheck(c, FileAbsent, false, `filename must be a string`, 42)
-	testCheck(c, FileAbsent, true, "", filename)
-	c.Assert(os.WriteFile(filename, nil, 0644), check.IsNil)
-	testCheck(c, FileAbsent, false, fmt.Sprintf(`file %q is present but should not exist`, filename), filename)
+	testInfo(c, testutil.FilePresent, "FilePresent", []string{"filename"})
+	testCheck(c, testutil.FilePresent, false, `filename must be a string`, 42)
+	testCheck(c, testutil.FilePresent, false, fmt.Sprintf(`file %q is absent but should exist`, filename), filename)
+	c.Assert(os.WriteFile(filename, nil, 0644), tc.IsNil)
+	testCheck(c, testutil.FilePresent, true, "", filename)
+}
+
+func (*filePresenceCheckerSuite) TestFileAbsent(c *tc.C) {
+	d := c.MkDir()
+	filename := filepath.Join(d, "foo")
+	testInfo(c, testutil.FileAbsent, "FileAbsent", []string{"filename"})
+	testCheck(c, testutil.FileAbsent, false, `filename must be a string`, 42)
+	testCheck(c, testutil.FileAbsent, true, "", filename)
+	c.Assert(os.WriteFile(filename, nil, 0644), tc.IsNil)
+	testCheck(c, testutil.FileAbsent, false, fmt.Sprintf(`file %q is present but should not exist`, filename), filename)
 }

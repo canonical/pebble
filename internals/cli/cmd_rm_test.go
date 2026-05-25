@@ -18,27 +18,27 @@ import (
 	"fmt"
 	"net/http"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestRmExtraArgs(c *C) {
+func (s *PebbleSuite) TestRmExtraArgs(c *tc.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "extra", "args"})
-	c.Assert(err, Equals, cli.ErrExtraArgs)
-	c.Assert(rest, HasLen, 1)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.Equals, cli.ErrExtraArgs)
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRm(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "POST")
-		c.Check(r.URL.Path, Equals, "/v1/files")
+func (s *PebbleSuite) TestRm(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action": "remove",
 			"paths": []any{
 				map[string]any{
@@ -52,19 +52,19 @@ func (s *PebbleSuite) TestRm(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "/foo/bar.baz"})
-	c.Assert(err, IsNil)
-	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRmRecursive(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "POST")
-		c.Check(r.URL.Path, Equals, "/v1/files")
+func (s *PebbleSuite) TestRmRecursive(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action": "remove",
 			"paths": []any{
 				map[string]any{
@@ -78,19 +78,19 @@ func (s *PebbleSuite) TestRmRecursive(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "-r", "/foo/bar"})
-	c.Assert(err, IsNil)
-	c.Assert(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRmFails(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "POST")
-		c.Check(r.URL.Path, Equals, "/v1/files")
+func (s *PebbleSuite) TestRmFails(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action": "remove",
 			"paths": []any{
 				map[string]any{
@@ -104,19 +104,19 @@ func (s *PebbleSuite) TestRmFails(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "/foo/bar.baz"})
-	c.Assert(err, ErrorMatches, "could not foo")
-	c.Assert(rest, HasLen, 1)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not foo")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRmFailsOnPath(c *C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, Equals, "POST")
-		c.Check(r.URL.Path, Equals, "/v1/files")
+func (s *PebbleSuite) TestRmFailsOnPath(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/files")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action": "remove",
 			"paths": []any{
 				map[string]any{
@@ -142,13 +142,13 @@ func (s *PebbleSuite) TestRmFailsOnPath(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"rm", "-r", "/foo/bar"})
 
 	clientErr, ok := err.(*client.Error)
-	c.Assert(ok, Equals, true)
-	c.Assert(clientErr.Message, Equals, "could not baz")
-	c.Assert(clientErr.Kind, Equals, "permission-denied")
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(clientErr.Message, tc.Equals, "could not baz")
+	c.Assert(clientErr.Kind, tc.Equals, "permission-denied")
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
-	c.Assert(rest, HasLen, 1)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

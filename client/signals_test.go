@@ -17,12 +17,12 @@ package client_test
 import (
 	"encoding/json"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 )
 
-func (cs *clientSuite) TestSignals(c *C) {
+func (cs *clientSuite) TestSignals(c *tc.C) {
 	cs.rsp = `{
 		"result": true,
 		"status": "OK",
@@ -33,14 +33,14 @@ func (cs *clientSuite) TestSignals(c *C) {
 		Signal:   "SIGHUP",
 		Services: []string{"s1", "s2"},
 	})
-	c.Assert(err, IsNil)
-	c.Check(cs.req.Method, Equals, "POST")
-	c.Check(cs.req.URL.Path, Equals, "/v1/signals")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(cs.req.Method, tc.Equals, "POST")
+	c.Check(cs.req.URL.Path, tc.Equals, "/v1/signals")
 
 	var body map[string]any
 	err = json.NewDecoder(cs.req.Body).Decode(&body)
-	c.Assert(err, IsNil)
-	c.Assert(body, DeepEquals, map[string]any{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(body, tc.DeepEquals, map[string]any{
 		"signal":   "SIGHUP",
 		"services": []any{"s1", "s2"},
 	})

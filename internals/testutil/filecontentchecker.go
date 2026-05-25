@@ -21,31 +21,31 @@ import (
 	"regexp"
 	"strings"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type fileContentChecker struct {
-	*check.CheckerInfo
+	*tc.CheckerInfo
 	exact bool
 }
 
 // FileEquals verifies that the given file's content is equal
 // to the string (or fmt.Stringer) or []byte provided.
-var FileEquals check.Checker = &fileContentChecker{
-	CheckerInfo: &check.CheckerInfo{Name: "FileEquals", Params: []string{"filename", "contents"}},
+var FileEquals tc.Checker = &fileContentChecker{
+	CheckerInfo: &tc.CheckerInfo{Name: "FileEquals", Params: []string{"filename", "contents"}},
 	exact:       true,
 }
 
 // FileContains verifies that the given file's content contains
 // the string (or fmt.Stringer) or []byte provided.
-var FileContains check.Checker = &fileContentChecker{
-	CheckerInfo: &check.CheckerInfo{Name: "FileContains", Params: []string{"filename", "contents"}},
+var FileContains tc.Checker = &fileContentChecker{
+	CheckerInfo: &tc.CheckerInfo{Name: "FileContains", Params: []string{"filename", "contents"}},
 }
 
 // FileMatches verifies that the given file's content matches
 // the string provided.
-var FileMatches check.Checker = &fileContentChecker{
-	CheckerInfo: &check.CheckerInfo{Name: "FileMatches", Params: []string{"filename", "regex"}},
+var FileMatches tc.Checker = &fileContentChecker{
+	CheckerInfo: &tc.CheckerInfo{Name: "FileMatches", Params: []string{"filename", "regex"}},
 }
 
 func (c *fileContentChecker) Check(params []any, names []string) (result bool, error string) {

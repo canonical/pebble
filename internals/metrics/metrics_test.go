@@ -18,20 +18,18 @@ import (
 	"bytes"
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/metrics"
 )
 
-func Test(t *testing.T) {
-	TestingT(t)
-}
-
 type OpenTelemetryWriterSuite struct{}
 
-var _ = Suite(&OpenTelemetryWriterSuite{})
+func TestOpenTelemetryWriterSuite(t *testing.T) {
+	tc.Run(t, &OpenTelemetryWriterSuite{})
+}
 
-func (s *OpenTelemetryWriterSuite) TestWriter(c *C) {
+func (s *OpenTelemetryWriterSuite) TestWriter(c *tc.C) {
 	testCases := []struct {
 		name     string
 		metric   metrics.Metric
@@ -108,11 +106,11 @@ special_chars{key_with_underscore="value_with_underscore",key-with-dash="value-w
 		},
 	}
 
-	for _, tc := range testCases {
+	for _, test := range testCases {
 		buf := &bytes.Buffer{}
 		writer := metrics.NewOpenTelemetryWriter(buf)
-		err := writer.Write(tc.metric)
-		c.Assert(err, IsNil)
-		c.Assert(buf.String(), Equals, tc.expected)
+		err := writer.Write(test.metric)
+		c.Assert(err, tc.ErrorIsNil)
+		c.Assert(buf.String(), tc.Equals, test.expected)
 	}
 }

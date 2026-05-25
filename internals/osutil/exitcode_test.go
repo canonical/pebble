@@ -17,35 +17,38 @@ package osutil
 import (
 	"os"
 	"os/exec"
+	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type ExitCodeTestSuite struct{}
 
-var _ = Suite(&ExitCodeTestSuite{})
+func TestExitCodeTestSuite(t *testing.T) {
+	tc.Run(t, &ExitCodeTestSuite{})
+}
 
-func (ts *ExitCodeTestSuite) TestExitCode(c *C) {
+func (ts *ExitCodeTestSuite) TestExitCode(c *tc.C) {
 	cmd := exec.Command("true")
 	err := cmd.Run()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	cmd = exec.Command("false")
 	err = cmd.Run()
-	c.Assert(err, NotNil)
+	c.Assert(err, tc.NotNil)
 	e, err := ExitCode(err)
-	c.Assert(err, IsNil)
-	c.Assert(e, Equals, 1)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(e, tc.Equals, 1)
 
 	cmd = exec.Command("sh", "-c", "exit 7")
 	err = cmd.Run()
 	e, err = ExitCode(err)
-	c.Assert(err, IsNil)
-	c.Assert(e, Equals, 7)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(e, tc.Equals, 7)
 
 	// ensure that non exec.ExitError values give a error
 	_, err = os.Stat("/random/file/that/is/not/there")
-	c.Assert(err, NotNil)
+	c.Assert(err, tc.NotNil)
 	_, err = ExitCode(err)
-	c.Assert(err, NotNil)
+	c.Assert(err, tc.NotNil)
 }

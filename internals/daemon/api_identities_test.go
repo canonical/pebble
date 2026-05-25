@@ -22,7 +22,7 @@ import (
 	"net/http"
 	"strings"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/identities"
@@ -50,7 +50,7 @@ GV6pXv511MycDg==
 -----END CERTIFICATE REQUEST-----
 `
 
-func (s *apiSuite) TestIdentities(c *C) {
+func (s *apiSuite) TestIdentities(c *tc.C) {
 	s.daemon(c)
 
 	st := s.d.overlord.State()
@@ -76,23 +76,23 @@ func (s *apiSuite) TestIdentities(c *C) {
 			Cert:   &identities.CertIdentity{X509: parseCert(c, validPEMX509Cert)},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	req, err := http.NewRequest("GET", "/v1/identities", nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cmd := apiCmd("/v1/identities")
 	rsp, ok := cmd.GET(cmd, req, nil).(*resp)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, tc.Equals, true)
 
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, http.StatusOK)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, http.StatusOK)
 	identities, ok := rsp.Result.(map[string]*apiIdentity)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, tc.Equals, true)
 
 	data, err := json.MarshalIndent(identities, "", "    ")
-	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, `
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(string(data), tc.Equals, `
 {
     "bob": {
         "access": "read",
@@ -121,14 +121,14 @@ func (s *apiSuite) TestIdentities(c *C) {
 }`[1:])
 }
 
-func (s *apiSuite) TestAddIdentities(c *C) {
+func (s *apiSuite) TestAddIdentities(c *tc.C) {
 	logBuf, restore := logger.MockLogger("")
 	defer restore()
 
 	s.daemon(c)
 
 	jsonCert, err := json.Marshal(validPEMX509Cert)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	body := fmt.Sprintf(`
 {
     "action": "add",
@@ -160,14 +160,14 @@ func (s *apiSuite) TestAddIdentities(c *C) {
     }
 }`, jsonCert)
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, http.StatusOK)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, http.StatusOK)
 
 	st := s.d.overlord.State()
 	st.Lock()
 	identitiesMgr := s.d.overlord.IdentitiesManager()
 	idents := identitiesMgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
 			Access: identities.ReadAccess,
@@ -197,7 +197,7 @@ func (s *apiSuite) TestAddIdentities(c *C) {
 	ensureSecurityLog(c, logBuf.String(), "WARN", "user_created:<unknown>,olivia,read", "Creating read user olivia")
 }
 
-func (s *apiSuite) TestAddIdentitiesNull(c *C) {
+func (s *apiSuite) TestAddIdentitiesNull(c *tc.C) {
 	s.daemon(c)
 
 	body := `
@@ -208,14 +208,14 @@ func (s *apiSuite) TestAddIdentitiesNull(c *C) {
     }
 }`
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
+	c.Check(rsp.Status, tc.Equals, http.StatusBadRequest)
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `identity value for "mary" must not be null for add operation`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Matches, `identity value for "mary" must not be null for add operation`)
 }
 
-func (s *apiSuite) TestUpdateIdentities(c *C) {
+func (s *apiSuite) TestUpdateIdentities(c *tc.C) {
 	logBuf, restore := logger.MockLogger("")
 	defer restore()
 
@@ -234,7 +234,7 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	body := `
@@ -256,12 +256,12 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
     }
 }`
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, http.StatusOK)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, http.StatusOK)
 
 	st.Lock()
 	idents := identitiesMgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"bob": {
 			Name:   "bob",
 			Access: identities.AdminAccess,
@@ -279,7 +279,7 @@ func (s *apiSuite) TestUpdateIdentities(c *C) {
 	ensureSecurityLog(c, logBuf.String(), "WARN", "user_updated:<unknown>,mary,read", "Updating read user mary")
 }
 
-func (s *apiSuite) TestUpdateIdentitiesNull(c *C) {
+func (s *apiSuite) TestUpdateIdentitiesNull(c *tc.C) {
 	s.daemon(c)
 
 	body := `
@@ -290,14 +290,14 @@ func (s *apiSuite) TestUpdateIdentitiesNull(c *C) {
     }
 }`
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
+	c.Check(rsp.Status, tc.Equals, http.StatusBadRequest)
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `identity value for "mary" must not be null for update operation`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Matches, `identity value for "mary" must not be null for update operation`)
 }
 
-func (s *apiSuite) TestReplaceIdentities(c *C) {
+func (s *apiSuite) TestReplaceIdentities(c *tc.C) {
 	logBuf, restore := logger.MockLogger("")
 	defer restore()
 
@@ -316,7 +316,7 @@ func (s *apiSuite) TestReplaceIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	body := `
@@ -339,12 +339,12 @@ func (s *apiSuite) TestReplaceIdentities(c *C) {
     }
 }`
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, http.StatusOK)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, http.StatusOK)
 
 	st.Lock()
 	idents := identitiesMgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"mary": {
 			Name:   "mary",
 			Access: identities.ReadAccess,
@@ -363,7 +363,7 @@ func (s *apiSuite) TestReplaceIdentities(c *C) {
 	ensureSecurityLog(c, logBuf.String(), "WARN", "user_updated:<unknown>,newguy,admin", "Updating admin user newguy")
 }
 
-func (s *apiSuite) TestRemoveIdentities(c *C) {
+func (s *apiSuite) TestRemoveIdentities(c *tc.C) {
 	logBuf, restore := logger.MockLogger("")
 	defer restore()
 
@@ -382,7 +382,7 @@ func (s *apiSuite) TestRemoveIdentities(c *C) {
 			Local:  &identities.LocalIdentity{UserID: 1000},
 		},
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	st.Unlock()
 
 	body := `
@@ -393,12 +393,12 @@ func (s *apiSuite) TestRemoveIdentities(c *C) {
     }
 }`
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeSync)
-	c.Check(rsp.Status, Equals, http.StatusOK)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Check(rsp.Status, tc.Equals, http.StatusOK)
 
 	st.Lock()
 	idents := identitiesMgr.Identities()
-	c.Assert(idents, DeepEquals, map[string]*identities.Identity{
+	c.Assert(idents, tc.DeepEquals, map[string]*identities.Identity{
 		"mary": {
 			Name:   "mary",
 			Access: identities.AdminAccess,
@@ -410,7 +410,7 @@ func (s *apiSuite) TestRemoveIdentities(c *C) {
 	ensureSecurityLog(c, logBuf.String(), "WARN", "user_deleted:<unknown>,bob", "Deleting user bob")
 }
 
-func (s *apiSuite) TestRemoveIdentitiesNotNull(c *C) {
+func (s *apiSuite) TestRemoveIdentitiesNotNull(c *tc.C) {
 	s.daemon(c)
 
 	body := `
@@ -426,14 +426,14 @@ func (s *apiSuite) TestRemoveIdentitiesNotNull(c *C) {
     }
 }`
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
+	c.Check(rsp.Status, tc.Equals, http.StatusBadRequest)
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `identity value for "mary" must be null for remove operation`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Matches, `identity value for "mary" must be null for remove operation`)
 }
 
-func (s *apiSuite) TestPostIdentitiesInvalidAction(c *C) {
+func (s *apiSuite) TestPostIdentitiesInvalidAction(c *tc.C) {
 	s.daemon(c)
 
 	body := `
@@ -442,22 +442,22 @@ func (s *apiSuite) TestPostIdentitiesInvalidAction(c *C) {
     "identities": {}
 }`
 	rsp := s.postIdentities(c, body)
-	c.Check(rsp.Type, Equals, ResponseTypeError)
-	c.Check(rsp.Status, Equals, http.StatusBadRequest)
+	c.Check(rsp.Type, tc.Equals, ResponseTypeError)
+	c.Check(rsp.Status, tc.Equals, http.StatusBadRequest)
 	result, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(result.Message, Matches, `invalid action "foobar", must be "add", "update", "replace", or "remove"`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(result.Message, tc.Matches, `invalid action "foobar", must be "add", "update", "replace", or "remove"`)
 }
 
-func (s *apiSuite) TestUnmarshalErrors(c *C) {
+func (s *apiSuite) TestUnmarshalErrors(c *tc.C) {
 	s.daemon(c)
 
 	// Marshal a certificate request to test valid PEM but invalid X.509.
 	jsonCertReq, err := json.Marshal(testPEMPKCS10Req)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	// Marshal a certificate with extra data after the PEM block.
 	jsonCertExtra, err := json.Marshal(validPEMX509Cert + "42")
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	tests := []struct {
 		data  string
@@ -496,27 +496,27 @@ func (s *apiSuite) TestUnmarshalErrors(c *C) {
 		body := fmt.Sprintf(`{"action": "foobar", "identities": %s}`, test.data)
 
 		rsp := s.postIdentities(c, body)
-		c.Check(rsp.Type, Equals, ResponseTypeError)
-		c.Check(rsp.Status, Equals, http.StatusBadRequest)
+		c.Check(rsp.Type, tc.Equals, ResponseTypeError)
+		c.Check(rsp.Status, tc.Equals, http.StatusBadRequest)
 		result, ok := rsp.Result.(*errorResult)
-		c.Assert(ok, Equals, true)
-		c.Check(result.Message, Matches, ".*: "+test.error)
+		c.Assert(ok, tc.Equals, true)
+		c.Check(result.Message, tc.Matches, ".*: "+test.error)
 	}
 }
 
-func (s *apiSuite) postIdentities(c *C, body string) *resp {
+func (s *apiSuite) postIdentities(c *tc.C, body string) *resp {
 	req, err := http.NewRequest("POST", "/v1/identities", strings.NewReader(body))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	cmd := apiCmd("/v1/identities")
 	rsp, ok := cmd.POST(cmd, req, nil).(*resp)
-	c.Assert(ok, Equals, true)
+	c.Assert(ok, tc.Equals, true)
 	return rsp
 }
 
-func parseCert(c *C, pemBlock string) *x509.Certificate {
+func parseCert(c *tc.C, pemBlock string) *x509.Certificate {
 	block, _ := pem.Decode([]byte(pemBlock))
-	c.Assert(block, NotNil)
+	c.Assert(block, tc.NotNil)
 	cert, _ := x509.ParseCertificate(block.Bytes)
-	c.Assert(cert, NotNil)
+	c.Assert(cert, tc.NotNil)
 	return cert
 }

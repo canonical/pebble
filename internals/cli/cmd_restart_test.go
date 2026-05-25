@@ -18,15 +18,15 @@ import (
 	"fmt"
 	"net/http"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestRestart(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestRestart(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/44" {
-			c.Check(r.Method, check.Equals, "GET")
+			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{
 	"type": "sync",
 	"result": {
@@ -43,11 +43,11 @@ func (s *PebbleSuite) TestRestart(c *check.C) {
 			return
 		}
 
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "restart",
 			"services": []any{"srv1", "srv2"},
 		})
@@ -60,19 +60,19 @@ func (s *PebbleSuite) TestRestart(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"restart", "srv1", "srv2"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRestartFails(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
+func (s *PebbleSuite) TestRestartFails(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "restart",
 			"services": []any{"srv1", "srv3"},
 		})
@@ -81,20 +81,20 @@ func (s *PebbleSuite) TestRestartFails(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"restart", "srv1", "srv3"})
-	c.Assert(err, check.ErrorMatches, "could not foo")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not foo")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRestartNoWait(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
-		c.Check(r.URL.Path, check.Not(check.Equals), "/v1/changes/44")
+func (s *PebbleSuite) TestRestartNoWait(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
+		c.Check(r.URL.Path, tc.Not(tc.Equals), "/v1/changes/44")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "restart",
 			"services": []any{"srv1", "srv2"},
 		})
@@ -107,25 +107,25 @@ func (s *PebbleSuite) TestRestartNoWait(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"restart", "srv1", "srv2", "--no-wait"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "44\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "44\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestRestartFailsGetChange(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+func (s *PebbleSuite) TestRestartFailsGetChange(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v1/changes/44" {
-			c.Check(r.Method, check.Equals, "GET")
+			c.Check(r.Method, tc.Equals, "GET")
 			fmt.Fprintf(w, `{"type": "error", "result": {"message": "could not bar"}}`)
 			return
 		}
 
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/services")
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/services")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action":   "restart",
 			"services": []any{"srv1", "srv2"},
 		})
@@ -138,8 +138,8 @@ func (s *PebbleSuite) TestRestartFailsGetChange(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"restart", "srv1", "srv2"})
-	c.Assert(err, check.ErrorMatches, "could not bar")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not bar")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

@@ -15,16 +15,20 @@
 package osutil_test
 
 import (
-	. "gopkg.in/check.v1"
+	"testing"
+
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/osutil"
 )
 
 type mountSuite struct{}
 
-var _ = Suite(&mountSuite{})
+func TestMountSuite(t *testing.T) {
+	tc.Run(t, &mountSuite{})
+}
 
-func (s *mountSuite) TestIsMountedHappyish(c *C) {
+func (s *mountSuite) TestIsMountedHappyish(c *tc.C) {
 	// note the different optional fields
 	const content = "" +
 		"44 24 7:1 / /snap/ubuntu-core/855 rw,relatime shared:27 - squashfs /dev/loop1 ro\n" +
@@ -33,26 +37,26 @@ func (s *mountSuite) TestIsMountedHappyish(c *C) {
 	defer osutil.FakeMountInfo(content)()
 
 	mounted, err := osutil.IsMounted("/snap/ubuntu-core/855")
-	c.Check(err, IsNil)
-	c.Check(mounted, Equals, true)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(mounted, tc.Equals, true)
 
 	mounted, err = osutil.IsMounted("/snap/something/123")
-	c.Check(err, IsNil)
-	c.Check(mounted, Equals, true)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(mounted, tc.Equals, true)
 
 	mounted, err = osutil.IsMounted("/snap/random/456")
-	c.Check(err, IsNil)
-	c.Check(mounted, Equals, true)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(mounted, tc.Equals, true)
 
 	mounted, err = osutil.IsMounted("/random/made/up/name")
-	c.Check(err, IsNil)
-	c.Check(mounted, Equals, false)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(mounted, tc.Equals, false)
 }
 
-func (s *mountSuite) TestIsMountedBroken(c *C) {
+func (s *mountSuite) TestIsMountedBroken(c *tc.C) {
 	defer osutil.FakeMountInfo("44 24 7:1 ...truncated-stuff")()
 
 	mounted, err := osutil.IsMounted("/snap/ubuntu-core/855")
-	c.Check(err, ErrorMatches, "incorrect number of fields, .*")
-	c.Check(mounted, Equals, false)
+	c.Check(err, tc.ErrorMatches, "incorrect number of fields, .*")
+	c.Check(mounted, tc.Equals, false)
 }

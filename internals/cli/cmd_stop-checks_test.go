@@ -18,18 +18,18 @@ import (
 	"fmt"
 	"net/http"
 
-	"gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestStopChecks(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/checks")
+func (s *PebbleSuite) TestStopChecks(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/checks")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action": "stop",
 			"checks": []any{"chk1", "chk2", "chk3"},
 		})
@@ -42,19 +42,19 @@ func (s *PebbleSuite) TestStopChecks(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"stop-checks", "chk1", "chk2", "chk3"})
-	c.Assert(err, check.IsNil)
-	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, "Checks stopped: chk1, chk2\n")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "Checks stopped: chk1, chk2\n")
+	c.Check(s.Stderr(), tc.Equals, "")
 }
 
-func (s *PebbleSuite) TestStopChecksFails(c *check.C) {
-	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.Method, check.Equals, "POST")
-		c.Check(r.URL.Path, check.Equals, "/v1/checks")
+func (s *PebbleSuite) TestStopChecksFails(c *tc.C) {
+	s.RedirectClientToTestServer(c, func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, tc.Equals, "POST")
+		c.Check(r.URL.Path, tc.Equals, "/v1/checks")
 
 		body := DecodedRequestBody(c, r)
-		c.Check(body, check.DeepEquals, map[string]any{
+		c.Check(body, tc.DeepEquals, map[string]any{
 			"action": "stop",
 			"checks": []any{"chk1", "chk3"},
 		})
@@ -63,8 +63,8 @@ func (s *PebbleSuite) TestStopChecksFails(c *check.C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"stop-checks", "chk1", "chk3"})
-	c.Assert(err, check.ErrorMatches, "could not foo")
-	c.Assert(rest, check.HasLen, 1)
-	c.Check(s.Stdout(), check.Equals, "")
-	c.Check(s.Stderr(), check.Equals, "")
+	c.Assert(err, tc.ErrorMatches, "could not foo")
+	c.Assert(rest, tc.HasLen, 1)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

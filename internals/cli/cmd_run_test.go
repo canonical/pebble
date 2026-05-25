@@ -19,23 +19,23 @@ import (
 	"os"
 	"path"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestMaybeCopyPebbleDir(c *C) {
+func (s *PebbleSuite) TestMaybeCopyPebbleDir(c *tc.C) {
 	src := c.MkDir()
 	err := os.MkdirAll(path.Join(src, "a", "b", "c"), 0700)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(path.Join(src, "a", "b", "c", "a.yaml"), []byte("# hi\n"), 0666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(path.Join(src, "a.yaml"), []byte("# bye\n"), 0666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	dst := c.MkDir()
 	err = cli.MaybeCopyPebbleDir(dst, src)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	got := map[string]bool{}
 	dstFS := os.DirFS(dst)
@@ -43,44 +43,44 @@ func (s *PebbleSuite) TestMaybeCopyPebbleDir(c *C) {
 		switch path {
 		case ".", "a", "a/b", "a/b/c":
 		case "a.yaml":
-			c.Check(got[path], Equals, false)
+			c.Check(got[path], tc.Equals, false)
 			data, err := fs.ReadFile(dstFS, path)
-			c.Check(err, IsNil)
-			c.Check(data, DeepEquals, []byte("# bye\n"))
+			c.Assert(err, tc.ErrorIsNil)
+			c.Check(data, tc.DeepEquals, []byte("# bye\n"))
 			got[path] = true
 		case "a/b/c/a.yaml":
-			c.Check(got[path], Equals, false)
+			c.Check(got[path], tc.Equals, false)
 			data, err := fs.ReadFile(dstFS, path)
-			c.Check(err, IsNil)
-			c.Check(data, DeepEquals, []byte("# hi\n"))
+			c.Assert(err, tc.ErrorIsNil)
+			c.Check(data, tc.DeepEquals, []byte("# hi\n"))
 			got[path] = true
 		default:
 			c.Errorf("bad path %s", path)
 		}
 		return err
 	})
-	c.Assert(err, IsNil)
-	c.Assert(got, DeepEquals, map[string]bool{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(got, tc.DeepEquals, map[string]bool{
 		"a.yaml":       true,
 		"a/b/c/a.yaml": true,
 	})
 }
 
-func (s *PebbleSuite) TestMaybeCopyPebbleDirNoCopy(c *C) {
+func (s *PebbleSuite) TestMaybeCopyPebbleDirNoCopy(c *tc.C) {
 	src := c.MkDir()
 	err := os.MkdirAll(path.Join(src, "a", "b", "c"), 0700)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(path.Join(src, "a", "b", "c", "a.yaml"), []byte("# hi\n"), 0666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = os.WriteFile(path.Join(src, "a.yaml"), []byte("# bye\n"), 0666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	dst := c.MkDir()
 	err = os.WriteFile(path.Join(dst, "a.yaml"), []byte("# no\n"), 0666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	err = cli.MaybeCopyPebbleDir(dst, src)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	got := map[string]bool{}
 	dstFS := os.DirFS(dst)
@@ -88,40 +88,40 @@ func (s *PebbleSuite) TestMaybeCopyPebbleDirNoCopy(c *C) {
 		switch path {
 		case ".":
 		case "a.yaml":
-			c.Check(got[path], Equals, false)
+			c.Check(got[path], tc.Equals, false)
 			data, err := fs.ReadFile(dstFS, path)
-			c.Check(err, IsNil)
-			c.Check(data, DeepEquals, []byte("# no\n"))
+			c.Assert(err, tc.ErrorIsNil)
+			c.Check(data, tc.DeepEquals, []byte("# no\n"))
 			got[path] = true
 		default:
 			c.Errorf("bad path %s", path)
 		}
 		return err
 	})
-	c.Assert(err, IsNil)
-	c.Assert(got, DeepEquals, map[string]bool{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(got, tc.DeepEquals, map[string]bool{
 		"a.yaml": true,
 	})
 }
 
-func (s *PebbleSuite) TestMaybeCopyPebbleDirSourceNotExist(c *C) {
+func (s *PebbleSuite) TestMaybeCopyPebbleDirSourceNotExist(c *tc.C) {
 	tmpDir := c.MkDir()
 	dst := path.Join(tmpDir, "dst")
 	err := os.Mkdir(dst, 0o700)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	src := path.Join(tmpDir, "not-exist")
 	err = cli.MaybeCopyPebbleDir(dst, src)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
-func (s *PebbleSuite) TestMaybeCopyPebbleDirSourceNotADirectory(c *C) {
+func (s *PebbleSuite) TestMaybeCopyPebbleDirSourceNotADirectory(c *tc.C) {
 	tmpDir := c.MkDir()
 	dst := path.Join(tmpDir, "dst")
 	err := os.Mkdir(dst, 0o700)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	src := path.Join(tmpDir, "file")
 	err = os.WriteFile(src, nil, 0o666)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = cli.MaybeCopyPebbleDir(dst, src)
-	c.Assert(err, ErrorMatches, ".*not a directory.*")
+	c.Assert(err, tc.ErrorMatches, ".*not a directory.*")
 }

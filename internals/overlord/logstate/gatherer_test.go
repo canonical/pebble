@@ -21,9 +21,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/plan"
@@ -32,9 +33,11 @@ import (
 
 type gathererSuite struct{}
 
-var _ = Suite(&gathererSuite{})
+func TestGathererSuite(t *testing.T) {
+	tc.Run(t, &gathererSuite{})
+}
 
-func (s *gathererSuite) TestGatherer(c *C) {
+func (s *gathererSuite) TestGatherer(c *tc.C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		maxBufferedEntries: 5,
@@ -47,7 +50,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	}
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -71,7 +74,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	}
 }
 
-func (s *gathererSuite) TestGathererTimeout(c *C) {
+func (s *gathererSuite) TestGathererTimeout(c *tc.C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Millisecond,
@@ -84,7 +87,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	}
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -98,7 +101,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	}
 }
 
-func (s *gathererSuite) TestGathererShutdown(c *C) {
+func (s *gathererSuite) TestGathererShutdown(c *tc.C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Microsecond,
@@ -111,14 +114,14 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	}
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
 
 	testSvc.writeLog("log line #1")
 	err = testSvc.stop()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	hasShutdown := make(chan struct{})
 	go func() {
@@ -142,7 +145,7 @@ logs in client buffer: %v`, len(g.client.(*testClient).buffered))
 	}
 }
 
-func (s *gathererSuite) TestRetryLoki(c *C) {
+func (s *gathererSuite) TestRetryLoki(c *tc.C) {
 	var handler func(http.ResponseWriter, *http.Request)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handler(w, r)
@@ -169,7 +172,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 			},
 		},
 	)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	testSvc := newTestService("svc1")
 	g.PlanChanged(&plan.Plan{
@@ -207,7 +210,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 	handler = func(w http.ResponseWriter, r *http.Request) {
 		close(reqReceived)
 		reqBody, err := io.ReadAll(r.Body)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 
 		expected := `{"streams":\[{"stream":{"pebble_service":"svc1"},"values":\[` +
 			// First two log lines should have been truncated
@@ -217,7 +220,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 			`\["\d+","log line #6"\],` +
 			`\["\d+","log line #7"\]` +
 			`\]}\]}`
-		c.Assert(string(reqBody), Matches, expected)
+		c.Assert(string(reqBody), tc.Matches, expected)
 	}
 
 	testSvc.writeLog("log line #6")
@@ -233,7 +236,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 }
 
 // Test to catch race conditions in gatherer
-func (s *gathererSuite) TestConcurrency(c *C) {
+func (s *gathererSuite) TestConcurrency(c *tc.C) {
 	target := &plan.LogTarget{
 		Name:     "tgt1",
 		Type:     plan.LokiTarget,
@@ -244,7 +247,7 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 	g, err := newLogGathererInternal(target, &logGathererOptions{
 		maxBufferedEntries: 2,
 	})
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	svc1 := newTestService("svc1")
 	svc2 := newTestService("svc2")
@@ -260,7 +263,7 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 		svc2.name: svc2.ringBuffer,
 	}
 
-	// Run a bunch of operations concurrently
+	// tc.Run a bunch of operations concurrently
 	doConcurrently := func(ops ...func()) {
 		wg := sync.WaitGroup{}
 		wg.Add(len(ops))
@@ -326,16 +329,16 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 	)
 
 	err = svc1.stop()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	err = svc2.stop()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	g.Stop()
 }
 
-func checkLogs(c *C, received []servicelog.Entry, expected []string) {
-	c.Assert(received, HasLen, len(expected))
+func checkLogs(c *tc.C, received []servicelog.Entry, expected []string) {
+	c.Assert(received, tc.HasLen, len(expected))
 	for i, entry := range received {
-		c.Check(entry.Message, Equals, expected[i]+"\n")
+		c.Check(entry.Message, tc.Equals, expected[i]+"\n")
 	}
 }
 

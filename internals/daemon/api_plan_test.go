@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -34,7 +34,7 @@ services:
         command: echo static
 `
 
-func (s *apiSuite) TestGetPlanErrors(c *C) {
+func (s *apiSuite) TestGetPlanErrors(c *tc.C) {
 	tests := []struct {
 		url     string
 		status  int
@@ -49,30 +49,30 @@ func (s *apiSuite) TestGetPlanErrors(c *C) {
 
 	for _, test := range tests {
 		req, err := http.NewRequest("POST", test.url, nil)
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		rsp := v1GetPlan(planCmd, req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
-		c.Assert(rec.Code, Equals, test.status)
-		c.Assert(rsp.Status, Equals, test.status)
-		c.Assert(rsp.Type, Equals, ResponseTypeError)
-		c.Assert(rsp.Result.(*errorResult).Message, Matches, test.message)
+		c.Assert(rec.Code, tc.Equals, test.status)
+		c.Assert(rsp.Status, tc.Equals, test.status)
+		c.Assert(rsp.Type, tc.Equals, ResponseTypeError)
+		c.Assert(rsp.Result.(*errorResult).Message, tc.Matches, test.message)
 	}
 }
 
-func (s *apiSuite) TestGetPlan(c *C) {
+func (s *apiSuite) TestGetPlan(c *tc.C) {
 	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
 	planCmd := apiCmd("/v1/plan")
 
 	req, err := http.NewRequest("GET", "/v1/plan?format=yaml", nil)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1GetPlan(planCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Assert(rec.Code, Equals, 200)
-	c.Assert(rsp.Status, Equals, 200)
-	c.Assert(rsp.Type, Equals, ResponseTypeSync)
+	c.Assert(rec.Code, tc.Equals, 200)
+	c.Assert(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Type, tc.Equals, ResponseTypeSync)
 
 	expectedYAML := `
 services:
@@ -80,25 +80,25 @@ services:
         override: replace
         command: echo static
 `[1:]
-	c.Assert(rsp.Result.(string), Equals, expectedYAML)
-	c.Assert(s.planYAML(c), Equals, expectedYAML)
+	c.Assert(rsp.Result.(string), tc.Equals, expectedYAML)
+	c.Assert(s.planYAML(c), tc.Equals, expectedYAML)
 }
 
-func (s *apiSuite) planYAML(c *C) string {
+func (s *apiSuite) planYAML(c *tc.C) string {
 	manager := s.d.overlord.PlanManager()
 	plan := manager.Plan()
 	yml, err := yaml.Marshal(plan)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return string(yml)
 }
 
-func (s *apiSuite) planLayersHasLen(c *C, expectedLen int) {
+func (s *apiSuite) planLayersHasLen(c *tc.C, expectedLen int) {
 	manager := s.d.overlord.PlanManager()
 	plan := manager.Plan()
-	c.Assert(plan.Layers, HasLen, expectedLen)
+	c.Assert(plan.Layers, tc.HasLen, expectedLen)
 }
 
-func (s *apiSuite) TestLayersErrors(c *C) {
+func (s *apiSuite) TestLayersErrors(c *tc.C) {
 	tests := []struct {
 		payload string
 		status  int
@@ -116,18 +116,18 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 
 	for _, test := range tests {
 		req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(test.payload))
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 		rec := httptest.NewRecorder()
 		rsp.ServeHTTP(rec, req)
-		c.Assert(rec.Code, Equals, test.status)
-		c.Assert(rsp.Status, Equals, test.status)
-		c.Assert(rsp.Type, Equals, ResponseTypeError)
-		c.Assert(rsp.Result.(*errorResult).Message, Matches, test.message)
+		c.Assert(rec.Code, tc.Equals, test.status)
+		c.Assert(rsp.Status, tc.Equals, test.status)
+		c.Assert(rsp.Type, tc.Equals, ResponseTypeError)
+		c.Assert(rsp.Result.(*errorResult).Message, tc.Matches, test.message)
 	}
 }
 
-func (s *apiSuite) TestLayersAddAppend(c *C) {
+func (s *apiSuite) TestLayersAddAppend(c *tc.C) {
 	logBuf, restore := logger.MockLogger("")
 	defer restore()
 
@@ -137,15 +137,15 @@ func (s *apiSuite) TestLayersAddAppend(c *C) {
 
 	payload := `{"action": "add", "label": "foo", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Assert(rec.Code, Equals, 200)
-	c.Assert(rsp.Status, Equals, 200)
-	c.Assert(rsp.Type, Equals, ResponseTypeSync)
-	c.Assert(rsp.Result.(bool), Equals, true)
-	c.Assert(s.planYAML(c), Equals, `
+	c.Assert(rec.Code, tc.Equals, 200)
+	c.Assert(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Assert(rsp.Result.(bool), tc.Equals, true)
+	c.Assert(s.planYAML(c), tc.Equals, `
 services:
     dynamic:
         override: replace
@@ -159,22 +159,22 @@ services:
 	ensureSecurityLog(c, logBuf.String(), "WARN", "authz_admin:<unknown>,add_layer", "Adding layer foo")
 }
 
-func (s *apiSuite) TestLayersAddCombine(c *C) {
+func (s *apiSuite) TestLayersAddCombine(c *tc.C) {
 	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
 	layersCmd := apiCmd("/v1/layers")
 
 	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  override: replace\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Assert(rec.Code, Equals, 200)
-	c.Assert(rsp.Status, Equals, 200)
-	c.Assert(rsp.Type, Equals, ResponseTypeSync)
-	c.Assert(rsp.Result.(bool), Equals, true)
-	c.Assert(s.planYAML(c), Equals, `
+	c.Assert(rec.Code, tc.Equals, 200)
+	c.Assert(rsp.Status, tc.Equals, 200)
+	c.Assert(rsp.Type, tc.Equals, ResponseTypeSync)
+	c.Assert(rsp.Result.(bool), tc.Equals, true)
+	c.Assert(s.planYAML(c), tc.Equals, `
 services:
     dynamic:
         override: replace
@@ -186,20 +186,20 @@ services:
 	s.planLayersHasLen(c, 1)
 }
 
-func (s *apiSuite) TestLayersCombineFormatError(c *C) {
+func (s *apiSuite) TestLayersCombineFormatError(c *tc.C) {
 	writeTestLayer(s.pebbleDir, planLayer)
 	_ = s.daemon(c)
 	layersCmd := apiCmd("/v1/layers")
 
 	payload := `{"action": "add", "combine": true, "label": "base", "format": "yaml", "layer": "services:\n dynamic:\n  command: echo dynamic\n"}`
 	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewBufferString(payload))
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Assert(rec.Code, Equals, http.StatusBadRequest)
-	c.Assert(rsp.Status, Equals, http.StatusBadRequest)
-	c.Assert(rsp.Type, Equals, ResponseTypeError)
+	c.Assert(rec.Code, tc.Equals, http.StatusBadRequest)
+	c.Assert(rsp.Status, tc.Equals, http.StatusBadRequest)
+	c.Assert(rsp.Type, tc.Equals, ResponseTypeError)
 	result := rsp.Result.(*errorResult)
-	c.Assert(result.Message, Matches, `layer "base" must define "override" for service "dynamic"`)
+	c.Assert(result.Message, tc.Matches, `layer "base" must define "override" for service "dynamic"`)
 }

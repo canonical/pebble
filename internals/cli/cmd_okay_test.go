@@ -17,31 +17,31 @@ package cli_test
 import (
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/cli"
 )
 
-func (s *PebbleSuite) TestOkay(c *C) {
+func (s *PebbleSuite) TestOkay(c *tc.C) {
 	s.writeCLIState(c, map[string]any{
 		"notices-last-listed": time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
 		"notices-last-okayed": time.Time{},
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	cliState := s.readNoticesCLIState(c)
-	c.Check(cliState, DeepEquals, map[string]any{
+	c.Check(cliState, tc.DeepEquals, map[string]any{
 		"notices-last-listed": "2023-09-06T15:06:00Z",
 		"notices-last-okayed": "2023-09-06T15:06:00Z",
 	})
 }
 
-func (s *PebbleSuite) TestOkayWarnings(c *C) {
+func (s *PebbleSuite) TestOkayWarnings(c *tc.C) {
 	s.writeCLIState(c, map[string]any{
 		"notices-last-listed":  time.Date(2023, 9, 6, 15, 6, 0, 0, time.UTC),
 		"notices-last-okayed":  time.Time{},
@@ -50,13 +50,13 @@ func (s *PebbleSuite) TestOkayWarnings(c *C) {
 	})
 
 	rest, err := cli.ParserForTest().ParseArgs([]string{"okay", "--warnings"})
-	c.Assert(err, IsNil)
-	c.Check(rest, HasLen, 0)
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorIsNil)
+	c.Check(rest, tc.HasLen, 0)
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 
 	cliState := s.readCLIState(c)
-	c.Check(cliState, DeepEquals, map[string]any{
+	c.Check(cliState, tc.DeepEquals, map[string]any{
 		"notices-last-listed":  "2023-09-06T15:06:00Z",
 		"notices-last-okayed":  "0001-01-01T00:00:00Z",
 		"warnings-last-listed": "2024-09-06T15:06:00Z",
@@ -64,9 +64,9 @@ func (s *PebbleSuite) TestOkayWarnings(c *C) {
 	})
 }
 
-func (s *PebbleSuite) TestOkayNoNotices(c *C) {
+func (s *PebbleSuite) TestOkayNoNotices(c *tc.C) {
 	_, err := cli.ParserForTest().ParseArgs([]string{"okay"})
-	c.Assert(err, ErrorMatches, "no notices.* have been listed.*")
-	c.Check(s.Stdout(), Equals, "")
-	c.Check(s.Stderr(), Equals, "")
+	c.Assert(err, tc.ErrorMatches, "no notices.* have been listed.*")
+	c.Check(s.Stdout(), tc.Equals, "")
+	c.Check(s.Stderr(), tc.Equals, "")
 }

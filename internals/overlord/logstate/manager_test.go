@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
@@ -30,15 +31,17 @@ import (
 
 type managerSuite struct{}
 
-var _ = Suite(&managerSuite{})
+func TestManagerSuite(t *testing.T) {
+	tc.Run(t, &managerSuite{})
+}
 
-func (*managerSuite) SetUpSuite(c *C) {
+func (*managerSuite) SetUpSuite(c *tc.C) {
 	// Send logs to stderr, so we can see them when debugging
 	l := logger.New(os.Stderr, "[test] ")
 	logger.SetLogger(l)
 }
 
-func (*managerSuite) TestPlanChange(c *C) {
+func (*managerSuite) TestPlanChange(c *tc.C) {
 	gathererOptions := logGathererOptions{
 		newClient: func(target *plan.LogTarget) (logClient, error) {
 			return &testClient{}, nil
@@ -103,28 +106,28 @@ func (*managerSuite) TestPlanChange(c *C) {
 	checkBuffers(c, m.buffers, []string{"svc1", "svc2", "svc4"})
 }
 
-func checkGatherers(c *C, gatherers map[string]*logGatherer, expected map[string][]string) {
-	c.Assert(gatherers, HasLen, len(expected))
+func checkGatherers(c *tc.C, gatherers map[string]*logGatherer, expected map[string][]string) {
+	c.Assert(gatherers, tc.HasLen, len(expected))
 	for tgtName, svcs := range expected {
 		g, ok := gatherers[tgtName]
-		c.Assert(ok, Equals, true)
+		c.Assert(ok, tc.Equals, true)
 
-		c.Assert(g.pullers.len(), Equals, len(svcs))
+		c.Assert(g.pullers.len(), tc.Equals, len(svcs))
 		for _, svc := range svcs {
-			c.Check(g.pullers.contains(svc), Equals, true)
+			c.Check(g.pullers.contains(svc), tc.Equals, true)
 		}
 	}
 }
 
-func checkBuffers(c *C, buffers map[string]*servicelog.RingBuffer, expected []string) {
-	c.Assert(buffers, HasLen, len(expected))
+func checkBuffers(c *tc.C, buffers map[string]*servicelog.RingBuffer, expected []string) {
+	c.Assert(buffers, tc.HasLen, len(expected))
 	for _, svcName := range expected {
 		_, ok := buffers[svcName]
-		c.Check(ok, Equals, true)
+		c.Check(ok, tc.Equals, true)
 	}
 }
 
-func (s *managerSuite) TestTimelyShutdown(c *C) {
+func (s *managerSuite) TestTimelyShutdown(c *tc.C) {
 	client := &slowFlushingClient{
 		flushTime: 1 * time.Microsecond,
 	}
@@ -161,10 +164,10 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	})
 	m.ServiceStarted(svc1.config, svc1.ringBuffer)
 
-	c.Assert(m.gatherers, HasLen, 10)
+	c.Assert(m.gatherers, tc.HasLen, 10)
 
 	err := svc1.stop()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	client.SetFlushTime(10 * time.Second)
 	// Stop all gatherers and check this happens quickly
@@ -213,7 +216,7 @@ func (c *slowFlushingClient) SetFlushTime(timeout time.Duration) {
 	c.flushTime = timeout
 }
 
-func (s *managerSuite) TestLabels(c *C) {
+func (s *managerSuite) TestLabels(c *tc.C) {
 	fakeClient := &labelStore{
 		labels:          map[string]map[string]string{},
 		notifySetLabels: make(chan struct{}, 2),
@@ -267,7 +270,7 @@ func (s *managerSuite) TestLabels(c *C) {
 
 	fakeClient.waitLabels(c)
 	fakeClient.waitLabels(c)
-	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
+	c.Assert(fakeClient.labels, tc.DeepEquals, map[string]map[string]string{
 		"svc1": {
 			"owner":   "user-alice",
 			"address": "http://103.2.51.6:3456",
@@ -286,7 +289,7 @@ func (s *managerSuite) TestLabels(c *C) {
 	// Wait for labels to be set
 	fakeClient.waitLabels(c)
 	fakeClient.waitLabels(c)
-	c.Assert(fakeClient.labels, DeepEquals, map[string]map[string]string{
+	c.Assert(fakeClient.labels, tc.DeepEquals, map[string]map[string]string{
 		"svc1": {
 			"owner":   "user-alice",
 			"address": "http://103.2.51.6:3456",
@@ -325,7 +328,7 @@ func (c *labelStore) SetLabels(serviceName string, labels map[string]string) {
 }
 
 // wait for labels to be set
-func (l *labelStore) waitLabels(c *C) {
+func (l *labelStore) waitLabels(c *tc.C) {
 	select {
 	case <-l.notifySetLabels:
 	case <-time.After(1 * time.Second):

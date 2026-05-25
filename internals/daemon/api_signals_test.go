@@ -20,12 +20,12 @@ import (
 	"net/http/httptest"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/internals/overlord/servstate"
 )
 
-func (s *apiSuite) TestSignalsSend(c *C) {
+func (s *apiSuite) TestSignalsSend(c *tc.C) {
 	writeTestLayer(s.pebbleDir, `
 services:
     test1:
@@ -39,11 +39,11 @@ services:
 	// Start test service
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/services", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 202)
+	c.Check(rec.Result().StatusCode, tc.Equals, 202)
 
 	// Wait for it to be running
 	serviceMgr := d.overlord.ServiceManager()
@@ -52,7 +52,7 @@ services:
 			c.Fatalf("timed out waiting for service to start")
 		}
 		services, err := serviceMgr.Services([]string{"test1"})
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if len(services) == 1 && services[0].Current == servstate.StatusActive {
 			break
 		}
@@ -62,24 +62,24 @@ services:
 	// First ensure a bad signal name returns an error
 	payload = bytes.NewBufferString(`{"signal": "FOOBAR", "services": ["test1"]}`)
 	req, err = http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp = v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec = httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 500)
+	c.Check(rec.Result().StatusCode, tc.Equals, 500)
 	errResult, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(errResult.Message, Matches, `cannot send signal to "test1": invalid signal name "FOOBAR"`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(errResult.Message, tc.Matches, `cannot send signal to "test1": invalid signal name "FOOBAR"`)
 
 	// Send SIGTERM to service via API
 	payload = bytes.NewBufferString(`{"signal": "SIGTERM", "services": ["test1"]}`)
 	req, err = http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp = v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec = httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 200)
-	c.Check(rsp.Result, DeepEquals, true)
+	c.Check(rec.Result().StatusCode, tc.Equals, 200)
+	c.Check(rsp.Result, tc.DeepEquals, true)
 
 	// Ensure it goes into error state due to the SIGTERM signal.
 	// The service returns with a non-zero exit code's return code because of SIGTERM,
@@ -90,7 +90,7 @@ services:
 			c.Fatalf("timed out waiting for service to go into backoff")
 		}
 		services, err := serviceMgr.Services([]string{"test1"})
-		c.Assert(err, IsNil)
+		c.Assert(err, tc.ErrorIsNil)
 		if len(services) == 1 && services[0].Current == servstate.StatusError {
 			break
 		}
@@ -98,42 +98,42 @@ services:
 	}
 }
 
-func (s *apiSuite) TestSignalsBadBody(c *C) {
+func (s *apiSuite) TestSignalsBadBody(c *tc.C) {
 	payload := bytes.NewBufferString("@")
 	req, err := http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 400)
+	c.Check(rec.Result().StatusCode, tc.Equals, 400)
 	errResult, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(errResult.Message, Matches, "cannot decode request body: .*")
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(errResult.Message, tc.Matches, "cannot decode request body: .*")
 }
 
-func (s *apiSuite) TestSignalsNoServices(c *C) {
+func (s *apiSuite) TestSignalsNoServices(c *tc.C) {
 	payload := bytes.NewBufferString(`{"signal": "SIGTERM"}`)
 	req, err := http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 400)
+	c.Check(rec.Result().StatusCode, tc.Equals, 400)
 	errResult, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(errResult.Message, Equals, "must specify one or more services")
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(errResult.Message, tc.Equals, "must specify one or more services")
 }
 
-func (s *apiSuite) TestSignalsServiceNotRunning(c *C) {
+func (s *apiSuite) TestSignalsServiceNotRunning(c *tc.C) {
 	s.daemon(c)
 	payload := bytes.NewBufferString(`{"signal": "SIGTERM", "services": ["test1"]}`)
 	req, err := http.NewRequest("POST", "/v1/signals", payload)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	rsp := v1PostSignals(apiCmd("/v1/signals"), req, nil).(*resp)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
-	c.Check(rec.Result().StatusCode, Equals, 500)
+	c.Check(rec.Result().StatusCode, tc.Equals, 500)
 	errResult, ok := rsp.Result.(*errorResult)
-	c.Assert(ok, Equals, true)
-	c.Assert(errResult.Message, Matches, `cannot send signal to "test1": service is not running`)
+	c.Assert(ok, tc.Equals, true)
+	c.Assert(errResult.Message, tc.Matches, `cannot send signal to "test1": service is not running`)
 }

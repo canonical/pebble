@@ -17,13 +17,11 @@ package workloads_test
 import (
 	"testing"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
 type workloadsSuite struct{}
 
-var _ = Suite(&workloadsSuite{})
-
-func Test(t *testing.T) {
-	TestingT(t)
+func TestWorkloadsSuite(t *testing.T) {
+	tc.Run(t, &workloadsSuite{})
 }

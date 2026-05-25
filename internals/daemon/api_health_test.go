@@ -21,9 +21,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/overlord"
@@ -31,11 +32,13 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
-var _ = Suite(&healthSuite{})
+func TestHealthSuite(t *testing.T) {
+	tc.Run(t, &healthSuite{})
+}
 
 type healthSuite struct{}
 
-func (s *healthSuite) TestNoChecks(c *C) {
+func (s *healthSuite) TestNoChecks(c *tc.C) {
 	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
 	})
@@ -43,13 +46,13 @@ func (s *healthSuite) TestNoChecks(c *C) {
 
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
-	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 200)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": true,
 	})
 }
 
-func (s *healthSuite) TestHealthy(c *C) {
+func (s *healthSuite) TestHealthy(c *tc.C) {
 	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
@@ -61,13 +64,13 @@ func (s *healthSuite) TestHealthy(c *C) {
 
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
-	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 200)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": true,
 	})
 }
 
-func (s *healthSuite) TestUnhealthy(c *C) {
+func (s *healthSuite) TestUnhealthy(c *tc.C) {
 	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusUp},
@@ -80,13 +83,13 @@ func (s *healthSuite) TestUnhealthy(c *C) {
 
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
-	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 502)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": false,
 	})
 }
 
-func (s *healthSuite) TestLevel(c *C) {
+func (s *healthSuite) TestLevel(c *tc.C) {
 	type levelTest struct {
 		aliveCheck   string // alive check: "up", "down", or no alive check
 		readyCheck   string // ready check: "up", "down", or no ready check
@@ -129,26 +132,26 @@ func (s *healthSuite) TestLevel(c *C) {
 
 			status, response := serveHealth(c, "GET", "/v1/health?level=alive", nil)
 			if test.aliveHealthy {
-				c.Check(status, Equals, 200)
-				c.Check(response, DeepEquals, map[string]any{"healthy": true})
+				c.Check(status, tc.Equals, 200)
+				c.Check(response, tc.DeepEquals, map[string]any{"healthy": true})
 			} else {
-				c.Check(status, Equals, 502)
-				c.Check(response, DeepEquals, map[string]any{"healthy": false})
+				c.Check(status, tc.Equals, 502)
+				c.Check(response, tc.DeepEquals, map[string]any{"healthy": false})
 			}
 
 			status, response = serveHealth(c, "GET", "/v1/health?level=ready", nil)
 			if test.readyHealthy {
-				c.Check(status, Equals, 200)
-				c.Check(response, DeepEquals, map[string]any{"healthy": true})
+				c.Check(status, tc.Equals, 200)
+				c.Check(response, tc.DeepEquals, map[string]any{"healthy": true})
 			} else {
-				c.Check(status, Equals, 502)
-				c.Check(response, DeepEquals, map[string]any{"healthy": false})
+				c.Check(status, tc.Equals, 502)
+				c.Check(response, tc.DeepEquals, map[string]any{"healthy": false})
 			}
 		}()
 	}
 }
 
-func (s *healthSuite) TestNames(c *C) {
+func (s *healthSuite) TestNames(c *tc.C) {
 	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return []*checkstate.CheckInfo{
 			{Name: "chk1", Status: checkstate.CheckStatusDown},
@@ -160,52 +163,52 @@ func (s *healthSuite) TestNames(c *C) {
 	defer restore()
 
 	status, response := serveHealth(c, "GET", "/v1/health?names=chk1&names=chk3", nil)
-	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 502)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": false,
 	})
 
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk1,chk3", nil)
-	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 502)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": false,
 	})
 
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk2", nil)
-	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 200)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": true,
 	})
 
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk3", nil)
-	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 200)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": true,
 	})
 
 	// With only an inactive check, this is the same as no checks, so healthy.
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk4", nil)
-	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 200)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": true,
 	})
 
 	// One healthy check, one that should be ignored.
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk2,chk4", nil)
-	c.Assert(status, Equals, 200)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 200)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": true,
 	})
 
 	// One unhealthy check, one that should be ignored.
 	status, response = serveHealth(c, "GET", "/v1/health?names=chk1,chk4", nil)
-	c.Assert(status, Equals, 502)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 502)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"healthy": false,
 	})
 }
 
-func (s *healthSuite) TestBadLevel(c *C) {
+func (s *healthSuite) TestBadLevel(c *tc.C) {
 	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, nil
 	})
@@ -213,13 +216,13 @@ func (s *healthSuite) TestBadLevel(c *C) {
 
 	status, response := serveHealth(c, "GET", "/v1/health?level=foo", nil)
 
-	c.Assert(status, Equals, 400)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 400)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"message": `level must be "alive" or "ready"`,
 	})
 }
 
-func (s *healthSuite) TestChecksError(c *C) {
+func (s *healthSuite) TestChecksError(c *tc.C) {
 	restore := FakeGetChecks(func(o *overlord.Overlord) ([]*checkstate.CheckInfo, error) {
 		return nil, errors.New("oops!")
 	})
@@ -227,8 +230,8 @@ func (s *healthSuite) TestChecksError(c *C) {
 
 	status, response := serveHealth(c, "GET", "/v1/health", nil)
 
-	c.Assert(status, Equals, 500)
-	c.Assert(response, DeepEquals, map[string]any{
+	c.Assert(status, tc.Equals, 500)
+	c.Assert(response, tc.DeepEquals, map[string]any{
 		"message": "internal server error",
 	})
 }
@@ -238,25 +241,25 @@ func (s *healthSuite) TestChecksError(c *C) {
 //
 // - https://github.com/canonical/pebble/issues/366
 // - https://bugs.launchpad.net/juju/+bug/2052517
-func (s *apiSuite) TestHealthStateLockNotHeldSuccess(c *C) {
+func (s *apiSuite) TestHealthStateLockNotHeldSuccess(c *tc.C) {
 	s.testHealthStateLockNotHeld(c, "", false)
 }
 
-func (s *apiSuite) TestHealthStateLockNotHeldError(c *C) {
+func (s *apiSuite) TestHealthStateLockNotHeldError(c *tc.C) {
 	s.testHealthStateLockNotHeld(c, "badlevel", true)
 }
 
-func (s *apiSuite) testHealthStateLockNotHeld(c *C, level string, expectErr bool) {
+func (s *apiSuite) testHealthStateLockNotHeld(c *tc.C, level string, expectErr bool) {
 	daemonOpts := &Options{
 		Dir:        s.pebbleDir,
 		SocketPath: s.pebbleDir + ".pebble.socket",
 	}
 	daemon, err := New(daemonOpts)
-	c.Assert(err, IsNil)
-	c.Assert(daemon.Init(), IsNil)
-	c.Assert(daemon.Start(), IsNil)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(daemon.Init(), tc.IsNil)
+	c.Assert(daemon.Start(), tc.IsNil)
 	defer func() {
-		c.Assert(daemon.Stop(nil), IsNil)
+		c.Assert(daemon.Stop(nil), tc.IsNil)
 	}()
 
 	// Acquire state lock so that the health endpoint can't.
@@ -291,26 +294,26 @@ func (s *apiSuite) testHealthStateLockNotHeld(c *C, level string, expectErr bool
 	select {
 	case healthErr := <-errCh:
 		if expectErr {
-			c.Assert(healthErr, NotNil)
+			c.Assert(healthErr, tc.NotNil)
 		} else {
-			c.Assert(healthErr, IsNil)
+			c.Assert(healthErr, tc.IsNil)
 		}
 	case <-time.After(5 * time.Second):
 		c.Fatalf("timed out waiting for /v1/health - it must be trying to acquire the state lock")
 	}
 }
 
-func serveHealth(c *C, method, url string, body io.Reader) (int, map[string]any) {
+func serveHealth(c *tc.C, method, url string, body io.Reader) (int, map[string]any) {
 	recorder := httptest.NewRecorder()
 	request, err := http.NewRequest(method, url, body)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	server := v1Health(&Command{d: &Daemon{}}, request, nil)
 	server.ServeHTTP(recorder, request)
 
-	c.Assert(recorder.Result().Header.Get("Content-Type"), Equals, "application/json")
+	c.Assert(recorder.Result().Header.Get("Content-Type"), tc.Equals, "application/json")
 	var response map[string]any
 	err = json.NewDecoder(recorder.Result().Body).Decode(&response)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return recorder.Result().StatusCode, response["result"].(map[string]any)
 }

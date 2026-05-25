@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 	"gopkg.in/yaml.v3"
 
 	"github.com/canonical/pebble/internals/overlord"
@@ -35,9 +35,6 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
-// Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
-
 type pairingSuite struct {
 	overlord      *overlord.Overlord
 	state         *state.State
@@ -45,24 +42,33 @@ type pairingSuite struct {
 	identitiesMgr *identities.Manager
 }
 
-var _ = Suite(&pairingSuite{})
+func TestPairingSuite(t *testing.T) {
+	tc.Run(t, &pairingSuite{})
+}
 
-func (ps *pairingSuite) SetUpTest(c *C) {
+func (ps *pairingSuite) SetUpTest(c *tc.C) {
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 
 	ps.overlord = overlord.Fake()
 	ps.state = ps.overlord.State()
 	ps.overlord.Loop()
+
+	c.Cleanup(func() {
+		ps.overlord = nil
+		ps.state = nil
+		ps.manager = nil
+		ps.identitiesMgr = nil
+	})
 }
 
-func (ps *pairingSuite) TearDownTest(c *C) {
+func (ps *pairingSuite) TearDownTest(c *tc.C) {
 	ps.overlord.Stop()
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
 // newManager creates a new pairing manager only after it
 // persists the paired state.
-func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingDetails) {
+func (ps *pairingSuite) newManager(c *tc.C, s *pairingstate.PairingDetails) {
 
 	if s != nil {
 		ps.state.Lock()
@@ -72,14 +78,14 @@ func (ps *pairingSuite) newManager(c *C, s *pairingstate.PairingDetails) {
 
 	var err error
 	ps.identitiesMgr, err = identities.NewManager(ps.state)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ps.manager, err = pairingstate.NewManager(ps.state, ps.identitiesMgr)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	ps.overlord.AddManager(ps.manager)
 	err = ps.overlord.StartUp()
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 }
 
 // PairingDetails returns the persisted pairing state.
@@ -103,14 +109,14 @@ func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 // expectWindowEnableDisable makes sure that the pairing window enable phase,
 // and the following transition to disable happens within reasonable bounds.
 // The overlord's ensure loop will automatically handle calling Ensure() on the manager.
-func (ps *pairingSuite) expectWindowEnableDisable(c *C, timeout time.Duration) {
+func (ps *pairingSuite) expectWindowEnableDisable(c *tc.C, timeout time.Duration) {
 	start := time.Now()
 
 	// 25% jitter
 	testJitter := timeout / 4
 
 	// 1. Window just opened, so should be enabled.
-	c.Assert(ps.manager.PairingEnabled(), Equals, true)
+	c.Assert(ps.manager.PairingEnabled(), tc.Equals, true)
 
 	// 2. Let's wait for the timeout to almost elapse, so that we can
 	//    check the state towards the end of the window.
@@ -135,15 +141,15 @@ func (ps *pairingSuite) expectWindowEnableDisable(c *C, timeout time.Duration) {
 }
 
 // generateTestClientCert creates a self-signed client certificate for testing.
-func generateTestClientCert(c *C) *x509.Certificate {
+func generateTestClientCert(c *tc.C) *x509.Certificate {
 	// Generate ed25519 key pair
 	_, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Generate serial number
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	now := time.Now()
 	template := &x509.Certificate{
@@ -160,11 +166,11 @@ func generateTestClientCert(c *C) *x509.Certificate {
 
 	// Create self-signed certificate
 	certDER, err := x509.CreateCertificate(rand.Reader, template, template, privateKey.Public(), privateKey)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	// Parse certificate from DER
 	cert, err := x509.ParseCertificate(certDER)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 
 	return cert
 }
@@ -184,8 +190,8 @@ func parseCombineLayers(yamls []string) (*plan.Layer, error) {
 }
 
 // layerYAML presents a plan as a marshalled YAML string.
-func layerYAML(c *C, layer *plan.Layer) string {
+func layerYAML(c *tc.C, layer *plan.Layer) string {
 	yml, err := yaml.Marshal(layer)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	return strings.TrimSpace(string(yml))
 }

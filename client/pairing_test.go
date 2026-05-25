@@ -20,37 +20,37 @@ import (
 	"io"
 	"net/url"
 
-	. "gopkg.in/check.v1"
+	"github.com/canonical/tc"
 )
 
-func (cs *clientSuite) TestPair(c *C) {
+func (cs *clientSuite) TestPair(c *tc.C) {
 	idCert := &x509.Certificate{}
 	cs.FakeTLSServer(idCert)
 	cs.rsp = `{"type": "sync", "result": null}`
 	cert, err := cs.cli.Pair()
-	c.Assert(cert, Equals, idCert)
-	c.Assert(err, IsNil)
-	c.Assert(cs.req.Method, Equals, "POST")
-	c.Assert(cs.req.URL.Path, Equals, "/v1/pairing")
-	c.Assert(cs.req.URL.Query(), DeepEquals, url.Values{})
+	c.Assert(cert, tc.Equals, idCert)
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(cs.req.Method, tc.Equals, "POST")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/pairing")
+	c.Assert(cs.req.URL.Query(), tc.DeepEquals, url.Values{})
 
 	body, err := io.ReadAll(cs.req.Body)
-	c.Assert(err, IsNil)
+	c.Assert(err, tc.ErrorIsNil)
 	var m map[string]any
 	err = json.Unmarshal(body, &m)
-	c.Assert(err, IsNil)
-	c.Assert(m, DeepEquals, map[string]any{
+	c.Assert(err, tc.ErrorIsNil)
+	c.Assert(m, tc.DeepEquals, map[string]any{
 		"action": "pair",
 	})
 }
 
-func (cs *clientSuite) TestPairError(c *C) {
+func (cs *clientSuite) TestPairError(c *tc.C) {
 	idCert := &x509.Certificate{}
 	cs.FakeTLSServer(idCert)
 	cs.rsp = `{"type": "error", "result": {"message": "cannot pair client: pairing window not enabled"}}`
 	cert, err := cs.cli.Pair()
-	c.Assert(cert, IsNil)
-	c.Assert(err, ErrorMatches, `cannot pair client: pairing window not enabled`)
-	c.Assert(cs.req.Method, Equals, "POST")
-	c.Assert(cs.req.URL.Path, Equals, "/v1/pairing")
+	c.Assert(cert, tc.IsNil)
+	c.Assert(err, tc.ErrorMatches, `cannot pair client: pairing window not enabled`)
+	c.Assert(cs.req.Method, tc.Equals, "POST")
+	c.Assert(cs.req.URL.Path, tc.Equals, "/v1/pairing")
 }
