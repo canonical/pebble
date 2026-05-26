@@ -115,17 +115,17 @@ const (
 // and Key, the previous notice is updated appropriately instead of a new one
 // being created.
 type Notice struct {
-	ID            string            `json:"id"`
-	UserID        *uint32           `json:"user-id"`
-	Type          NoticeType        `json:"type"`
-	Key           string            `json:"key"`
-	FirstOccurred time.Time         `json:"first-occurred"`
-	LastOccurred  time.Time         `json:"last-occurred"`
-	LastRepeated  time.Time         `json:"last-repeated"`
-	Occurrences   int               `json:"occurrences"`
-	LastData      map[string]string `json:"last-data,omitempty"`
-	RepeatAfter   time.Duration     `json:"repeat-after,omitempty"`
-	ExpireAfter   time.Duration     `json:"expire-after,omitempty"`
+	ID            string            `json:"id" yaml:"id"`
+	UserID        *uint32           `json:"user-id" yaml:"user-id"`
+	Type          NoticeType        `json:"type" yaml:"type"`
+	Key           string            `json:"key" yaml:"key"`
+	FirstOccurred time.Time         `json:"first-occurred" yaml:"first-occurred"`
+	LastOccurred  time.Time         `json:"last-occurred" yaml:"last-occurred"`
+	LastRepeated  time.Time         `json:"last-repeated" yaml:"last-repeated"`
+	Occurrences   int               `json:"occurrences" yaml:"occurrences"`
+	LastData      map[string]string `json:"last-data,omitempty" yaml:"last-data,omitempty"`
+	RepeatAfter   time.Duration     `json:"repeat-after,omitempty" yaml:"repeat-after,omitempty"`
+	ExpireAfter   time.Duration     `json:"expire-after,omitempty" yaml:"expire-after,omitempty"`
 }
 
 type NoticeType string
@@ -149,6 +149,24 @@ type jsonNotice struct {
 	Notice
 	RepeatAfter string `json:"repeat-after,omitempty"`
 	ExpireAfter string `json:"expire-after,omitempty"`
+}
+
+// MarshalJSON is needed because the default JSON marshaler encodes
+// time.Duration fields (RepeatAfter, ExpireAfter) as nanoseconds.
+func (n Notice) MarshalJSON() ([]byte, error) {
+	type rawNotice Notice
+	raw := struct {
+		rawNotice
+		RepeatAfter string `json:"repeat-after,omitempty"`
+		ExpireAfter string `json:"expire-after,omitempty"`
+	}{rawNotice: rawNotice(n)}
+	if n.RepeatAfter != 0 {
+		raw.RepeatAfter = n.RepeatAfter.String()
+	}
+	if n.ExpireAfter != 0 {
+		raw.ExpireAfter = n.ExpireAfter.String()
+	}
+	return json.Marshal(raw)
 }
 
 // This is used to ensure we send a well-formed notice ID in the URL path.
