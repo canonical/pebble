@@ -54,7 +54,7 @@ func NewClient(options *ClientOptions) *Client {
 	fillDefaultOptions(&opts)
 	c := &Client{
 		options:    &opts,
-		httpClient: &http.Client{Timeout: opts.RequestTimeout},
+		httpClient: &http.Client{Timeout: opts.RequestTimeout, Transport: opts.Transport},
 		buffer:     make([]entryWithService, 2*opts.MaxRequestEntries),
 		labels:     make(map[string]json.RawMessage),
 	}
@@ -70,6 +70,7 @@ type ClientOptions struct {
 	UserAgent         string
 	TargetName        string
 	Location          string
+	Transport         http.RoundTripper
 }
 
 func fillDefaultOptions(options *ClientOptions) {

@@ -17,6 +17,7 @@ package logstate
 import (
 	"sync"
 
+	"github.com/canonical/pebble/internals/httputil"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
@@ -29,19 +30,30 @@ type LogManager struct {
 	plan      *plan.Plan
 
 	newGatherer func(*plan.LogTarget) (*logGatherer, error)
+	transport   *httputil.Transport
 }
 
 func NewLogManager() *LogManager {
-	return &LogManager{
-		gatherers:   map[string]*logGatherer{},
-		buffers:     map[string]*servicelog.RingBuffer{},
-		newGatherer: newLogGatherer,
+	m := &LogManager{
+		gatherers: map[string]*logGatherer{},
+		buffers:   map[string]*servicelog.RingBuffer{},
+		transport: httputil.NewTransport(),
 	}
+	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
+		return newLogGathererInternal(t, &logGathererOptions{
+			transport: m.transport,
+		})
+	}
+	return m
 }
 
 // PlanChanged is called by the service manager when the plan changes.
 // Based on the new plan, we will Stop old gatherers and start new ones.
 func (m *LogManager) PlanChanged(pl *plan.Plan) {
+	if err := m.transport.Refresh(); err != nil {
+		logger.Noticef("Cannot refresh TLS cert pool: %v", err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

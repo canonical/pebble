@@ -17,6 +17,7 @@ package logstate
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -89,6 +90,7 @@ type logGathererOptions struct {
 	maxBufferedEntries  int
 	timeoutCurrentFlush time.Duration
 	timeoutFinalFlush   time.Duration
+	transport           http.RoundTripper
 	// method to get a new client
 	newClient func(*plan.LogTarget) (logClient, error)
 }
@@ -137,7 +139,10 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 		options.timeoutFinalFlush = timeoutFinalFlush
 	}
 	if options.newClient == nil {
-		options.newClient = newLogClient
+		t := options.transport
+		options.newClient = func(target *plan.LogTarget) (logClient, error) {
+			return newLogClient(target, t)
+		}
 	}
 	return options
 }
@@ -367,13 +372,14 @@ type logClient interface {
 	SetLabels(serviceName string, labels map[string]string)
 }
 
-func newLogClient(target *plan.LogTarget) (logClient, error) {
+func newLogClient(target *plan.LogTarget, transport http.RoundTripper) (logClient, error) {
 	switch target.Type {
 	case plan.LokiTarget:
 		return loki.NewClient(&loki.ClientOptions{
 			TargetName: target.Name,
 			Location:   target.Location,
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			Transport:  transport,
 		}), nil
 	case plan.OpenTelemetryTarget:
 		return opentelemetry.NewClient(&opentelemetry.ClientOptions{
@@ -381,6 +387,7 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 			Location:   target.Location,
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
 			ScopeName:  cmd.ProgramName,
+			Transport:  transport,
 		}), nil
 	case plan.SyslogTarget:
 		hostname, err := os.Hostname()

@@ -17,6 +17,7 @@ package checkstate
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"reflect"
 	"sort"
 	"strings"
@@ -24,6 +25,7 @@ import (
 
 	"gopkg.in/tomb.v2"
 
+	"github.com/canonical/pebble/internals/httputil"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/planstate"
@@ -48,6 +50,7 @@ type CheckManager struct {
 
 	checksLock sync.Mutex
 	checks     map[string]*checkData
+	transport  *httputil.Transport
 }
 
 // FailureFunc is the type of function called when a failure action is triggered.
@@ -56,9 +59,10 @@ type FailureFunc func(name string)
 // NewManager creates a new check manager.
 func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager) *CheckManager {
 	manager := &CheckManager{
-		state:   s,
-		checks:  make(map[string]*checkData),
-		planMgr: planMgr,
+		state:     s,
+		checks:    make(map[string]*checkData),
+		planMgr:   planMgr,
+		transport: httputil.NewTransport(),
 	}
 
 	// Health check changes can be long-running; ensure they don't get pruned.
@@ -103,6 +107,10 @@ func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 // PlanChanged handles updates to the plan (server configuration),
 // stopping the previous checks and starting the new ones as required.
 func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
+	if err := m.transport.Refresh(); err != nil {
+		logger.Noticef("Cannot refresh TLS cert pool: %v", err)
+	}
+
 	m.state.Lock()
 	defer m.state.Unlock()
 
@@ -254,13 +262,14 @@ func checkType(config *plan.Check) string {
 
 // newChecker creates a new checker of the configured type. Assumes
 // mergeServiceContext has already been called.
-func newChecker(config *plan.Check) checker {
+func newChecker(config *plan.Check, transport http.RoundTripper) checker {
 	switch {
 	case config.HTTP != nil:
 		return &httpChecker{
-			name:    config.Name,
-			url:     config.HTTP.URL,
-			headers: config.HTTP.Headers,
+			name:      config.Name,
+			url:       config.HTTP.URL,
+			headers:   config.HTTP.Headers,
+			transport: transport,
 		}
 
 	case config.TCP != nil:
@@ -658,7 +667,7 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 
 	// If the check is stopped, run the check directly without using changes and tasks.
 	if changeID == "" {
-		chk := newChecker(check)
+		chk := newChecker(check, m.transport)
 		err := runCheck(ctx, chk, check.Timeout.Value)
 		if err != nil {
 			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))

@@ -44,14 +44,15 @@ const (
 
 // httpChecker is a checker that ensures an HTTP GET at a specified URL returns 2xx.
 type httpChecker struct {
-	name    string
-	url     string
-	headers map[string]string
+	name      string
+	url       string
+	headers   map[string]string
+	transport http.RoundTripper
 }
 
 func (c *httpChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
-	client := &http.Client{}
+	client := &http.Client{Transport: c.transport}
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)

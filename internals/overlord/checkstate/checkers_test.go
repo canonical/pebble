@@ -56,15 +56,16 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	defer server.Close()
 
 	// Good 200 URL works
-	chk := &httpChecker{url: server.URL + "/foo/bar"}
+	chk := &httpChecker{url: server.URL + "/foo/bar", transport: nil}
 	err := chk.check(context.Background())
 	c.Assert(err, IsNil)
 	c.Assert(path, Equals, "/foo/bar")
 
 	// Custom headers are sent through
 	chk = &httpChecker{
-		url:     server.URL + "/foo/bar",
-		headers: map[string]string{"X-Name": "Bob Smith", "User-Agent": "pebble-test"},
+		url:       server.URL + "/foo/bar",
+		headers:   map[string]string{"X-Name": "Bob Smith", "User-Agent": "pebble-test"},
+		transport: nil,
 	}
 	err = chk.check(context.Background())
 	c.Assert(err, IsNil)
@@ -73,14 +74,14 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	c.Assert(headers.Get("User-Agent"), Equals, "pebble-test")
 
 	// Non-2xx status code returns error
-	chk = &httpChecker{url: server.URL + "/404"}
+	chk = &httpChecker{url: server.URL + "/404", transport: nil}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "non-2xx status code 404")
 	c.Assert(path, Equals, "/404")
 
 	// In case of non-2xx status, short response body is fully included in error details
 	response = "error details"
-	chk = &httpChecker{url: server.URL + "/500"}
+	chk = &httpChecker{url: server.URL + "/500", transport: nil}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "non-2xx status code 500")
 	detailsErr, ok := err.(*detailsError)
@@ -93,7 +94,7 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 		fmt.Fprintf(&output, "line %d\n", i)
 	}
 	response = output.String()
-	chk = &httpChecker{url: server.URL + "/500"}
+	chk = &httpChecker{url: server.URL + "/500", transport: nil}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, "non-2xx status code 500")
 	detailsErr, ok = err.(*detailsError)
@@ -103,18 +104,18 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	// Cancelled context returns error
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	chk = &httpChecker{url: server.URL}
+	chk = &httpChecker{url: server.URL, transport: nil}
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, ".* context canceled")
 
 	// After server closed, should get a network dial error
 	server.Close()
-	chk = &httpChecker{url: server.URL}
+	chk = &httpChecker{url: server.URL, transport: nil}
 	err = chk.check(context.Background())
 	c.Assert(err, ErrorMatches, ".* connection refused")
 
 	// Malformed URL returns an error
-	chk = &httpChecker{url: "#!@$%@#@"}
+	chk = &httpChecker{url: "#!@$%@#@", transport: nil}
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, "cannot build request: .*")
 }
@@ -266,7 +267,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			URL:     "https://example.com/foo",
 			Headers: map[string]string{"k": "v"},
 		},
-	})
+	}, nil)
 	http, ok := chk.(*httpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(http.name, Equals, "http")
@@ -279,7 +280,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Port: 80,
 			Host: "localhost",
 		},
-	})
+	}, nil)
 	tcp, ok := chk.(*tcpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(tcp.name, Equals, "tcp")
@@ -298,7 +299,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Group:       "group",
 			WorkingDir:  "/working/dir",
 		},
-	})
+	}, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Assert(exec.name, Equals, "exec")
@@ -329,7 +330,7 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 			ServiceContext: "svc1",
 		},
 	})
-	chk := newChecker(config)
+	chk := newChecker(config, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")
@@ -367,7 +368,7 @@ func (s *CheckersSuite) TestExecContextOverride(c *C) {
 			WorkingDir:     "/working/dir",
 		},
 	})
-	chk := newChecker(config)
+	chk := newChecker(config, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")

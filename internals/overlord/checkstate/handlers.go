@@ -48,7 +48,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	prevChangeID := data.prevChangeID
 	m.checksLock.Unlock()
 
-	chk := newChecker(config)
+	chk := newChecker(config, m.transport)
 
 	performCheck := func() (shouldExit bool, err error) {
 		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
@@ -166,7 +166,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	prevChangeID := data.prevChangeID
 	m.checksLock.Unlock()
 
-	chk := newChecker(config)
+	chk := newChecker(config, m.transport)
 
 	recoverCheck := func() (shouldExit bool, err error) {
 		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
