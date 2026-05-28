@@ -36,9 +36,10 @@ if none are specified) and displays them in chronological order.
 type cmdLogs struct {
 	client *client.Client
 
-	Follow     bool   `short:"f" long:"follow"`
-	Format     string `long:"format"`
-	N          string `short:"n"`
+	Follow bool   `short:"f" long:"follow"`
+	N      string `short:"n"`
+	//lint:ignore SA5008 "choice" tag is intentionally duplicated
+	Format     string `long:"format" default:"text" choice:"text" choice:"json"`
 	Positional struct {
 		Services []string `positional-arg-name:"<service>"`
 	} `positional-args:"yes"`
@@ -51,7 +52,7 @@ func init() {
 		Description: cmdLogsDescription,
 		ArgsHelp: map[string]string{
 			"--follow": "Follow (tail) logs for given services until Ctrl-C is\npressed. If no services are specified, show logs from\nall services running when the command starts.",
-			"--format": "Output format: \"text\" (default) or \"json\" (JSON lines).",
+			"--format": "Output format",
 			"-n":       "Number of logs to show (before following); defaults to 30.\nIf 'all', show all buffered logs.",
 		},
 		New: func(opts *CmdOptions) flags.Commander {
@@ -81,22 +82,20 @@ func (cmd *cmdLogs) Execute(args []string) error {
 
 	var writeLog func(entry client.LogEntry) error
 	switch cmd.Format {
-	case "", "text":
+	case "text":
 		writeLog = func(entry client.LogEntry) error {
 			_, err := fmt.Fprintf(Stdout, "%s [%s] %s\n",
 				entry.Time.Format(logTimeFormat), entry.Service, entry.Message)
 			return err
 		}
-
 	case "json":
 		encoder := json.NewEncoder(Stdout)
 		encoder.SetEscapeHTML(false)
 		writeLog = func(entry client.LogEntry) error {
 			return encoder.Encode(&entry)
 		}
-
 	default:
-		return fmt.Errorf(`invalid output format (expected "json" or "text", not %q)`, cmd.Format)
+		panic(fmt.Sprintf("internal error: invalid format option %q", cmd.Format))
 	}
 
 	opts := client.LogsOptions{

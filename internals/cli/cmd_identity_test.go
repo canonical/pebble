@@ -50,6 +50,57 @@ local:
 	c.Check(s.Stderr(), Equals, "")
 }
 
+func (s *PebbleSuite) TestIdentityJSON(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/identities")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		fmt.Fprint(w, `{
+			"type": "sync",
+			"status-code": 200,
+			"result": {
+				"bob": {"access": "read", "local": {"user-id": 42}}
+			}
+		}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "json", "bob"})
+	c.Assert(err, IsNil)
+	c.Check(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `{"access":"read","local":{"user-id":42}}`+"\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestIdentityYAML(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, Equals, "GET")
+		c.Check(r.URL.Path, Equals, "/v1/identities")
+		c.Check(r.URL.Query(), DeepEquals, url.Values{})
+		fmt.Fprint(w, `{
+			"type": "sync",
+			"status-code": 200,
+			"result": {
+				"bob": {"access": "read", "local": {"user-id": 42}}
+			}
+		}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "yaml", "bob"})
+	c.Assert(err, IsNil)
+	c.Check(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+access: read
+local:
+    user-id: 42
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestIdentityInvalidFormat(c *C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"identity", "--format", "foobar", "bob"})
+	c.Assert(err, ErrorMatches, "Invalid value.*for option.*--format.*")
+}
+
 func (s *PebbleSuite) TestIdentityNotFound(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, Equals, "GET")

@@ -73,9 +73,8 @@ func (s *PebbleSuite) TestLogsJSON(c *C) {
 }
 
 func (s *PebbleSuite) TestLogsInvalidFormat(c *C) {
-	rest, err := cli.ParserForTest().ParseArgs([]string{"logs", "--format", "invalid"})
-	c.Assert(err.Error(), Equals, `invalid output format (expected "json" or "text", not "invalid")`)
-	c.Assert(rest, HasLen, 1)
+	_, err := cli.ParserForTest().ParseArgs([]string{"logs", "--format", "invalid"})
+	c.Assert(err, ErrorMatches, "Invalid value.*for option.*--format.*")
 }
 
 func (s *PebbleSuite) TestLogsN(c *C) {

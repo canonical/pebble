@@ -103,8 +103,10 @@ Usage:
 The changes command displays a summary of system changes performed recently.
 
 [changes command options]
-      --abs-time     Display absolute times (in RFC 3339 format). Otherwise,
-                     display relative times up to 60 days, then YYYY-MM-DD.
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR changes -->
 
@@ -134,10 +136,11 @@ pebble check --help
 Usage:
   pebble check [check-OPTIONS] <check>
 
-The check command shows details for a single check in YAML format.
+The check command shows details for a single check.
 
 [check command options]
-      --refresh    Run the check immediately
+      --format=[text|json|yaml]   Output format (default: text)
+      --refresh                   Run the check immediately
 ```
 <!-- END AUTOMATED OUTPUT FOR check -->
 
@@ -158,7 +161,8 @@ checks, optionally filtered by level and check names provided as positional
 arguments.
 
 [checks command options]
-      --level=[alive|ready]   Check level to filter for
+      --format=[text|json|yaml]   Output format (default: text)
+      --level=[alive|ready]       Check level to filter for
 ```
 <!-- END AUTOMATED OUTPUT FOR checks -->
 
@@ -336,7 +340,7 @@ pebble update-identities  Update or replace identities
 pebble remove-identities  Remove identities
 
 [identities command options]
-      --format=   Output format: "text" (default), "json", or "yaml".
+      --format=[text|json|yaml]   Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR identities -->
 
@@ -351,9 +355,12 @@ The `identity` command is used to show a single identity.
 pebble identity --help
 
 Usage:
-  pebble identity <name>
+  pebble identity [identity-OPTIONS] <name>
 
 The identity command shows details for a single identity in YAML format.
+
+[identity command options]
+      --format=[text|json|yaml]   Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR identity -->
 
@@ -376,13 +383,15 @@ The logs command fetches buffered logs from the given services (or all services
 if none are specified) and displays them in chronological order.
 
 [logs command options]
-      -f, --follow     Follow (tail) logs for given services until Ctrl-C is
-                       pressed. If no services are specified, show logs from
-                       all services running when the command starts.
-          --format=    Output format: "text" (default) or "json" (JSON lines).
-      -n=              Number of logs to show (before following); defaults to
-                       30.
-                       If 'all', show all buffered logs.
+      -f, --follow             Follow (tail) logs for given services until
+                               Ctrl-C is
+                               pressed. If no services are specified, show logs
+                               from
+                               all services running when the command starts.
+      -n=                      Number of logs to show (before following);
+                               defaults to 30.
+                               If 'all', show all buffered logs.
+          --format=[text|json] Output format (default: text)
 ```
 <!-- END AUTOMATED OUTPUT FOR logs -->
 
@@ -452,10 +461,13 @@ pattern
 may be specified for the last path element.
 
 [ls command options]
-          --abs-time  Display absolute times (in RFC 3339 format). Otherwise,
-                      display relative times up to 60 days, then YYYY-MM-DD.
-      -d              List matching entries themselves, not directory contents
-      -l              Use a long listing format
+          --abs-time                Display absolute times (in RFC 3339
+                                    format). Otherwise, display relative times
+                                    up to 60 days, then YYYY-MM-DD.
+          --format=[text|json|yaml] Output format (default: text)
+      -d                            List matching entries themselves, not
+                                    directory contents
+      -l                            Use a long listing format
 ```
 <!-- END AUTOMATED OUTPUT FOR ls -->
 
@@ -506,8 +518,9 @@ The notice command fetches a single notice, either by ID (1-arg variant), or
 by unique type and key combination (2-arg variant).
 
 [notice command options]
-      --uid=            Look up notice from user with this UID (admin only;
-                        2-arg variant only)
+      --format=[text|json|yaml]   Output format (default: text)
+      --uid=                      Look up notice from user with this UID (admin
+                                  only; 2-arg variant only)
 ```
 <!-- END AUTOMATED OUTPUT FOR notice -->
 
@@ -575,15 +588,21 @@ can use --users=all to view notice with any user ID, or --uid=UID to view
 another user's notices.
 
 [notices command options]
-      --abs-time    Display absolute times (in RFC 3339 format). Otherwise,
-                    display relative times up to 60 days, then YYYY-MM-DD.
-      --users=      The only valid value is 'all', which lists notices with any
-                    user ID (admin only; cannot be used with --uid)
-      --uid=        Only list notices with this user ID (admin only; cannot be
-                    used with --users)
-      --type=       Only list notices of this type (multiple allowed)
-      --key=        Only list notices with this key (multiple allowed)
-      --timeout=    Wait up to this duration for matching notices to arrive
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
+      --users=                    The only valid value is 'all', which lists
+                                  notices with any user ID (admin only; cannot
+                                  be used with --uid)
+      --uid=                      Only list notices with this user ID (admin
+                                  only; cannot be used with --users)
+      --type=                     Only list notices of this type (multiple
+                                  allowed)
+      --key=                      Only list notices with this key (multiple
+                                  allowed)
+      --timeout=                  Wait up to this duration for matching notices
+                                  to arrive
 ```
 <!-- END AUTOMATED OUTPUT FOR notices -->
 
@@ -996,8 +1015,10 @@ The services command lists status information about the services specified, or
 about all services if none are specified.
 
 [services command options]
-      --abs-time     Display absolute times (in RFC 3339 format). Otherwise,
-                     display relative times up to 60 days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
 ```
 <!-- END AUTOMATED OUTPUT FOR services -->
 
@@ -1192,17 +1213,20 @@ The tasks command displays a summary of tasks associated with an individual
 change that happened recently.
 
 [tasks command options]
-      --abs-time       Display absolute times (in RFC 3339 format). Otherwise,
-                       display relative times up to 60 days, then YYYY-MM-DD.
-      --last=          Select last change of given type (install, refresh,
-                       remove, try, auto-refresh, etc.). A question mark at the
-                       end of the type means to do nothing (instead of
-                       returning an error) if no change of the given type is
-                       found. Note the question mark could need protecting from
-                       the shell.
+      --abs-time                  Display absolute times (in RFC 3339 format).
+                                  Otherwise, display relative times up to 60
+                                  days, then YYYY-MM-DD.
+      --format=[text|json|yaml]   Output format (default: text)
+      --last=                     Select last change of given type (install,
+                                  refresh, remove, try, auto-refresh, etc.). A
+                                  question mark at the end of the type means to
+                                  do nothing (instead of returning an error) if
+                                  no change of the given type is found. Note
+                                  the question mark could need protecting from
+                                  the shell.
 
 [tasks command arguments]
-  <change-id>:         Change ID
+  <change-id>:                    Change ID
 ```
 <!-- END AUTOMATED OUTPUT FOR tasks -->
 
@@ -1298,12 +1322,13 @@ listed again unless it happens again, _and_ a cooldown time has passed.
 Warnings expire automatically, and once expired they are forgotten.
 
 [warnings command options]
+      --all                           Show all warnings
       --abs-time                      Display absolute times (in RFC 3339
                                       format). Otherwise, display relative
                                       times up to 60 days, then YYYY-MM-DD.
+      --format=[text|json|yaml]       Output format (default: text)
       --unicode=[auto|never|always]   Use a little bit of Unicode to improve
                                       legibility. (default: auto)
-      --all                           Show all warnings
-      --verbose                       Show more information
+      --verbose                       Show more information (text format only)
 ```
 <!-- END AUTOMATED OUTPUT FOR warnings -->

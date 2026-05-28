@@ -249,7 +249,7 @@ func (c *Command) Daemon() *Daemon {
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
-		InternalError(c.d.degradedErr.Error()).ServeHTTP(w, r)
+		ServerError(c.d.degradedErr.Error()).ServeHTTP(w, r)
 		return
 	}
 
@@ -257,7 +257,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {
 		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
-		InternalError(err.Error()).ServeHTTP(w, r)
+		ServerError(err.Error()).ServeHTTP(w, r)
 		return
 	}
 

@@ -145,3 +145,129 @@ func (s *PebbleSuite) TestLsInvalidPattern(c *C) {
 	c.Check(s.Stdout(), Equals, "")
 	c.Check(s.Stderr(), Equals, "")
 }
+
+func (s *PebbleSuite) TestLsJSON(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/files")
+		c.Assert(r.URL.Query(), DeepEquals, url.Values{"action": {"list"}, "path": {"/"}})
+		fmt.Fprintln(w, `{
+	"type": "sync",
+	"result": [
+		{
+			"path": "/foo",
+			"name": "foo",
+			"type": "directory",
+			"permissions": "777",
+			"last-modified": "2016-04-21T01:02:03Z",
+			"user-id": 0,
+			"user": "root",
+			"group-id": 0,
+			"group": "root"
+		},
+		{
+			"path": "/bar",
+			"name": "bar",
+			"type": "file",
+			"permissions": "644",
+			"last-modified": "2021-04-21T01:02:03Z",
+			"user-id": 600,
+			"user": "toor",
+			"group-id": 600,
+			"group": "toor",
+			"size": 1024
+		},
+		{
+			"path": "/baz",
+			"name": "baz",
+			"type": "file",
+			"permissions": "600",
+			"last-modified": "2023-01-01T00:00:00Z",
+			"user-id": null,
+			"user": "",
+			"group-id": null,
+			"group": "",
+			"size": 0
+		}
+	]
+}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "json", "/"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `{"files":[{"path":"/foo","name":"foo","type":"directory","permissions":"777","last-modified":"2016-04-21T01:02:03Z","user-id":0,"user":"root","group-id":0,"group":"root"},{"path":"/bar","name":"bar","type":"file","size":1024,"permissions":"644","last-modified":"2021-04-21T01:02:03Z","user-id":600,"user":"toor","group-id":600,"group":"toor"},{"path":"/baz","name":"baz","type":"file","size":0,"permissions":"600","last-modified":"2023-01-01T00:00:00Z"}]}`+"\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLsYAML(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/files")
+		c.Assert(r.URL.Query(), DeepEquals, url.Values{"action": {"list"}, "path": {"/"}, "itself": {"true"}})
+		fmt.Fprintln(w, `{
+	"type": "sync",
+	"result": [{
+		"path": "/",
+		"name": "/",
+		"type": "directory",
+		"permissions": "777",
+		"last-modified": "2016-04-21T01:02:03Z",
+		"user-id": 0,
+		"user": "root",
+		"group-id": 0,
+		"group": "root"
+	}]
+}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "yaml", "-d", "/"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+files:
+    - path: /
+      name: /
+      type: directory
+      permissions: "777"
+      last-modified: "2016-04-21T01:02:03Z"
+      user-id: 0
+      user: root
+      group-id: 0
+      group: root
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLsEmptyJSON(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/files")
+		fmt.Fprintln(w, `{"type":"sync","result":[]}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "json", "/empty"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `{"files":[]}`+"\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLsEmptyYAML(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/files")
+		fmt.Fprintln(w, `{"type":"sync","result":[]}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "yaml", "/empty"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, "files: []\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestLsInvalidFormat(c *C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"ls", "--format", "foobar", "/"})
+	c.Assert(err, ErrorMatches, "Invalid value.*for option.*--format.*")
+}
