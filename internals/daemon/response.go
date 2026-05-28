@@ -131,7 +131,7 @@ type errorResult struct {
 
 func SyncResponse(result any) Response {
 	if err, ok := result.(error); ok {
-		return InternalError("internal error: %v", err)
+		return ServerError("internal error: %v", err)
 	}
 
 	if rsp, ok := result.(Response); ok {
@@ -192,7 +192,7 @@ func makeErrorResponder(status int) errorResponder {
 }
 
 // errorResponder is a callable that produces an error Response.
-// e.g., InternalError("something broke: %v", err), etc.
+// e.g., ServerError("something broke: %v", err), etc.
 type errorResponder func(string, ...any) Response
 
 // Standard error responses.
@@ -202,6 +202,6 @@ var (
 	Forbidden        = makeErrorResponder(http.StatusForbidden)
 	NotFound         = makeErrorResponder(http.StatusNotFound)
 	MethodNotAllowed = makeErrorResponder(http.StatusMethodNotAllowed)
-	InternalError    = makeErrorResponder(http.StatusInternalServerError)
+	ServerError      = makeErrorResponder(http.StatusInternalServerError)
 	GatewayTimeout   = makeErrorResponder(http.StatusGatewayTimeout)
 )

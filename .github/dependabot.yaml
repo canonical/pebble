@@ -6,6 +6,8 @@ updates:
       interval: "monthly"  # This is hard-coded to the 1st of the month
     labels:
       - "dependencies"
+    cooldown:
+      default-days: 7
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -13,3 +15,5 @@ updates:
     open-pull-requests-limit: 0  # Security updates only
     labels:
       - "dependencies"
+    cooldown:
+      default-days: 7

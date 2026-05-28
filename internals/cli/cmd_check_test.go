@@ -218,6 +218,55 @@ func (s *PebbleSuite) TestCheckRefreshNotFound(c *C) {
 	c.Check(err, ErrorMatches, "cannot find check .*")
 }
 
+func (s *PebbleSuite) TestCheckJSON(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk1"}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [{"name": "chk1", "startup": "enabled", "status": "up", "successes": 5, "threshold": 3, "change-id": "1"}]
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--format", "json", "chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `{"name":"chk1","startup":"enabled","status":"up","successes":5,"failures":0,"threshold":3,"change-id":"1"}`+"\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestCheckYAML(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, Equals, "GET")
+		c.Assert(r.URL.Path, Equals, "/v1/checks")
+		c.Assert(r.URL.Query(), DeepEquals, url.Values{"names": {"chk1"}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [{"name": "chk1", "startup": "enabled", "status": "up", "successes": 5, "threshold": 3, "change-id": "1"}]
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"check", "--format", "yaml", "chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(rest, HasLen, 0)
+	c.Check(s.Stdout(), Equals, `
+name: chk1
+startup: enabled
+status: up
+successes: 5
+failures: 0
+threshold: 3
+change-id: "1"
+`[1:])
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestCheckInvalidFormat(c *C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"check", "--format", "foobar", "chk1"})
+	c.Assert(err, ErrorMatches, "Invalid value.*for option.*--format.*")
+}
+
 func (s *PebbleSuite) TestCheckPrevChangeLog(c *C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

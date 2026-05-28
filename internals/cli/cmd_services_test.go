@@ -69,6 +69,42 @@ func (s *PebbleSuite) TestPlanNoServices(c *check.C) {
 	c.Check(s.Stderr(), check.Equals, "Plan has no services.\n")
 }
 
+func (s *PebbleSuite) TestPlanNoServicesJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": []
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"services":{}}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestPlanNoServicesYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": []
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, "services: {}\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
 func (s *PebbleSuite) TestNoMatchingServices(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, check.Equals, "GET")
@@ -110,6 +146,70 @@ bar      disabled  active    2022-04-28T17:05:23+12:00
 foo      enabled   inactive  -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestServicesJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled"},
+		{"name": "svc3", "current": "backoff", "startup": "enabled"}
+	]
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `{"services":{"svc1":{"name":"svc1","startup":"enabled","current":"inactive","current-since":"2022-04-28T17:05:23+12:00"},"svc2":{"name":"svc2","startup":"enabled","current":"inactive"},"svc3":{"name":"svc3","startup":"enabled","current":"backoff"}}}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestServicesYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled"},
+		{"name": "svc3", "current": "backoff", "startup": "enabled"}
+	]
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "yaml"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+services:
+    svc1:
+        name: svc1
+        startup: enabled
+        current: inactive
+        current-since: 2022-04-28T17:05:23+12:00
+    svc2:
+        name: svc2
+        startup: enabled
+        current: inactive
+    svc3:
+        name: svc3
+        startup: enabled
+        current: backoff
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestServicesInvalidFormat(c *check.C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "foobar"})
+	c.Assert(err, check.ErrorMatches, "Invalid value.*for option.*--format.*")
 }
 
 func (s *PebbleSuite) TestServicesFail(c *check.C) {

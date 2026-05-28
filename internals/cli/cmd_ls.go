@@ -17,8 +17,10 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	pathpkg "path"
 	"strings"
+	"time"
 
 	"github.com/canonical/go-flags"
 	"github.com/canonical/x-go/strutil/quantity"
@@ -36,6 +38,7 @@ type cmdLs struct {
 	client *client.Client
 
 	timeMixin
+	formatMixin
 	Directory  bool `short:"d"`
 	LongFormat bool `short:"l"`
 	Positional struct {
@@ -48,7 +51,7 @@ func init() {
 		Name:        "ls",
 		Summary:     cmdLsSummary,
 		Description: cmdLsDescription,
-		ArgsHelp: merge(timeArgsHelp, map[string]string{
+		ArgsHelp: merge(timeArgsHelp, formatArgsHelp, map[string]string{
 			"-d": "List matching entries themselves, not directory contents",
 			"-l": "Use a long listing format",
 		}),
@@ -56,6 +59,62 @@ func init() {
 			return &cmdLs{client: opts.Client}
 		},
 	})
+}
+
+type fileEntry struct {
+	Path         string `json:"path" yaml:"path"`
+	Name         string `json:"name" yaml:"name"`
+	Type         string `json:"type" yaml:"type"`
+	Size         *int64 `json:"size,omitempty" yaml:"size,omitempty"`
+	Permissions  string `json:"permissions" yaml:"permissions"`
+	LastModified string `json:"last-modified" yaml:"last-modified"`
+	UserID       *int   `json:"user-id,omitempty" yaml:"user-id,omitempty"`
+	User         string `json:"user,omitempty" yaml:"user,omitempty"`
+	GroupID      *int   `json:"group-id,omitempty" yaml:"group-id,omitempty"`
+	Group        string `json:"group,omitempty" yaml:"group,omitempty"`
+}
+
+type lsResult struct {
+	Files []fileEntry `json:"files" yaml:"files"`
+}
+
+func fileModeToType(mode os.FileMode) string {
+	switch {
+	case mode&os.ModeType == 0:
+		return "file"
+	case mode&os.ModeDir != 0:
+		return "directory"
+	case mode&os.ModeSymlink != 0:
+		return "symlink"
+	case mode&os.ModeSocket != 0:
+		return "socket"
+	case mode&os.ModeNamedPipe != 0:
+		return "named-pipe"
+	case mode&os.ModeDevice != 0:
+		return "device"
+	default:
+		return "unknown"
+	}
+}
+
+func fileInfoToEntry(fi *client.FileInfo) fileEntry {
+	mode := fi.Mode()
+	entry := fileEntry{
+		Path:         fi.Path(),
+		Name:         fi.Name(),
+		Type:         fileModeToType(mode),
+		Permissions:  fmt.Sprintf("%03o", mode.Perm()),
+		LastModified: fi.ModTime().Format(time.RFC3339),
+		UserID:       fi.UserID(),
+		User:         fi.User(),
+		GroupID:      fi.GroupID(),
+		Group:        fi.Group(),
+	}
+	if mode.IsRegular() {
+		size := fi.Size()
+		entry.Size = &size
+	}
+	return entry
 }
 
 func (cmd *cmdLs) Execute(args []string) error {
@@ -77,6 +136,18 @@ func (cmd *cmdLs) Execute(args []string) error {
 		return err
 	}
 
+	if cmd.Format == "text" {
+		return cmd.writeText(files)
+	}
+
+	entries := make([]fileEntry, 0, len(files))
+	for _, fi := range files {
+		entries = append(entries, fileInfoToEntry(fi))
+	}
+	return cmd.formatNonText(lsResult{Files: entries})
+}
+
+func (cmd *cmdLs) writeText(files []*client.FileInfo) error {
 	w := tabWriter()
 	defer w.Flush()
 	for _, fi := range files {
@@ -92,7 +163,6 @@ func (cmd *cmdLs) Execute(args []string) error {
 			fmt.Fprintln(w, fi.Name())
 		}
 	}
-
 	return nil
 }
 
