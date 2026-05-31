@@ -230,26 +230,6 @@ When a subcommand is given, `enter` runs that subcommand against the same Pebble
 
 This makes `enter` a convenient way for a container image to provide inspection and exec modes that don't start the default services.
 
-### Examples
-
-Use Pebble as the container entrypoint, starting the daemon and configured services:
-
-```{terminal}
-pebble enter
-```
-
-Run a one-shot command inside the same Pebble environment used by the container:
-
-```{terminal}
-pebble enter exec -- echo hello
-```
-
-Inspect the plan without starting any services:
-
-```{terminal}
-pebble enter plan
-```
-
 For the environment variables that apply, see [Environment variables](environment-variables).
 
 
