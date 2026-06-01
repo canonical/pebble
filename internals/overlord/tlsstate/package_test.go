@@ -30,11 +30,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/canonical/pebble/internals/testutil"
 	. "gopkg.in/check.v1"
 )
 
 // Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type tlsSuite struct {
 	// The HTTPS server port number allocated during a test.
