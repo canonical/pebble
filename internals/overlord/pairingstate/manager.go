@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -230,6 +231,7 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	}
 	_, err := clientCert.Verify(opts)
 	if err != nil {
+		logger.SecurityWarn(logger.SecurityAuthzFail, "", "client certificate failed self-signed verification during pairing: "+err.Error())
 		return fmt.Errorf("cannot verify client certificate signature: %w", err)
 	}
 
