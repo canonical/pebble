@@ -264,7 +264,9 @@ func (s *daemonSuite) TestExplicitPaths(c *C) {
 func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 	fakeUserAgent := "some-agent-talking-to-pebble/1.0"
 
-	cmd := &Command{d: s.newDaemon(c)}
+	d := s.newDaemon(c)
+	defer d.overlord.Stop()
+	cmd := &Command{d: d}
 	handler := &fakeHandler{cmd: cmd}
 	rf := func(innerCmd *Command, req *http.Request, user *UserState) Response {
 		c.Assert(cmd, Equals, innerCmd)
@@ -305,6 +307,7 @@ func (s *daemonSuite) TestCommandMethodDispatch(c *C) {
 
 func (s *daemonSuite) TestCommandRestartingState(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	cmd := &Command{d: d, ReadAccess: OpenAccess{}}
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
@@ -351,6 +354,7 @@ func (s *daemonSuite) TestCommandRestartingState(c *C) {
 
 func (s *daemonSuite) TestFillsWarnings(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	cmd := &Command{d: d, ReadAccess: OpenAccess{}}
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
@@ -393,6 +397,7 @@ type accessCheckerTestCase struct {
 
 func (s *daemonSuite) testAccessChecker(c *C, tests []accessCheckerTestCase, remoteAddr string) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	// Add some named identities for testing with.
 	identitiesMgr := d.overlord.IdentitiesManager()
@@ -580,6 +585,7 @@ func (s *daemonSuite) TestAdminAccess(c *C) {
 
 func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	var userSeen *UserState
 	cmd := &Command{
@@ -635,6 +641,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 
 func (s *daemonSuite) TestAddRoutes(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	expected := make([]string, len(API))
 	for i, v := range API {
@@ -789,7 +796,8 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 		c.Assert(err, IsNil)
 		c.Check(res.StatusCode, Equals, 200)
 		body, err := io.ReadAll(res.Body)
-		res.Body.Close()
+		c.Assert(err, IsNil)
+		err = res.Body.Close()
 		c.Assert(err, IsNil)
 		c.Check(string(body), Equals, "OKOK")
 		close(alright)
@@ -1298,6 +1306,8 @@ func doTestReq(c *C, cmd *Command, method string) *httptest.ResponseRecorder {
 
 func (s *daemonSuite) TestDegradedModeReply(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
+
 	cmd := &Command{d: d, ReadAccess: OpenAccess{}, WriteAccess: OpenAccess{}}
 	cmd.GET = func(*Command, *http.Request, *UserState) Response {
 		return SyncResponse(nil)
@@ -1889,6 +1899,7 @@ func (t *transportTypeSuite) TestTransportTypeContext(c *C) {
 
 func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	// Set up a Local identity.
 	identitiesMgr := d.overlord.IdentitiesManager()
@@ -1937,6 +1948,8 @@ func (s *daemonSuite) TestServeHTTPUserStateLocal(c *C) {
 
 func (s *daemonSuite) TestServeHTTPUserStateUIDOnly(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
+
 	// Don't set up any named identities, so it falls back to UID-only
 
 	// Capture the UserState passed to the response function.
@@ -1970,6 +1983,8 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnly(c *C) {
 
 func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyRoot(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
+
 	// Don't set up any named identities, so it falls back to UID-only
 
 	// Capture the UserState passed to the response function.
@@ -2003,6 +2018,8 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyRoot(c *C) {
 
 func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
+
 	// Don't set up any named identities, so it falls back to UID-only
 
 	// Capture the UserState passed to the response function.
@@ -2037,6 +2054,7 @@ func (s *daemonSuite) TestServeHTTPUserStateUIDOnlyDaemonUID(c *C) {
 
 func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	// Set up a Basic auth identity with a hashed password.
 	// Generate sha512-crypt hash for password "test".
@@ -2086,6 +2104,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicUnixSocket(c *C) {
 
 func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	// Set up a Basic auth identity with a hashed password.
 	// Generate sha512-crypt hash for password "test".
@@ -2135,6 +2154,7 @@ func (s *daemonSuite) TestServeHTTPUserStateBasicHTTP(c *C) {
 
 func (s *daemonSuite) TestServeHTTPUserStateCert(c *C) {
 	d := s.newDaemon(c)
+	defer d.overlord.Stop()
 
 	// Create a test certificate.
 	certPEM := `-----BEGIN CERTIFICATE-----
