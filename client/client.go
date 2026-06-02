@@ -374,7 +374,9 @@ func (rq *defaultRequester) retry(ctx context.Context, method, urlpath string, q
 		}
 		select {
 		case <-retry.C:
-			continue
+			if ctx.Err() == nil {
+				continue
+			}
 		case <-timeout:
 		case <-ctx.Done():
 		}
