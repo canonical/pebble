@@ -162,7 +162,7 @@ func Parser(opts *ParserOptions) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
 		Version: func() {
-			printVersions(opts.Client)
+			printVersions(opts.Client, nil)
 			panic(&exitStatus{0})
 		},
 	}

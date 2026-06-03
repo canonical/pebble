@@ -31,6 +31,7 @@ The version command displays the versions of the running client and server.
 type cmdVersion struct {
 	client *client.Client
 
+	formatMixin
 	ClientOnly bool `long:"client"`
 }
 
@@ -39,13 +40,18 @@ func init() {
 		Name:        "version",
 		Summary:     cmdVersionSummary,
 		Description: cmdVersionDescription,
-		ArgsHelp: map[string]string{
+		ArgsHelp: merge(formatArgsHelp, map[string]string{
 			"--client": "Only display the client version",
-		},
+		}),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdVersion{client: opts.Client}
 		},
 	})
+}
+
+type versionResult struct {
+	Client string `json:"client" yaml:"client"`
+	Server string `json:"server,omitempty" yaml:"server,omitempty"`
 }
 
 func (cmd cmdVersion) Execute(args []string) error {
@@ -54,18 +60,29 @@ func (cmd cmdVersion) Execute(args []string) error {
 	}
 
 	if cmd.ClientOnly {
+		if cmd.Format != "text" {
+			return cmd.formatNonText(
+				versionResult{Client: version.Version},
+			)
+		}
 		fmt.Fprintln(Stdout, version.Version)
 		return nil
 	}
 
-	return printVersions(cmd.client)
+	return printVersions(cmd.client, &cmd.formatMixin)
 }
 
-func printVersions(cli *client.Client) error {
+func printVersions(cli *client.Client, format *formatMixin) error {
 	serverVersion := "-"
 	sysInfo, err := cli.SysInfo()
 	if err == nil {
 		serverVersion = sysInfo.Version
+	}
+	if format != nil && format.Format != "text" {
+		return format.formatNonText(versionResult{
+			Client: version.Version,
+			Server: serverVersion,
+		})
 	}
 	w := tabWriter()
 	fmt.Fprintf(w, "client\t%s\n", version.Version)
