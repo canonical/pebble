@@ -318,9 +318,12 @@ The health command queries the health of configured checks.
 
 It returns an exit code 0 if all the requested checks are healthy, or
 an exit code 1 if at least one of the requested checks are unhealthy.
+If --format is passed either json or yaml, an exit code of 0 is returned for
+both healthy and unhealthy requested checks.
 
 [health command options]
-      --level=[alive|ready]   Check level to filter for
+      --format=[text|json|yaml]   Output format (default: text)
+      --level=[alive|ready]       Check level to filter for
 ```
 <!-- END AUTOMATED OUTPUT FOR health -->
 
@@ -1365,7 +1368,8 @@ Usage:
 The version command displays the versions of the running client and server.
 
 [version command options]
-      --client    Only display the client version
+      --format=[text|json|yaml]   Output format (default: text)
+      --client                    Only display the client version
 ```
 <!-- END AUTOMATED OUTPUT FOR version -->
 
