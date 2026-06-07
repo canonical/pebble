@@ -287,7 +287,7 @@ html_js_files = [
 # Configuration for Intersphinx projects
 #
 intersphinx_mapping = {
-    "operator": ("https://documentation.ubuntu.com/ops/latest/", None),
+    "operator": ("https://canonical.com/juju/docs/ops/latest/", None),
     "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
     "rockcraft": ("https://documentation.ubuntu.com/rockcraft/latest/", None),
 }
