@@ -24,7 +24,7 @@ description: |
 
   **Documentation**
 
-  To learn more about Pebble, see https://documentation.ubuntu.com/pebble/.
+  To learn more about Pebble, see https://ubuntu.com/docs/pebble/.
 issues: https://github.com/canonical/pebble/issues
 source-code: https://github.com/canonical/pebble
 license: GPL-3.0
