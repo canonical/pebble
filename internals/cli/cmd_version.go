@@ -59,31 +59,35 @@ func (cmd cmdVersion) Execute(args []string) error {
 		return ErrExtraArgs
 	}
 
+	text := cmd.Format == "text"
+
 	if cmd.ClientOnly {
-		if cmd.Format != "text" {
-			return cmd.formatNonText(
-				versionResult{Client: version.Version},
-			)
+		if !text {
+			return cmd.formatNonText(versionResult{Client: version.Version})
 		}
 		fmt.Fprintln(Stdout, version.Version)
 		return nil
 	}
 
-	return printVersions(cmd.client, &cmd.formatMixin)
-}
-
-func printVersions(cli *client.Client, format *formatMixin) error {
-	serverVersion := "-"
-	sysInfo, err := cli.SysInfo()
-	if err == nil {
+	serverVersion := ""
+	sysInfo, serverErr := cmd.client.SysInfo()
+	if serverErr == nil {
 		serverVersion = sysInfo.Version
+	} else if text {
+		serverVersion = "-"
 	}
-	if format != nil && format.Format != "text" {
-		return format.formatNonText(versionResult{
+
+	if !text {
+		err := cmd.formatNonText(versionResult{
 			Client: version.Version,
 			Server: serverVersion,
 		})
+		if serverErr != nil {
+			return serverErr
+		}
+		return err
 	}
+
 	w := tabWriter()
 	fmt.Fprintf(w, "client\t%s\n", version.Version)
 	fmt.Fprintf(w, "server\t%s\n", serverVersion)

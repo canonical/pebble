@@ -146,7 +146,7 @@ func fixupArg(optName string) string {
 }
 
 type defaultOptions struct {
-	Version func() `long:"version" hidden:"yes" description:"Print the version and exit"`
+	Version func() `long:"version" hidden:"yes" description:"Print the client version and exit"`
 }
 
 type ParserOptions struct {
@@ -161,10 +161,7 @@ type ParserOptions struct {
 func Parser(opts *ParserOptions) *flags.Parser {
 	// Implement --version by default on every command
 	defaultOpts := defaultOptions{
-		Version: func() {
-			printVersions(opts.Client, nil)
-			panic(&exitStatus{0})
-		},
+		Version: printClientVersion,
 	}
 
 	flagOpts := flags.Options(flags.PassDoubleDash)
@@ -508,4 +505,9 @@ func cliStatePath() string {
 		configDir = os.ExpandEnv("$HOME/.config")
 	}
 	return filepath.Join(configDir, "pebble", "cli.json")
+}
+
+func printClientVersion() {
+	fmt.Fprintln(Stdout, cmd.Version)
+	panic(&exitStatus{0})
 }

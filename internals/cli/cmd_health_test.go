@@ -170,7 +170,7 @@ func (s *PebbleSuite) TestHealthUnhealthyYAML(c *check.C) {
 	exitCode := cli.PebbleMain()
 	// Ensure an unhealthy check does not fail with YAML output.
 	c.Check(exitCode, check.Equals, 0)
-	c.Check(s.Stdout(), check.Equals, `healthy: false`+"\n")
+	c.Check(s.Stdout(), check.Equals, "healthy: false\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
