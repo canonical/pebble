@@ -109,7 +109,7 @@ html_context = {
 # }
 
 # Project slug
-# Set to the path after https://ubuntu.com
+# Set to the path after https://ubuntu.com/
 slug = "docs/pebble"
 
 #######################
