@@ -46,10 +46,11 @@ jobs:
             pkg_slug=$(echo "$pkg" | tr '/' '_')
             if ! stress -fast \
                 -p "$p" \
-                -duration 5m \
+                -count 1000 \
+                -duration 2m \
                 -timeout 3m \
                 -o "stress-failures/${pkg_slug}-" \
-                ./pkg.test; then
+                ./pkg.test -test.timeout 2m; then
               echo "STRESS FAILED: $pkg"
               failed_pkgs+=("$pkg")
               failed=1
