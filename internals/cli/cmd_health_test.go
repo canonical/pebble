@@ -99,3 +99,113 @@ func (s *PebbleSuite) TestHealthBadLevel(c *check.C) {
 	c.Check(s.Stdout(), check.Equals, "")
 	c.Check(s.Stderr(), check.Matches, "error: Invalid value .* Allowed values are: alive or ready\n")
 }
+
+func (s *PebbleSuite) TestHealthJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+			"type": "sync",
+			"status-code": 200,
+			"result": {"healthy": true}
+		}`)
+	})
+
+	restore := fakeArgs("pebble", "health", "--format", "json")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(exitCode, check.Equals, 0)
+	c.Check(s.Stdout(), check.Equals, `{"healthy":true}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestHealthUnhealthyJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+			"type": "sync",
+			"status-code": 502,
+			"result": {"healthy": false}
+		}`)
+	})
+
+	restore := fakeArgs("pebble", "health", "--format", "json")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	// Ensure an unhealthy check does not fail with JSON output.
+	c.Check(exitCode, check.Equals, 0)
+	c.Check(s.Stdout(), check.Equals, `{"healthy":false}`+"\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestHealthYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+			"type": "sync",
+			"status-code": 200,
+			"result": {"healthy": true}
+		}`)
+	})
+
+	restore := fakeArgs("pebble", "health", "--format", "yaml")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(exitCode, check.Equals, 0)
+	c.Check(s.Stdout(), check.Equals, "healthy: true\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestHealthUnhealthyYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+			"type": "sync",
+			"status-code": 502,
+			"result": {"healthy": false}
+		}`)
+	})
+
+	restore := fakeArgs("pebble", "health", "--format", "yaml")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	// Ensure an unhealthy check does not fail with YAML output.
+	c.Check(exitCode, check.Equals, 0)
+	c.Check(s.Stdout(), check.Equals, "healthy: false\n")
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestHealthInvalidFormat(c *check.C) {
+	restore := fakeArgs("pebble", "health", "--format", "foobar")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(exitCode, check.Equals, 1)
+	c.Check(s.Stdout(), check.Equals, "")
+	c.Check(s.Stderr(), check.Matches, "error: Invalid value .* Allowed values are: text, json or yaml\n")
+}
+
+func (s *PebbleSuite) TestHealthInvalidResponseYAML(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		fmt.Fprintf(w, `bad`)
+	})
+
+	restore := fakeArgs("pebble", "health", "--format", "yaml")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(exitCode, check.Equals, 1)
+}
+
+func (s *PebbleSuite) TestHealthInvalidResponseJSON(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		fmt.Fprintf(w, `bad`)
+	})
+
+	restore := fakeArgs("pebble", "health", "--format", "json")
+	defer restore()
+
+	exitCode := cli.PebbleMain()
+	c.Check(exitCode, check.Equals, 1)
+}
