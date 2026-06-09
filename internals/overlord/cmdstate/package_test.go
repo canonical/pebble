@@ -16,14 +16,11 @@ package cmdstate_test
 
 import (
 	"testing"
-	"testing/synctest"
 
+	"github.com/canonical/pebble/internals/testutil"
 	. "gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		defer synctest.Wait()
-		TestingT(t)
-	})
+	testutil.PrintGoroutineLeaks(t, TestingT)
 }
