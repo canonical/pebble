@@ -29,6 +29,7 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 type suite struct{}
@@ -36,7 +37,7 @@ type suite struct{}
 var _ = Suite(&suite{})
 
 func Test(t *testing.T) {
-	TestingT(t)
+	testutil.PrintGoroutineLeaks(t, TestingT)
 }
 
 func (*suite) TestRequest(c *C) {

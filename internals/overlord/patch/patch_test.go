@@ -28,9 +28,12 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/patch"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type patchSuite struct{}
 

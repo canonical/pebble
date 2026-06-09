@@ -47,6 +47,59 @@ func (s *PebbleSuite) TestVersionClientOnly(c *C) {
 	c.Check(s.Stderr(), Equals, "")
 }
 
+func (s *PebbleSuite) TestVersionJSON(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"type":"sync","status-code":200,"status":"OK","result":{"version":"7.89"}}`)
+	})
+
+	restore := fakeVersion("4.56")
+	defer restore()
+
+	_, err := cli.ParserForTest().ParseArgs([]string{"version", "--format", "json"})
+	c.Assert(err, IsNil)
+	c.Check(s.Stdout(), Equals, `{"client":"4.56","server":"7.89"}`+"\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestVersionYAML(c *C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, `{"type":"sync","status-code":200,"status":"OK","result":{"version":"7.89"}}`)
+	})
+
+	restore := fakeVersion("4.56")
+	defer restore()
+
+	_, err := cli.ParserForTest().ParseArgs([]string{"version", "--format", "yaml"})
+	c.Assert(err, IsNil)
+	c.Check(s.Stdout(), Equals, "client: \"4.56\"\nserver: \"7.89\"\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestVersionClientOnlyJSON(c *C) {
+	restore := fakeVersion("v1.2.3")
+	defer restore()
+
+	_, err := cli.ParserForTest().ParseArgs([]string{"version", "--client", "--format", "json"})
+	c.Assert(err, IsNil)
+	c.Check(s.Stdout(), Equals, `{"client":"v1.2.3"}`+"\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestVersionClientOnlyYAML(c *C) {
+	restore := fakeVersion("v1.2.3")
+	defer restore()
+
+	_, err := cli.ParserForTest().ParseArgs([]string{"version", "--client", "--format", "yaml"})
+	c.Assert(err, IsNil)
+	c.Check(s.Stdout(), Equals, "client: v1.2.3\n")
+	c.Check(s.Stderr(), Equals, "")
+}
+
+func (s *PebbleSuite) TestVersionInvalidFormat(c *C) {
+	_, err := cli.ParserForTest().ParseArgs([]string{"version", "--format", "foobar"})
+	c.Assert(err, ErrorMatches, "Invalid value.*for option.*--format.*")
+}
+
 func (s *PebbleSuite) TestVersionExtraArgs(c *C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"version", "extra", "args"})
 	c.Assert(err, Equals, cli.ErrExtraArgs)

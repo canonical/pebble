@@ -23,10 +23,13 @@ import (
 
 	"github.com/canonical/pebble/internals/progress"
 	"github.com/canonical/pebble/internals/progress/progresstest"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 // Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type ProgressTestSuite struct {
 }

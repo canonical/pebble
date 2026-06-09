@@ -18,11 +18,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/canonical/pebble/internals/testutil"
 	"gopkg.in/check.v1"
 )
 
 func Test(t *testing.T) {
-	check.TestingT(t)
+	testutil.PrintGoroutineLeaks(t, check.TestingT)
 }
 
 func testInfo(c *check.C, checker check.Checker, name string, paramNames []string) {
