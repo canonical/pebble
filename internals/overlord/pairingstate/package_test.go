@@ -33,10 +33,13 @@ import (
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 // Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type pairingSuite struct {
 	overlord      *overlord.Overlord

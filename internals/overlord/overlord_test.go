@@ -39,7 +39,9 @@ import (
 	"github.com/canonical/pebble/internals/testutil"
 )
 
-func TestOverlord(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type overlordSuite struct {
 	dir       string

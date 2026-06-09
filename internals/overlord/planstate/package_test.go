@@ -27,10 +27,13 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 // Hook up check.v1 into the "go test" runner.
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type planSuite struct {
 	planMgr   *planstate.PlanManager

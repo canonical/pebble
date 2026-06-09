@@ -27,10 +27,13 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate/servstatetest"
 	"github.com/canonical/pebble/internals/overlord/standby"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 // Hook up v1 into the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type standbySuite struct {
 	state *state.State

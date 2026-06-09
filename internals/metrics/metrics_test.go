@@ -21,10 +21,11 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/metrics"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 func Test(t *testing.T) {
-	TestingT(t)
+	testutil.PrintGoroutineLeaks(t, TestingT)
 }
 
 type OpenTelemetryWriterSuite struct{}

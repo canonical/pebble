@@ -17,6 +17,7 @@ package workloads_test
 import (
 	"testing"
 
+	"github.com/canonical/pebble/internals/testutil"
 	. "gopkg.in/check.v1"
 )
 
@@ -25,5 +26,5 @@ type workloadsSuite struct{}
 var _ = Suite(&workloadsSuite{})
 
 func Test(t *testing.T) {
-	TestingT(t)
+	testutil.PrintGoroutineLeaks(t, TestingT)
 }

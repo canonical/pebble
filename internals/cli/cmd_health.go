@@ -28,11 +28,14 @@ The health command queries the health of configured checks.
 
 It returns an exit code 0 if all the requested checks are healthy, or
 an exit code 1 if at least one of the requested checks are unhealthy.
+If --format is passed either json or yaml, an exit code of 0 is returned for
+both healthy and unhealthy requested checks.
 `
 
 type cmdHealth struct {
 	client *client.Client
 
+	formatMixin
 	//lint:ignore SA5008 "choice" tag is intentionally duplicated
 	Level      string `long:"level" choice:"alive" choice:"ready"`
 	Positional struct {
@@ -49,11 +52,15 @@ func init() {
 		Name:        "health",
 		Summary:     cmdHealthSummary,
 		Description: cmdHealthDescription,
-		ArgsHelp:    cmdHealthArgsHelp,
+		ArgsHelp:    merge(cmdHealthArgsHelp, formatArgsHelp),
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdHealth{client: opts.Client}
 		},
 	})
+}
+
+type healthResult struct {
+	Healthy bool `json:"healthy" yaml:"healthy"`
 }
 
 func (cmd *cmdHealth) Execute(args []string) error {
@@ -70,14 +77,23 @@ func (cmd *cmdHealth) Execute(args []string) error {
 		return err
 	}
 
-	status := "unhealthy"
-	if health {
-		status = "healthy"
-	}
-	fmt.Fprintln(Stdout, status)
+	if cmd.Format == "text" {
+		status := "unhealthy"
+		if health {
+			status = "healthy"
+		}
+		fmt.Fprintln(Stdout, status)
 
-	if !health {
-		panic(&exitStatus{1})
+		if !health {
+			panic(&exitStatus{1})
+		}
+
+		return nil
+	}
+
+	err = cmd.formatNonText(healthResult{Healthy: health})
+	if err != nil {
+		return err
 	}
 
 	return nil
