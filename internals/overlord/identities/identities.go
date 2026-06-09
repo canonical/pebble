@@ -27,6 +27,7 @@ import (
 
 	"github.com/GehirnInc/crypt/sha512_crypt"
 
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -360,6 +361,12 @@ func (m *Manager) IdentityFromInputs(userID *uint32, username, password string, 
 				if err == nil {
 					return identity
 				}
+				// The presented certificate matched a stored identity
+				// certificate by equality but failed signature
+				// verification against itself as a self-signed root.
+				// This is unexpected for a known identity and worth
+				// auditing.
+				logger.SecurityWarn(logger.SecurityAuthzFail, identity.Name, "client certificate matched stored identity but failed self-signed verification: "+err.Error())
 			}
 		}
 		// If a client certificate is provided, but did not match, we bail.

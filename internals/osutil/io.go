@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/canonical/x-go/randutil"
 
@@ -40,7 +41,7 @@ const (
 // Allow disabling sync for testing. This brings massive improvements on
 // certain filesystems (like btrfs) and very much noticeable improvements in
 // all unit tests in general.
-var unsafeIO bool = IsTestBinary() && os.Getenv("UNSAFE_IO") == "1"
+var unsafeIO bool = testing.Testing() && os.Getenv("UNSAFE_IO") == "1"
 
 // For testing
 var randomString = randutil.RandomString
