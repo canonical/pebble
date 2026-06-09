@@ -101,7 +101,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type S struct {
 	testutil.BaseTest

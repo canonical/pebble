@@ -37,10 +37,13 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 // Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type clientSuite struct {
 	cli          *client.Client

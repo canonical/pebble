@@ -24,7 +24,9 @@ import (
 	"github.com/canonical/pebble/internals/testutil"
 )
 
-func TestRestart(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type restartSuite struct{}
 

@@ -37,10 +37,11 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 func Test(t *testing.T) {
-	TestingT(t)
+	testutil.PrintGoroutineLeaks(t, TestingT)
 }
 
 type ManagerSuite struct {
