@@ -1,4 +1,4 @@
-// Copyright (c) 2021 Canonical Ltd
+// Copyright (c) 2026 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -10,18 +10,15 @@
 // GNU General Public License for more details.
 //
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package servicelog_test
+package cmdstate
 
-import (
-	"testing"
-
-	"github.com/canonical/pebble/internals/testutil"
-	. "gopkg.in/check.v1"
-)
-
-// Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) {
-	testutil.PrintGoroutineLeaks(t, TestingT)
+// AddTestExecution inserts a fake execution into the manager's map and
+// broadcasts the condition variable.
+func (m *CommandManager) AddTestExecution(taskID string) {
+	m.executionsCond.L.Lock()
+	m.executions[taskID] = &execution{}
+	m.executionsCond.Broadcast()
+	m.executionsCond.L.Unlock()
 }

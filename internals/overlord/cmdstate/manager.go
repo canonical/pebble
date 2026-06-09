@@ -68,10 +68,12 @@ func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *s
 		m.executionsCond.L.Unlock()
 	}()
 
-	executionCh := make(chan *execution)
+	executionCh := make(chan *execution, 1)
 	go func() {
 		e := m.waitExecution(task.ID(), stopWait)
 		if e != nil {
+			// executionCh is buffered to avoid a goroutine leak when this is
+			// blocked indefinitely.
 			executionCh <- e
 		}
 	}()

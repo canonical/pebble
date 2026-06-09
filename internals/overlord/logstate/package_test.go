@@ -17,7 +17,10 @@ package logstate
 import (
 	"testing"
 
+	"github.com/canonical/pebble/internals/testutil"
 	. "gopkg.in/check.v1"
 )
 
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
