@@ -4,10 +4,15 @@ on:
   schedule:
     - cron: "0 0 * * 0"
   workflow_dispatch:
+    inputs:
+      runs-on:
+        description: "Runner to use"
+        required: false
+        default: "self-hosted-linux-amd64-noble-large"
 
 jobs:
   stress:
-    runs-on: self-hosted-linux-amd64-noble-large
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runs-on || 'self-hosted-linux-amd64-noble-large' }}
     steps:
       - uses: actions/checkout@v6
         with:
