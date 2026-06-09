@@ -10,6 +10,9 @@ on:
         required: false
         default: "self-hosted-linux-amd64-noble-large"
 
+permissions:
+  contents: read
+
 jobs:
   stress:
     runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runs-on || 'self-hosted-linux-amd64-noble-large' }}
