@@ -24,36 +24,41 @@ import (
 func PrintGoroutineLeaks(t *testing.T, f func(t *testing.T)) {
 	t.Helper()
 
-	grl := pprof.Lookup("goroutineleak")
-	if grl == nil {
+	leakProfile := pprof.Lookup("goroutineleak")
+	if leakProfile == nil {
 		f(t)
 		return
 	}
 
 	done := make(chan struct{})
-	go leakSentinal(done)
+	go leakSentinel(done)
 	defer func() {
-		// leak the sentinal
+		// Leak the sentinel.
 		done = nil
 
-		// find the sentinal in the go routine leak profile
+		// Find the sentinal in the goroutine leak profile.
 		out := &bytes.Buffer{}
-		sentinalBytes := []byte("leakSentinal")
+		sentinelBytes := []byte("leakSentinel")
 		for {
-			_ = grl.WriteTo(out, 2)
-			if bytes.Contains(out.Bytes(), sentinalBytes) {
+			_ = leakProfile.WriteTo(out, 2)
+			// Break out of the loop if the leaked sentinel was discovered in
+			// the leak profile. Otherwise continue until the test harness times
+			// out.
+			if bytes.Contains(out.Bytes(), sentinelBytes) {
 				break
 			}
 			out.Reset()
 			runtime.GC()
 		}
 
-		// find any leaked go routines other than the sentinal
+		// Find any leaked goroutines other than the sentinel.
 		leakedBytes := []byte("(leaked)")
 		leaked := false
 		for stack := range bytes.SplitSeq(out.Bytes(), []byte("\n\n")) {
-			if bytes.Contains(stack, sentinalBytes) ||
-				!bytes.Contains(stack, leakedBytes) {
+			isSentinel := bytes.Contains(stack, sentinelBytes)
+			isLeak := bytes.Contains(stack, leakedBytes)
+			if isSentinel || !isLeak {
+				// Ignore both the sentinel leak and non-leaked goroutines.
 				continue
 			}
 			if leaked {
@@ -63,7 +68,7 @@ func PrintGoroutineLeaks(t *testing.T, f func(t *testing.T)) {
 			leaked = true
 		}
 
-		// mark the test as failed if any leaked go routines was found
+		// Mark the test as failed if any leaked goroutines were found.
 		if leaked {
 			t.Fail()
 		}
@@ -72,6 +77,6 @@ func PrintGoroutineLeaks(t *testing.T, f func(t *testing.T)) {
 	f(t)
 }
 
-func leakSentinal(done chan struct{}) {
+func leakSentinel(done chan struct{}) {
 	<-done
 }
