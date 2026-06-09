@@ -37,7 +37,7 @@ jobs:
           passed_pkgs=()
           failed_pkgs=()
           compile_failed_pkgs=()
-          for pkg in $(go list ./...); do
+          for pkg in $(go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./...); do
             echo "==> $pkg"
             if ! GOEXPERIMENT=goroutineleakprofile \
                 go test -race -o pkg.test -c "$pkg"; then
