@@ -1,0 +1,21 @@
+---
+name: "Validate PR Title"
+# Ensure that the PR title conforms to the Conventional Commits and our choice of types and scopes, so that library version bumps can be detected automatically
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+permissions: {}
+
+jobs:
+  main:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+        with:
+          persist-credentials: false
+      - run: python3 .github/check-conventional-pr-title.py
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
