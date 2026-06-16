@@ -50,6 +50,10 @@ parts:
       which go
       go version
       snap info go
+      if [ "$CRAFT_ARCH_BUILD_FOR" = "armhf" ]; then
+        export GOARCH=arm
+        export GOARM=6
+      fi
       CGO_ENABLED=0 go build -trimpath -ldflags=-w -ldflags=-s -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
 
   pebble-release-data:
