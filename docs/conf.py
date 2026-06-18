@@ -116,7 +116,7 @@ slug = "docs/pebble"
 # Sitemap configuration: https://sphinx-sitemap.readthedocs.io/
 #######################
 
-# Use RTD canonical URL to ensure duplicate pages have a specific canonical URL
+# Used for the canonical URL of each page
 html_baseurl = "https://ubuntu.com/docs/pebble/"
 
 # sphinx-sitemap uses html_baseurl to generate the full URL for each page:
