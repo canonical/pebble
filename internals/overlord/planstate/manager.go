@@ -129,7 +129,8 @@ func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
 		return &LabelExists{Label: layer.Label}
 	}
 
-	newPlan, err := m.appendLayer(layer, inner)
+	var err error
+	newPlan, err = m.appendLayer(layer, inner)
 	return err
 }
 
@@ -333,6 +334,7 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		}
 	}
 
-	newPlan, err := m.appendLayer(newLayer, false)
+	var err error
+	newPlan, err = m.appendLayer(newLayer, false)
 	return err
 }

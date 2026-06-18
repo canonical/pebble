@@ -470,6 +470,105 @@ services:
 `[1:])
 }
 
+func (ps *planSuite) TestAppendLayerCallsChangeListener(c *C) {
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	var gotPlans []*plan.Plan
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		gotPlans = append(gotPlans, p)
+	})
+
+	// A successful AppendLayer must notify change listeners with the new
+	// (non-nil) plan. This is a regression test for a bug where the inner
+	// `newPlan` variable shadowed the outer one used by the deferred
+	// callChangeListeners call, leaving listeners uninformed.
+	layer := ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/sh
+`)
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	c.Assert(gotPlans, HasLen, 1)
+	c.Assert(gotPlans[0], NotNil)
+	c.Assert(gotPlans[0], Equals, ps.planMgr.Plan())
+	svc1, ok := gotPlans[0].Services["svc1"]
+	c.Assert(ok, Equals, true)
+	c.Assert(svc1.Command, Equals, "/bin/sh")
+
+	// A failed AppendLayer (duplicate label) must NOT notify listeners.
+	dup := ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: /bin/bash
+`)
+	err = ps.planMgr.AppendLayer(dup, false)
+	c.Assert(err, FitsTypeOf, &planstate.LabelExists{})
+	c.Assert(gotPlans, HasLen, 1)
+
+	// A subsequent successful AppendLayer must notify again.
+	layer2 := ps.parseLayer(c, 0, "label2", `
+services:
+    svc2:
+        override: replace
+        command: /bin/foo
+`)
+	err = ps.planMgr.AppendLayer(layer2, false)
+	c.Assert(err, IsNil)
+	c.Assert(gotPlans, HasLen, 2)
+	c.Assert(gotPlans[1], NotNil)
+	c.Assert(gotPlans[1], Equals, ps.planMgr.Plan())
+	_, ok = gotPlans[1].Services["svc2"]
+	c.Assert(ok, Equals, true)
+}
+
+func (ps *planSuite) TestSetServiceArgsCallsChangeListener(c *C) {
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	// Seed the plan with a service so SetServiceArgs has something to act on.
+	layer := ps.parseLayer(c, 0, "label1", `
+services:
+    svc1:
+        override: replace
+        command: foo [ --bar ]
+`)
+	err = ps.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+
+	// Register the listener after the seed append so we only observe
+	// notifications from SetServiceArgs.
+	var gotPlans []*plan.Plan
+	ps.planMgr.AddChangeListener(func(p *plan.Plan) {
+		gotPlans = append(gotPlans, p)
+	})
+
+	// A successful SetServiceArgs must notify change listeners with the new
+	// (non-nil) plan. This is a regression test for a bug where the inner
+	// `newPlan` variable shadowed the outer one used by the deferred
+	// callChangeListeners call, leaving listeners uninformed.
+	err = ps.planMgr.SetServiceArgs(map[string][]string{
+		"svc1": {"-abc", "--xyz"},
+	})
+	c.Assert(err, IsNil)
+	c.Assert(gotPlans, HasLen, 1)
+	c.Assert(gotPlans[0], NotNil)
+	c.Assert(gotPlans[0], Equals, ps.planMgr.Plan())
+	c.Assert(gotPlans[0].Services["svc1"].Command, Equals, "foo [ -abc --xyz ]")
+
+	// A failed SetServiceArgs (unknown service) must NOT notify listeners.
+	err = ps.planMgr.SetServiceArgs(map[string][]string{
+		"does-not-exist": {"--flag"},
+	})
+	c.Assert(err, ErrorMatches, `service "does-not-exist" not found in plan`)
+	c.Assert(gotPlans, HasLen, 1)
+}
+
 func (ps *planSuite) TestChangeListenerAndLocking(c *C) {
 	manager, err := planstate.NewManager(ps.layersDir)
 	c.Assert(err, IsNil)
