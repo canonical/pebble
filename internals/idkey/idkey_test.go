@@ -31,7 +31,7 @@ func (ks *keySuite) TestNoDirectory(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	firstBoot, err := idkey.Generate(keyDir)
+	firstBoot, err := idkey.Generate(keyDir, true)
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
@@ -48,11 +48,11 @@ func (ks *keySuite) TestGet(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	firstBoot, err := idkey.Get(keyDir)
+	firstBoot, err := idkey.Get(keyDir, true)
 	c.Assert(err, IsNil)
 
 	// Load the identity key (other boots)
-	nextBoot, err := idkey.Get(keyDir)
+	nextBoot, err := idkey.Get(keyDir, true)
 	c.Assert(err, IsNil)
 
 	// Both should be the same identity.
@@ -71,7 +71,7 @@ func (ks *keySuite) TestDirectoryInvalid(c *C) {
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 
 	// Saving
-	_, err = idkey.Generate(keyDir)
+	_, err = idkey.Generate(keyDir, true)
 	c.Assert(err, ErrorMatches, ".* expected permission 0o700 .*")
 }
 
@@ -81,7 +81,7 @@ func (ks *keySuite) TestDirInvalid(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "foo/identity")
 
 	// Saving
-	_, err := idkey.Generate(keyDir)
+	_, err := idkey.Generate(keyDir, true)
 	c.Assert(err, ErrorMatches, "cannot create identity directory.*")
 }
 
@@ -90,7 +90,7 @@ func (ks *keySuite) TestInvalidKey(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	_, err := idkey.Generate(keyDir)
+	_, err := idkey.Generate(keyDir, true)
 	c.Assert(err, IsNil)
 
 	err = os.Chmod(filepath.Join(keyDir, "key.pem"), 0o644)
@@ -106,7 +106,7 @@ func (ks *keySuite) TestEmptyKey(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	_, err := idkey.Generate(keyDir)
+	_, err := idkey.Generate(keyDir, true)
 	c.Assert(err, IsNil)
 
 	// Zero the existing file.
@@ -126,7 +126,7 @@ func (ks *keySuite) TestKeyWithTrailingBytes(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	_, err := idkey.Generate(keyDir)
+	_, err := idkey.Generate(keyDir, true)
 	c.Assert(err, IsNil)
 
 	// Append some unexpected bytes after the PEM block.
@@ -147,7 +147,7 @@ func (ks *keySuite) TestKeySign(c *C) {
 	keyDir := filepath.Join(c.MkDir(), "identity")
 
 	// Create a new identity key (first boot)
-	signer, err := idkey.Generate(keyDir)
+	signer, err := idkey.Generate(keyDir, true)
 	c.Assert(err, IsNil)
 
 	message := []byte("hello world")
@@ -170,7 +170,7 @@ func (ks *keySuite) TestKeySign(c *C) {
 func (ks *keySuite) BenchmarkKeyGeneration(c *C) {
 	for i := 0; i < c.N; i++ {
 		keyDir := filepath.Join(c.MkDir(), "identity")
-		_, err := idkey.Generate(keyDir)
+		_, err := idkey.Generate(keyDir, true)
 		c.Assert(err, IsNil)
 	}
 }

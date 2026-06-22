@@ -33,6 +33,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/canonical/pebble/internals/logger"
 )
 
 const identityKeyFile = "key.pem"
@@ -46,10 +48,10 @@ type IDKey struct {
 }
 
 // Get checks if an existing private identity key exists, and loads the key
-// if it does. It creates a new private identity key and persists it to disk
-// if no key was found. Cases where explicit control is desired on when to
+// if it does. If no key was found it creates a new one, persisting it to disk
+// when persist is true. Cases where explicit control is desired on when to
 // generate or load can use Generate and Load directly.
-func Get(keyDir string) (*IDKey, error) {
+func Get(keyDir string, persist bool) (*IDKey, error) {
 	keyPath := filepath.Join(keyDir, identityKeyFile)
 	exists, err := pathExists(keyPath)
 	if err != nil {
@@ -58,33 +60,54 @@ func Get(keyDir string) (*IDKey, error) {
 	if exists {
 		return Load(keyDir)
 	}
-	return Generate(keyDir)
+	return Generate(keyDir, persist)
 }
 
-// Generate generates a new identity key and persists it to disk. This
-// function should only ever be called on the first boot otherwise the
-// existing identity will be overwritten.
+// Generate generates a new identity key. When persist is true the key is
+// written to disk; when false an ephemeral in-memory identity is returned
+// that does not touch the filesystem (see issue #801) -- used with the
+// in-memory state backend, e.g. on a read-only rootfs. This function should
+// only ever be called on the first boot otherwise the existing identity will
+// be overwritten.
 //
-// This function is equivalent to running:
+// When persisted, this function is equivalent to running:
 //
 //	openssl genpkey -algorithm Ed25519 -out key.pem
-func Generate(keyDir string) (*IDKey, error) {
+func Generate(keyDir string, persist bool) (*IDKey, error) {
 	k := &IDKey{
 		keyDir: keyDir,
 	}
-	err := k.createDir()
-	if err != nil {
-		return nil, fmt.Errorf("cannot create identity directory: %w", err)
-	}
-	_, k.key, err = ed25519.GenerateKey(rand.Reader)
+	_, key, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("cannot generate identity key: %w", err)
 	}
-	err = k.save()
+	k.key = key
+
+	if !persist {
+		// Ephemeral identity: skip the disk entirely. It won't survive a
+		// restart, matching the in-memory state backend it's paired with.
+		logger.Noticef("Not persisting identity key; using an ephemeral identity.")
+		return k, nil
+	}
+
+	err = k.persist()
 	if err != nil {
-		return nil, fmt.Errorf("cannot save identity key: %w", err)
+		return nil, err
 	}
 	return k, nil
+}
+
+// persist creates the key directory and writes the key to disk.
+func (k *IDKey) persist() error {
+	err := k.createDir()
+	if err != nil {
+		return fmt.Errorf("cannot create identity directory: %w", err)
+	}
+	err = k.save()
+	if err != nil {
+		return fmt.Errorf("cannot save identity key: %w", err)
+	}
+	return nil
 }
 
 // Load loads an existing identity key from disk.
