@@ -63,12 +63,11 @@ func Get(keyDir string, persist bool) (*IDKey, error) {
 	return Generate(keyDir, persist)
 }
 
-// Generate generates a new identity key. When persist is true the key is
-// written to disk; when false an ephemeral in-memory identity is returned
-// that does not touch the filesystem (see issue #801) -- used with the
-// in-memory state backend, e.g. on a read-only rootfs. This function should
-// only ever be called on the first boot otherwise the existing identity will
-// be overwritten.
+// Generate generates a new identity key and, when persist is true, writes it
+// to disk. When persist is false an ephemeral in-memory identity is returned
+// that never touches the filesystem (used with the in-memory state backend,
+// e.g. on a read-only rootfs). This function should only ever be called on the
+// first boot otherwise the existing identity will be overwritten.
 //
 // When persisted, this function is equivalent to running:
 //
@@ -77,37 +76,26 @@ func Generate(keyDir string, persist bool) (*IDKey, error) {
 	k := &IDKey{
 		keyDir: keyDir,
 	}
-	_, key, err := ed25519.GenerateKey(rand.Reader)
+	var err error
+	_, k.key, err = ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("cannot generate identity key: %w", err)
 	}
-	k.key = key
 
 	if !persist {
-		// Ephemeral identity: skip the disk entirely. It won't survive a
-		// restart, matching the in-memory state backend it's paired with.
 		logger.Noticef("Not persisting identity key; using an ephemeral identity.")
 		return k, nil
 	}
 
-	err = k.persist()
+	err = k.createDir()
 	if err != nil {
-		return nil, err
-	}
-	return k, nil
-}
-
-// persist creates the key directory and writes the key to disk.
-func (k *IDKey) persist() error {
-	err := k.createDir()
-	if err != nil {
-		return fmt.Errorf("cannot create identity directory: %w", err)
+		return nil, fmt.Errorf("cannot create identity directory: %w", err)
 	}
 	err = k.save()
 	if err != nil {
-		return fmt.Errorf("cannot save identity key: %w", err)
+		return nil, fmt.Errorf("cannot save identity key: %w", err)
 	}
-	return nil
+	return k, nil
 }
 
 // Load loads an existing identity key from disk.
