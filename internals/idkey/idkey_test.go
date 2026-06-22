@@ -59,6 +59,31 @@ func (ks *keySuite) TestGet(c *C) {
 	c.Assert(firstBoot.Fingerprint(), Equals, nextBoot.Fingerprint())
 }
 
+// TestEphemeral checks that an ephemeral key is generated without touching
+// the filesystem, even when the directory can't be written.
+func (ks *keySuite) TestEphemeral(c *C) {
+	// A non-existent non-leaf directory would fail a persisted Generate, but
+	// must be tolerated when ephemeral since the disk is never touched.
+	keyDir := filepath.Join(c.MkDir(), "foo/identity")
+
+	k, err := idkey.Generate(keyDir, false)
+	c.Assert(err, IsNil)
+	c.Check(k, NotNil)
+	c.Check(k.Fingerprint(), Not(Equals), "")
+
+	// Nothing should have been written to disk.
+	_, err = os.Stat(keyDir)
+	c.Check(os.IsNotExist(err), Equals, true)
+
+	// Get with persist=false on an empty dir behaves the same.
+	keyDir2 := filepath.Join(c.MkDir(), "identity")
+	k2, err := idkey.Get(keyDir2, false)
+	c.Assert(err, IsNil)
+	c.Check(k2, NotNil)
+	_, err = os.Stat(filepath.Join(keyDir2, "key.pem"))
+	c.Check(os.IsNotExist(err), Equals, true)
+}
+
 // TestDirectoryInvalid confirms that if the leaf directory has invalid
 // permissions we exit.
 func (ks *keySuite) TestDirectoryInvalid(c *C) {

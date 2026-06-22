@@ -134,6 +134,29 @@ func (ovs *overlordSuite) TestNewInMemoryBackend(c *C) {
 	c.Check(errors.Is(err, fs.ErrNotExist), Equals, true)
 }
 
+func (ovs *overlordSuite) TestNewNonWritableDir(c *C) {
+	if os.Getuid() == 0 {
+		c.Skip("requires non-root user")
+	}
+	restore := patch.Fake(42, 2, nil)
+	defer restore()
+
+	// A non-writable pebble dir mimics a read-only filesystem.
+	err := os.Chmod(ovs.dir, 0o500)
+	c.Assert(err, IsNil)
+	defer os.Chmod(ovs.dir, 0o700)
+	c.Assert(osutil.IsWritable(ovs.dir), Equals, false)
+
+	// PersistDefault still requires a writable directory.
+	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir})
+	c.Assert(err, ErrorMatches, `directory ".*" not writable`)
+
+	// PersistNever uses the in-memory backend and tolerates a read-only dir.
+	o, err := overlord.New(&overlord.Options{PebbleDir: ovs.dir, Persist: overlord.PersistNever})
+	c.Assert(err, IsNil)
+	c.Check(o, NotNil)
+}
+
 func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	fakeState := fmt.Appendf(nil, `{
 		"data": {"patch-level": %d, "patch-sublevel": %d, "patch-sublevel-last-version": %q, "some": "data", "pairing-details": {"paired": false}},
