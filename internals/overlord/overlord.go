@@ -150,7 +150,9 @@ func New(opts *Options) (*Overlord, error) {
 	if !osutil.IsDir(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
-	if !osutil.IsWritable(o.pebbleDir) {
+	// Only require a writable directory when state is persisted to disk. With
+	// PersistNever (in-memory backend) pebble can run on a read-only rootfs.
+	if opts.Persist == PersistDefault && !osutil.IsWritable(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q not writable", o.pebbleDir)
 	}
 
