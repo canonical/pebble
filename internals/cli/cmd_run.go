@@ -194,10 +194,7 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 
-	// When state isn't persisted (in-memory backend, e.g. on a read-only
-	// rootfs) the identity key is ephemeral too -- it's never written to disk.
 	persist := os.Getenv("PEBBLE_PERSIST") != "never"
-
 	idPath := filepath.Join(rcmd.pebbleDir, "identity")
 	idSigner, err := idkey.Get(idPath, persist)
 	if err != nil {

@@ -69,7 +69,7 @@ func Get(keyDir string, persist bool) (*IDKey, error) {
 // e.g. on a read-only rootfs). This function should only ever be called on the
 // first boot otherwise the existing identity will be overwritten.
 //
-// When persisted, this function is equivalent to running:
+// This function is equivalent to running:
 //
 //	openssl genpkey -algorithm Ed25519 -out key.pem
 func Generate(keyDir string, persist bool) (*IDKey, error) {
