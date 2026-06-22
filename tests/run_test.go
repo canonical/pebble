@@ -273,7 +273,8 @@ services:
 }
 
 // TestPersistNever tests that when the environment variable `PEBBLE_PERSIST` is set to "never",
-// Pebble does not persist its state to the disk.
+// Pebble persists nothing to disk: neither the state file nor the identity key. The identity
+// becomes ephemeral, which is what lets Pebble run on a read-only filesystem.
 func TestPersistNever(t *testing.T) {
 	t.Setenv("PEBBLE_PERSIST", "never")
 	pebbleDir := t.TempDir()
@@ -290,12 +291,23 @@ services:
 
 	createLayer(t, pebbleDir, "001-simple-layer.yaml", layerYAML)
 
-	_, _ = pebbleDaemon(t, pebbleDir, "run")
+	_, stderrCh := pebbleDaemon(t, pebbleDir, "run")
+	waitForLog(t, stderrCh, "pebble", "using an ephemeral identity", 3*time.Second)
 	waitForFile(t, filepath.Join(pebbleDir, "svc1"), 3*time.Second)
 
+	// The state file must not be written.
 	_, err := os.Stat(filepath.Join(pebbleDir, ".pebble.state"))
 	if err == nil {
 		t.Fatalf("pebble run with PEBBLE_PERSIST set to 'never' still created the state file")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("pebble run with PEBBLE_PERSIST set to 'never' got error other than ErrNotExist: %v", err)
+	}
+
+	// The identity key must not be written either.
+	_, err = os.Stat(filepath.Join(pebbleDir, "identity", "key.pem"))
+	if err == nil {
+		t.Fatalf("pebble run with PEBBLE_PERSIST set to 'never' still wrote the identity key")
 	}
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("pebble run with PEBBLE_PERSIST set to 'never' got error other than ErrNotExist: %v", err)
