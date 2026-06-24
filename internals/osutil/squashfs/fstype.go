@@ -21,15 +21,12 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 )
 
-// useFuse detects if we should be using squashfuse instead
-var useFuse = useFuseImpl
-
-func useFuseImpl() bool {
-	if !osutil.CanStat("/dev/fuse") {
+var needsFuseImpl = func() bool {
+	if !osutil.FileExists("/dev/fuse") {
 		return false
 	}
 
-	if !osutil.IsExecInPath("squashfuse") && !osutil.IsExecInPath("snapfuse") {
+	if !osutil.ExecutableExists("squashfuse") && !osutil.ExecutableExists("snapfuse") {
 		return false
 	}
 
@@ -39,39 +36,49 @@ func useFuseImpl() bool {
 	}
 
 	virt := strings.TrimSpace(string(out))
-	if virt != "none" { // lint:ignore S1008 Should use 'return cond'
+	if virt != "none" {
 		return true
 	}
 
 	return false
 }
 
-// FakeUseFuse is exported so useFuse can be overridden by testing.
-func FakeUseFuse(r bool) func() {
-	oldUseFuse := useFuse
-	useFuse = func() bool {
+// FakeNeedsFuse is exported so NeedsFuse can be overridden by testing.
+func FakeNeedsFuse(r bool) func() {
+	oldNeedsFuseImpl := needsFuseImpl
+	needsFuseImpl = func() bool {
 		return r
 	}
-	return func() { useFuse = oldUseFuse }
+	return func() { needsFuseImpl = oldNeedsFuseImpl }
 }
 
-// FSType returns what fstype to use for squashfs mounts and what
-// mount options
-func FSType() (fstype string, options []string, err error) {
-	fstype = "squashfs"
-	options = []string{"ro", "x-gdu.hide"}
+// NeedsFuse returns true if the given system needs fuse to mount snaps
+func NeedsFuse() bool {
+	return needsFuseImpl()
+}
 
-	if useFuse() {
+// StandardOptions returns base squashfs options.
+func StandardOptions() []string {
+	return []string{"ro", "x-gdu.hide", "x-gvfs-hide"}
+}
+
+// FsType returns what fstype to use for squashfs mounts and what
+// mount options
+func FsType() (fstype string, options []string) {
+	fstype = "squashfs"
+	options = StandardOptions()
+
+	if NeedsFuse() {
 		options = append(options, "allow_other")
 		switch {
-		case osutil.IsExecInPath("squashfuse"):
+		case osutil.ExecutableExists("squashfuse"):
 			fstype = "fuse.squashfuse"
-		case osutil.IsExecInPath("snapfuse"):
+		case osutil.ExecutableExists("snapfuse"):
 			fstype = "fuse.snapfuse"
 		default:
-			panic("cannot happen because useFuse() ensures one of the two executables is there")
+			panic("cannot happen because NeedsFuse() ensures one of the two executables is there")
 		}
 	}
 
-	return fstype, options, nil
+	return fstype, options
 }
