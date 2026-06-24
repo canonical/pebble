@@ -90,7 +90,7 @@ Pebble is released as the [`pebble` snap](https://snapcraft.io/pebble) and as so
 
 The easiest way to ensure that you get security updates is to install the snap; see [](#install_pebble_snap). The snap's `latest` channel tracks the current release and the `fips` channel tracks the FIPS-compliant builds. Updates are delivered automatically by snap refresh; refer to the [snap documentation](https://snapcraft.io/docs/managing-updates) to schedule or defer refreshes, bearing in mind that delaying a refresh delays security fixes.
 
-The versions of Pebble under security maintenance are listed in [SECURITY.md](https://github.com/canonical/pebble/blob/master/SECURITY.md): security updates are released for major versions that have had releases in the last year and for the versions of Pebble bundled with maintained Juju releases. There is no separate long-term-support track; a version leaves security maintenance once it falls outside that window.
+The versions of Pebble under security maintenance are listed in [SECURITY.md](https://github.com/canonical/pebble/blob/master/SECURITY.md): security updates are released for major versions that have had releases in the last year and for the versions of Pebble bundled with maintained Juju releases. Long Term Support (LTS) releases receive five years of standard support, with up to ten additional years of [extended support](https://ubuntu.com/security/esm); other releases leave security maintenance once they fall outside the window above.
 
 To verify the installed version of the daemon, run `pebble version`.
 
