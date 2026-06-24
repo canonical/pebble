@@ -19,7 +19,7 @@ flowchart LR
         StateDB[("State DB<br/>+ layer files<br/>+ Unix socket")]
     end
     Services["Managed services"]
-    Logs["Log targets<br/>(e.g. Loki)"]
+    Logs["Log targets<br/>(such as Loki)"]
 
     Admin -- "Unix socket<br/>(UID-keyed identity)" --> Daemon
     Client -- "Unix socket / --https TLS" --> Daemon
