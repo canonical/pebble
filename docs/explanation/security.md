@@ -75,9 +75,7 @@ If `$PEBBLE_PERSIST` is set to `never`, then Pebble will only keep the state in 
 
 Beyond restricting the `$PEBBLE` directory permissions described above, you can further harden a Pebble deployment:
 
-- Run the Pebble daemon as a non-root user wherever the managed workload permits it, so that a compromise of the daemon does not automatically confer root on the host.
 - Prefer the default Unix-socket API over the `--http` option. The open-access endpoints exposed by `--http` require no authentication, so only enable them when you genuinely need unauthenticated network access to that limited endpoint set.
-- When network access to the full API is required, use TLS by passing `--https` rather than `--http`, so that traffic is encrypted in transit.
 - Give each client the least-privileged Pebble identity it needs rather than sharing the admin identity. For more information, see [](../how-to/manage-identities.md).
 - Apply network isolation so that any exposed ports are reachable only from the hosts and networks that need them, using host firewalling or network policies as appropriate to your environment.
 
