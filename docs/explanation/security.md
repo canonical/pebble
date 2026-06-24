@@ -29,7 +29,7 @@ flowchart LR
     Daemon -- "forward service logs" --> Logs
 ```
 
-The first boundary is between users who interact with the daemon and the daemon itself. Clients connect over a Unix socket, and the daemon authorises each request from the connecting user's UID, mapping it to a Pebble identity. When the daemon is started with `--http`, a further untrusted boundary is exposed: a deliberately limited set of open-access endpoints reachable over TCP without authentication.
+The first boundary is between users who interact with the daemon and the daemon itself. Clients connect over a Unix socket, and the daemon authorises each request from the connecting user's UID, mapping it to a Pebble identity. When the daemon is started with `--http`, a further trust boundary is exposed: a deliberately limited set of open-access endpoints reachable over TCP without authentication.
 
 The second boundary is between the daemon and the services it manages. The daemon runs with the privileges it was started with and launches services as configured, so a service is only as isolated from the daemon as the host makes it.
 
@@ -77,7 +77,7 @@ Beyond restricting the `$PEBBLE` directory permissions described above, you can 
 
 - Prefer the default Unix-socket API over the `--http` option. The open-access endpoints exposed by `--http` require no authentication, so only enable them when you genuinely need unauthenticated network access to that limited endpoint set.
 - Give each client the least-privileged Pebble identity it needs rather than sharing the admin identity. For more information, see [](../how-to/manage-identities.md).
-- Apply network isolation so that any exposed ports are reachable only from the hosts and networks that need them, using host firewalling or network policies as appropriate to your environment.
+- Apply network isolation so that any exposed ports are reachable only from the hosts and networks that need them, using host firewall rules or network policies as appropriate to your environment.
 
 FIPS 140-compliant builds of Pebble are available as a separate distribution channel; see the [Cryptographic technology](#cryptographic-technology) section below.
 
@@ -93,6 +93,7 @@ The versions of Pebble under security maintenance are listed in [SECURITY.md](ht
 To verify the installed version of the daemon, run `pebble version`.
 
 
+(cryptographic-technology)=
 ## Cryptographic technology
 
 Pebble uses cryptography in a small number of well-defined places: hashing passwords for the basic identity type, and TLS for the optional HTTPS API. FIPS 140-compliant builds are distributed separately and are described below.
@@ -111,6 +112,7 @@ Currently, the Pebble client doesn't support HTTPS (TLS). To connect to a Pebble
 
 Our intention is that projects that build on Pebble can [override how TLS connections are verified](https://pkg.go.dev/github.com/canonical/pebble@v1.23.0/client#Config).
 
+(fips-140)=
 ### FIPS 140
 
 This project also distributes [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble: the source code is in the `fips` branch and there's the `fips` track for the official [`pebble` snap](https://snapcraft.io/pebble). These builds take the conservative approach of removing access to cryptographic primitives entirely, pending FIPS validation of the Go runtime: basic-auth password hashing is removed (and so is the third-party SHA-crypt library, so only pre-hashed password identities can authenticate), the `--https` flag is unavailable so the daemon will not serve HTTPS, and outbound requests from the CLI, checks, and log targets are restricted to HTTP (HTTPS origins and HTTP-to-HTTPS redirects fail). Refer to [HACKING.md](https://github.com/canonical/pebble/blob/fips/HACKING.md#fips-140-changes) in the `fips` branch for the authoritative list of changes.
