@@ -128,15 +128,51 @@ Pebble does not encrypt state at rest. Confidentiality at rest relies on the `$P
 
 ## Logging and monitoring
 
-Pebble emits three streams of logs, each with a distinct purpose.
+Pebble emits three streams of logs, each with a distinct purpose. Security events are interleaved on the daemon stream and are described separately below.
 
-**Daemon logs.** The Pebble daemon writes its own log messages to its standard error stream as one line per message, where each line carries an ISO-8601 timestamp, a level marker, and a free-text message (for example, `2026-06-24T08:00:00.000Z [pebble] HTTP API server listening on ":4000".`). Two levels are emitted: `Notice` is always on and is intended to be user-visible; `Debug` is gated on the `PEBBLE_DEBUG=1` environment variable. The host's service manager or container runtime collects the stream — there is no separate log file or rotation managed by Pebble itself.
+### Daemon logs
 
-Interleaved with these free-text lines, Pebble also emits security events on the same stream, following the [OWASP application logging vocabulary](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Vocabulary_Cheat_Sheet.html). Each event is a single JSON object with `type` set to `security` and the fields `datetime` (RFC 3339, UTC), `level` (`WARN` or `CRITICAL`), `event` (the OWASP event name, optionally suffixed with `:<arg>` — for example `authz_fail:42,/v1/services`), `description`, and `appid` (defaults to `pebble`). The events Pebble currently emits are `sys_startup` and `sys_shutdown` for daemon lifecycle, `sys_monitor_disabled` when service health monitoring is disabled, `authz_admin` and `authz_fail` for authorisation decisions (including TLS client-certificate verification failures), and `user_created`, `user_updated`, and `user_deleted` for changes to the identities database. Because these events ride on the daemon stream, collecting daemon logs is sufficient to collect them; filter on `"type":"security"` to extract them downstream.
+The Pebble daemon writes its own log messages to its standard error stream as one line per message, where each line carries an ISO-8601 timestamp, a level marker, and a free-text message (for example, `2026-06-24T08:00:00.000Z [pebble] HTTP API server listening on ":4000".`). Two levels are emitted: `Notice` is always on and is intended to be user-visible; `Debug` is gated on the `PEBBLE_DEBUG=1` environment variable. The host's service manager or container runtime collects the stream — there is no separate log file or rotation managed by Pebble itself.
 
-**Service logs.** The standard output and standard error of the services Pebble manages are captured and made available, including as a stream, through the logs API and the [`pebble logs`](#reference_pebble_logs_command) command. Passing `--verbose` (or setting `PEBBLE_VERBOSE=1`) on `pebble run` additionally mirrors service output onto the daemon's own standard output. Service logs can be forwarded to external collectors (for example, Loki) through the log-target configuration in the layer plan.
+### Service logs
 
-**Notices.** Pebble also records notices, such as warnings and change updates, which clients can list and wait on through the notices API; for more information, see [](/reference/notices).
+The standard output and standard error of the services Pebble manages are captured and made available, including as a stream, through the logs API and the [`pebble logs`](#reference_pebble_logs_command) command. Passing `--verbose` (or setting `PEBBLE_VERBOSE=1`) on `pebble run` additionally mirrors service output onto the daemon's own standard output. Service logs can be forwarded to external collectors (for example, Loki) through the log-target configuration in the layer plan.
+
+### Notices
+
+Pebble also records notices, such as warnings and change updates, which clients can list and wait on through the notices API; for more information, see [](/reference/notices).
+
+### Security events
+
+Interleaved with the free-text daemon log lines, Pebble emits security events on the same stream, following the [OWASP application logging vocabulary](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Vocabulary_Cheat_Sheet.html). Because these events ride on the daemon stream, collecting daemon logs is sufficient to collect them; filter on `"type":"security"` to extract them downstream.
+
+Each event is a single JSON object on its own line:
+
+```json
+{
+  "type": "security",
+  "datetime": "2026-06-24T08:00:00.000Z",
+  "level": "WARN",
+  "event": "authz_fail:42,/v1/services",
+  "description": "UID 42 denied access to /v1/services",
+  "appid": "pebble"
+}
+```
+
+`datetime` is RFC 3339 UTC, `level` is `WARN` or `CRITICAL`, `event` is the OWASP event name optionally suffixed with `:<arg>`, and `appid` defaults to `pebble`.
+
+The events Pebble currently emits are:
+
+| Event | Emitted when |
+| --- | --- |
+| `sys_startup` | The daemon starts. |
+| `sys_shutdown` | The daemon shuts down. |
+| `sys_monitor_disabled` | Service health monitoring is disabled. |
+| `authz_admin` | An admin-level authorisation decision is made. |
+| `authz_fail` | An authorisation check fails, including TLS client-certificate verification failures. |
+| `user_created` | An identity is added to the identities database. |
+| `user_updated` | An identity in the database is modified. |
+| `user_deleted` | An identity is removed from the database. |
 
 
 ## Decommissioning
