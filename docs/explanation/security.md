@@ -5,12 +5,46 @@
 
 ## Product architecture
 
-Pebble runs as a long-lived daemon that supervises a set of services on behalf of an administrator. Its security posture is shaped by three trust boundaries. The first is between the users who interact with the daemon and the daemon itself: clients connect over a Unix socket and the daemon authorises each request from the connecting user's UID, mapping it to a Pebble identity, as described in the Access to the API section below. The second is between the daemon and the services it manages: the daemon runs with the privileges it was started with and launches services as configured, so a service is only as isolated from the daemon as the host makes it. The third is between the daemon and its on-disk state in the `$PEBBLE` directory, whose confidentiality and integrity depend on the directory permissions described in The Pebble directory section below. When the daemon is started with `--http`, a further, untrusted boundary is exposed: a limited set of open-access endpoints reachable over TCP without authentication.
+Pebble runs as a long-lived daemon that supervises a set of services on behalf of an administrator. Its security posture is shaped by three trust boundaries.
+
+```{mermaid}
+flowchart LR
+    Admin["Admin / operator<br/>(local UID)"]
+    Client["Client / API user<br/>(local UID)"]
+    HTTP["--http TCP client<br/>(unauthenticated)"]
+    subgraph DaemonProc["Pebble daemon process"]
+        Daemon["Daemon<br/>(service / exec /<br/>check / log managers)"]
+    end
+    subgraph State["$PEBBLE directory"]
+        StateDB[("State DB<br/>+ layer files<br/>+ Unix socket")]
+    end
+    Services["Managed services"]
+    Logs["Log targets<br/>(e.g. Loki)"]
+
+    Admin -- "Unix socket<br/>(UID-keyed identity)" --> Daemon
+    Client -- "Unix socket / --https TLS" --> Daemon
+    HTTP -- "open-access endpoint set" --> Daemon
+    Daemon -- "fork/exec, signals,<br/>service-log capture" --> Services
+    Daemon -- "read / write state" --> StateDB
+    Daemon -- "forward service logs" --> Logs
+```
+
+The first boundary is between users who interact with the daemon and the daemon itself. Clients connect over a Unix socket, and the daemon authorises each request from the connecting user's UID, mapping it to a Pebble identity. When the daemon is started with `--http`, a further untrusted boundary is exposed: a deliberately limited set of open-access endpoints reachable over TCP without authentication.
+
+The second boundary is between the daemon and the services it manages. The daemon runs with the privileges it was started with and launches services as configured, so a service is only as isolated from the daemon as the host makes it.
+
+The third boundary is between the daemon and its on-disk state in the `$PEBBLE` directory, whose confidentiality and integrity depend on directory permissions.
+
+This section is drawn from Pebble's SSDLC threat model. The full asset and threat catalogue (crown jewels, stepping stones, and ranked threats per C/I/A) lives with the SSDLC artefacts; this page summarises the architecture-relevant boundaries.
 
 
-## Secure by Design
+## Secure by design
 
-Pebble is designed to keep its security surface small by default. The API is served over a Unix socket rather than a network port, so out of the box the daemon is reachable only by local users and access decisions are made from the kernel-supplied UID rather than from credentials sent over the wire. Exposing endpoints over the network is opt-in through the `--http` option, and the endpoints made available that way are deliberately limited to a read-only, open-access set. Finer-grained access is granted explicitly through UID-keyed identities rather than being on by default. The daemon's persistent footprint is bounded to the `$PEBBLE` directory, which keeps the state that needs protecting in one well-defined location.
+Pebble is designed to keep its security surface small by default.
+
+The API is served over a Unix socket rather than a network port, so out of the box the daemon is reachable only by local users and access decisions are made from the kernel-supplied UID rather than from credentials sent over the wire. Exposing endpoints over the network is opt-in through the `--http` option, and the endpoints made available that way are deliberately limited to a read-only, open-access set.
+
+Finer-grained access is granted explicitly through UID-keyed identities rather than being on by default. The daemon's persistent footprint is bounded to the `$PEBBLE` directory, which keeps the state that needs protecting in one well-defined location.
 
 
 ## Access to the API
@@ -26,7 +60,7 @@ For more information, see [](api-and-clients.md) and [](../how-to/manage-identit
 
 By default, Pebble stores its configuration, internal state, and Unix socket in the directory specified by the `PEBBLE` environment variable. If `$PEBBLE` is not set, Pebble uses the directory `/var/lib/pebble/default`.
 
-The `$PEBBLE` directory must be readable and writable by the UID of the pebble process. Make sure that no other UIDs can read or write to the $PEBBLE directory. You can do that with `chmod`, for example:
+The `$PEBBLE` directory must be readable and writable by the UID of the pebble process. Make sure that no other UIDs can read or write to the `$PEBBLE` directory. You can do that with `chmod`, for example:
 
 ```{terminal}
 chmod 700 /var/lib/pebble/default
@@ -34,7 +68,8 @@ chmod 700 /var/lib/pebble/default
 
 The file `$PEBBLE/.pebble.state` contains the internal state of the Pebble daemon. You shouldn't try to edit this file or change its permissions.
 
-If `$PEBBLE_PERSIST` is set to "never", then Pebble will only keep the state in memory without persisting it to the state file.
+If `$PEBBLE_PERSIST` is set to `never`, then Pebble will only keep the state in memory without persisting it to the state file.
+
 
 ## Hardening
 
@@ -42,32 +77,37 @@ Beyond restricting the `$PEBBLE` directory permissions described above, you can 
 
 - Run the Pebble daemon as a non-root user wherever the managed workload permits it, so that a compromise of the daemon does not automatically confer root on the host.
 - Prefer the default Unix-socket API over the `--http` option. The open-access endpoints exposed by `--http` require no authentication, so only enable them when you genuinely need unauthenticated network access to that limited endpoint set.
-- When network access to the full API is required, use TLS by passing `--https` rather than `--http`, so that traffic is encrypted in transit. See the TLS sub-section below.
+- When network access to the full API is required, use TLS by passing `--https` rather than `--http`, so that traffic is encrypted in transit.
 - Give each client the least-privileged Pebble identity it needs rather than sharing the admin identity. For more information, see [](../how-to/manage-identities.md).
 - Apply network isolation so that any exposed ports are reachable only from the hosts and networks that need them, using host firewalling or network policies as appropriate to your environment.
 
-## Security updates
+FIPS 140-compliant builds of Pebble are available as a separate distribution channel; see the [Cryptographic technology](#cryptographic-technology) section below.
 
-There are several ways to install Pebble. The easiest way to ensure that you get security updates is to [install the snap](#install_pebble_snap).
 
-### Security lifecycle
+## Security lifecycle
 
-The versions of Pebble under security maintenance are listed in [SECURITY.md](https://github.com/canonical/pebble/blob/master/SECURITY.md): security updates are released for major versions that have had releases in the last year and for the versions of Pebble bundled with maintained Juju releases. The recommended way to receive these updates is the [`pebble` snap](https://snapcraft.io/pebble); track its `latest` channel to stay on the current release, and track the `fips` channel for updates to the FIPS-compliant builds. Updates are delivered automatically by snap refresh; refer to the [snap documentation](https://snapcraft.io/docs/managing-updates) to schedule or defer refreshes, bearing in mind that delaying a refresh delays security fixes. To verify the installed version, run `pebble version`. There is no separate long-term-support track: a version leaves security maintenance once it falls outside the window described in SECURITY.md.
+Pebble is released as the [`pebble` snap](https://snapcraft.io/pebble) and as source releases on GitHub. Pebble follows [semantic versioning](https://semver.org/): the major version changes for incompatible API changes, the minor version for backwards-compatible feature additions, and the patch version for backwards-compatible bug fixes.
+
+The easiest way to ensure that you get security updates is to install the snap; see [](#install_pebble_snap). The snap's `latest` channel tracks the current release and the `fips` channel tracks the FIPS-compliant builds. Updates are delivered automatically by snap refresh; refer to the [snap documentation](https://snapcraft.io/docs/managing-updates) to schedule or defer refreshes, bearing in mind that delaying a refresh delays security fixes.
+
+The versions of Pebble under security maintenance are listed in [SECURITY.md](https://github.com/canonical/pebble/blob/master/SECURITY.md): security updates are released for major versions that have had releases in the last year and for the versions of Pebble bundled with maintained Juju releases. There is no separate long-term-support track; a version leaves security maintenance once it falls outside that window.
+
+To verify the installed version of the daemon, run `pebble version`.
 
 
 ## Cryptographic technology
 
-Pebble uses cryptography in a small number of well-defined places: hashing passwords for the basic identity type, TLS for the optional HTTPS API, and the FIPS 140-compliant builds. The sub-sections below describe each of these, the packages that provide the cryptographic functionality, and Pebble's approach to data at rest.
+Pebble uses cryptography in a small number of well-defined places: hashing passwords for the basic identity type, TLS for the optional HTTPS API, and the FIPS 140-compliant builds.
 
 ### Basic identity type
 
-For the "basic" [identity](/reference/identities) type, Pebble uses Ulrich Drepper's SHA-crypt algorithm with SHA-512. Specifically, we use the third party Go library [github.com/GehirnInc/crypt](https://github.com/Gehirninc/crypt) for verifying the password hashes sent in a client's `Authorization` HTTP header.
+For the "basic" [identity](/reference/identities) type, Pebble uses Ulrich Drepper's SHA-crypt algorithm with SHA-512 (a 512-bit digest). Specifically, we use the third party Go library [github.com/GehirnInc/crypt](https://github.com/GehirnInc/crypt) for verifying the password hashes sent in a client's `Authorization` HTTP header.
 
 ### TLS
 
-Pebble uses the TLS code in Go's standard library when the `--https` argument is passed to `pebble run`, enabling API access over TLS.
+Pebble uses the TLS code in Go's standard library when the `--https` argument is passed to `pebble run`, enabling API access over TLS. Pebble negotiates TLS 1.2 or TLS 1.3; older protocol versions are not offered.
 
-Server-side TLS certificates are managed by Pebble. On first start, a Pebble identity certificate is generated. Incoming HTTPS requests will use ephemeral TLS certificates, self-signed with the identity certificate. There is currently no support for integration with an external certificate authority.
+Server-side TLS certificates are managed by Pebble. On first start, a Pebble identity certificate is generated using Ed25519 (256-bit keys). Incoming HTTPS requests will use ephemeral TLS certificates, self-signed with the identity certificate. There is currently no support for integration with an external certificate authority.
 
 Currently, the Pebble client doesn't support HTTPS (TLS). To connect to a Pebble daemon over HTTPS, you'll need to make [API](/reference/api) calls using `curl --insecure`, for example.
 
@@ -75,29 +115,41 @@ Our intention is that projects that build on Pebble can [override how TLS connec
 
 ### FIPS 140
 
-This project also distributes [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble: the source code is in the `fips` branch and there's the `fips` track for the official [`pebble` snap](https://snapcraft.io/pebble). Refer to [HACKING.md](https://github.com/canonical/pebble/blob/fips/HACKING.md#fips-140-changes) in the `fips` branch for the list of limitations in the FIPS builds.
+This project also distributes [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble: the source code is in the `fips` branch and there's the `fips` track for the official [`pebble` snap](https://snapcraft.io/pebble). The FIPS builds replace the standard library's cryptographic primitives with a FIPS-validated module. Refer to [HACKING.md](https://github.com/canonical/pebble/blob/fips/HACKING.md#fips-140-changes) in the `fips` branch for the list of limitations in the FIPS builds.
 
 ### Cryptographic packages
 
-The cryptographic functionality Pebble uses is provided by two sources. The first is the Go standard library, which supplies TLS and certificate handling (`crypto/tls`, `crypto/x509`), key generation and signing for the identity certificate (`crypto/ed25519`, `crypto/rand`), and SHA-512 hashing (`crypto/sha512`). The second is the third-party [github.com/GehirnInc/crypt](https://github.com/GehirnInc/crypt) library, which provides the SHA-crypt password hashing used for the basic identity type. The FIPS builds replace the standard library's cryptographic primitives with a FIPS-validated module, as described in the FIPS 140 sub-section above.
+The cryptographic functionality Pebble uses is provided by two sources. The first is the Go standard library, which supplies TLS and certificate handling (`crypto/tls`, `crypto/x509`), key generation and signing for the identity certificate (`crypto/ed25519`, `crypto/rand`), and SHA-512 hashing (`crypto/sha512`). The second is the third-party [github.com/GehirnInc/crypt](https://github.com/GehirnInc/crypt) library, which provides the SHA-crypt password hashing used for the basic identity type. The FIPS builds replace the standard library's cryptographic primitives with a FIPS-validated module.
 
 ### Encryption at rest
 
-Pebble does not encrypt state at rest. Confidentiality at rest relies on the `$PEBBLE` directory permissions described in The Pebble directory section above and on the host's at-rest encryption story. When `$PEBBLE_PERSIST=never` is set, state is held only in memory and the persistence concern does not apply.
+Pebble does not encrypt state at rest. Confidentiality at rest relies on the `$PEBBLE` directory permissions and on the host's at-rest encryption story. When `$PEBBLE_PERSIST=never` is set, state is held only in memory and the persistence concern does not apply.
 
 
 ## Logging and monitoring
 
-The Pebble daemon writes structured logs to its standard error stream, which the host's service manager or container runtime can collect. The standard output and standard error of the services Pebble manages are captured and made available, including as a stream, through the logs API and the [`pebble logs`](#reference_pebble_logs_command) command. Pebble also records notices, such as warnings and change updates, which clients can list and wait on through the notices API; for more information, see [](/reference/notices).
+Pebble emits three streams of logs, each with a distinct purpose.
 
-OWASP-vocabulary security event logging is being introduced in [canonical/pebble#874](https://github.com/canonical/pebble/pull/874); this section will be expanded with the event vocabulary when that PR lands.
+**Daemon logs.** The Pebble daemon writes its own log messages to its standard error stream as one line per message, where each line carries an ISO-8601 timestamp, a level marker, and a free-text message (for example, `2026-06-24T08:00:00.000Z [pebble] HTTP API server listening on ":4000".`). Two levels are emitted: `Notice` is always on and is intended to be user-visible; `Debug` is gated on the `PEBBLE_DEBUG=1` environment variable. The host's service manager or container runtime collects the stream — there is no separate log file or rotation managed by Pebble itself.
+
+**Service logs.** The standard output and standard error of the services Pebble manages are captured and made available, including as a stream, through the logs API and the [`pebble logs`](#reference_pebble_logs_command) command. Passing `--verbose` (or setting `PEBBLE_VERBOSE=1`) on `pebble run` additionally mirrors service output onto the daemon's own standard output. Service logs can be forwarded to external collectors (for example, Loki) through the log-target configuration in the layer plan.
+
+**Notices.** Pebble also records notices, such as warnings and change updates, which clients can list and wait on through the notices API; for more information, see [](/reference/notices).
+
+OWASP-vocabulary security event logging is being introduced in [canonical/pebble#874](https://github.com/canonical/pebble/pull/874); this section will be expanded with the event vocabulary and its emission format when that PR lands.
 
 
-## Secure decommissioning
+## Decommissioning
 
 To remove Pebble, uninstall it using the method it was installed with, such as `sudo snap remove pebble` for the snap. If you no longer need the daemon's state, also remove the `$PEBBLE` directory (`/var/lib/pebble/default` by default). This directory can contain identity secrets and service state, so treat its removal as you would any other deletion of sensitive data. On a FIPS deployment, remove the FIPS-build snap and its `$PEBBLE` directory in the same way.
 
 
 ## Reporting vulnerabilities
 
-Security vulnerabilities in Pebble should be reported privately. See [SECURITY.md](https://github.com/canonical/pebble/blob/master/SECURITY.md) for the disclosure process and the supported-version policy. Known vulnerabilities and their fixes are published as [GitHub Security Advisories](https://github.com/canonical/pebble/security/advisories).
+Security vulnerabilities in Pebble should be reported privately. References:
+
+* [SECURITY.md](https://github.com/canonical/pebble/blob/master/SECURITY.md) for the disclosure process and the supported-version policy.
+* The [Ubuntu Security disclosure and embargo policy](https://ubuntu.com/security/disclosure-policy).
+* The [GitHub Security Advisories for `canonical/pebble`](https://github.com/canonical/pebble/security/advisories) for known vulnerabilities and their fixes.
+* The [Pebble release notes](https://github.com/canonical/pebble/releases) on GitHub.
+* Relevant [Ubuntu Security Notices](https://ubuntu.com/security/notices) when a vulnerability also affects an Ubuntu-packaged copy of Pebble.
