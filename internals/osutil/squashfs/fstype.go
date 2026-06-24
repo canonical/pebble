@@ -36,11 +36,7 @@ var needsFuseImpl = func() bool {
 	}
 
 	virt := strings.TrimSpace(string(out))
-	if virt != "none" {
-		return true
-	}
-
-	return false
+	return virt != "none"
 }
 
 // FakeNeedsFuse is exported so NeedsFuse can be overridden by testing.
