@@ -97,7 +97,7 @@ To verify the installed version of the daemon, run `pebble version`.
 
 ## Cryptographic technology
 
-Pebble uses cryptography in a small number of well-defined places: hashing passwords for the basic identity type, TLS for the optional HTTPS API, and the FIPS 140-compliant builds.
+Pebble uses cryptography in a small number of well-defined places: hashing passwords for the basic identity type, and TLS for the optional HTTPS API. FIPS 140-compliant builds are distributed separately and are described below.
 
 ### Basic identity type
 
@@ -115,11 +115,11 @@ Our intention is that projects that build on Pebble can [override how TLS connec
 
 ### FIPS 140
 
-This project also distributes [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble: the source code is in the `fips` branch and there's the `fips` track for the official [`pebble` snap](https://snapcraft.io/pebble). The FIPS builds replace the standard library's cryptographic primitives with a FIPS-validated module. Refer to [HACKING.md](https://github.com/canonical/pebble/blob/fips/HACKING.md#fips-140-changes) in the `fips` branch for the list of limitations in the FIPS builds.
+This project also distributes [FIPS 140](https://en.wikipedia.org/wiki/FIPS_140)-compliant builds of Pebble: the source code is in the `fips` branch and there's the `fips` track for the official [`pebble` snap](https://snapcraft.io/pebble). These builds take the conservative approach of removing access to cryptographic primitives entirely, pending FIPS validation of the Go runtime: basic-auth password hashing is removed (and so is the third-party SHA-crypt library, so only pre-hashed password identities can authenticate), the `--https` flag is unavailable so the daemon will not serve HTTPS, and outbound requests from the CLI, checks, and log targets are restricted to HTTP (HTTPS origins and HTTP-to-HTTPS redirects fail). Refer to [HACKING.md](https://github.com/canonical/pebble/blob/fips/HACKING.md#fips-140-changes) in the `fips` branch for the authoritative list of changes.
 
 ### Cryptographic packages
 
-The cryptographic functionality Pebble uses is provided by two sources. The first is the Go standard library, which supplies TLS and certificate handling (`crypto/tls`, `crypto/x509`), key generation and signing for the identity certificate (`crypto/ed25519`, `crypto/rand`), and SHA-512 hashing (`crypto/sha512`). The second is the third-party [github.com/GehirnInc/crypt](https://github.com/GehirnInc/crypt) library, which provides the SHA-crypt password hashing used for the basic identity type. The FIPS builds replace the standard library's cryptographic primitives with a FIPS-validated module.
+The cryptographic functionality Pebble uses is provided by two sources. The first is the Go standard library, which supplies TLS and certificate handling (`crypto/tls`, `crypto/x509`), key generation and signing for the identity certificate (`crypto/ed25519`, `crypto/rand`), and SHA-512 hashing (`crypto/sha512`). The second is the third-party [github.com/GehirnInc/crypt](https://github.com/GehirnInc/crypt) library, which provides the SHA-crypt password hashing used for the basic identity type. The FIPS builds remove these cryptographic primitives rather than replacing them; see [](#fips-140) for the resulting feature restrictions.
 
 ### Encryption at rest
 
