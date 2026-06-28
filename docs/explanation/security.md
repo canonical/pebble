@@ -48,6 +48,7 @@ Finer-grained access is granted explicitly through UID-keyed identities rather t
 For more information, see [](api-and-clients.md) and [](../how-to/manage-identities.md).
 
 
+(the-pebble-directory)=
 ## The Pebble directory
 
 By default, Pebble stores its configuration, internal state, and Unix socket in the directory specified by the `PEBBLE` environment variable. If `$PEBBLE` is not set, Pebble uses the directory `/var/lib/pebble/default`.
