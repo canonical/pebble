@@ -12,14 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v6
-      with:
-        persist-credentials: false
-    - name: Dependency review
-      uses: actions/dependency-review-action@v4
-      with:
-        fail-on-severity: high
-        comment-summary-in-pr: on-failure
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high```
