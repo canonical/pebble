@@ -20,4 +20,4 @@ jobs:
       - name: Dependency review
         uses: actions/dependency-review-action@v4
         with:
-          fail-on-severity: high```
+          fail-on-severity: high
