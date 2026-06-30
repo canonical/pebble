@@ -18,10 +18,12 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/cli"
+	"github.com/canonical/pebble/internals/overlord"
 )
 
 func (s *PebbleSuite) TestMaybeCopyPebbleDir(c *C) {
@@ -124,4 +126,55 @@ func (s *PebbleSuite) TestMaybeCopyPebbleDirSourceNotADirectory(c *C) {
 	c.Assert(err, IsNil)
 	err = cli.MaybeCopyPebbleDir(dst, src)
 	c.Assert(err, ErrorMatches, ".*not a directory.*")
+}
+
+func (s *PebbleSuite) TestSetupTLSOptionsHTTPSNotSet(c *C) {
+	pebbleDir := c.MkDir()
+
+	// No HTTPS configured: no identity should be loaded or generated, and
+	// the persist mode must not matter.
+	opts, err := cli.SetupTLSOptions(pebbleDir, "", overlord.PersistDefault)
+	c.Assert(err, IsNil)
+	c.Check(opts.Signer, IsNil)
+
+	opts, err = cli.SetupTLSOptions(pebbleDir, "", overlord.PersistNever)
+	c.Assert(err, IsNil)
+	c.Check(opts.Signer, IsNil)
+
+	// Also confirm idkey.Get was never called by checking no "identity"
+	// directory was created in pebbleDir.
+	_, err = os.Stat(filepath.Join(pebbleDir, "identity"))
+	c.Check(os.IsNotExist(err), Equals, true)
+}
+
+func (s *PebbleSuite) TestSetupTLSOptionsHTTPSWithPersistNever(c *C) {
+	pebbleDir := c.MkDir()
+
+	opts, err := cli.SetupTLSOptions(pebbleDir, ":8443", overlord.PersistNever)
+	c.Assert(err, ErrorMatches, `cannot use --https with PEBBLE_PERSIST=never: identity key requires persistent state`)
+	c.Check(opts.Signer, IsNil)
+
+	// No identity directory or key should have been created.
+	_, err = os.Stat(filepath.Join(pebbleDir, "identity"))
+	c.Check(os.IsNotExist(err), Equals, true)
+}
+
+func (s *PebbleSuite) TestSetupTLSOptionsHTTPSWithPersistDefault(c *C) {
+	pebbleDir := c.MkDir()
+
+	opts, err := cli.SetupTLSOptions(pebbleDir, ":8443", overlord.PersistDefault)
+	c.Assert(err, IsNil)
+	c.Assert(opts.Signer, NotNil)
+	c.Check(opts.Signer.Fingerprint(), Not(Equals), "")
+
+	// The identity key was persisted to disk.
+	info, err := os.Stat(filepath.Join(pebbleDir, "identity", "key.pem"))
+	c.Assert(err, IsNil)
+	c.Check(info.Mode().IsRegular(), Equals, true)
+
+	// Calling again should reuse the existing key (same fingerprint).
+	opts2, err := cli.SetupTLSOptions(pebbleDir, ":8443", overlord.PersistDefault)
+	c.Assert(err, IsNil)
+	c.Assert(opts2.Signer, NotNil)
+	c.Check(opts2.Signer.Fingerprint(), Equals, opts.Signer.Fingerprint())
 }
