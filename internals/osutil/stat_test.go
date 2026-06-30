@@ -142,6 +142,9 @@ func makeTestPathInDir(c *C, dir, path string, mode os.FileMode) string {
 }
 
 func (ts *StatTestSuite) TestIsWritableDir(c *C) {
+	if os.Getuid() == 0 {
+		c.Skip("cannot run test as root: file permissions are bypassed")
+	}
 	for _, t := range []struct {
 		path       string
 		mode       os.FileMode
@@ -214,6 +217,11 @@ func (ts *StatTestSuite) TestDirExists(c *C) {
 	}
 
 	p := makeTestPath(c, "foo/bar", 0)
+	if os.Getuid() == 0 {
+		// running as root, directory permission checks are bypassed,
+		// so DirExists won't report a permission error.
+		return
+	}
 	c.Assert(os.Chmod(filepath.Dir(p), 0), IsNil)
 	defer os.Chmod(filepath.Dir(p), 0755)
 	exists, isDir, err := osutil.DirExists(p)
