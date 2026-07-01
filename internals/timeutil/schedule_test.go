@@ -21,10 +21,13 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/testutil"
 	"github.com/canonical/pebble/internals/timeutil"
 )
 
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type timeutilSuite struct{}
 

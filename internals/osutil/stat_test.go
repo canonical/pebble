@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2026 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package osutil
+package osutil_test
 
 import (
 	"fmt"
@@ -22,36 +22,44 @@ import (
 	"syscall"
 
 	. "gopkg.in/check.v1"
+
+	"github.com/canonical/pebble/internals/osutil"
 )
 
 type StatTestSuite struct{}
 
 var _ = Suite(&StatTestSuite{})
 
-func (ts *StatTestSuite) TestCanStat(c *C) {
+func (ts *StatTestSuite) TestFileDoesNotExist(c *C) {
+	c.Assert(osutil.FileExists("/i-do-not-exist"), Equals, false)
+}
+
+func (ts *StatTestSuite) TestFileExistsSimple(c *C) {
 	fname := filepath.Join(c.MkDir(), "foo")
 	err := os.WriteFile(fname, []byte(fname), 0644)
 	c.Assert(err, IsNil)
 
-	c.Assert(CanStat(fname), Equals, true)
-	c.Assert(CanStat("/i-do-not-exist"), Equals, false)
+	c.Assert(osutil.FileExists(fname), Equals, true)
 }
 
-func (ts *StatTestSuite) TestCanStatOddPerms(c *C) {
+func (ts *StatTestSuite) TestFileExistsExistsOddPermissions(c *C) {
 	fname := filepath.Join(c.MkDir(), "foo")
 	err := os.WriteFile(fname, []byte(fname), 0100)
 	c.Assert(err, IsNil)
 
-	c.Assert(CanStat(fname), Equals, true)
+	c.Assert(osutil.FileExists(fname), Equals, true)
 }
 
-func (ts *StatTestSuite) TestIsDir(c *C) {
+func (ts *StatTestSuite) TestIsDirectoryDoesNotExist(c *C) {
+	c.Assert(osutil.IsDirectory("/i-do-not-exist"), Equals, false)
+}
+
+func (ts *StatTestSuite) TestIsDirectorySimple(c *C) {
 	dname := filepath.Join(c.MkDir(), "bar")
 	err := os.Mkdir(dname, 0700)
 	c.Assert(err, IsNil)
 
-	c.Assert(IsDir(dname), Equals, true)
-	c.Assert(IsDir("/i-do-not-exist"), Equals, false)
+	c.Assert(osutil.IsDirectory(dname), Equals, true)
 }
 
 func (ts *StatTestSuite) TestIsSymlink(c *C) {
@@ -59,40 +67,65 @@ func (ts *StatTestSuite) TestIsSymlink(c *C) {
 	err := os.Symlink("/", sname)
 	c.Assert(err, IsNil)
 
-	c.Assert(IsSymlink(sname), Equals, true)
-	c.Assert(IsSymlink(c.MkDir()), Equals, false)
+	c.Assert(osutil.IsSymlink(sname), Equals, true)
 }
 
-func (ts *StatTestSuite) TestIsExecInPath(c *C) {
+func (ts *StatTestSuite) TestIsSymlinkNoSymlink(c *C) {
+	c.Assert(osutil.IsSymlink(c.MkDir()), Equals, false)
+}
+
+func (ts *StatTestSuite) TestExecutableExists(c *C) {
 	oldPath := os.Getenv("PATH")
 	defer os.Setenv("PATH", oldPath)
 	d := c.MkDir()
 	os.Setenv("PATH", d)
-	c.Check(IsExecInPath("xyzzy"), Equals, false)
+	c.Check(osutil.ExecutableExists("xyzzy"), Equals, false)
 
 	fname := filepath.Join(d, "xyzzy")
 	c.Assert(os.WriteFile(fname, []byte{}, 0644), IsNil)
-	c.Check(IsExecInPath("xyzzy"), Equals, false)
+	c.Check(osutil.ExecutableExists("xyzzy"), Equals, false)
 
 	c.Assert(os.Chmod(fname, 0755), IsNil)
-	c.Check(IsExecInPath("xyzzy"), Equals, true)
+	c.Check(osutil.ExecutableExists("xyzzy"), Equals, true)
 }
 
-func (s *StatTestSuite) TestLookPathDefaultGivesCorrectPath(c *C) {
-	lookPath = func(name string) (string, error) { return "/bin/true", nil }
-	c.Assert(LookPathDefault("true", "/bin/foo"), Equals, "/bin/true")
+func (ts *StatTestSuite) TestLookPathDefaultGivesCorrectPath(c *C) {
+	r := osutil.FakeLookPath(func(name string) (string, error) { return "/bin/true", nil })
+	defer r()
+	c.Assert(osutil.LookPathDefault("true", "/bin/foo"), Equals, "/bin/true")
 }
 
-func (s *StatTestSuite) TestLookPathDefaultReturnsDefaultWhenNotFound(c *C) {
-	lookPath = func(name string) (string, error) { return "", fmt.Errorf("Not found") }
-	c.Assert(LookPathDefault("bar", "/bin/bla"), Equals, "/bin/bla")
+func (ts *StatTestSuite) TestLookPathDefaultReturnsDefaultWhenNotFound(c *C) {
+	r := osutil.FakeLookPath(func(name string) (string, error) { return "", fmt.Errorf("Not found") })
+	defer r()
+	c.Assert(osutil.LookPathDefault("bar", "/bin/bla"), Equals, "/bin/bla")
+}
+
+func (ts *StatTestSuite) TestLookInPaths(c *C) {
+	d1 := c.MkDir()
+	d2 := c.MkDir()
+	d3 := c.MkDir()
+
+	makeTestPathInDir(c, d1, "ls", 0o755)
+	makeTestPathInDir(c, d2, "ls", 0o755)
+	makeTestPathInDir(c, d3, "ls", 0o644)
+
+	c.Check(osutil.LookInPaths("ls", ""), Equals, "")
+	realLs := osutil.LookInPaths("ls", os.Getenv("PATH"))
+	c.Check(realLs, Not(Equals), "")
+	c.Check(osutil.LookInPaths("ls", d1+":"+d2+":"+d3), Equals, filepath.Join(d1, "ls"))
+	c.Check(osutil.LookInPaths("ls", d2+":"+d1+":"+d3), Equals, filepath.Join(d2, "ls"))
+	// ls in d3 is not executable
+	c.Check(osutil.LookInPaths("ls", d3+":"+d2+":"+d1), Equals, filepath.Join(d2, "ls"))
+	c.Check(osutil.LookInPaths("ls", d1+":"+d2+":"+os.Getenv("PATH")), Equals, filepath.Join(d1, "ls"))
+	c.Check(osutil.LookInPaths("ls", os.Getenv("PATH")+":"+d1+":"+d2), Equals, realLs)
 }
 
 func makeTestPath(c *C, path string, mode os.FileMode) string {
 	return makeTestPathInDir(c, c.MkDir(), path, mode)
 }
 
-func makeTestPathInDir(c *C, dir string, path string, mode os.FileMode) string {
+func makeTestPathInDir(c *C, dir, path string, mode os.FileMode) string {
 	mkdir := strings.HasSuffix(path, "/")
 	path = filepath.Join(dir, path)
 
@@ -108,11 +141,10 @@ func makeTestPathInDir(c *C, dir string, path string, mode os.FileMode) string {
 	return path
 }
 
-func (s *StatTestSuite) TestIsWritableDir(c *C) {
+func (ts *StatTestSuite) TestIsWritableDir(c *C) {
 	if os.Getuid() == 0 {
-		c.Skip("requires running as non-root user")
+		c.Skip("cannot run test as root: file permissions are bypassed")
 	}
-
 	for _, t := range []struct {
 		path       string
 		mode       os.FileMode
@@ -132,12 +164,12 @@ func (s *StatTestSuite) TestIsWritableDir(c *C) {
 		{"file", 0600, true},
 		{"file", 0400, false},
 	} {
-		writable := IsWritable(makeTestPath(c, t.path, t.mode))
+		writable := osutil.IsWritable(makeTestPath(c, t.path, t.mode))
 		c.Check(writable, Equals, t.isWritable, Commentf("incorrect result for %q (%s), got %v, expected %v", t.path, t.mode, writable, t.isWritable))
 	}
 }
 
-func (s *StatTestSuite) TestIsDirNotExist(c *C) {
+func (ts *StatTestSuite) TestIsDirNotExist(c *C) {
 	for _, e := range []error{
 		os.ErrNotExist,
 		syscall.ENOENT,
@@ -149,18 +181,18 @@ func (s *StatTestSuite) TestIsDirNotExist(c *C) {
 		&os.SyscallError{Err: syscall.ENOENT},
 		&os.SyscallError{Err: syscall.ENOTDIR},
 	} {
-		c.Check(IsDirNotExist(e), Equals, true, Commentf("%#v (%v)", e, e))
+		c.Check(osutil.IsDirNotExist(e), Equals, true, Commentf("%#v (%v)", e, e))
 	}
 
 	for _, e := range []error{
 		nil,
 		fmt.Errorf("hello"),
 	} {
-		c.Check(IsDirNotExist(e), Equals, false)
+		c.Check(osutil.IsDirNotExist(e), Equals, false)
 	}
 }
 
-func (s *StatTestSuite) TestExistsIsDir(c *C) {
+func (ts *StatTestSuite) TestDirExists(c *C) {
 	for _, t := range []struct {
 		make   string
 		path   string
@@ -178,29 +210,31 @@ func (s *StatTestSuite) TestExistsIsDir(c *C) {
 		if t.make != "" {
 			makeTestPathInDir(c, base, t.make, 0755)
 		}
-		exists, isDir, err := ExistsIsDir(filepath.Join(base, t.path))
+		exists, isDir, err := osutil.DirExists(filepath.Join(base, t.path))
 		c.Check(exists, Equals, t.exists, comm)
 		c.Check(isDir, Equals, t.isDir, comm)
 		c.Check(err, IsNil, comm)
 	}
 
-	if os.Getuid() == 0 {
-		c.Skip("requires running as non-root user")
-	}
 	p := makeTestPath(c, "foo/bar", 0)
+	if os.Getuid() == 0 {
+		// running as root, directory permission checks are bypassed,
+		// so DirExists won't report a permission error.
+		return
+	}
 	c.Assert(os.Chmod(filepath.Dir(p), 0), IsNil)
 	defer os.Chmod(filepath.Dir(p), 0755)
-	exists, isDir, err := ExistsIsDir(p)
+	exists, isDir, err := osutil.DirExists(p)
 	c.Check(exists, Equals, false)
 	c.Check(isDir, Equals, false)
 	c.Check(err, NotNil)
 }
 
-func (s *StatTestSuite) TestIsExec(c *C) {
-	c.Check(IsExec("non-existent"), Equals, false)
-	c.Check(IsExec("."), Equals, false)
+func (ts *StatTestSuite) TestIsExecutable(c *C) {
+	c.Check(osutil.IsExecutable("non-existent"), Equals, false)
+	c.Check(osutil.IsExecutable("."), Equals, false)
 	dir := c.MkDir()
-	c.Check(IsExec(dir), Equals, false)
+	c.Check(osutil.IsExecutable(dir), Equals, false)
 
 	for _, tc := range []struct {
 		mode os.FileMode
@@ -222,6 +256,132 @@ func (s *StatTestSuite) TestIsExec(c *C) {
 
 		err = os.WriteFile(p, []byte(""), tc.mode)
 		c.Assert(err, IsNil)
-		c.Check(IsExec(p), Equals, tc.is)
+		c.Check(osutil.IsExecutable(p), Equals, tc.is)
 	}
+}
+
+func (ts *StatTestSuite) TestRegularFileExists(c *C) {
+	tt := []struct {
+		make           bool
+		makeNonRegular bool
+		path           string
+		expExists      bool
+		expIsReg       bool
+		expErr         string
+		comment        string
+	}{
+		{
+			make:      true,
+			path:      "foo",
+			expExists: true,
+			expIsReg:  true,
+			comment:   "file is regular",
+		},
+		{
+			make:           true,
+			makeNonRegular: true,
+			path:           "bar",
+			expExists:      true,
+			comment:        "file is symlink",
+		},
+		{
+			path:      "not-exists",
+			expExists: false,
+			expErr:    ".*no such file or directory",
+			comment:   "file doesn't exist",
+		},
+	}
+
+	for _, t := range tt {
+		fullpath := filepath.Join(c.MkDir(), t.path)
+		comment := Commentf(t.comment)
+
+		if t.make {
+			if t.makeNonRegular {
+				// make it a symlink
+				err := os.Symlink("foo", fullpath)
+				c.Assert(err, IsNil, comment)
+			} else {
+				// make it a normal file
+				err := os.WriteFile(fullpath, nil, 0644)
+				c.Assert(err, IsNil, comment)
+			}
+		}
+
+		exists, isReg, err := osutil.RegularFileExists(fullpath)
+		if t.expErr != "" {
+			c.Assert(err, ErrorMatches, t.expErr, comment)
+			continue
+		}
+		c.Assert(exists, Equals, t.expExists, comment)
+		c.Assert(isReg, Equals, t.expIsReg, comment)
+	}
+}
+
+func (ts *StatTestSuite) TestComparePathsByDeviceInodeHappy(c *C) {
+	base := c.MkDir()
+
+	// Same file
+	path_a := filepath.Join(base, "file-a")
+	c.Assert(os.WriteFile(path_a, nil, 0644), IsNil)
+	match, err := osutil.ComparePathsByDeviceInode(path_a, path_a)
+	c.Assert(err, IsNil)
+	c.Assert(match, Equals, true)
+
+	// Different files
+	path_b := filepath.Join(base, "file-b")
+	c.Assert(os.WriteFile(path_b, nil, 0644), IsNil)
+	match, err = osutil.ComparePathsByDeviceInode(path_a, path_b)
+	c.Assert(err, IsNil)
+	c.Assert(match, Equals, false)
+
+	// Same directory
+	match, err = osutil.ComparePathsByDeviceInode(base, base)
+	c.Assert(err, IsNil)
+	c.Assert(match, Equals, true)
+
+	// Different directories
+	path_a = filepath.Join(base, "dir-a")
+	c.Assert(os.Mkdir(path_a, 0644), IsNil)
+	match, err = osutil.ComparePathsByDeviceInode(base, path_a)
+	c.Assert(err, IsNil)
+	c.Assert(match, Equals, false)
+
+	// Symlink to directory and directory
+	path_b = filepath.Join(base, "symlink-to-dir-a")
+	c.Assert(os.Symlink(path_a, path_b), IsNil)
+	match, err = osutil.ComparePathsByDeviceInode(path_b, path_b)
+	c.Assert(err, IsNil)
+	c.Assert(match, Equals, true)
+
+	// Different symlinks to same directory
+	path_c := filepath.Join(base, "another-symlink-to-dir-a")
+	c.Assert(os.Symlink(path_a, path_c), IsNil)
+	match, err = osutil.ComparePathsByDeviceInode(path_b, path_c)
+	c.Assert(err, IsNil)
+	c.Assert(match, Equals, true)
+
+	// Path including symlink to directory and directory
+	path_a = filepath.Join(base, "dir-b/dir-c/dir-e/dir-f")
+	c.Assert(os.MkdirAll(path_a, 0755), IsNil)
+	path_b = filepath.Join(base, "dir-b/dir-c")
+	path_c = filepath.Join(base, "symlink-to-dir-c")
+	c.Assert(os.Symlink(path_b, path_c), IsNil)
+	match, err = osutil.ComparePathsByDeviceInode(path_a, filepath.Join(path_c, "dir-e/dir-f"))
+	c.Assert(err, IsNil)
+	c.Assert(match, Equals, true)
+}
+
+func (ts *StatTestSuite) TestComparePathsByDeviceInodeErrorPathNotExist(c *C) {
+	base := c.MkDir()
+
+	// Path a does not exist
+	match, err := osutil.ComparePathsByDeviceInode(filepath.Join(base, "missing-dir"), base)
+	c.Assert(err, ErrorMatches, "*: no such file or directory")
+	c.Assert(match, Equals, false)
+
+	// Path b does not exist
+	match, err = osutil.ComparePathsByDeviceInode(base, filepath.Join(base, "missing-dir"))
+	c.Assert(err, ErrorMatches, "*: no such file or directory")
+	c.Assert(match, Equals, false)
 }

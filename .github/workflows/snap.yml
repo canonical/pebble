@@ -62,13 +62,15 @@ jobs:
   remote-build:
     runs-on: ubuntu-latest
     environment: snap-build
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
     if: github.event_name != 'pull_request'
     strategy:
       fail-fast: true
       matrix:
-        # TODO: temporarily pause ppc64el, s390x, and riscv64 builds while builders are broken
-        # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
-        arch: ["amd64", "arm64", "armhf"]
+        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@v6
@@ -102,6 +104,12 @@ jobs:
         uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
+
+      - name: Attest build provenance
+        if: steps.build-snap.outcome == 'success'
+        uses: actions/attest-build-provenance@96278af6caaf10aea03fd8d33a09a777ca52d62f  # v3.2.0
+        with:
+          subject-path: ${{ steps.build-snap.outputs.snap }}
 
       - name: Rename the logs file, for colons are not allowed in the artifact name
         if: always()
@@ -163,9 +171,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # TODO: temporarily pause ppc64el, s390x, and riscv64 builds while builders are broken
-        # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
-        arch: ["amd64", "arm64", "armhf"]
+        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
       - uses: actions/download-artifact@v8
         with:

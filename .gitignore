@@ -8,3 +8,4 @@ cmd/VERSION
 .vscode
 /pebble
 dist/
+*.test

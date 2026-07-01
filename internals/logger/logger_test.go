@@ -25,10 +25,13 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 // Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 var _ = Suite(&LogSuite{})
 

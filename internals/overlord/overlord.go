@@ -140,7 +140,7 @@ func New(opts *Options) (*Overlord, error) {
 	if !filepath.IsAbs(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q must be absolute", o.pebbleDir)
 	}
-	if !osutil.IsDir(o.pebbleDir) {
+	if !osutil.IsDirectory(o.pebbleDir) {
 		return nil, fmt.Errorf("directory %q does not exist", o.pebbleDir)
 	}
 	if !osutil.IsWritable(o.pebbleDir) {
@@ -293,10 +293,10 @@ func getCurrentBootID() (string, error) {
 func loadState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
 	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
 
-	if !osutil.CanStat(statePath) {
+	if !osutil.FileExists(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
 		stateDir := filepath.Dir(statePath)
-		if !osutil.IsDir(stateDir) {
+		if !osutil.IsDirectory(stateDir) {
 			return nil, nil, fmt.Errorf("fatal: directory %q must be present", stateDir)
 		}
 		s := state.New(backend)
@@ -686,8 +686,7 @@ func (m *Overlord) StartOfOperationTime() (time.Time, error) {
 	err := m.State().Get("start-of-operation-time", &opTime)
 	if err == nil {
 		return opTime, nil
-	}
-	if err != nil && !errors.Is(err, state.ErrNoState) {
+	} else if !errors.Is(err, state.ErrNoState) {
 		return opTime, err
 	}
 	opTime = timeNow()
