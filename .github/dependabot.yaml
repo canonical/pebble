@@ -1,19 +1,46 @@
+# Routine version-update sweeps only. CVE patches are raised by the
+# repo-level "Dependabot security updates" toggle (managed in
+# canonical-repo-automation: features.dependabot_security_updates = true),
+# which is event-driven and does not honour the schedule below.
 version: 2
+
 updates:
+  # ===================================================================
+  # GitHub Actions: routine lane (monthly, single grouped PR)
+  # ===================================================================
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"  # This is hard-coded to the 1st of the month
+      interval: "monthly"
     labels:
       - "dependencies"
+    open-pull-requests-limit: 100
     cooldown:
       default-days: 7
+      semver-major-days: 14
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # ===================================================================
+  # Go modules: routine lane (monthly, single grouped PR; a runtime
+  # major falls through to its own ungrouped PR).
+  # ===================================================================
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
-      interval: "daily"
-    open-pull-requests-limit: 0  # Security updates only
+      interval: "monthly"
     labels:
       - "dependencies"
+    open-pull-requests-limit: 100
     cooldown:
       default-days: 7
+      semver-major-days: 14
+    groups:
+      gomod:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
