@@ -24,7 +24,7 @@ description: |
 
   **Documentation**
 
-  To learn more about Pebble, see https://documentation.ubuntu.com/pebble/.
+  To learn more about Pebble, see https://ubuntu.com/docs/pebble/.
 issues: https://github.com/canonical/pebble/issues
 source-code: https://github.com/canonical/pebble
 license: GPL-3.0
@@ -50,6 +50,10 @@ parts:
       which go
       go version
       snap info go
+      if [ "$CRAFT_ARCH_BUILD_FOR" = "armhf" ]; then
+        export GOARCH=arm
+        export GOARM=6
+      fi
       CGO_ENABLED=0 go build -trimpath -ldflags=-w -ldflags=-s -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
 
   pebble-release-data:

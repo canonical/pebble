@@ -30,7 +30,9 @@ import (
 	"github.com/canonical/pebble/internals/testutil"
 )
 
-func TestState(t *testing.T) { TestingT(t) }
+func Test(t *testing.T) {
+	testutil.PrintGoroutineLeaks(t, TestingT)
+}
 
 type stateSuite struct{}
 
