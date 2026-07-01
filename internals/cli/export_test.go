@@ -66,8 +66,6 @@ var (
 
 	MaybeCopyPebbleDir = maybeCopyPebbleDir
 
-	SetupTLSOptions = setupTLSOptions
-
 	WithDefaultRunOptions = withDefaultRunOptions
 )
 
