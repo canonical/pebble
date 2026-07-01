@@ -11,9 +11,9 @@ Pebble runs as a long-lived daemon that supervises a set of services on behalf o
 flowchart LR
     Client["Pebble client or<br/>third-party client"]
     HTTP["Open access to<br/>limited endpoints"]
-    Daemon["Daemon<br/>(service / exec /<br/>check / log managers)"]
+    Daemon["Daemon<br/>(service, exec,<br/>check, log managers)"]
     subgraph State["$PEBBLE directory"]
-        StateDB[("State DB<br/>+ layer files<br/>+ Unix socket")]
+        StateDB[("State DB,<br/>layer files,<br/>Unix socket")]
     end
     HostFS["Service files, exec targets,<br/>working dirs, check files"]
     Services["Managed services"]
@@ -22,20 +22,18 @@ flowchart LR
     Client -- "HTTP over socket<br/>(local UID or basic auth)" --> Daemon
     HTTP -- "HTTP over TCP<br/>(unauthenticated)" --> Daemon
     Daemon -- "fork/exec, signals,<br/>service-log capture" --> Services
-    Daemon -- "read / write state" --> StateDB
-    Daemon -- "read / write<br/>(as configured)" --> HostFS
+    Daemon -- "read/write state" --> StateDB
+    Daemon -- "read/write<br/>(as configured)" --> HostFS
     Daemon -- "forward service logs" --> Logs
 ```
-
-More detail:
 
 Clients reach the daemon over a Unix socket in the `$PEBBLE` directory. The daemon authorises each request from the connecting user's UID, mapping it to a Pebble identity; the `basic` identity type uses a hashed password sent over the same socket.
 
 When the daemon is started with `--http`, a deliberately limited set of open-access endpoints is exposed over TCP without authentication.
 
-The daemon runs with the privileges it was started with and launches services as configured, so a service is only as isolated from the daemon as the host makes it. Beyond `$PEBBLE`, the daemon can read or write any path that its configured services, exec commands, and checks touch — bounded by the privileges it was started with.
+The daemon runs with the privileges it was started with and launches services as configured, so a service is only as isolated from the daemon as the host makes it. Beyond `$PEBBLE`, the daemon can read or write any path that is accessible by its configured services, exec commands, and checks — bounded by the privileges it was started with.
 
-The daemon's persistent state lives in the `$PEBBLE` directory — the state DB, the Unix socket, and any layer files — which defaults to `/var/lib/pebble/default`. Its confidentiality and integrity depend on the directory's permissions. Setting `PEBBLE_PERSIST=never` keeps the state in memory only, so the on-disk footprint reduces to the layer files and Unix socket. The directory can be seeded on first start from another location with `PEBBLE_COPY_ONCE`. The Pebble CLI stores its own client-side data files under `$XDG_CONFIG_HOME` (`$HOME/.config` by default), separate from the daemon's `$PEBBLE` directory.
+The daemon's persistent state (the database, socket, and layer files) lives in the `$PEBBLE` directory, which defaults to `/var/lib/pebble/default`. Its confidentiality and integrity depend on the directory's permissions. Setting `PEBBLE_PERSIST=never` keeps the state in memory only, so the on-disk footprint reduces to the layer files and Unix socket. The directory can be seeded on first start from another location with `PEBBLE_COPY_ONCE`. The Pebble CLI stores its own client-side data files under `$XDG_CONFIG_HOME` (`$HOME/.config` by default), separate from the daemon's `$PEBBLE` directory.
 
 ## Secure by design
 
