@@ -27,13 +27,13 @@ jobs:
     if: github.event_name == 'pull_request'
     steps:
       - name: Checkout Pebble repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: "go.mod"
 
@@ -44,7 +44,7 @@ jobs:
         id: build-snap
         uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: failure()
         with:
           name: snapcraft-logs
@@ -54,7 +54,7 @@ jobs:
             pebble_*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pebble-snap-amd64
           path: ${{ steps.build-snap.outputs.snap }}
@@ -73,7 +73,7 @@ jobs:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
       - name: Checkout Pebble repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -90,7 +90,7 @@ jobs:
           git config --global user.name "pebble-dev"
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: "go.mod"
 
@@ -115,7 +115,7 @@ jobs:
         if: always()
         run: cat snapcraft-pebble-*.txt > snapcraft-logs.txt || echo "no log files"
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: snapcraft-logs-${{ matrix.arch }}
@@ -126,7 +126,7 @@ jobs:
             snapcraft-logs.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: steps.build-snap.outcome == 'success'
         with:
           name: pebble-snap-${{ matrix.arch }}
@@ -143,7 +143,7 @@ jobs:
       (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: pebble-snap-amd64
 
@@ -173,7 +173,7 @@ jobs:
       matrix:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: pebble-snap-${{ matrix.arch }}
 
