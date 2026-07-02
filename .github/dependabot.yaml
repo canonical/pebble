@@ -5,9 +5,7 @@
 version: 2
 
 updates:
-  # ===================================================================
   # GitHub Actions: routine lane (monthly, single grouped PR)
-  # ===================================================================
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -23,10 +21,8 @@ updates:
         patterns:
           - "*"
 
-  # ===================================================================
   # Go modules: routine lane (monthly, single grouped PR; a runtime
   # major falls through to its own ungrouped PR).
-  # ===================================================================
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
