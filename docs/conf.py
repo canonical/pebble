@@ -133,6 +133,7 @@ sitemap_excludes = [
     "404/",
     "genindex/",
     "search/",
+    "reuse/*",
 ]
 
 ################################
