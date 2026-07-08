@@ -72,6 +72,7 @@ func (s *execSuite) SetUpTest(c *C) {
 }
 
 func (s *execSuite) TearDownTest(c *C) {
+	s.client.CloseIdleConnections()
 	err := s.daemon.Stop(nil)
 	c.Check(err, IsNil)
 

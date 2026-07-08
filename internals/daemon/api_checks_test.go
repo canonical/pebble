@@ -51,7 +51,7 @@ checks:
             command: sleep x
 `)
 	s.daemon(c)
-	s.startOverlord()
+	s.startOverlord(c)
 
 	// Request with no filters.
 	start := time.Now()
@@ -113,7 +113,7 @@ checks:
 
 func (s *apiSuite) TestChecksGetInvalidLevel(c *C) {
 	s.daemon(c)
-	s.startOverlord()
+	s.startOverlord(c)
 
 	rsp, body := s.getChecks(c, "?level=foo")
 	c.Check(rsp.Status, Equals, 400)
@@ -126,7 +126,7 @@ func (s *apiSuite) TestChecksGetInvalidLevel(c *C) {
 
 func (s *apiSuite) TestChecksEmpty(c *C) {
 	s.daemon(c)
-	s.startOverlord()
+	s.startOverlord(c)
 
 	rsp, body := s.getChecks(c, "")
 	c.Check(rsp.Status, Equals, 200)
@@ -189,7 +189,7 @@ checks:
             command: sleep x
 `)
 	s.daemon(c)
-	s.startOverlord()
+	s.startOverlord(c)
 
 	start := time.Now()
 	for {
@@ -246,7 +246,7 @@ checks:
             command: sleep 0.1
 `)
 	s.daemon(c)
-	s.startOverlord()
+	s.startOverlord(c)
 
 	// Try to stop a check that's already stopped (disabled)
 	rsp := s.postChecks(c, `{"action": "stop", "checks": ["chk1"]}`)
@@ -284,7 +284,7 @@ checks:
 	checksYAML = strings.Replace(checksYAML, "{{.CheckCommand}}", checkCommand, -1)
 	writeTestLayer(s.pebbleDir, checksYAML)
 	s.daemon(c)
-	s.startOverlord()
+	s.startOverlord(c)
 
 	start := time.Now()
 	for {

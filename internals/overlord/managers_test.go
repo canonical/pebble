@@ -42,6 +42,7 @@ func (s *mgrsSuite) SetUpTest(c *C) {
 
 	o, err := overlord.New(&overlord.Options{PebbleDir: s.dir})
 	c.Assert(err, IsNil)
+	defer o.Stop()
 	err = o.StartUp()
 	c.Assert(err, IsNil)
 	s.o = o

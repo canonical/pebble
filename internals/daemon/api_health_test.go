@@ -276,6 +276,7 @@ func (s *apiSuite) testHealthStateLockNotHeld(c *C, level string, expectErr bool
 		if err != nil {
 			return err
 		}
+		defer pebble.CloseIdleConnections()
 		healthy, err := pebble.Health(&client.HealthOptions{
 			Level: client.CheckLevel(level),
 		})
