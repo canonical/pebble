@@ -1,0 +1,3 @@
+# Node and npm are required by the Pi agent harness
+apt-get update
+apt-get install nodejs npm
