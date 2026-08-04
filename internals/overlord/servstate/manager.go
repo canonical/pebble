@@ -60,14 +60,22 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
 
+	// Schedule changes persist for as long as a service has a schedule
+	// configured. This ensures they don't get pruned.
+	s.RegisterPendingChangeByAttr(scheduleNoPruneAttr, func(*state.Change) bool {
+		return true
+	})
+
 	return manager, nil
 }
 
 // PlanChanged informs the service manager that the plan has been updated.
 func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
 	m.planLock.Lock()
-	defer m.planLock.Unlock()
 	m.plan = plan
+	m.planLock.Unlock()
+
+	m.scheduleChanged(plan)
 }
 
 // getPlan returns the current plan pointer in a concurrency-safe way. The
@@ -88,7 +96,7 @@ func (m *ServiceManager) getPlan() *plan.Plan {
 
 // Ensure implements StateManager.Ensure.
 func (m *ServiceManager) Ensure() error {
-	return nil
+	return m.ensureSchedules()
 }
 
 type ServiceInfo struct {
