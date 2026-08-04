@@ -23,6 +23,16 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
+const (
+	ServiceScheduleKind = serviceScheduleKind
+	ScheduleDetailsAttr = scheduleDetailsAttr
+)
+
+var (
+	ScheduleShouldRunNow = scheduleShouldRunNow
+	NextScheduleTime     = nextScheduleTime
+)
+
 var CalculateNextBackoff = calculateNextBackoff
 var GetAction = getAction
 
