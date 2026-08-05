@@ -15,6 +15,7 @@
 package servstate_test
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -41,48 +42,57 @@ services:
         schedule: 9:00-11:00
 `
 
-// scheduleChange returns the (single, expected) service-schedule change, or
-// nil if none exists.
+// scheduleChange returns the pending (not yet ready) service-schedule
+// change, or nil if none exists. There should be at most one such change per
+// service at any given time.
 func (s *S) scheduleChange(c *C) *state.Change {
 	s.st.Lock()
 	defer s.st.Unlock()
 	for _, chg := range s.st.Changes() {
-		if chg.Kind() == servstate.ServiceScheduleKind {
+		if chg.Kind() == servstate.ServiceScheduleKind && !chg.IsReady() {
 			return chg
 		}
 	}
 	return nil
 }
 
-func (s *S) scheduleDetails(c *C, chg *state.Change) scheduleDetails {
+// scheduleTask returns the first task of chg, which is always the
+// service-schedule task (a "start" task set may follow it once the schedule
+// has fired).
+func (s *S) scheduleTask(c *C, chg *state.Change) *state.Task {
 	s.st.Lock()
 	defer s.st.Unlock()
 	tasks := chg.Tasks()
-	c.Assert(tasks, HasLen, 1)
+	c.Assert(len(tasks) >= 1, Equals, true)
+	return tasks[0]
+}
+
+func (s *S) scheduleDetails(c *C, chg *state.Change) scheduleDetails {
+	task := s.scheduleTask(c, chg)
+	s.st.Lock()
+	defer s.st.Unlock()
 	var details scheduleDetails
-	err := tasks[0].Get(servstate.ScheduleDetailsAttr, &details)
+	err := task.Get(servstate.ScheduleDetailsAttr, &details)
 	c.Assert(err, IsNil)
 	return details
 }
 
 func (s *S) setScheduleNext(c *C, chg *state.Change, next time.Time) {
+	task := s.scheduleTask(c, chg)
 	s.st.Lock()
 	defer s.st.Unlock()
-	tasks := chg.Tasks()
-	c.Assert(tasks, HasLen, 1)
 	var details scheduleDetails
-	err := tasks[0].Get(servstate.ScheduleDetailsAttr, &details)
+	err := task.Get(servstate.ScheduleDetailsAttr, &details)
 	c.Assert(err, IsNil)
 	details.Next = next
-	tasks[0].Set(servstate.ScheduleDetailsAttr, &details)
+	task.Set(servstate.ScheduleDetailsAttr, &details)
 }
 
 func (s *S) scheduleTaskLog(c *C, chg *state.Change) []string {
+	task := s.scheduleTask(c, chg)
 	s.st.Lock()
 	defer s.st.Unlock()
-	tasks := chg.Tasks()
-	c.Assert(tasks, HasLen, 1)
-	return tasks[0].Log()
+	return task.Log()
 }
 
 func (s *S) countChangesOfKind(c *C, kind string) int {
@@ -126,6 +136,31 @@ func (s *S) TestScheduleShouldRunNow(c *C) {
 func (s *S) TestNextScheduleTimeInvalid(c *C) {
 	_, err := servstate.NextScheduleTime("not-a-schedule", time.Now())
 	c.Assert(err, NotNil)
+}
+
+// TestNextScheduleTimeAfterAlwaysAdvances guards against a schedule
+// computation getting "stuck": for a schedule with a spread (randomised)
+// window that's currently open, re-deriving the next occurrence from a
+// previous occurrence can otherwise land back inside the same still-open
+// window with a new random offset, so it never actually advances into the
+// future. That would cause a scheduled start's "next" time to be treated as
+// immediately due again and again, spawning an unbounded chain of
+// service-schedule changes.
+func (s *S) TestNextScheduleTimeAfterAlwaysAdvances(c *C) {
+	now := time.Now()
+	// A schedule with a spread window that's open right now: re-evaluating
+	// from a previous occurrence can otherwise land back inside the same
+	// still-open window with a new random offset.
+	sched := fmt.Sprintf("%02d:%02d-%02d:%02d/2", now.Hour(), now.Minute(), (now.Hour()+1)%24, now.Minute())
+
+	last := now.Add(-24 * time.Hour)
+	for i := 0; i < 50; i++ {
+		next, err := servstate.NextScheduleTimeAfter(sched, last)
+		c.Assert(err, IsNil)
+		c.Assert(next.After(time.Now()), Equals, true,
+			Commentf("iteration %d: next=%v is not after now", i, next))
+		last = next
+	}
 }
 
 // -- PlanChanged behaviour --
@@ -252,9 +287,11 @@ func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {
 	err := s.manager.Ensure()
 	c.Assert(err, IsNil)
 
-	startChg := s.findChangeOfKind(c, "start")
-	c.Assert(startChg, NotNil)
-	waitChangeReady(c, s.runner, startChg, "service to start on schedule")
+	// No independent "start" change should have been created; the start
+	// task is added to the same schedule change.
+	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
+
+	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
 
 	s.waitUntilService(c, "sched1", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
@@ -262,6 +299,17 @@ func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {
 
 	logs := s.scheduleTaskLog(c, chg)
 	c.Check(logContains(logs, "Started service"), Equals, true)
+
+	// A new pending change should have been created to track the next
+	// scheduled occurrence, distinct from the now-finished one, and there
+	// should only be one pending service-schedule change.
+	newChg := s.scheduleChange(c)
+	c.Assert(newChg, NotNil)
+	c.Check(newChg.ID() != chg.ID(), Equals, true)
+	s.st.Lock()
+	ready := chg.IsReady()
+	s.st.Unlock()
+	c.Check(ready, Equals, true)
 }
 
 func (s *S) TestEnsureLogsMissedScheduleButStillRuns(c *C) {
@@ -280,9 +328,9 @@ func (s *S) TestEnsureLogsMissedScheduleButStillRuns(c *C) {
 	err := s.manager.Ensure()
 	c.Assert(err, IsNil)
 
-	startChg := s.findChangeOfKind(c, "start")
-	c.Assert(startChg, NotNil)
-	waitChangeReady(c, s.runner, startChg, "service to start on schedule")
+	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
+
+	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
 
 	s.waitUntilService(c, "sched1", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
@@ -342,17 +390,4 @@ func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
 
 	logs := s.scheduleTaskLog(c, chg)
 	c.Check(logContains(logs, "Skipped scheduled start"), Equals, true)
-}
-
-// findChangeOfKind returns the first change of the given kind not equal to
-// any service-schedule change, or nil if none is found.
-func (s *S) findChangeOfKind(c *C, kind string) *state.Change {
-	s.st.Lock()
-	defer s.st.Unlock()
-	for _, chg := range s.st.Changes() {
-		if chg.Kind() == kind {
-			return chg
-		}
-	}
-	return nil
 }
