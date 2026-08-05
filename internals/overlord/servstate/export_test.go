@@ -28,8 +28,9 @@ const (
 )
 
 var (
-	ScheduleShouldRunNow = scheduleShouldRunNow
-	NextScheduleTime     = nextScheduleTime
+	ScheduleShouldRunNow  = scheduleShouldRunNow
+	NextScheduleTime      = nextScheduleTime
+	NextScheduleTimeAfter = nextScheduleTimeAfter
 )
 
 var CalculateNextBackoff = calculateNextBackoff
