@@ -331,6 +331,31 @@ func (m *ServiceManager) serviceIsActive(name string) bool {
 	}
 }
 
+// scheduledStartTimes returns the next scheduled start time for every
+// service that currently has a service-schedule task in the Doing status,
+// i.e. is waiting for its next scheduled start.
+//
+// The caller must hold the state lock.
+func (m *ServiceManager) scheduledStartTimes() map[string]time.Time {
+	scheduled := make(map[string]time.Time)
+	for _, change := range m.state.Changes() {
+		if change.Kind() != serviceScheduleKind {
+			continue
+		}
+		for _, task := range change.Tasks() {
+			if task.Kind() != serviceScheduleKind || task.Status() != state.DoingStatus {
+				continue
+			}
+			var details scheduleDetails
+			if err := task.Get(scheduleDetailsAttr, &details); err != nil {
+				continue
+			}
+			scheduled[details.ServiceName] = details.Next
+		}
+	}
+	return scheduled
+}
+
 // scheduleChangeReady is called whenever a change's status changes; it looks
 // for service-schedule changes that have just become ready (i.e. their
 // service-schedule task fired and any start task(s) added alongside it have

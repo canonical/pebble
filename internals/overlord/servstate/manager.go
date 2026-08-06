@@ -128,6 +128,7 @@ type ServiceInfo struct {
 	Current      ServiceStatus
 	CurrentSince time.Time
 	Outdated     bool
+	Scheduled    time.Time
 }
 
 type ServiceStartup string
@@ -158,6 +159,11 @@ func serviceOutdated(config *plan.Service, workload *workloads.Workload, s *serv
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	currentPlan := m.getPlan()
+
+	m.state.Lock()
+	scheduled := m.scheduledStartTimes()
+	m.state.Unlock()
+
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -191,6 +197,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			}
 			info.Outdated = serviceOutdated(config, workload, s)
 		}
+		info.Scheduled = scheduled[name]
 		services = append(services, info)
 	}
 	sort.Slice(services, func(i, j int) bool {
