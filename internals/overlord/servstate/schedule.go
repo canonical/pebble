@@ -16,7 +16,6 @@ package servstate
 
 import (
 	"fmt"
-	"math"
 	"sort"
 	"time"
 
@@ -56,10 +55,6 @@ const (
 	// scheduleMissThreshold is how overdue a scheduled start has to be before
 	// we call it out explicitly as "missed" in the task log.
 	scheduleMissThreshold = 5 * time.Second
-
-	// scheduleTaskPollInterval is how often doServiceSchedule checks whether
-	// its task has been finished externally.
-	scheduleTaskPollInterval = time.Second
 )
 
 // scheduleDetails is persisted on the service-schedule task, and records the
@@ -130,50 +125,97 @@ func scheduleShouldRunNow(now, missed, following time.Time) bool {
 // scheduled start time, and returns the change ID.
 // The caller must hold the state lock.
 func serviceScheduleChange(st *state.State, name, scheduleStr string, next time.Time) string {
-	summary := fmt.Sprintf("Wait for scheduled start of service %q", name)
-	task := st.NewTask(serviceScheduleKind, summary)
+	taskSummary := fmt.Sprintf("Wait for scheduled start of service %q", name)
+	task := st.NewTask(serviceScheduleKind, taskSummary)
 	task.Set(scheduleDetailsAttr, &scheduleDetails{
 		ServiceName: name,
 		Schedule:    scheduleStr,
 		Next:        next,
 	})
-	// doServiceSchedule (registered as this kind's TaskRunner handler) parks
-	// until the status below is changed by ensureSchedules/scheduleChanged;
-	// it's what drives this task, not the handler itself. Mark it Doing so
-	// it's clear from "pebble changes"/"pebble tasks" that it's ongoing.
 	task.SetStatus(state.DoingStatus)
+	task.At(next)
 
-	change := st.NewChange(serviceScheduleKind, summary)
+	changeSummary := fmt.Sprintf("Scheduled start of service %q", name)
+	change := st.NewChange(serviceScheduleKind, changeSummary)
 	change.Set(scheduleNoPruneAttr, true)
 	change.AddTask(task)
 	return change.ID()
 }
 
 // doServiceSchedule is the TaskRunner handler for serviceScheduleKind tasks.
+// The task runner invokes it once the task's scheduled time arrives (set via
+// task.At, see serviceScheduleChange and scheduleChanged).
 //
-// The task's outcome is driven entirely by ServiceManager.Ensure (see
-// ensureSchedules) and scheduleChanged, which change its status away from
-// DoingStatus once the scheduled time arrives (or the schedule is retired).
-// This handler's only job is to occupy the task runner's "do" slot for this
-// task kind, so that it isn't picked up by the runner's generic handling for
-// tasks with no registered handler (which would otherwise mark it Done
-// immediately, defeating the entire point of it representing "still
-// waiting"). It just blocks, polling for that external status change, until
-// it happens or the runner asks it to stop.
-func (m *ServiceManager) doServiceSchedule(task *state.Task, tomb *tomb.Tomb) error {
-	for {
-		select {
-		case <-tomb.Dying():
-			return tomb.Err()
-		case <-time.After(scheduleTaskPollInterval):
+// It decides whether to start the service now (adding a "start" task set to
+// the same change, after which the task runner marks this task Done once we
+// return) or to keep waiting for the next occurrence (rescheduling ourselves
+// and return Retry, so the task runner invokes us again then).
+func (m *ServiceManager) doServiceSchedule(task *state.Task, _ *tomb.Tomb) error {
+	m.state.Lock()
+	defer m.state.Unlock()
+
+	var details scheduleDetails
+	err := task.Get(scheduleDetailsAttr, &details)
+	if err != nil {
+		return fmt.Errorf("cannot get service-schedule-details from task: %w", err)
+	}
+
+	now := timeNow()
+	if now.Before(details.Next) {
+		// Woken up early, go back to sleep.
+		task.At(details.Next)
+		return &state.Retry{}
+	}
+
+	missed := details.Next
+	following, err := nextScheduleTimeAfter(details.Schedule, missed)
+	if err != nil {
+		logger.Noticef("Cannot compute next scheduled start for service %q: %v", details.ServiceName, err)
+		task.Errorf("Cannot compute next scheduled start for service %q: %v", details.ServiceName, err)
+	}
+
+	followingMsg := "not scheduled again"
+	if !following.IsZero() {
+		followingMsg = fmt.Sprintf("next scheduled start at %s", following.Format(time.RFC3339))
+	}
+
+	fired := false
+	if !scheduleShouldRunNow(now, missed, following) {
+		task.Logf("Skipped scheduled start at %s for service %q (missed by too long); %s.",
+			missed.Format(time.RFC3339), details.ServiceName, followingMsg)
+	} else {
+		if now.Sub(missed) > scheduleMissThreshold {
+			task.Logf("Missed scheduled start at %s for service %q; starting it now.",
+				missed.Format(time.RFC3339), details.ServiceName)
 		}
-		m.state.Lock()
-		stillWaiting := task.Status() == state.DoingStatus
-		m.state.Unlock()
-		if !stillWaiting {
-			return nil
+		if m.serviceIsActive(details.ServiceName) {
+			task.Logf("Service %q is already running; %s.", details.ServiceName, followingMsg)
+		} else if lanes, err := m.StartOrder([]string{details.ServiceName}); err != nil {
+			task.Errorf("Cannot start service %q on schedule: %v", details.ServiceName, err)
+		} else if taskSet, err := Start(m.state, lanes); err != nil {
+			task.Errorf("Cannot start service %q on schedule: %v", details.ServiceName, err)
+		} else {
+			task.Change().AddAll(taskSet)
+			task.Logf("Started service %q on schedule; %s.", details.ServiceName, followingMsg)
+			fired = true
 		}
 	}
+
+	// Record the following occurrence, whether we fired or not: if we fired,
+	// scheduleChangeReady reads this back once the change becomes ready, to
+	// create the following change.
+	details.Next = following
+	task.Set(scheduleDetailsAttr, &details)
+
+	if fired {
+		m.state.EnsureBefore(0)
+		return nil
+	}
+
+	// Reschedule ourselves for the next occurrence and ask the task runner to
+	// start this task again then.
+	task.At(following)
+	return &state.Retry{}
 }
 
 // scheduleChanged is called from PlanChanged to create, update, or retire
@@ -237,6 +279,8 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 			Schedule:    config.Schedule,
 			Next:        next,
 		})
+		// If the task hasn't fired yet, reschedule it.
+		task.At(next)
 		shouldEnsure = true
 	}
 
@@ -285,116 +329,6 @@ func (m *ServiceManager) serviceIsActive(name string) bool {
 	default:
 		return false
 	}
-}
-
-// ensureSchedules starts any services whose scheduled timer has elapsed, and to
-// reschedule the next start.
-func (m *ServiceManager) ensureSchedules() error {
-	m.state.Lock()
-	defer m.state.Unlock()
-
-	var (
-		now    time.Time     = timeNow()
-		before time.Duration = math.MaxInt64
-	)
-
-	for _, change := range m.state.Changes() {
-		if change.Kind() != serviceScheduleKind || change.IsReady() {
-			continue
-		}
-		task := change.Tasks()[0]
-		if !task.Has(scheduleDetailsAttr) {
-			continue
-		}
-		if task.Status() != state.DoingStatus {
-			// Already fired: the start task(s) added alongside it are still
-			// running. Nothing more to do here until the whole change becomes
-			// ready (see scheduleChangeReady).
-			continue
-		}
-
-		var details scheduleDetails
-		err := task.Get(scheduleDetailsAttr, &details)
-		if err != nil {
-			return fmt.Errorf("cannot get service-schedule-details from task: %w", err)
-		}
-
-		if details.Next.IsZero() {
-			continue
-		}
-
-		if now.Before(details.Next) {
-			before = min(before, details.Next.Sub(now))
-			continue
-		}
-
-		missed := details.Next
-		following, err := nextScheduleTimeAfter(details.Schedule, missed)
-		if err != nil {
-			logger.Noticef("Cannot compute next scheduled start for service %q: %v", details.ServiceName, err)
-			task.Errorf("Cannot compute next scheduled start for service %q: %v", details.ServiceName, err)
-		}
-
-		followingMsg := "not scheduled again"
-		if !following.IsZero() {
-			followingMsg = fmt.Sprintf("next scheduled start at %s", following.Format(time.RFC3339))
-		}
-
-		fired := false
-		if scheduleShouldRunNow(now, missed, following) {
-			if now.Sub(missed) > scheduleMissThreshold {
-				task.Logf("Missed scheduled start at %s for service %q; starting it now.",
-					missed.Format(time.RFC3339), details.ServiceName)
-			}
-			if m.serviceIsActive(details.ServiceName) {
-				// Stay on this change/task: just log and move on to the next
-				// occurrence.
-				task.Logf("Service %q is already running; %s.", details.ServiceName, followingMsg)
-			} else {
-				lanes, err := m.StartOrder([]string{details.ServiceName})
-				if err != nil {
-					task.Errorf("Cannot start service %q on schedule: %v", details.ServiceName, err)
-				} else {
-					taskSet, err := Start(m.state, lanes)
-					if err != nil {
-						task.Errorf("Cannot start service %q on schedule: %v", details.ServiceName, err)
-					} else {
-						// Add the start task(s) to this same change, rather
-						// than creating an independent one.
-						change.AddAll(taskSet)
-						task.Logf("Started service %q on schedule; %s.", details.ServiceName, followingMsg)
-						fired = true
-					}
-				}
-			}
-		} else {
-			task.Logf("Skipped scheduled start at %s for service %q (missed by too long); %s.",
-				missed.Format(time.RFC3339), details.ServiceName, followingMsg)
-		}
-
-		// Record the following occurrence, whether we fired or not: if we
-		// fired, scheduleChangeReady reads this back once the change becomes
-		// ready, to create the follow-up change.
-		details.Next = following
-		task.Set(scheduleDetailsAttr, &details)
-
-		if fired {
-			// Mark the service-schedule task done now that the start task(s)
-			// have been added to the change (must happen after AddAll/Set
-			// above, so the change's ready channel doesn't close
-			// prematurely). The change becomes ready once the start task(s)
-			// finish, at which point scheduleChangeReady takes over.
-			task.SetStatus(state.DoneStatus)
-		} else {
-			before = min(before, following.Sub(now))
-		}
-	}
-
-	if before < math.MaxInt64 {
-		m.state.EnsureBefore(before)
-	}
-
-	return nil
 }
 
 // scheduleChangeReady is called whenever a change's status changes; it looks
