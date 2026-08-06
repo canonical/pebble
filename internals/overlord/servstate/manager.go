@@ -59,11 +59,8 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
-	// doServiceSchedule doesn't actually do anything but park itself: it
-	// exists so that service-schedule tasks (which are driven by
-	// ServiceManager.Ensure, not a task runner handler) aren't picked up by
-	// the task runner's generic handling for tasks with no registered
-	// handler, which would otherwise mark them Done immediately.
+	// doServiceSchedule decides whether to start a service once its scheduled
+	// time arrives.
 	runner.AddHandler(serviceScheduleKind, manager.doServiceSchedule, nil)
 
 	// Schedule changes persist for as long as a service has a schedule
@@ -109,7 +106,7 @@ func (m *ServiceManager) getPlan() *plan.Plan {
 
 // Ensure implements StateManager.Ensure.
 func (m *ServiceManager) Ensure() error {
-	return m.ensureSchedules()
+	return nil
 }
 
 type ServiceInfo struct {

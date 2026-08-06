@@ -86,6 +86,28 @@ func (s *S) setScheduleNext(c *C, chg *state.Change, next time.Time) {
 	c.Assert(err, IsNil)
 	details.Next = next
 	task.Set(servstate.ScheduleDetailsAttr, &details)
+	task.At(next)
+}
+
+// waitTaskLogContains runs the task runner until the task's log contains the
+// sub-string, or fails the test after a timeout.
+func waitTaskLogContains(c *C, runner *state.TaskRunner, st *state.State, task *state.Task, substr string) {
+	timeout := time.After(10 * time.Second)
+	for {
+		runner.Ensure()
+		st.Lock()
+		found := logContains(task.Log(), substr)
+		st.Unlock()
+		if found {
+			return
+		}
+		select {
+		case <-timeout:
+			c.Fatalf("timeout waiting for task log to contain %q", substr)
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
 }
 
 func (s *S) scheduleTaskLog(c *C, chg *state.Change) []string {
@@ -284,14 +306,11 @@ func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {
 	// Force the schedule to be due right now.
 	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
 
-	err := s.manager.Ensure()
-	c.Assert(err, IsNil)
+	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
 
 	// No independent "start" change should have been created; the start
 	// task is added to the same schedule change.
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
-
-	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
 
 	s.waitUntilService(c, "sched1", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
@@ -325,12 +344,9 @@ func (s *S) TestEnsureLogsMissedScheduleButStillRuns(c *C) {
 	// should run anyway.
 	s.setScheduleNext(c, chg, time.Now().Add(-30*time.Second))
 
-	err := s.manager.Ensure()
-	c.Assert(err, IsNil)
+	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
 
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
-
-	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
 
 	s.waitUntilService(c, "sched1", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
@@ -355,14 +371,16 @@ func (s *S) TestEnsureSkipsStartWhenAlreadyRunning(c *C) {
 	c.Assert(chg, NotNil)
 	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
 
-	err := s.manager.Ensure()
-	c.Assert(err, IsNil)
+	task := s.scheduleTask(c, chg)
+	waitTaskLogContains(c, s.runner, s.st, task, "already running")
 
-	// No "start" change should have been created by the schedule.
+	// No "start" change should have been created by the schedule, and the
+	// schedule change should still be pending (not finished).
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
-
-	logs := s.scheduleTaskLog(c, chg)
-	c.Check(logContains(logs, "already running"), Equals, true)
+	s.st.Lock()
+	ready := chg.IsReady()
+	s.st.Unlock()
+	c.Check(ready, Equals, false)
 }
 
 func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
@@ -376,8 +394,8 @@ func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
 	longAgo := time.Now().Add(-240 * time.Hour) // 10 days ago
 	s.setScheduleNext(c, chg, longAgo)
 
-	err := s.manager.Ensure()
-	c.Assert(err, IsNil)
+	task := s.scheduleTask(c, chg)
+	waitTaskLogContains(c, s.runner, s.st, task, "Skipped scheduled start")
 
 	// No service should have been started because of this.
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
@@ -387,7 +405,4 @@ func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
 	// schedule fires daily, so the new Next should be close to now, not
 	// close to the 10-day-old missed time).
 	c.Check(details.Next.After(longAgo.Add(48*time.Hour)), Equals, true)
-
-	logs := s.scheduleTaskLog(c, chg)
-	c.Check(logContains(logs, "Skipped scheduled start"), Equals, true)
 }
