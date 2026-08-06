@@ -114,6 +114,7 @@ type ServiceInfo struct {
 	Startup      ServiceStartup
 	Current      ServiceStatus
 	CurrentSince time.Time
+	Scheduled    time.Time
 }
 
 type ServiceStartup string
@@ -136,6 +137,11 @@ const (
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	currentPlan := m.getPlan()
+
+	m.state.Lock()
+	scheduled := m.scheduledStartTimes()
+	m.state.Unlock()
+
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -162,6 +168,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			info.Current = stateToStatus(s.state)
 			info.CurrentSince = s.currentSince
 		}
+		info.Scheduled = scheduled[name]
 		services = append(services, info)
 	}
 	sort.Slice(services, func(i, j int) bool {
