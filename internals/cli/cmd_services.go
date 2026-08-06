@@ -90,6 +90,10 @@ func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
 	fmt.Fprintln(w, "Service\tStartup\tCurrent\tSince\tNotes")
 
 	for _, svc := range services {
+		scheduled := "-"
+		if !svc.Scheduled.IsZero() {
+			scheduled = cmd.fmtTime(svc.Scheduled)
+		}
 		since := "-"
 		if !svc.CurrentSince.IsZero() {
 			since = cmd.fmtTime(svc.CurrentSince)
