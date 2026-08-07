@@ -57,6 +57,7 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
 			},
 		},
 	}
+	defer httpsClient.CloseIdleConnections()
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/health", port), nil)
 	c.Assert(err, IsNil)
@@ -65,6 +66,8 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	var m map[string]any
 	err = json.NewDecoder(response.Body).Decode(&m)
+	c.Assert(err, IsNil)
+	err = response.Body.Close()
 	c.Assert(err, IsNil)
 	c.Assert(m, DeepEquals, map[string]any{
 		"type":        "sync",
@@ -112,6 +115,7 @@ func (s *daemonSuite) TestHTTPSUserAccessFail(c *C) {
 			},
 		},
 	}
+	defer httpsClient.CloseIdleConnections()
 
 	request, err := http.NewRequest("GET", fmt.Sprintf("https://localhost:%d/v1/checks", port), nil)
 	c.Assert(err, IsNil)
@@ -120,6 +124,8 @@ func (s *daemonSuite) TestHTTPSUserAccessFail(c *C) {
 
 	// Access fails because the TLS client identity is not known.
 	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
+	err = response.Body.Close()
+	c.Assert(err, IsNil)
 
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)
@@ -166,6 +172,7 @@ pairing:
 			},
 		},
 	}
+	defer httpsClient.CloseIdleConnections()
 
 	// Enable pairing window
 	pairingMgr := d.overlord.PairingManager()
@@ -188,6 +195,10 @@ pairing:
 
 	// Access succeeds because the TLS client identity is now paired
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
+	err = pairingResponse.Body.Close()
+	c.Assert(err, IsNil)
+	err = response.Body.Close()
+	c.Assert(err, IsNil)
 
 	err = d.Stop(nil)
 	c.Assert(err, IsNil)

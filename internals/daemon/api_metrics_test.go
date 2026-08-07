@@ -33,7 +33,7 @@ services:
         command: sleep 10
 `)
 	d := s.daemon(c)
-	s.startOverlord()
+	s.startOverlord(c)
 
 	// Start test service.
 	payload := bytes.NewBufferString(`{"action": "start", "services": ["test1"]}`)
