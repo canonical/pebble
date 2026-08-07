@@ -1975,11 +1975,12 @@ func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
 		return err
 	}
 	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		TrustContexts: combined.TrustContexts,
+		Sections:      combined.Sections,
 	}
 	return s.plan.Validate()
 }
@@ -2007,11 +2008,12 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	c.Assert(err, IsNil)
 	c.Assert(combined.Validate(), IsNil)
 	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		TrustContexts: combined.TrustContexts,
+		Sections:      combined.Sections,
 	}
 	c.Assert(s.plan.Validate(), IsNil)
 }

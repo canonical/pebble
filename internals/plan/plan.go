@@ -30,6 +30,7 @@ import (
 	"github.com/canonical/x-go/strutil/shlex"
 	"gopkg.in/yaml.v3"
 
+	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 )
@@ -117,10 +118,11 @@ func UnregisterSectionExtension(field string) {
 }
 
 type Plan struct {
-	Layers     []*Layer              `yaml:"-"`
-	Services   map[string]*Service   `yaml:"services,omitempty"`
-	Checks     map[string]*Check     `yaml:"checks,omitempty"`
-	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty"`
+	Layers        []*Layer                 `yaml:"-"`
+	Services      map[string]*Service      `yaml:"services,omitempty"`
+	Checks        map[string]*Check        `yaml:"checks,omitempty"`
+	LogTargets    map[string]*LogTarget    `yaml:"log-targets,omitempty"`
+	TrustContexts map[string]*TrustContext `yaml:"trust-contexts,omitempty"`
 
 	Sections map[string]Section `yaml:",inline"`
 }
@@ -199,13 +201,14 @@ func (p *Plan) MarshalYAML() (any, error) {
 //
 // Please see ReadLayersDir for more details.
 type Layer struct {
-	Order       int                   `yaml:"-"`
-	Label       string                `yaml:"-"`
-	Summary     string                `yaml:"summary,omitempty"`
-	Description string                `yaml:"description,omitempty"`
-	Services    map[string]*Service   `yaml:"services,omitempty"`
-	Checks      map[string]*Check     `yaml:"checks,omitempty"`
-	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty"`
+	Order         int                      `yaml:"-"`
+	Label         string                   `yaml:"-"`
+	Summary       string                   `yaml:"summary,omitempty"`
+	Description   string                   `yaml:"description,omitempty"`
+	Services      map[string]*Service      `yaml:"services,omitempty"`
+	Checks        map[string]*Check        `yaml:"checks,omitempty"`
+	LogTargets    map[string]*LogTarget    `yaml:"log-targets,omitempty"`
+	TrustContexts map[string]*TrustContext `yaml:"trust-contexts,omitempty"`
 
 	Sections map[string]Section `yaml:",inline"`
 }
@@ -683,6 +686,60 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	}
 }
 
+// TrustContext can specify a set of trusted keys, certificates, indentities,
+// domains or scopes that can be consumed by services, checks and log-targets to
+// establish trust with an exogenous entity.
+type TrustContext struct {
+	Name     string   `yaml:"-"`
+	Override Override `yaml:"override,omitempty"`
+	Include  []string `yaml:"include,omitempty"`
+
+	TLS *TLSTrustContext `yaml:"tls"`
+}
+
+// Copy returns a deep copy of the trust context configuration.
+func (t *TrustContext) Copy() *TrustContext {
+	copied := *t
+	copied.Include = slices.Clone(t.Include)
+	if t.TLS != nil {
+		copied.TLS = t.TLS.Copy()
+	}
+	return &copied
+}
+
+// Merge merges the fields set in other into t.
+func (t *TrustContext) Merge(other *TrustContext) {
+	t.Include = slices.Concat(t.Include, other.Include)
+	if other.TLS != nil {
+		if t.TLS == nil {
+			t.TLS = other.TLS.Copy()
+		} else {
+			t.TLS.Merge(other.TLS)
+		}
+	}
+}
+
+// TLSTrustContext establishes x509 certificates that are trusted by the trust
+// context consumer.
+type TLSTrustContext struct {
+	CACert string `yaml:"ca-cert"`
+}
+
+// Copy returns a deep copy of the TLS trust context configuration.
+func (t *TLSTrustContext) Copy() *TLSTrustContext {
+	copied := *t
+	return &copied
+}
+
+// Merge merges the fields set in other into t.
+func (t *TLSTrustContext) Merge(other *TLSTrustContext) {
+	if len(t.CACert) == 0 {
+		t.CACert = other.CACert
+	} else if len(other.CACert) > 0 {
+		t.CACert = strings.Join([]string{t.CACert, other.CACert}, "\n")
+	}
+}
+
 // FormatError is the error returned when a layer has a format error, such as
 // a missing "override" field.
 type FormatError struct {
@@ -700,10 +757,11 @@ func (e *FormatError) Error() string {
 // validate the combined output if required.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
-		Services:   make(map[string]*Service),
-		Checks:     make(map[string]*Check),
-		LogTargets: make(map[string]*LogTarget),
-		Sections:   make(map[string]Section),
+		Services:      make(map[string]*Service),
+		Checks:        make(map[string]*Check),
+		LogTargets:    make(map[string]*LogTarget),
+		TrustContexts: make(map[string]*TrustContext),
+		Sections:      make(map[string]Section),
 	}
 
 	// Combine the same sections from each layer. Note that we do this before
@@ -796,6 +854,29 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				return nil, &FormatError{
 					Message: fmt.Sprintf(`layer %q has invalid "override" value for log target %q`,
 						layer.Label, target.Name),
+				}
+			}
+		}
+
+		for name, context := range layer.TrustContexts {
+			switch context.Override {
+			case MergeOverride:
+				if old, ok := combined.TrustContexts[name]; ok {
+					old.Merge(context)
+				} else {
+					combined.TrustContexts[name] = context.Copy()
+				}
+			case ReplaceOverride:
+				combined.TrustContexts[name] = context.Copy()
+			case UnknownOverride:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q must define "override" for trust context %q`,
+						layer.Label, context.Name),
+				}
+			default:
+				return nil, &FormatError{
+					Message: fmt.Sprintf(`layer %q has invalid "override" value for trust context %q`,
+						layer.Label, context.Name),
 				}
 			}
 		}
@@ -984,6 +1065,26 @@ func (layer *Layer) Validate() error {
 			return &FormatError{
 				Message: fmt.Sprintf(`log target %q has unsupported type %q, must be %q, %q or %q`,
 					name, target.Type, LokiTarget, OpenTelemetryTarget, SyslogTarget),
+			}
+		}
+	}
+
+	for name, context := range layer.TrustContexts {
+		if context == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("trust context object cannot be null for trust context %q", name),
+			}
+		}
+		switch name {
+		case "system", "internal", cmd.ProgramName:
+			return &FormatError{
+				Message: fmt.Sprintf("trust context name %q is reserved", name),
+			}
+		case "default":
+			if context.TLS != nil {
+				return &FormatError{
+					Message: fmt.Sprintf("trust context %s cannot define tls context directly", name),
+				}
 			}
 		}
 	}
@@ -1269,10 +1370,11 @@ func (p *Plan) checkCycles() error {
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer := &Layer{
-		Services:   make(map[string]*Service),
-		Checks:     make(map[string]*Check),
-		LogTargets: make(map[string]*LogTarget),
-		Sections:   make(map[string]Section),
+		Services:      make(map[string]*Service),
+		Checks:        make(map[string]*Check),
+		LogTargets:    make(map[string]*LogTarget),
+		TrustContexts: make(map[string]*TrustContext),
+		Sections:      make(map[string]Section),
 	}
 
 	// The following manual approach is required because:
@@ -1285,11 +1387,12 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	// sections, and at the top field level, which includes Section field
 	// names.
 	builtins := map[string]any{
-		"summary":     &layer.Summary,
-		"description": &layer.Description,
-		"services":    &layer.Services,
-		"checks":      &layer.Checks,
-		"log-targets": &layer.LogTargets,
+		"summary":        &layer.Summary,
+		"description":    &layer.Description,
+		"services":       &layer.Services,
+		"checks":         &layer.Checks,
+		"log-targets":    &layer.LogTargets,
+		"trust-contexts": &layer.TrustContexts,
 	}
 
 	sections := make(map[string]yaml.Node)
@@ -1583,12 +1686,13 @@ func ReadDir(layersDir string, base *Plan) (*Plan, error) {
 			// be to use order "1" and, before prepending this layer, offset all
 			// other layers' orders by 1000 (which is what PlanManager.AppendLayer)
 			// does internally in order to support layer sub-directories.
-			Order:      0,
-			Label:      "pebble-base",
-			Services:   base.Services,
-			Checks:     base.Checks,
-			LogTargets: base.LogTargets,
-			Sections:   base.Sections,
+			Order:         0,
+			Label:         "pebble-base",
+			Services:      base.Services,
+			Checks:        base.Checks,
+			LogTargets:    base.LogTargets,
+			TrustContexts: base.TrustContexts,
+			Sections:      base.Sections,
 		}
 		layers = append([]*Layer{baseLayer}, layers...)
 	}
@@ -1598,11 +1702,12 @@ func ReadDir(layersDir string, base *Plan) (*Plan, error) {
 		return nil, err
 	}
 	plan := &Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		TrustContexts: combined.TrustContexts,
+		Sections:      combined.Sections,
 	}
 	err = plan.Validate()
 	if err != nil {
