@@ -91,7 +91,7 @@ var (
 // builtinSections represents all the built-in layer sections. This list is used
 // for identifying built-in fields in this package. It is unit tested to match
 // the YAML fields exposed in the Layer type, to catch inconsistencies.
-var builtinSections = []string{"summary", "description", "services", "checks", "log-targets"}
+var builtinSections = []string{"summary", "description", "services", "checks", "log-targets", "trust-contexts"}
 
 // RegisterSectionExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used. The order in which extensions are
@@ -215,12 +215,13 @@ type Layer struct {
 
 type Service struct {
 	// Basic details
-	Name        string         `yaml:"-"`
-	Summary     string         `yaml:"summary,omitempty"`
-	Description string         `yaml:"description,omitempty"`
-	Startup     ServiceStartup `yaml:"startup,omitempty"`
-	Override    Override       `yaml:"override,omitempty"`
-	Command     string         `yaml:"command,omitempty"`
+	Name         string         `yaml:"-"`
+	Summary      string         `yaml:"summary,omitempty"`
+	Description  string         `yaml:"description,omitempty"`
+	Startup      ServiceStartup `yaml:"startup,omitempty"`
+	Override     Override       `yaml:"override,omitempty"`
+	Command      string         `yaml:"command,omitempty"`
+	TrustContext string         `yaml:"trust-context,omitempty"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -276,6 +277,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
+	}
+	if other.TrustContext != "" {
+		s.TrustContext = other.TrustContext
 	}
 	if other.KillDelay.IsSet {
 		s.KillDelay = other.KillDelay
@@ -539,8 +543,9 @@ const (
 
 // HTTPCheck holds the configuration for an HTTP health check.
 type HTTPCheck struct {
-	URL     string            `yaml:"url,omitempty"`
-	Headers map[string]string `yaml:"headers,omitempty"`
+	URL          string            `yaml:"url,omitempty"`
+	Headers      map[string]string `yaml:"headers,omitempty"`
+	TrustContext string            `yaml:"trust-context,omitempty"`
 }
 
 // Copy returns a deep copy of the HTTP check configuration.
@@ -554,6 +559,9 @@ func (c *HTTPCheck) Copy() *HTTPCheck {
 func (c *HTTPCheck) Merge(other *HTTPCheck) {
 	if other.URL != "" {
 		c.URL = other.URL
+	}
+	if other.TrustContext != "" {
+		c.TrustContext = other.TrustContext
 	}
 	for k, v := range other.Headers {
 		if c.Headers == nil {
@@ -595,6 +603,7 @@ type ExecCheck struct {
 	GroupID        *int              `yaml:"group-id,omitempty"`
 	Group          string            `yaml:"group,omitempty"`
 	WorkingDir     string            `yaml:"working-dir,omitempty"`
+	TrustContext   string            `yaml:"trust-context,omitempty"`
 }
 
 // Copy returns a deep copy of the exec check configuration.
@@ -639,16 +648,20 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 	if other.WorkingDir != "" {
 		c.WorkingDir = other.WorkingDir
 	}
+	if other.TrustContext != "" {
+		c.TrustContext = other.TrustContext
+	}
 }
 
 // LogTarget specifies a remote server to forward logs to.
 type LogTarget struct {
-	Name     string            `yaml:"-"`
-	Type     LogTargetType     `yaml:"type"`
-	Location string            `yaml:"location"`
-	Services []string          `yaml:"services"`
-	Override Override          `yaml:"override,omitempty"`
-	Labels   map[string]string `yaml:"labels,omitempty"`
+	Name         string            `yaml:"-"`
+	Type         LogTargetType     `yaml:"type"`
+	Location     string            `yaml:"location"`
+	Services     []string          `yaml:"services"`
+	Override     Override          `yaml:"override,omitempty"`
+	Labels       map[string]string `yaml:"labels,omitempty"`
+	TrustContext string            `yaml:"trust-context,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
@@ -676,6 +689,9 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	}
 	if other.Location != "" {
 		t.Location = other.Location
+	}
+	if other.TrustContext != "" {
+		t.TrustContext = other.TrustContext
 	}
 	t.Services = append(t.Services, other.Services...)
 	for k, v := range other.Labels {
