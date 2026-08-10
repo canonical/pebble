@@ -41,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/overlord/tlsstate"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/timing"
 )
 
@@ -128,6 +129,7 @@ type Overlord struct {
 	checkMgr      *checkstate.CheckManager
 	logMgr        *logstate.LogManager
 	tlsMgr        *tlsstate.TLSManager
+	trustMgr      *truststate.TrustManager
 	identitiesMgr *identities.Manager
 	pairingMgr    *pairingstate.PairingManager
 
@@ -210,6 +212,11 @@ func New(opts *Options) (*Overlord, error) {
 	}
 	o.tlsMgr = tlsstate.NewManager(&tlsOpts)
 	o.stateEng.AddManager(o.tlsMgr)
+
+	trustDir := filepath.Join(opts.PebbleDir, "trust")
+	o.trustMgr = truststate.NewManager(trustDir)
+	o.stateEng.AddManager(o.trustMgr)
+	o.planMgr.AddChangeListener(o.trustMgr.PlanChanged)
 
 	o.identitiesMgr, err = identities.NewManager(s)
 	if err != nil {
@@ -665,6 +672,12 @@ func (o *Overlord) PlanManager() *planstate.PlanManager {
 // TLS keypairs for HTTPS connections.
 func (o *Overlord) TLSManager() *tlsstate.TLSManager {
 	return o.tlsMgr
+}
+
+// TrustManager returns the manager responsible for managing trust contexts
+// declared in the plan.
+func (o *Overlord) TrustManager() *truststate.TrustManager {
+	return o.trustMgr
 }
 
 // IdentitiesManager returns the manager responsible for managing client
