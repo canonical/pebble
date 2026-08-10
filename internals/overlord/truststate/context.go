@@ -43,6 +43,17 @@ type TrustContext struct {
 	version *trustContextVersion
 }
 
+// IsSystemCA returns true if the trust context resolved to the system CA pool,
+// either directly or indirectly.
+func (t *TrustContext) IsSystemCA() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.version == nil {
+		return false
+	}
+	return t.version.isSystemPool
+}
+
 // CAPool returns a certificate pool containing all of the CA certificates
 // trusted by this trust context, including those pulled in transitively via
 // "include". The returned pool is a fresh copy on each call, so it's safe
@@ -96,10 +107,11 @@ type trustContextVersion struct {
 	mgr  *TrustManager
 	name string
 
-	shortSha  string
-	pemBundle []byte
-	pool      *x509.CertPool
-	filePath  string
+	shortSha     string
+	pemBundle    []byte
+	pool         *x509.CertPool
+	isSystemPool bool
+	filePath     string
 
 	// refCount, superseded and cleaned are all only ever accessed while
 	// holding mgr.mu.

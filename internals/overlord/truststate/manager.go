@@ -159,12 +159,13 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 			continue
 		}
 		v := &trustContextVersion{
-			mgr:       m,
-			name:      r.name,
-			shortSha:  r.data.shortSha,
-			pemBundle: r.data.pemBundle,
-			pool:      r.data.pool,
-			filePath:  bundleFilePath(m.trustDir, r.name, r.data.shortSha),
+			mgr:          m,
+			name:         r.name,
+			shortSha:     r.data.shortSha,
+			pemBundle:    r.data.pemBundle,
+			pool:         r.data.pool,
+			isSystemPool: r.data.isSystemPool,
+			filePath:     bundleFilePath(m.trustDir, r.name, r.data.shortSha),
 		}
 		newCurrent[r.name] = v
 		if old != nil {
@@ -219,9 +220,10 @@ func (m *TrustManager) ensureTrustDir() error {
 
 // resolvedTrust holds the trust data for a single trust context.
 type resolvedTrust struct {
-	pemBundle []byte
-	pool      *x509.CertPool
-	shortSha  string
+	pemBundle    []byte
+	pool         *x509.CertPool
+	isSystemPool bool
+	shortSha     string
 }
 
 // resolve computes the fully-resolved CA pool and PEM bundle for the named
@@ -280,9 +282,10 @@ func (m *TrustManager) resolve(name string, pl *plan.Plan) (*resolvedTrust, erro
 	shortSha := hex.EncodeToString(sum[:])[:8]
 
 	return &resolvedTrust{
-		pemBundle: pemBundle,
-		pool:      pool,
-		shortSha:  shortSha,
+		pemBundle:    pemBundle,
+		pool:         pool,
+		isSystemPool: includesSystem && len(pemParts) == 0,
+		shortSha:     shortSha,
 	}, nil
 }
 
