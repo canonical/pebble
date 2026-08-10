@@ -196,8 +196,12 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 
 // TrustContext returns a reference to the current resolved state of the
 // named trust context. The caller must call Close on the returned
-// TrustContext once it is no longer needed.
+// TrustContext once it is no longer needed. If passed a trust context name that
+// is an empty string, the default trust context is returned.
 func (m *TrustManager) TrustContext(name string) (*TrustContext, error) {
+	if name == "" {
+		name = DefaultTrustContext
+	}
 	m.mu.Lock()
 	v, ok := m.current[name]
 	if ok {
