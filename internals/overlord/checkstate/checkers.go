@@ -16,6 +16,7 @@ package checkstate
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -44,14 +45,39 @@ const (
 
 // httpChecker is a checker that ensures an HTTP GET at a specified URL returns 2xx.
 type httpChecker struct {
-	name    string
-	url     string
-	headers map[string]string
+	name         string
+	url          string
+	headers      map[string]string
+	trustContext string
+	trustMgr     TrustManager
 }
 
 func (c *httpChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
 	client := &http.Client{}
+
+	// Resolve the trust context configured for this check (falling back to
+	// the "default" trust context if none is set), and use its CA bundle to
+	// validate the server's certificate, unless it resolves to the system CA
+	// pool, in which case the default HTTP client behaviour is used.
+	if c.trustMgr == nil {
+		logger.Noticef("Check %q (exec): cannot resolve trust context %q: no trust manager", c.name, c.trustContext)
+	} else if trustContext, err := c.trustMgr.TrustContext(c.trustContext); err != nil {
+		logger.Noticef("Check %q (exec): cannot resolve trust context %q: %v", c.name, c.trustContext, err)
+	} else if trustContext.IsSystemCA() {
+		trustContext.Close()
+	} else {
+		defer trustContext.Close()
+		pool, err := trustContext.CAPool()
+		if err != nil {
+			logger.Noticef("Check %q (http): cannot get CA pool for trust context %q: %v", c.name, c.trustContext, err)
+		} else {
+			client.Transport = &http.Transport{
+				TLSClientConfig: &tls.Config{RootCAs: pool},
+			}
+		}
+	}
+
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)
@@ -117,14 +143,16 @@ func (c *tcpChecker) check(ctx context.Context) error {
 
 // execChecker is a checker that ensures a command executes successfully.
 type execChecker struct {
-	name        string
-	command     string
-	environment map[string]string
-	userID      *int
-	user        string
-	groupID     *int
-	group       string
-	workingDir  string
+	name         string
+	command      string
+	environment  map[string]string
+	userID       *int
+	user         string
+	groupID      *int
+	group        string
+	workingDir   string
+	trustContext string
+	trustMgr     TrustManager
 }
 
 func (c *execChecker) check(ctx context.Context) error {
@@ -137,6 +165,29 @@ func (c *execChecker) check(ctx context.Context) error {
 	environment := osutil.Environ()
 	// Requested environment takes precedence.
 	maps.Copy(environment, c.environment)
+
+	// Resolve the trust context configured for this check (falling back to
+	// the "default" trust context if none is set), and provide its CA bundle
+	// via SSL_CERT_FILE, unless the check has set that environment variable
+	// itself, or the trust context resolves to the system CA pool.
+	if c.trustMgr == nil {
+		logger.Noticef("Check %q (exec): cannot resolve trust context %q: no trust manager", c.name, c.trustContext)
+	} else if trustContext, err := c.trustMgr.TrustContext(c.trustContext); err != nil {
+		logger.Noticef("Check %q (exec): cannot resolve trust context %q: %v", c.name, c.trustContext, err)
+	} else if trustContext.IsSystemCA() || c.environment["SSL_CERT_FILE"] != "" {
+		trustContext.Close()
+	} else {
+		defer trustContext.Close()
+		caBundleFile, err := trustContext.CABundleFile()
+		if err != nil {
+			logger.Noticef(
+				"Check %q (exec): cannot get CA bundle file for trust context %q: %v",
+				c.name, c.trustContext, err,
+			)
+		} else {
+			environment["SSL_CERT_FILE"] = caBundleFile
+		}
+	}
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = make([]string, 0, len(environment)) // avoid additional allocations

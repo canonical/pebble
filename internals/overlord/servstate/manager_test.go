@@ -1125,7 +1125,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
@@ -1220,7 +1220,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
@@ -1312,7 +1312,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
@@ -1397,7 +1397,7 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
