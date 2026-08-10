@@ -13,6 +13,7 @@ import (
 	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/workloads"
@@ -36,18 +37,25 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 
-	logMgr LogManager
+	logMgr   LogManager
+	trustMgr TrustManager
 }
 
 type LogManager interface {
 	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
+// TrustManager provides access to the CA trust contexts declared in the
+// plan, as maintained by truststate.TrustManager.
+type TrustManager interface {
+	TrustContext(name string) (*truststate.TrustContext, error)
+}
+
 type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager, trustMgr TrustManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),
@@ -55,6 +63,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logMgr:        logMgr,
+		trustMgr:      trustMgr,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)

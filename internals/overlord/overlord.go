@@ -238,7 +238,8 @@ func New(opts *Options) (*Overlord, error) {
 		o.runner,
 		opts.ServiceOutput,
 		opts.RestartHandler,
-		o.logMgr)
+		o.logMgr,
+		o.trustMgr)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}
@@ -711,7 +712,7 @@ func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
 	o.runner = state.NewTaskRunner(s)
-	o.serviceMgr, _ = servstate.NewManager(s, o.runner, nil, nil, nil)
+	o.serviceMgr, _ = servstate.NewManager(s, o.runner, nil, nil, nil, nil)
 	return o
 }
 
