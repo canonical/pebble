@@ -90,19 +90,19 @@ type logGathererOptions struct {
 	timeoutCurrentFlush time.Duration
 	timeoutFinalFlush   time.Duration
 	// method to get a new client
-	newClient func(*plan.LogTarget) (logClient, error)
+	newClient func(*plan.LogTarget, TrustManager) (logClient, error)
 }
 
-func newLogGatherer(target *plan.LogTarget) (*logGatherer, error) {
-	return newLogGathererInternal(target, &logGathererOptions{})
+func newLogGatherer(target *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+	return newLogGathererInternal(target, trustMgr, &logGathererOptions{})
 }
 
 // newLogGathererInternal contains the actual creation code for a logGatherer.
 // This function is used in the real implementation, but also allows overriding
 // certain configuration values for testing.
-func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions) (*logGatherer, error) {
+func newLogGathererInternal(target *plan.LogTarget, trustMgr TrustManager, options *logGathererOptions) (*logGatherer, error) {
 	options = fillDefaultOptions(options)
-	client, err := options.newClient(target)
+	client, err := options.newClient(target, trustMgr)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create log client: %w", err)
 	}
@@ -367,20 +367,24 @@ type logClient interface {
 	SetLabels(serviceName string, labels map[string]string)
 }
 
-func newLogClient(target *plan.LogTarget) (logClient, error) {
+func newLogClient(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
 	switch target.Type {
 	case plan.LokiTarget:
 		return loki.NewClient(&loki.ClientOptions{
-			TargetName: target.Name,
-			Location:   target.Location,
-			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			TargetName:   target.Name,
+			Location:     target.Location,
+			UserAgent:    fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			TrustContext: target.TrustContext,
+			TrustManager: trustMgr,
 		}), nil
 	case plan.OpenTelemetryTarget:
 		return opentelemetry.NewClient(&opentelemetry.ClientOptions{
-			TargetName: target.Name,
-			Location:   target.Location,
-			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
-			ScopeName:  cmd.ProgramName,
+			TargetName:   target.Name,
+			Location:     target.Location,
+			UserAgent:    fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			ScopeName:    cmd.ProgramName,
+			TrustContext: target.TrustContext,
+			TrustManager: trustMgr,
 		}), nil
 	case plan.SyslogTarget:
 		hostname, err := os.Hostname()

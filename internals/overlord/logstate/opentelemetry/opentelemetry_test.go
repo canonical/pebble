@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,6 +29,8 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
+	"github.com/canonical/pebble/internals/overlord/truststate"
+	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
 )
@@ -346,6 +349,55 @@ func (*suite) TestLabels(c *C) {
 	case <-time.After(1 * time.Second):
 		c.Fatal("timed out waiting for request")
 	}
+}
+
+func (*suite) TestTrustContext(c *C) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	caCertPEM := string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: server.Certificate().Raw,
+	}))
+	trustMgr := truststate.NewManager(c.MkDir())
+	trustMgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"vendorA": {
+				Name: "vendorA",
+				TLS:  &plan.TLSTrustContext{CACert: caCertPEM},
+			},
+		},
+	})
+
+	newClient := func(trustContext string) *opentelemetry.Client {
+		return opentelemetry.NewClient(&opentelemetry.ClientOptions{
+			Location:     server.URL,
+			ScopeName:    "pebble",
+			TrustContext: trustContext,
+			TrustManager: trustMgr,
+		})
+	}
+	addAndFlush := func(client *opentelemetry.Client) error {
+		err := client.Add(servicelog.Entry{Service: "svc1", Message: "hello\n"})
+		c.Assert(err, IsNil)
+		return client.Flush(context.Background())
+	}
+
+	// Without a trust context, the server's self-signed certificate isn't
+	// trusted by the system pool, so the flush fails.
+	err := addAndFlush(newClient(""))
+	c.Assert(err, ErrorMatches, ".*(certificate|x509).*")
+
+	// With the matching trust context configured, the flush succeeds.
+	err = addAndFlush(newClient("vendorA"))
+	c.Assert(err, IsNil)
+
+	// An unknown trust context logs an error and falls back to the default
+	// HTTP client behaviour, so the flush still fails.
+	err = addAndFlush(newClient("unknown"))
+	c.Assert(err, ErrorMatches, ".*(certificate|x509).*")
 }
 
 // Strips all extraneous whitespace from JSON
