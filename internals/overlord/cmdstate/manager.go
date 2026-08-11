@@ -36,12 +36,21 @@ func NewManager(runner *state.TaskRunner) *CommandManager {
 	}
 	runner.AddHandler("exec", manager.doExec, nil)
 
-	// Delete the in-memory execSetup object when the exec is done.
+	// Delete the in-memory execSetup object when the exec is done, releasing
+	// its trust context if set.
 	runner.AddCleanup("exec", func(task *state.Task, tomb *tomb.Tomb) error {
 		st := task.State()
+
 		st.Lock()
-		defer st.Unlock()
+		v := st.Cached(execSetupKey{task.ID()})
 		st.Cache(execSetupKey{task.ID()}, nil)
+		st.Unlock()
+
+		execSetup, _ := v.(*execSetup)
+		if execSetup != nil && execSetup.TrustContext != nil {
+			execSetup.TrustContext.Close()
+		}
+
 		return nil
 	})
 
