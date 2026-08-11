@@ -231,7 +231,7 @@ func New(opts *Options) (*Overlord, error) {
 	o.stateEng.AddManager(o.pairingMgr)
 	o.planMgr.AddChangeListener(o.pairingMgr.PlanChanged)
 
-	o.logMgr = logstate.NewLogManager()
+	o.logMgr = logstate.NewLogManager(o.trustMgr)
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,

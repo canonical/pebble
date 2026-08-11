@@ -17,6 +17,7 @@ package loki
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -35,6 +37,13 @@ const (
 	requestTimeout    = 10 * time.Second
 	maxRequestEntries = 100
 )
+
+// TrustManager provides access to the trust context, so that the client can
+// validate the Loki server's certificate against the trust context
+// configured for the log target.
+type TrustManager interface {
+	TrustContext(name string) (*truststate.TrustContext, error)
+}
 
 type Client struct {
 	options    *ClientOptions
@@ -70,6 +79,14 @@ type ClientOptions struct {
 	UserAgent         string
 	TargetName        string
 	Location          string
+
+	// TrustContext is the name of the trust context to use to validate the
+	// Loki server's certificate (falling back to the "default" trust
+	// context if empty).
+	TrustContext string
+	// TrustManager provides access to the trust context named by
+	// TrustContext. If nil, the default HTTP client behaviour is used.
+	TrustManager TrustManager
 }
 
 func fillDefaultOptions(options *ClientOptions) {
@@ -155,12 +172,50 @@ func (c *Client) Flush(ctx context.Context) error {
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	httpReq.Header.Set("User-Agent", c.options.UserAgent)
 
+	// Resolve the trust context configured for this log target (falling
+	// back to the "default" trust context if none is set), and use its CA
+	// bundle to validate the server's certificate, unless it resolves to
+	// the system CA pool, in which case the default HTTP client behaviour
+	// is used.
+	c.httpClient.Transport = c.resolveTransport()
+
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
 		return err
 	}
 
 	return c.handleServerResponse(resp)
+}
+
+// resolveTransport resolves the trust context configured for this log
+// target, and returns an *http.Transport configured to validate the
+// server's certificate against it. It returns nil (meaning the default HTTP
+// client behaviour should be used) if there's no trust manager, the trust
+// context can't be resolved, or it resolves to the system CA pool.
+func (c *Client) resolveTransport() http.RoundTripper {
+	if c.options.TrustManager == nil {
+		logger.Noticef("Log target %q (loki): cannot resolve trust context %q: no trust manager",
+			c.options.TargetName, c.options.TrustContext)
+		return nil
+	}
+	trustContext, err := c.options.TrustManager.TrustContext(c.options.TrustContext)
+	if err != nil {
+		logger.Noticef("Log target %q (loki): cannot resolve trust context %q: %v",
+			c.options.TargetName, c.options.TrustContext, err)
+		return nil
+	}
+	if trustContext.IsSystemCA() {
+		trustContext.Close()
+		return nil
+	}
+	defer trustContext.Close()
+	pool, err := trustContext.CAPool()
+	if err != nil {
+		logger.Noticef("Log target %q (loki): cannot get CA pool for trust context %q: %v",
+			c.options.TargetName, c.options.TrustContext, err)
+		return nil
+	}
+	return &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}
 }
 
 // resetBuffer drops all buffered logs (in the case of a successful send, or an
