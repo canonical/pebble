@@ -277,20 +277,25 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	var stop []string
 	for name, s := range m.services {
 		if config, ok := currentPlan.Services[name]; ok {
-			// Don't restart the service unless the service configuration or its
-			// workload definition (if any) have changed
+			// Don't restart the service unless the service configuration, its
+			// workload definition or trust context have changed.
 			var workload *workloads.Workload
 			if ws != nil {
 				workload = ws.Entries[s.config.Workload]
 			}
-			if config.Equal(s.config) && (workload == nil || workload.Equal(s.workload)) {
+			serviceChanged := !config.Equal(s.config)
+			workloadChanged := !workload.Equal(s.workload)
+			trustContextVersion := m.currentTrustContextVersion(config.TrustContext)
+			trustContextChanged := trustContextVersion != s.trustContextVersion
+			if !(serviceChanged || workloadChanged || trustContextChanged) {
 				continue
 			}
-			// Update service config and workload from plan
+			// Update service config, workload and trust context version.
 			s.config = config.Copy()
 			if workload != nil {
 				s.workload = workload
 			}
+			s.trustContextVersion = trustContextVersion
 		}
 		needsRestart[name] = true
 		stop = append(stop, name)
@@ -319,6 +324,20 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	}
 
 	return stopLanes, startLanes, nil
+}
+
+// currentTrustContextVersion returns the version for the current resolved named
+// trust context, or an empty string if it can't be resolved.
+func (m *ServiceManager) currentTrustContextVersion(name string) string {
+	if m.trustMgr == nil {
+		return ""
+	}
+	trustContext, err := m.trustMgr.TrustContext(name)
+	if err != nil {
+		return ""
+	}
+	defer trustContext.Close()
+	return trustContext.Version()
 }
 
 func (m *ServiceManager) SendSignal(services []string, signal string) error {

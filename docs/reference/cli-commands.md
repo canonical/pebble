@@ -879,6 +879,12 @@ For `startup: enabled` services that are running:
 
 Replan also starts any `startup: enabled` services that have not yet been started, or that have been manually stopped.
 
+If the service references a trust context, and that referenced trust context has
+changed since the service started, replan will cause that service to restart. By
+default, a service that does not reference a trust context will implicitly use
+the "default" trust context. As such, if the "default" trust context or any of
+its included trust contexts have changed, the service will restart.
+
 ### Examples
 
 Here is an example, where `srv1` is a service that has `startup: enabled`, and `srv2` does not:

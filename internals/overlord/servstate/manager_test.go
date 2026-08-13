@@ -23,6 +23,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -517,6 +518,70 @@ services:
 	c.Check(config.OnSuccess, Equals, plan.ActionIgnore)
 	c.Check(config.Summary, Equals, "A summary!")
 	c.Check(config.Command, Equals, command)
+}
+
+// TestReplanTrustContextChanged checks that Replan detects a change to the
+// resolved content of a service's trust context (for example, because a
+// trust context it includes was updated) and flags the service for restart,
+// even though the service's own configuration, and the name of the trust
+// context it references, are unchanged.
+func (s *S) TestReplanTrustContextChanged(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, fmt.Sprintf(`
+trust-contexts:
+    base:
+        override: replace
+        tls:
+            ca-cert: |
+%s
+    vendorA:
+        override: replace
+        include: [base]
+services:
+    ssltest:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        trust-context: vendorA
+`, indentPEM(testCACertPEM, 16)))
+	s.planChanged(c)
+
+	s.startServices(c, [][]string{{"ssltest"}})
+	defer s.stopServices(c, [][]string{{"ssltest"}})
+
+	// Nothing has changed yet, so Replan shouldn't flag the service.
+	// (testPlanLayer's test1/test2 are startup:enabled, so they always show
+	// up in "starts", regardless of whether they need restarting.)
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(lanesContain(stops, "ssltest"), Equals, false)
+	c.Check(lanesContain(starts, "ssltest"), Equals, false)
+
+	// Change what "vendorA" includes, without touching the service or the
+	// name of the trust context it references: the resolved trust content
+	// changes, so the service should be flagged to stop and restart.
+	s.planAddLayer(c, `
+trust-contexts:
+    vendorA:
+        override: replace
+        include: [base, system]
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(lanesContain(stops, "ssltest"), Equals, true)
+	c.Check(lanesContain(starts, "ssltest"), Equals, true)
+}
+
+// lanesContain reports whether name appears in any lane of lanes.
+func lanesContain(lanes [][]string, name string) bool {
+	for _, lane := range lanes {
+		if slices.Contains(lane, name) {
+			return true
+		}
+	}
+	return false
 }
 
 func resetWorkloadsSectionExtension() {

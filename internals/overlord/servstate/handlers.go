@@ -116,6 +116,13 @@ type serviceData struct {
 	// is held until the process has finished, and released (closed) by the
 	// goroutine that waits for the process to exit.
 	trustContext *truststate.TrustContext
+	// trustContextVersion is the resolved content version (see
+	// truststate.TrustContext.Version) of the trust context configured for
+	// this service, as of the last time it was (re)started. It's used by
+	// Replan to detect changes to the trust context (or a trust context it
+	// transitively includes) that require the service to be restarted, even
+	// if the service's own configuration hasn't changed.
+	trustContextVersion string
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -453,9 +460,11 @@ func (s *serviceData) startInternal() error {
 	} else if trustContext, err := s.manager.trustMgr.TrustContext(s.config.TrustContext); err != nil {
 		logger.Noticef("Cannot resolve trust context %q for service %q: %v", s.config.TrustContext, serviceName, err)
 	} else if trustContext.IsSystemCA() || hasCertFileEnv {
+		s.trustContextVersion = trustContext.Version()
 		trustContext.Close()
 	} else {
 		s.trustContext = trustContext
+		s.trustContextVersion = trustContext.Version()
 		caBundleFile, err := trustContext.CABundleFile()
 		if err != nil {
 			logger.Noticef("Cannot get CA bundle file for trust context %q: %v", s.config.TrustContext, err)
