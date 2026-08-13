@@ -54,6 +54,17 @@ func (t *TrustContext) IsSystemCA() bool {
 	return t.version.isSystemPool
 }
 
+// Version returns the version for the trust context. Between two versions of a
+// trust context of the same name, this value will be different.
+func (t *TrustContext) Version() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.version == nil {
+		return ""
+	}
+	return t.version.shortSha
+}
+
 // CAPool returns a certificate pool containing all of the CA certificates
 // trusted by this trust context, including those pulled in transitively via
 // "include". The returned pool is a fresh copy on each call, so it's safe
