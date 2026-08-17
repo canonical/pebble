@@ -177,6 +177,7 @@ func (p *Plan) MarshalYAML() (any, error) {
 		Type: reflect.TypeFor[map[string]*TraceTarget](),
 		Tag:  `yaml:"trace-targets,omitempty"`,
 	}}
+	sectionsIdx := len(ordered)
 	for i, field := range sectionExtensionsOrder {
 		section := p.Sections[field]
 		ordered = append(ordered, reflect.StructField{
@@ -194,7 +195,7 @@ func (p *Plan) MarshalYAML() (any, error) {
 	v.Field(3).Set(reflect.ValueOf(p.MetricTargets))
 	v.Field(4).Set(reflect.ValueOf(p.TraceTargets))
 	for i, field := range sectionExtensionsOrder {
-		v.Field(4 + i).Set(reflect.ValueOf(p.Sections[field]))
+		v.Field(sectionsIdx + i).Set(reflect.ValueOf(p.Sections[field]))
 	}
 	plan := v.Addr().Interface()
 	return plan, nil
