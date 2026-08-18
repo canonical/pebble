@@ -1035,6 +1035,117 @@ OTEL_SERVICE_NAME=otlpoverride
 	c.Assert(string(dataNotEnrolled), Equals, "")
 }
 
+// TestOTLPLogsDedupShadowBuffer verifies that once a service has sent its
+// first OTLP log, subsequent stdout/stderr output is diverted away from the
+// main log ring buffer (to avoid duplicate log lines being buffered), and
+// that any output still in the shadow buffer is recovered into the main
+// ring buffer when the service exits.
+func (s *S) TestOTLPLogsDedupShadowBuffer(c *C) {
+	s.newServiceManager(c)
+	s.manager.SetOTLPAddress("127.0.0.1:12345")
+	s.planAddLayer(c, testPlanLayer)
+
+	dir := c.MkDir()
+	marker1 := filepath.Join(dir, "m1")
+	marker2 := filepath.Join(dir, "m2")
+	marker3 := filepath.Join(dir, "m3")
+	marker4 := filepath.Join(dir, "m4")
+
+	layer := fmt.Sprintf(`
+services:
+    otlpdedup:
+        override: replace
+        on-success: ignore
+        command: /bin/sh -c "echo before-otlp; touch %s; while [ ! -f %s ]; do sleep 0.02; done; echo after-otlp-1; touch %s; while [ ! -f %s ]; do sleep 0.02; done; echo after-otlp-2"
+
+log-targets:
+    otel-logs:
+        override: replace
+        type: opentelemetry
+        location: http://localhost:4318
+        services: [otlpdedup]
+`, marker1, marker2, marker3, marker4)
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
+	c.Check(s.manager.OTLPLogsEnabled("otlpdedup"), Equals, true)
+
+	chg := s.startServices(c, [][]string{{"otlpdedup"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	waitForDone(marker1, func() { c.Fatal("timeout waiting for marker1") })
+
+	// Wait for "before-otlp" to land in the main ring buffer.
+	s.waitForServiceLog(c, "otlpdedup", "before-otlp")
+
+	// Simulate the service's first OTLP log arriving.
+	s.manager.WriteServiceLog("otlpdedup", time.Now(), "otlp-message")
+	s.waitForServiceLog(c, "otlpdedup", "otlp-message")
+
+	// Let the service write more stdout output; it should now be diverted to
+	// the shadow ring buffer rather than the main one.
+	c.Assert(os.WriteFile(marker2, nil, 0o644), IsNil)
+	waitForDone(marker3, func() { c.Fatal("timeout waiting for marker3") })
+
+	// Give the log-copying goroutine a moment to catch up, then check that
+	// "after-otlp-1" hasn't leaked into the main ring buffer.
+	time.Sleep(200 * time.Millisecond)
+	c.Check(strings.Contains(s.readServiceLog(c, "otlpdedup"), "after-otlp-1"), Equals, false)
+
+	// Let the service finish and exit.
+	c.Assert(os.WriteFile(marker4, nil, 0o644), IsNil)
+	s.waitUntilService(c, "otlpdedup", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusInactive
+	})
+
+	// On exit, the shadow buffer's recent entries should be recovered into
+	// the main ring buffer, in their original order.
+	log := s.readServiceLog(c, "otlpdedup")
+	iBefore := strings.Index(log, "before-otlp")
+	iOtlp := strings.Index(log, "otlp-message")
+	iAfter1 := strings.Index(log, "after-otlp-1")
+	iAfter2 := strings.Index(log, "after-otlp-2")
+	c.Assert(iBefore, Not(Equals), -1)
+	c.Assert(iOtlp, Not(Equals), -1)
+	c.Assert(iAfter1, Not(Equals), -1)
+	c.Assert(iAfter2, Not(Equals), -1)
+	c.Check(iBefore < iOtlp, Equals, true)
+	c.Check(iOtlp < iAfter1, Equals, true)
+	c.Check(iAfter1 < iAfter2, Equals, true)
+}
+
+// waitForServiceLog polls the named service's main log ring buffer until it
+// contains substr.
+func (s *S) waitForServiceLog(c *C, service, substr string) {
+	for range 500 {
+		if strings.Contains(s.readServiceLog(c, service), substr) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c.Fatalf("timed out waiting for %q to appear in %q logs", substr, service)
+}
+
+// readServiceLog returns the full contents of the named service's main log
+// ring buffer.
+func (s *S) readServiceLog(c *C, service string) string {
+	iterators, err := s.manager.ServiceLogs([]string{service}, -1)
+	c.Assert(err, IsNil)
+	it, ok := iterators[service]
+	if !ok {
+		return ""
+	}
+	buf := &bytes.Buffer{}
+	for it.Next(nil) {
+		_, err := io.Copy(buf, it)
+		c.Assert(err, IsNil)
+	}
+	c.Assert(it.Close(), IsNil)
+	return buf.String()
+}
+
 func (s *S) TestOTLPMetricsEnvironmentInjection(c *C) {
 	s.newServiceManager(c)
 	s.manager.SetOTLPAddress("127.0.0.1:12345")

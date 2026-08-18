@@ -75,6 +75,15 @@ var (
 const (
 	maxLogBytes  = 100 * 1024
 	lastLogLines = 20
+
+	// maxShadowLogBytes bounds the size of the shadow ring buffer used to hold
+	// stdout/stderr output once a service has started sending its own logs via
+	// OTLP (see shadowLogs on serviceData).
+	maxShadowLogBytes = 8 * 1024
+
+	// shadowLogsMaxAge is the maximum age of an entry in the shadow ring buffer
+	// that will be copied into the main log ring buffer when the service exits.
+	shadowLogsMaxAge = time.Minute
 )
 
 // serviceState represents the state a service's state machine is in.
@@ -125,6 +134,21 @@ type serviceData struct {
 	// trace target when it was started, so replan can detect enrollment changes
 	// and restart the service.
 	otlpTracesEnabled bool
+
+	// otlpLogReceived records whether at least one OTLP log has been received
+	// (via WriteServiceLog) for the current run of this service. Until it's set,
+	// stdout/stderr output is written to logs as usual. Once set, stdout/stderr
+	// output is instead written to shadowLogs, to avoid buffering duplicate log
+	// lines in the main ring buffer once the service is exporting its own logs
+	// via OTLP.
+	otlpLogReceived atomic.Bool
+
+	// shadowLogs holds stdout/stderr output written after the first OTLP log
+	// was received for the current run of this service (see otlpLogReceived).
+	// It's created fresh at the start of each run, and drained into logs (for
+	// entries within shadowLogsMaxAge) when the service exits, so recent output
+	// isn't lost if OTLP export didn't fully deliver it.
+	shadowLogs *servicelog.RingBuffer
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -487,7 +511,26 @@ func (s *serviceData) startInternal() error {
 		outputIterator = s.logs.HeadIterator(0)
 	}
 	serviceName := s.config.Name
-	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
+
+	// Reset the OTLP-log-received state for this run. If the service is
+	// enrolled in an opentelemetry log target, create a fresh shadow ring
+	// buffer and use a writer that diverts stdout/stderr output there once the
+	// service's first OTLP log is received, to avoid double-buffering duplicate
+	// log lines in the main ring buffer. See otlpLogReceived and shadowLogs on
+	// serviceData for details.
+	s.otlpLogReceived.Store(false)
+	var logWriter io.Writer
+	if s.otlpLogsEnabled {
+		s.shadowLogs = servicelog.NewRingBuffer(maxShadowLogBytes)
+		logWriter = &dedupLogWriter{
+			service: s,
+			main:    servicelog.NewFormatWriter(s.logs, serviceName),
+			shadow:  servicelog.NewFormatWriter(s.shadowLogs, serviceName),
+		}
+	} else {
+		s.shadowLogs = nil
+		logWriter = servicelog.NewFormatWriter(s.logs, serviceName)
+	}
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
 
@@ -586,6 +629,11 @@ func (s *serviceData) exited(exitCode int) error {
 	if s.resetTimer != nil {
 		s.resetTimer.Stop()
 	}
+
+	// Recover any recent output still sitting in the shadow ring buffer (see
+	// otlpLogReceived and shadowLogs on serviceData) now that the process has
+	// exited and won't write to it any more.
+	s.drainShadowLogs()
 
 	switch s.state {
 	case stateStarting:

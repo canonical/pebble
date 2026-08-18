@@ -16,6 +16,7 @@ package servstate
 
 import (
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -170,7 +171,10 @@ func injectOTLPTracesEnv(env map[string]string, receiverAddr, serviceName string
 }
 
 // WriteServiceLog writes a single log entry with an explicit timestamp into the
-// named service's ring buffer.
+// named service's ring buffer. It also records that this service has now
+// received an OTLP log for its current run, so that subsequent stdout/stderr
+// output is diverted to the shadow ring buffer instead of being buffered again
+// in the main ring buffer (see otlpLogReceived and shadowLogs on serviceData).
 func (m *ServiceManager) WriteServiceLog(name string, t time.Time, message string) bool {
 	m.servicesLock.Lock()
 	service := m.services[name]
@@ -178,9 +182,45 @@ func (m *ServiceManager) WriteServiceLog(name string, t time.Time, message strin
 	if service == nil || service.logs == nil {
 		return false
 	}
+	service.otlpLogReceived.Store(true)
 	err := servicelog.WriteEntry(service.logs, name, t, message)
 	if err != nil {
 		logger.Noticef("Cannot write OTLP log entry for service %q: %v", name, err)
 	}
 	return true
+}
+
+// dedupLogWriter writes formatted stdout/stderr output to a service's main log
+// ring buffer until the first OTLP log is received for the current run of the
+// service, after which it writes to the shadow ring buffer instead. This
+// prevents stdout/stderr lines from being buffered a second time in the main
+// ring buffer once the service is exporting its own logs via OTLP.
+type dedupLogWriter struct {
+	service *serviceData
+	main    io.Writer
+	shadow  io.Writer
+}
+
+func (w *dedupLogWriter) Write(p []byte) (int, error) {
+	if w.service.otlpLogReceived.Load() {
+		return w.shadow.Write(p)
+	}
+	return w.main.Write(p)
+}
+
+// drainShadowLogs copies any entries from the service's shadow ring buffer (see
+// shadowLogs on serviceData) that were written within the last shadowLogsMaxAge
+// into the main log ring buffer, then discards the shadow buffer. It's called
+// when the service's process exits, so that recent stdout/stderr output isn't
+// lost even if OTLP export didn't fully deliver it before the process exited.
+func (s *serviceData) drainShadowLogs() {
+	if s.shadowLogs == nil {
+		return
+	}
+	cutoff := time.Now().Add(-shadowLogsMaxAge)
+	err := servicelog.CopyRecent(s.logs, s.shadowLogs, cutoff)
+	if err != nil {
+		logger.Noticef("Cannot copy shadow logs for service %q: %v", s.config.Name, err)
+	}
+	s.shadowLogs = nil
 }
