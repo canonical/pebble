@@ -38,6 +38,7 @@ type ServiceManager struct {
 
 	logMgr     LogManager
 	metricsMgr MetricsManager
+	traceMgr   TraceManager
 
 	otlpAddrLock sync.Mutex
 	otlpAddr     string
@@ -54,6 +55,13 @@ type MetricsManager interface {
 	ServiceStarted(service *plan.Service)
 }
 
+// TraceManager is used by the service manager to notify the trace manager when
+// a service starts, so it can generate a new service.instance.id resource
+// attribute for trace enrichment.
+type TraceManager interface {
+	ServiceStarted(service *plan.Service)
+}
+
 type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
@@ -65,6 +73,7 @@ func NewManager(
 	restarter Restarter,
 	logMgr LogManager,
 	metricsMgr MetricsManager,
+	traceMgr TraceManager,
 ) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
@@ -74,6 +83,7 @@ func NewManager(
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logMgr:        logMgr,
 		metricsMgr:    metricsMgr,
+		traceMgr:      traceMgr,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -296,10 +306,12 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 			}
 			otlpLogsChanged := otlpLogsEnabledFor(currentPlan, config) != s.otlpLogsEnabled
 			otlpMetricsChanged := otlpMetricsEnabledFor(currentPlan, config) != s.otlpMetricsEnabled
+			otlpTracesChanged := otlpTracesEnabledFor(currentPlan, config) != s.otlpTracesEnabled
 			if config.Equal(s.config) &&
 				workload.Equal(s.workload) &&
 				!otlpLogsChanged &&
-				!otlpMetricsChanged {
+				!otlpMetricsChanged &&
+				!otlpTracesChanged {
 				continue
 			}
 			// Update service config and workload from plan

@@ -120,6 +120,11 @@ type serviceData struct {
 	// metrics target when it was started, so replan can detect enrollment
 	// changes and restart the service.
 	otlpMetricsEnabled bool
+
+	// otlpTracesEnabled records whether this service was enrolled in an otel
+	// trace target when it was started, so replan can detect enrollment changes
+	// and restart the service.
+	otlpTracesEnabled bool
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -390,7 +395,7 @@ func (s *serviceData) startInternal() error {
 
 	// Inject OTLP logs environment variables if this service is enrolled in
 	// an opentelemetry log target, unless already set. Record the enrollment
-	// state so Replan can detect when it changes later.
+	// state so Replan can detect when it changes.
 	s.otlpLogsEnabled = otlpLogsEnabledFor(s.manager.getPlan(), s.config)
 	if s.otlpLogsEnabled {
 		injectOTLPLogsEnv(environment, s.manager.otlpAddress(), s.config.Name)
@@ -398,10 +403,18 @@ func (s *serviceData) startInternal() error {
 
 	// Inject OTLP metrics environment variables if this service is enrolled
 	// in an opentelemetry metrics target, unless already set. Record the
-	// enrollment state so replan can detect when it changes later.
+	// enrollment state so replan can detect when it changes.
 	s.otlpMetricsEnabled = otlpMetricsEnabledFor(s.manager.getPlan(), s.config)
 	if s.otlpMetricsEnabled {
 		injectOTLPMetricsEnv(environment, s.manager.otlpAddress(), s.config.Name)
+	}
+
+	// Inject OTLP trace environment variables if this service is enrolled in
+	// an opentelemetry trace target, unless already set. Record the enrollment
+	// state so replan can detect when it changes.
+	s.otlpTracesEnabled = otlpTracesEnabledFor(s.manager.getPlan(), s.config)
+	if s.otlpTracesEnabled {
+		injectOTLPTracesEnv(environment, s.manager.otlpAddress(), s.config.Name)
 	}
 
 	s.cmd.Dir = s.config.WorkingDir
@@ -540,6 +553,9 @@ func (s *serviceData) startInternal() error {
 	// Notify metricsMgr so it can generate a new service.instance.id for
 	// metrics enrichment.
 	s.manager.metricsMgr.ServiceStarted(s.config)
+	// Notify traceMgr so it can generate a new service.instance.id for trace
+	// enrichment.
+	s.manager.traceMgr.ServiceStarted(s.config)
 	s.startCount.Add(1)
 	return nil
 }

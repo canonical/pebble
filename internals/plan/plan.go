@@ -449,6 +449,26 @@ func (s *Service) MetricsTo(t *MetricTarget) bool {
 	return false
 }
 
+// TracesTo returns true if the traces from s should be forwarded to target t.
+func (s *Service) TracesTo(t *TraceTarget) bool {
+	// Iterate backwards through t.Services until we find something matching
+	// s.Name.
+	for i := len(t.Services) - 1; i >= 0; i-- {
+		switch t.Services[i] {
+		case s.Name:
+			return true
+		case ("-" + s.Name):
+			return false
+		case "all":
+			return true
+		case "-all":
+			return false
+		}
+	}
+	// Nothing matching the service name, so it was not specified.
+	return false
+}
+
 type ServiceStartup string
 
 const (

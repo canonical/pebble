@@ -1992,6 +1992,65 @@ func (s *S) TestMetricsTo(c *C) {
 	}
 }
 
+func (s *S) TestTracesTo(c *C) {
+	tests := []struct {
+		services []string
+		tracesTo map[string]bool
+	}{{
+		services: nil,
+		tracesTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{},
+		tracesTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"all"},
+		tracesTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+		},
+	}, {
+		services: []string{"svc1"},
+		tracesTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"all", "-svc2"},
+		tracesTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+			"svc3": true,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-all"},
+		tracesTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+			"svc3": false,
+		},
+	}}
+
+	for _, test := range tests {
+		target := &plan.TraceTarget{
+			Services: test.services,
+		}
+
+		for serviceName, shouldTracesTo := range test.tracesTo {
+			service := &plan.Service{
+				Name: serviceName,
+			}
+			c.Check(service.TracesTo(target), Equals, shouldTracesTo,
+				Commentf("matching service %q against 'services: %v'", serviceName, test.services))
+		}
+	}
+}
+
 func (s *S) TestMergeServiceContextNoContext(c *C) {
 	userID, groupID := 10, 20
 	overrides := plan.ContextOptions{

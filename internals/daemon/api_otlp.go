@@ -27,6 +27,7 @@ import (
 	commonpb "github.com/canonical/pebble/internals/otlp/common/v1"
 	logspb "github.com/canonical/pebble/internals/otlp/logs/v1"
 	metricspb "github.com/canonical/pebble/internals/otlp/metrics/v1"
+	tracepb "github.com/canonical/pebble/internals/otlp/trace/v1"
 )
 
 const (
@@ -140,6 +141,55 @@ func v1PostOTLPMetrics(c *Command, r *http.Request, _ *UserState) Response {
 
 	metricsMgr := overlordMetricsManager(c.d.overlord)
 	metricsMgr.AddMetrics(serviceName, data.GetResourceMetrics())
+
+	return otlpEmptyResponse{protobuf: isProtobuf}
+}
+
+// v1PostOTLPTraces implements the local OTLP/HTTP trace receiver endpoint,
+// POST /v1/services/{name}/otlp/v1/traces. It accepts a JSON or Protobuf
+// encoded ExportTraceServiceRequest, and buffers the resource spans for
+// forwarding to any trace-targets the named service is enrolled in.
+func v1PostOTLPTraces(c *Command, r *http.Request, _ *UserState) Response {
+	serviceName := muxVars(r)["name"]
+
+	contentType := r.Header.Get("Content-Type")
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		mediaType = contentType
+	}
+
+	var isProtobuf bool
+	switch mediaType {
+	case otlpContentTypeJSON:
+		isProtobuf = false
+	case otlpContentTypeProtobuf:
+		isProtobuf = true
+	default:
+		return UnsupportedMediaType("unsupported content type %q, must be %q or %q",
+			contentType, otlpContentTypeJSON, otlpContentTypeProtobuf)
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxOTLPBodyBytes+1))
+	if err != nil {
+		return BadRequest("cannot read request body: %v", err)
+	}
+	if len(body) > maxOTLPBodyBytes {
+		return BadRequest("request body exceeds maximum size of %d bytes", maxOTLPBodyBytes)
+	}
+
+	var data tracepb.TracesData
+	if isProtobuf {
+		if err := proto.Unmarshal(body, &data); err != nil {
+			return BadRequest("cannot unmarshal request body: %v", err)
+		}
+	} else {
+		if err := protojson.Unmarshal(body, &data); err != nil {
+			return BadRequest("cannot unmarshal request body: %v", err)
+		}
+	}
+
+	traceMgr := overlordTraceManager(c.d.overlord)
+	traceMgr.AddTraces(serviceName, data.GetResourceSpans())
 
 	return otlpEmptyResponse{protobuf: isProtobuf}
 }

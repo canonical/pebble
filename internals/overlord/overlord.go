@@ -42,6 +42,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/overlord/tlsstate"
+	"github.com/canonical/pebble/internals/overlord/tracestate"
 	"github.com/canonical/pebble/internals/timing"
 )
 
@@ -129,6 +130,7 @@ type Overlord struct {
 	checkMgr      *checkstate.CheckManager
 	logMgr        *logstate.LogManager
 	metricsMgr    *metricsstate.MetricsManager
+	traceMgr      *tracestate.TraceManager
 	tlsMgr        *tlsstate.TLSManager
 	identitiesMgr *identities.Manager
 	pairingMgr    *pairingstate.PairingManager
@@ -228,6 +230,7 @@ func New(opts *Options) (*Overlord, error) {
 
 	o.logMgr = logstate.NewLogManager()
 	o.metricsMgr = metricsstate.NewMetricsManager()
+	o.traceMgr = tracestate.NewTraceManager()
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,
@@ -235,7 +238,8 @@ func New(opts *Options) (*Overlord, error) {
 		opts.ServiceOutput,
 		opts.RestartHandler,
 		o.logMgr,
-		o.metricsMgr)
+		o.metricsMgr,
+		o.traceMgr)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}
@@ -252,6 +256,9 @@ func New(opts *Options) (*Overlord, error) {
 	// The metrics manager should be stopped after the service manager.
 	o.stateEng.AddManager(o.metricsMgr)
 
+	// The trace manager should be stopped after the service manager.
+	o.stateEng.AddManager(o.traceMgr)
+
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.stateEng.AddManager(o.commandMgr)
 
@@ -266,6 +273,9 @@ func New(opts *Options) (*Overlord, error) {
 
 	// Tell metrics manager about plan updates.
 	o.planMgr.AddChangeListener(o.metricsMgr.PlanChanged)
+
+	// Tell trace manager about plan updates.
+	o.planMgr.AddChangeListener(o.traceMgr.PlanChanged)
 
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
@@ -659,6 +669,11 @@ func (o *Overlord) MetricsManager() *metricsstate.MetricsManager {
 	return o.metricsMgr
 }
 
+// TraceManager returns the overlord's trace manager.
+func (o *Overlord) TraceManager() *tracestate.TraceManager {
+	return o.traceMgr
+}
+
 // CommandManager returns the command manager responsible for executing
 // commands under the overlord.
 func (o *Overlord) CommandManager() *cmdstate.CommandManager {
@@ -714,7 +729,7 @@ func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
 	o.runner = state.NewTaskRunner(s)
-	o.serviceMgr, _ = servstate.NewManager(s, o.runner, nil, nil, nil, nil)
+	o.serviceMgr, _ = servstate.NewManager(s, o.runner, nil, nil, nil, nil, nil)
 	return o
 }
 
