@@ -127,6 +127,10 @@ var API = []*Command{{
 	Path:        "/v1/services/{name}/otlp/v1/logs",
 	WriteAccess: OTLPAccess{},
 	POST:        v1PostOTLPLogs,
+}, {
+	Path:        "/v1/services/{name}/otlp/v1/metrics",
+	WriteAccess: OTLPAccess{},
+	POST:        v1PostOTLPMetrics,
 }}
 
 var (
@@ -135,6 +139,7 @@ var (
 	overlordServiceManager = (*overlord.Overlord).ServiceManager
 	overlordPlanManager    = (*overlord.Overlord).PlanManager
 	overlordCheckManager   = (*overlord.Overlord).CheckManager
+	overlordMetricsManager = (*overlord.Overlord).MetricsManager
 
 	muxVars = mux.Vars
 )

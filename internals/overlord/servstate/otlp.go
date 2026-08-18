@@ -83,6 +83,49 @@ func injectOTLPLogsEnv(env map[string]string, receiverAddr, serviceName string) 
 	setIfAbsent("OTEL_SERVICE_NAME", serviceName)
 }
 
+// OTLPMetricsEnabled reports whether the named service is currently enrolled
+// in an opentelemetry metrics target.
+func (m *ServiceManager) OTLPMetricsEnabled(name string) bool {
+	currentPlan := m.getPlan()
+	service, ok := currentPlan.Services[name]
+	if !ok {
+		return false
+	}
+	return otlpMetricsEnabledFor(currentPlan, service)
+}
+
+// otlpMetricsEnabledFor reports whether a service is enrolled in at least
+// one opentelemetry metrics target.
+func otlpMetricsEnabledFor(p *plan.Plan, service *plan.Service) bool {
+	for _, target := range p.MetricTargets {
+		if target.Type != plan.OpenTelemetryMetricTarget {
+			continue
+		}
+		if service.MetricsTo(target) {
+			return true
+		}
+	}
+	return false
+}
+
+// injectOTLPMetricsEnv sets the OTLP metrics env vars unless a value already
+// exists for that key.
+func injectOTLPMetricsEnv(env map[string]string, receiverAddr, serviceName string) {
+	if receiverAddr == "" {
+		return
+	}
+	setIfAbsent := func(key, value string) {
+		if _, ok := env[key]; !ok {
+			env[key] = value
+		}
+	}
+	endpoint := fmt.Sprintf("http://%s/v1/services/%s/otlp/v1/metrics", receiverAddr, serviceName)
+	setIfAbsent("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", endpoint)
+	setIfAbsent("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "http/json")
+	setIfAbsent("OTEL_METRICS_EXPORTER", "otlp")
+	setIfAbsent("OTEL_SERVICE_NAME", serviceName)
+}
+
 // WriteServiceLog writes a single log entry with an explicit timestamp into the
 // named service's ring buffer.
 func (m *ServiceManager) WriteServiceLog(name string, t time.Time, message string) bool {

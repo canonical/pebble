@@ -90,7 +90,7 @@ var (
 // builtinSections represents all the built-in layer sections. This list is used
 // for identifying built-in fields in this package. It is unit tested to match
 // the YAML fields exposed in the Layer type, to catch inconsistencies.
-var builtinSections = []string{"summary", "description", "services", "checks", "log-targets"}
+var builtinSections = []string{"summary", "description", "services", "checks", "log-targets", "metric-targets", "trace-targets"}
 
 // RegisterSectionExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used. The order in which extensions are
@@ -411,6 +411,26 @@ func CommandString(base, extra []string) string {
 
 // LogsTo returns true if the logs from s should be forwarded to target t.
 func (s *Service) LogsTo(t *LogTarget) bool {
+	// Iterate backwards through t.Services until we find something matching
+	// s.Name.
+	for i := len(t.Services) - 1; i >= 0; i-- {
+		switch t.Services[i] {
+		case s.Name:
+			return true
+		case ("-" + s.Name):
+			return false
+		case "all":
+			return true
+		case "-all":
+			return false
+		}
+	}
+	// Nothing matching the service name, so it was not specified.
+	return false
+}
+
+// MetricsTo returns true if the metrics from s should be forwarded to target t.
+func (s *Service) MetricsTo(t *MetricTarget) bool {
 	// Iterate backwards through t.Services until we find something matching
 	// s.Name.
 	for i := len(t.Services) - 1; i >= 0; i-- {
@@ -801,10 +821,12 @@ func (e *FormatError) Error() string {
 // validate the combined output if required.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
-		Services:   make(map[string]*Service),
-		Checks:     make(map[string]*Check),
-		LogTargets: make(map[string]*LogTarget),
-		Sections:   make(map[string]Section),
+		Services:      make(map[string]*Service),
+		Checks:        make(map[string]*Check),
+		LogTargets:    make(map[string]*LogTarget),
+		MetricTargets: make(map[string]*MetricTarget),
+		TraceTargets:  make(map[string]*TraceTarget),
+		Sections:      make(map[string]Section),
 	}
 
 	// Combine the same sections from each layer. Note that we do this before

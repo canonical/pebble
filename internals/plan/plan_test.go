@@ -340,9 +340,11 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
+		Checks:        map[string]*plan.Check{},
+		LogTargets:    map[string]*plan.LogTarget{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -672,8 +674,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
+		LogTargets:    map[string]*plan.LogTarget{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Checks override replace works correctly",
@@ -750,8 +754,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
+		LogTargets:    map[string]*plan.LogTarget{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Checks override merge works correctly",
@@ -834,8 +840,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
+		LogTargets:    map[string]*plan.LogTarget{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Timeout is capped at period",
@@ -864,8 +872,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
+		LogTargets:    map[string]*plan.LogTarget{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Unset timeout is capped at period",
@@ -893,8 +903,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
+		LogTargets:    map[string]*plan.LogTarget{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "One of http, tcp, or exec must be present for check",
@@ -1038,7 +1050,9 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		Sections: map[string]plan.Section{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Overriding log targets",
@@ -1194,7 +1208,9 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		Sections: map[string]plan.Section{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Log target requires type field",
@@ -1362,7 +1378,9 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Sections: map[string]plan.Section{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Reserved log target labels",
@@ -1411,9 +1429,11 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks:     map[string]*plan.Check{},
-		LogTargets: map[string]*plan.LogTarget{},
-		Sections:   map[string]plan.Section{},
+		Checks:        map[string]*plan.Check{},
+		LogTargets:    map[string]*plan.LogTarget{},
+		MetricTargets: map[string]*plan.MetricTarget{},
+		TraceTargets:  map[string]*plan.TraceTarget{},
+		Sections:      map[string]plan.Section{},
 	},
 }, {
 	summary: "Three layers missing command",
@@ -1908,6 +1928,65 @@ func (s *S) TestLogsTo(c *C) {
 				Name: serviceName,
 			}
 			c.Check(service.LogsTo(target), Equals, shouldLogTo,
+				Commentf("matching service %q against 'services: %v'", serviceName, test.services))
+		}
+	}
+}
+
+func (s *S) TestMetricsTo(c *C) {
+	tests := []struct {
+		services  []string
+		metricsTo map[string]bool
+	}{{
+		services: nil,
+		metricsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{},
+		metricsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"all"},
+		metricsTo: map[string]bool{
+			"svc1": true,
+			"svc2": true,
+		},
+	}, {
+		services: []string{"svc1"},
+		metricsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+		},
+	}, {
+		services: []string{"all", "-svc2"},
+		metricsTo: map[string]bool{
+			"svc1": true,
+			"svc2": false,
+			"svc3": true,
+		},
+	}, {
+		services: []string{"svc1", "svc2", "-all"},
+		metricsTo: map[string]bool{
+			"svc1": false,
+			"svc2": false,
+			"svc3": false,
+		},
+	}}
+
+	for _, test := range tests {
+		target := &plan.MetricTarget{
+			Services: test.services,
+		}
+
+		for serviceName, shouldMetricsTo := range test.metricsTo {
+			service := &plan.Service{
+				Name: serviceName,
+			}
+			c.Check(service.MetricsTo(target), Equals, shouldMetricsTo,
 				Commentf("matching service %q against 'services: %v'", serviceName, test.services))
 		}
 	}

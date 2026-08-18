@@ -115,6 +115,11 @@ type serviceData struct {
 	// target when it was started, so replan can detect enrollment changes and
 	// restart the service.
 	otlpLogsEnabled bool
+
+	// otlpMetricsEnabled records whether this service was enrolled in an otel
+	// metrics target when it was started, so replan can detect enrollment
+	// changes and restart the service.
+	otlpMetricsEnabled bool
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -391,6 +396,14 @@ func (s *serviceData) startInternal() error {
 		injectOTLPLogsEnv(environment, s.manager.otlpAddress(), s.config.Name)
 	}
 
+	// Inject OTLP metrics environment variables if this service is enrolled
+	// in an opentelemetry metrics target, unless already set. Record the
+	// enrollment state so replan can detect when it changes later.
+	s.otlpMetricsEnabled = otlpMetricsEnabledFor(s.manager.getPlan(), s.config)
+	if s.otlpMetricsEnabled {
+		injectOTLPMetricsEnv(environment, s.manager.otlpAddress(), s.config.Name)
+	}
+
 	s.cmd.Dir = s.config.WorkingDir
 
 	// Start as another user if specified in plan.
@@ -524,6 +537,9 @@ func (s *serviceData) startInternal() error {
 
 	// Pass buffer reference to logMgr to start log forwarding
 	s.manager.logMgr.ServiceStarted(s.config, s.logs)
+	// Notify metricsMgr so it can generate a new service.instance.id for
+	// metrics enrichment.
+	s.manager.metricsMgr.ServiceStarted(s.config)
 	s.startCount.Add(1)
 	return nil
 }

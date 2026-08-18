@@ -452,6 +452,39 @@ log-targets:
 	s.stopTestServices(c)
 }
 
+func (s *S) TestReplanOTLPMetricsEnrollmentChange(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+
+	// test1's own configuration doesn't change, but it becomes enrolled in a
+	// new opentelemetry metrics target.
+	s.planAddLayer(c, `
+metric-targets:
+    otel-metrics:
+        override: replace
+        type: opentelemetry
+        location: http://localhost:4318
+        services: [test1]
+`)
+	s.planChanged(c)
+
+	c.Check(s.manager.OTLPMetricsEnabled("test1"), Equals, true)
+	c.Check(s.manager.OTLPMetricsEnabled("test2"), Equals, false)
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{{"test1"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}})
+
+	s.stopTestServices(c)
+}
+
 func (s *S) TestReplanServicesWithWorkload(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
@@ -965,6 +998,80 @@ OTEL_SERVICE_NAME=otlpoverride
 
 	// Services not enrolled in any opentelemetry log target get no OTLP env vars.
 	dataNotEnrolled, err := os.ReadFile(logPathNotEnrolled)
+	c.Assert(err, IsNil)
+	c.Assert(string(dataNotEnrolled), Equals, "")
+}
+
+func (s *S) TestOTLPMetricsEnvironmentInjection(c *C) {
+	s.newServiceManager(c)
+	s.manager.SetOTLPAddress("127.0.0.1:12345")
+	s.planAddLayer(c, testPlanLayer)
+
+	dir := c.MkDir()
+	metricsPath := filepath.Join(dir, "metrics.txt")
+	layer := `
+services:
+    otlptest:
+        override: replace
+        command: /bin/sh -c "env | grep '^OTEL_' | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
+
+    otlpoverride:
+        override: replace
+        command: /bin/sh -c "env | grep '^OTEL_' | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
+        environment:
+            OTEL_METRICS_EXPORTER: none
+
+    notenrolled:
+        override: replace
+        command: /bin/sh -c "env | grep '^OTEL_' | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
+
+metric-targets:
+    otel-metrics:
+        override: replace
+        type: opentelemetry
+        location: http://localhost:4318
+        services: [otlptest, otlpoverride]
+`
+	metricsPathOverride := filepath.Join(dir, "metrics-override.txt")
+	metricsPathNotEnrolled := filepath.Join(dir, "metrics-not-enrolled.txt")
+	s.planAddLayer(c, fmt.Sprintf(layer, metricsPath, metricsPathOverride, metricsPathNotEnrolled))
+	s.planChanged(c)
+
+	c.Check(s.manager.OTLPMetricsEnabled("otlptest"), Equals, true)
+	c.Check(s.manager.OTLPMetricsEnabled("otlpoverride"), Equals, true)
+	c.Check(s.manager.OTLPMetricsEnabled("notenrolled"), Equals, false)
+
+	chg := s.startServices(c, [][]string{{"otlptest", "otlpoverride", "notenrolled"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	s.waitForDoneCheck(c, "otlptest")
+	s.waitForDoneCheck(c, "otlpoverride")
+	s.waitForDoneCheck(c, "notenrolled")
+
+	// Enrolled service should have all OTLP metrics env vars injected.
+	data, err := os.ReadFile(metricsPath)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, `
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlptest/otlp/v1/metrics
+OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/json
+OTEL_METRICS_EXPORTER=otlp
+OTEL_SERVICE_NAME=otlptest
+`[1:])
+
+	// Operator-provided environment variables must not be overridden.
+	dataOverride, err := os.ReadFile(metricsPathOverride)
+	c.Assert(err, IsNil)
+	c.Assert(string(dataOverride), Equals, `
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlpoverride/otlp/v1/metrics
+OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/json
+OTEL_METRICS_EXPORTER=none
+OTEL_SERVICE_NAME=otlpoverride
+`[1:])
+
+	// Services not enrolled in any opentelemetry metrics target get no OTLP env vars.
+	dataNotEnrolled, err := os.ReadFile(metricsPathNotEnrolled)
 	c.Assert(err, IsNil)
 	c.Assert(string(dataNotEnrolled), Equals, "")
 }
@@ -2085,18 +2192,20 @@ func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
 		return err
 	}
 	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		MetricTargets: combined.MetricTargets,
+		TraceTargets:  combined.TraceTargets,
+		Sections:      combined.Sections,
 	}
 	return s.plan.Validate()
 }
 
 func (s *S) newServiceManager(c *C) {
 	var err error
-	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{}, fakeMetricsManager{})
 	c.Assert(err, IsNil)
 }
 
@@ -2117,11 +2226,13 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	c.Assert(err, IsNil)
 	c.Assert(combined.Validate(), IsNil)
 	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		MetricTargets: combined.MetricTargets,
+		TraceTargets:  combined.TraceTargets,
+		Sections:      combined.Sections,
 	}
 	c.Assert(s.plan.Validate(), IsNil)
 }
@@ -2353,6 +2464,12 @@ func createZombie() error {
 type fakeLogManager struct{}
 
 func (f fakeLogManager) ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer) {
+	// no-op
+}
+
+type fakeMetricsManager struct{}
+
+func (f fakeMetricsManager) ServiceStarted(service *plan.Service) {
 	// no-op
 }
 

@@ -36,7 +36,8 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 
-	logMgr LogManager
+	logMgr     LogManager
+	metricsMgr MetricsManager
 
 	otlpAddrLock sync.Mutex
 	otlpAddr     string
@@ -46,11 +47,25 @@ type LogManager interface {
 	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
+// MetricsManager is used by the service manager to notify the metrics manager
+// when a service starts, so it can generate a new service.instance.id resource
+// attribute for metrics enrichment.
+type MetricsManager interface {
+	ServiceStarted(service *plan.Service)
+}
+
 type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+func NewManager(
+	s *state.State,
+	runner *state.TaskRunner,
+	serviceOutput io.Writer,
+	restarter Restarter,
+	logMgr LogManager,
+	metricsMgr MetricsManager,
+) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),
@@ -58,6 +73,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logMgr:        logMgr,
+		metricsMgr:    metricsMgr,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -279,9 +295,11 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 				workload = ws.Entries[s.config.Workload]
 			}
 			otlpLogsChanged := otlpLogsEnabledFor(currentPlan, config) != s.otlpLogsEnabled
+			otlpMetricsChanged := otlpMetricsEnabledFor(currentPlan, config) != s.otlpMetricsEnabled
 			if config.Equal(s.config) &&
 				workload.Equal(s.workload) &&
-				!otlpLogsChanged {
+				!otlpLogsChanged &&
+				!otlpMetricsChanged {
 				continue
 			}
 			// Update service config and workload from plan

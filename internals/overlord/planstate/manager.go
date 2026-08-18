@@ -255,11 +255,13 @@ func (m *PlanManager) updatePlanLayers(layers []*plan.Layer) (*plan.Plan, error)
 		return nil, err
 	}
 	p := &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		MetricTargets: combined.MetricTargets,
+		TraceTargets:  combined.TraceTargets,
+		Sections:      combined.Sections,
 	}
 	err = p.Validate()
 	if err != nil {
