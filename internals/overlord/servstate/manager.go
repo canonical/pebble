@@ -37,6 +37,9 @@ type ServiceManager struct {
 	rand     *rand.Rand
 
 	logMgr LogManager
+
+	otlpAddrLock sync.Mutex
+	otlpAddr     string
 }
 
 type LogManager interface {
@@ -269,12 +272,16 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	for name, s := range m.services {
 		if config, ok := currentPlan.Services[name]; ok {
 			// Don't restart the service unless the service configuration or its
-			// workload definition (if any) have changed
+			// workload definition (if any) have changed, or OTLP enrollment has
+			// changed.
 			var workload *workloads.Workload
 			if ws != nil {
 				workload = ws.Entries[s.config.Workload]
 			}
-			if config.Equal(s.config) && (workload == nil || workload.Equal(s.workload)) {
+			otlpLogsChanged := otlpLogsEnabledFor(currentPlan, config) != s.otlpLogsEnabled
+			if config.Equal(s.config) &&
+				workload.Equal(s.workload) &&
+				!otlpLogsChanged {
 				continue
 			}
 			// Update service config and workload from plan

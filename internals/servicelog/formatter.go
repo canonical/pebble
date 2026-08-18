@@ -16,6 +16,7 @@ package servicelog
 
 import (
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,4 +95,29 @@ func (f *formatter) Write(p []byte) (nn int, ee error) {
 		}
 	}
 	return written, nil
+}
+
+// WriteEntry formats and writes a single log entry to dest, using the
+// supplied timestamp rather than the time at which the write occurs.
+//
+// If message contains multiple lines, each line is written as a separate
+// entry sharing the same timestamp and service name, matching the format
+// produced by NewFormatWriter so entries can be parsed consistently by
+// Parse.
+func WriteEntry(dest io.Writer, serviceName string, t time.Time, message string) error {
+	message = strings.TrimSuffix(message, "\n")
+	lines := strings.Split(message, "\n")
+	var buf []byte
+	for _, line := range lines {
+		buf = logger.AppendTimestamp(buf[:0], t)
+		buf = append(buf, " ["...)
+		buf = append(buf, serviceName...)
+		buf = append(buf, "] "...)
+		buf = append(buf, line...)
+		buf = append(buf, '\n')
+		if _, err := dest.Write(buf); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -123,6 +123,10 @@ var API = []*Command{{
 	Path:       "/v1/metrics",
 	ReadAccess: MetricsAccess{},
 	GET:        v1GetMetrics,
+}, {
+	Path:        "/v1/services/{name}/otlp/v1/logs",
+	WriteAccess: OTLPAccess{},
+	POST:        v1PostOTLPLogs,
 }}
 
 var (

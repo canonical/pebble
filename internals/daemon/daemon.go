@@ -171,6 +171,8 @@ type Daemon struct {
 	generalListener net.Listener
 	httpListener    net.Listener
 	httpsListener   net.Listener
+	otlpListener    net.Listener
+	otlpAddr        string
 	connTracker     *connTracker
 	serve           *http.Server
 	tomb            tomb.Tomb
@@ -493,8 +495,35 @@ func (d *Daemon) Init() error {
 		logger.Noticef("HTTPS API server listening on %q.", d.options.HTTPSAddress)
 	}
 
+	// Pebble's local OTLP receiver is reachable via the plain HTTP API listener
+	// when one is configured. Otherwise, start a dedicated loopback listener
+	// on any port.
+	if d.httpListener != nil {
+		d.otlpAddr = loopbackAddr(d.httpListener.Addr())
+	} else {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			return fmt.Errorf("cannot listen for OTLP receiver: %v", err)
+		}
+		d.otlpListener = listener
+		d.otlpAddr = loopbackAddr(listener.Addr())
+		logger.Noticef("OTLP receiver listening on %q.", listener.Addr())
+	}
+	d.overlord.ServiceManager().SetOTLPAddress(d.otlpAddr)
+
 	logger.Noticef("Started daemon.")
 	return nil
+}
+
+// loopbackAddr returns the host:port to use to reach a listener bound to
+// addr from a loopback client, replacing whatever host addr has (which may
+// be unspecified, e.g. "::") with the IPv4 loopback address.
+func loopbackAddr(addr net.Addr) string {
+	_, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return ""
+	}
+	return net.JoinHostPort("127.0.0.1", port)
 }
 
 // SetDegradedMode puts the daemon into a degraded mode which will the
@@ -630,6 +659,15 @@ func (d *Daemon) Start() error {
 		// Start additional HTTPS API
 		d.tomb.Go(func() error {
 			err := d.serve.Serve(d.httpsListener)
+			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
+				return err
+			}
+			return nil
+		})
+	}
+	if d.otlpListener != nil {
+		d.tomb.Go(func() error {
+			err := d.serve.Serve(d.otlpListener)
 			if err != http.ErrServerClosed && d.tomb.Err() == tomb.ErrStillAlive {
 				return err
 			}

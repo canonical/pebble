@@ -110,6 +110,11 @@ type serviceData struct {
 	restarting   bool
 	currentSince time.Time
 	startCount   atomic.Int64
+
+	// otlpLogsEnabled records whether this service was enrolled in an otel log
+	// target when it was started, so replan can detect enrollment changes and
+	// restart the service.
+	otlpLogsEnabled bool
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -377,6 +382,14 @@ func (s *serviceData) startInternal() error {
 	// If both workload and service provides the same environment variable,
 	// the service environment prevails.
 	maps.Copy(environment, s.config.Environment)
+
+	// Inject OTLP logs environment variables if this service is enrolled in
+	// an opentelemetry log target, unless already set. Record the enrollment
+	// state so Replan can detect when it changes later.
+	s.otlpLogsEnabled = otlpLogsEnabledFor(s.manager.getPlan(), s.config)
+	if s.otlpLogsEnabled {
+		injectOTLPLogsEnv(environment, s.manager.otlpAddress(), s.config.Name)
+	}
 
 	s.cmd.Dir = s.config.WorkingDir
 

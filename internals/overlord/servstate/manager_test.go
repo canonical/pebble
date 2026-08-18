@@ -416,6 +416,42 @@ services:
 	s.stopTestServices(c)
 }
 
+// TestReplanOTLPLogsEnrollmentChange verifies that Replan restarts a service
+// whose OTLP logs environment variables have been enabled or disabled since
+// it last started, even though its own plan configuration is unchanged.
+func (s *S) TestReplanOTLPLogsEnrollmentChange(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+
+	// test1's own configuration doesn't change, but it becomes enrolled in a
+	// new opentelemetry log target.
+	s.planAddLayer(c, `
+log-targets:
+    otel-logs:
+        override: replace
+        type: opentelemetry
+        location: http://localhost:4318
+        services: [test1]
+`)
+	s.planChanged(c)
+
+	c.Check(s.manager.OTLPLogsEnabled("test1"), Equals, true)
+	c.Check(s.manager.OTLPLogsEnabled("test2"), Equals, false)
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{{"test1"}})
+	c.Check(starts, DeepEquals, [][]string{{"test1", "test2"}})
+
+	s.stopTestServices(c)
+}
+
 func (s *S) TestReplanServicesWithWorkload(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
@@ -857,6 +893,80 @@ PEBBLE_ENV_TEST_1=foo
 PEBBLE_ENV_TEST_2=bar bazz
 PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
+}
+
+func (s *S) TestOTLPLogsEnvironmentInjection(c *C) {
+	s.newServiceManager(c)
+	s.manager.SetOTLPAddress("127.0.0.1:12345")
+	s.planAddLayer(c, testPlanLayer)
+
+	dir := c.MkDir()
+	logPath := filepath.Join(dir, "log.txt")
+	layer := `
+services:
+    otlptest:
+        override: replace
+        command: /bin/sh -c "env | grep '^OTEL_' | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
+
+    otlpoverride:
+        override: replace
+        command: /bin/sh -c "env | grep '^OTEL_' | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
+        environment:
+            OTEL_LOGS_EXPORTER: none
+
+    notenrolled:
+        override: replace
+        command: /bin/sh -c "env | grep '^OTEL_' | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
+
+log-targets:
+    otel-logs:
+        override: replace
+        type: opentelemetry
+        location: http://localhost:4318
+        services: [otlptest, otlpoverride]
+`
+	logPathOverride := filepath.Join(dir, "log-override.txt")
+	logPathNotEnrolled := filepath.Join(dir, "log-not-enrolled.txt")
+	s.planAddLayer(c, fmt.Sprintf(layer, logPath, logPathOverride, logPathNotEnrolled))
+	s.planChanged(c)
+
+	c.Check(s.manager.OTLPLogsEnabled("otlptest"), Equals, true)
+	c.Check(s.manager.OTLPLogsEnabled("otlpoverride"), Equals, true)
+	c.Check(s.manager.OTLPLogsEnabled("notenrolled"), Equals, false)
+
+	chg := s.startServices(c, [][]string{{"otlptest", "otlpoverride", "notenrolled"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	s.waitForDoneCheck(c, "otlptest")
+	s.waitForDoneCheck(c, "otlpoverride")
+	s.waitForDoneCheck(c, "notenrolled")
+
+	// Enrolled service should have all four OTLP logs env vars injected.
+	data, err := os.ReadFile(logPath)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, `
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlptest/otlp/v1/logs
+OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/json
+OTEL_LOGS_EXPORTER=otlp
+OTEL_SERVICE_NAME=otlptest
+`[1:])
+
+	// Operator-provided environment variables must not be overridden.
+	dataOverride, err := os.ReadFile(logPathOverride)
+	c.Assert(err, IsNil)
+	c.Assert(string(dataOverride), Equals, `
+OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlpoverride/otlp/v1/logs
+OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/json
+OTEL_LOGS_EXPORTER=none
+OTEL_SERVICE_NAME=otlpoverride
+`[1:])
+
+	// Services not enrolled in any opentelemetry log target get no OTLP env vars.
+	dataNotEnrolled, err := os.ReadFile(logPathNotEnrolled)
+	c.Assert(err, IsNil)
+	c.Assert(string(dataNotEnrolled), Equals, "")
 }
 
 // TestActionRestart makes sure that the service restart backoff mechanism
