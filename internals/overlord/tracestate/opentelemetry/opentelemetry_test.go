@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	. "gopkg.in/check.v1"
 
 	commonpb "github.com/canonical/pebble/internals/otlp/common/v1"
@@ -72,13 +72,13 @@ func (*suite) TestFlushEnrichesAndSends(c *C) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, http.MethodPost)
 		c.Assert(r.URL.Path, Equals, "/v1/traces")
-		c.Assert(r.Header.Get("Content-Type"), Equals, "application/json")
+		c.Assert(r.Header.Get("Content-Type"), Equals, "application/x-protobuf")
 		c.Assert(r.Header.Get("User-Agent"), Equals, "pebble/1.23.0")
 
 		body, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
 		var data tracepb.TracesData
-		err = protojson.Unmarshal(body, &data)
+		err = proto.Unmarshal(body, &data)
 		c.Assert(err, IsNil)
 		received <- &data
 	}))
@@ -126,7 +126,7 @@ func (*suite) TestServiceInstanceIDNotOverwritten(c *C) {
 		body, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
 		var data tracepb.TracesData
-		err = protojson.Unmarshal(body, &data)
+		err = proto.Unmarshal(body, &data)
 		c.Assert(err, IsNil)
 		received <- &data
 	}))

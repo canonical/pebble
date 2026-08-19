@@ -1014,7 +1014,7 @@ log-targets:
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, `
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlptest/otlp/v1/logs
-OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/protobuf
 OTEL_LOGS_EXPORTER=otlp
 OTEL_SERVICE_NAME=otlptest
 `[1:])
@@ -1024,7 +1024,7 @@ OTEL_SERVICE_NAME=otlptest
 	c.Assert(err, IsNil)
 	c.Assert(string(dataOverride), Equals, `
 OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlpoverride/otlp/v1/logs
-OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_LOGS_PROTOCOL=http/protobuf
 OTEL_LOGS_EXPORTER=none
 OTEL_SERVICE_NAME=otlpoverride
 `[1:])
@@ -1199,7 +1199,7 @@ metric-targets:
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, `
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlptest/otlp/v1/metrics
-OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/protobuf
 OTEL_METRICS_EXPORTER=otlp
 OTEL_SERVICE_NAME=otlptest
 `[1:])
@@ -1209,7 +1209,7 @@ OTEL_SERVICE_NAME=otlptest
 	c.Assert(err, IsNil)
 	c.Assert(string(dataOverride), Equals, `
 OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://127.0.0.1:12345/v1/services/otlpoverride/otlp/v1/metrics
-OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_METRICS_PROTOCOL=http/protobuf
 OTEL_METRICS_EXPORTER=none
 OTEL_SERVICE_NAME=otlpoverride
 `[1:])
@@ -1273,7 +1273,7 @@ trace-targets:
 	c.Assert(err, IsNil)
 	c.Assert(string(data), Equals, `
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://127.0.0.1:12345/v1/services/otlptest/otlp/v1/traces
-OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
 OTEL_SERVICE_NAME=otlptest
 OTEL_TRACES_EXPORTER=otlp
 `[1:])
@@ -1283,7 +1283,7 @@ OTEL_TRACES_EXPORTER=otlp
 	c.Assert(err, IsNil)
 	c.Assert(string(dataOverride), Equals, `
 OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://127.0.0.1:12345/v1/services/otlpoverride/otlp/v1/traces
-OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
 OTEL_SERVICE_NAME=otlpoverride
 OTEL_TRACES_EXPORTER=none
 `[1:])

@@ -22,7 +22,6 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	. "gopkg.in/check.v1"
 
@@ -73,7 +72,7 @@ func (ts *otlpTracesTargetServer) waitForTraces(c *C) *tracepb.TracesData {
 	select {
 	case body := <-ts.received:
 		var data tracepb.TracesData
-		err := protojson.Unmarshal(body, &data)
+		err := proto.Unmarshal(body, &data)
 		c.Assert(err, IsNil)
 		return &data
 	case <-time.After(5 * time.Second):

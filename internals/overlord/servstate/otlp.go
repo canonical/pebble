@@ -79,7 +79,7 @@ func injectOTLPLogsEnv(env map[string]string, receiverAddr, serviceName string) 
 	}
 	endpoint := fmt.Sprintf("http://%s/v1/services/%s/otlp/v1/logs", receiverAddr, serviceName)
 	setIfAbsent("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", endpoint)
-	setIfAbsent("OTEL_EXPORTER_OTLP_LOGS_PROTOCOL", "http/json")
+	setIfAbsent("OTEL_EXPORTER_OTLP_LOGS_PROTOCOL", "http/protobuf")
 	setIfAbsent("OTEL_LOGS_EXPORTER", "otlp")
 	setIfAbsent("OTEL_SERVICE_NAME", serviceName)
 }
@@ -122,7 +122,7 @@ func injectOTLPMetricsEnv(env map[string]string, receiverAddr, serviceName strin
 	}
 	endpoint := fmt.Sprintf("http://%s/v1/services/%s/otlp/v1/metrics", receiverAddr, serviceName)
 	setIfAbsent("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT", endpoint)
-	setIfAbsent("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "http/json")
+	setIfAbsent("OTEL_EXPORTER_OTLP_METRICS_PROTOCOL", "http/protobuf")
 	setIfAbsent("OTEL_METRICS_EXPORTER", "otlp")
 	setIfAbsent("OTEL_SERVICE_NAME", serviceName)
 }
@@ -165,7 +165,7 @@ func injectOTLPTracesEnv(env map[string]string, receiverAddr, serviceName string
 	}
 	endpoint := fmt.Sprintf("http://%s/v1/services/%s/otlp/v1/traces", receiverAddr, serviceName)
 	setIfAbsent("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", endpoint)
-	setIfAbsent("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/json")
+	setIfAbsent("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", "http/protobuf")
 	setIfAbsent("OTEL_TRACES_EXPORTER", "otlp")
 	setIfAbsent("OTEL_SERVICE_NAME", serviceName)
 }

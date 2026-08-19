@@ -25,7 +25,7 @@ import (
 	"sort"
 	"time"
 
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/canonical/pebble/internals/logger"
 	commonpb "github.com/canonical/pebble/internals/otlp/common/v1"
@@ -66,7 +66,7 @@ type batch struct {
 }
 
 // Client sends enriched OTLP traces to a remote OpenTelemetry/HTTP collector,
-// encoded as JSON.
+// encoded as binary protobuf.
 type Client struct {
 	options    *ClientOptions
 	httpClient *http.Client
@@ -199,16 +199,16 @@ func mergeAttributes(existing []*commonpb.KeyValue, service, instanceID string, 
 }
 
 func (c *Client) sendBatch(ctx context.Context, data *tracepb.TracesData) error {
-	jsonData, err := protojson.Marshal(data)
+	protoData, err := proto.Marshal(data)
 	if err != nil {
 		return fmt.Errorf("cannot marshal trace batch: %v", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.options.Location+"/v1/traces", bytes.NewReader(jsonData))
+	req, err := http.NewRequestWithContext(ctx, "POST", c.options.Location+"/v1/traces", bytes.NewReader(protoData))
 	if err != nil {
 		return fmt.Errorf("cannot create request: %v", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", "application/x-protobuf")
 	req.Header.Set("User-Agent", c.options.UserAgent)
 
 	resp, err := c.httpClient.Do(req)
