@@ -701,6 +701,7 @@ type LogTarget struct {
 	Services []string          `yaml:"services"`
 	Override Override          `yaml:"override,omitempty"`
 	Labels   map[string]string `yaml:"labels,omitempty"`
+	Headers  map[string]string `yaml:"headers,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
@@ -718,6 +719,7 @@ func (t *LogTarget) Copy() *LogTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
 	copied.Labels = maps.Clone(t.Labels)
+	copied.Headers = maps.Clone(t.Headers)
 	return &copied
 }
 
@@ -736,6 +738,12 @@ func (t *LogTarget) Merge(other *LogTarget) {
 		}
 		t.Labels[k] = v
 	}
+	for k, v := range other.Headers {
+		if t.Headers == nil {
+			t.Headers = make(map[string]string)
+		}
+		t.Headers[k] = v
+	}
 }
 
 // MetricTarget specifies a remote server to forward metrics to.
@@ -746,6 +754,7 @@ type MetricTarget struct {
 	Services []string          `yaml:"services"`
 	Override Override          `yaml:"override,omitempty"`
 	Labels   map[string]string `yaml:"labels,omitempty"`
+	Headers  map[string]string `yaml:"headers,omitempty"`
 }
 
 // MetricTargetType defines the protocol to use to forward metrics.
@@ -761,6 +770,7 @@ func (t *MetricTarget) Copy() *MetricTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
 	copied.Labels = maps.Clone(t.Labels)
+	copied.Headers = maps.Clone(t.Headers)
 	return &copied
 }
 
@@ -779,6 +789,12 @@ func (t *MetricTarget) Merge(other *MetricTarget) {
 		}
 		t.Labels[k] = v
 	}
+	for k, v := range other.Headers {
+		if t.Headers == nil {
+			t.Headers = make(map[string]string)
+		}
+		t.Headers[k] = v
+	}
 }
 
 // TraceTarget specifies a remote server to forward traces to.
@@ -789,6 +805,7 @@ type TraceTarget struct {
 	Services []string          `yaml:"services"`
 	Override Override          `yaml:"override,omitempty"`
 	Labels   map[string]string `yaml:"labels,omitempty"`
+	Headers  map[string]string `yaml:"headers,omitempty"`
 }
 
 // TraceTargetType defines the protocol to use to forward traces.
@@ -804,6 +821,7 @@ func (t *TraceTarget) Copy() *TraceTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
 	copied.Labels = maps.Clone(t.Labels)
+	copied.Headers = maps.Clone(t.Headers)
 	return &copied
 }
 
@@ -821,6 +839,12 @@ func (t *TraceTarget) Merge(other *TraceTarget) {
 			t.Labels = make(map[string]string)
 		}
 		t.Labels[k] = v
+	}
+	for k, v := range other.Headers {
+		if t.Headers == nil {
+			t.Headers = make(map[string]string)
+		}
+		t.Headers[k] = v
 	}
 }
 

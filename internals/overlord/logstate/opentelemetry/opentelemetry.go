@@ -73,6 +73,7 @@ type ClientOptions struct {
 	ScopeName         string
 	TargetName        string
 	Location          string
+	Headers           map[string]string
 }
 
 func fillDefaultOptions(options *ClientOptions) {
@@ -214,6 +215,9 @@ func (c *Client) sendBatch(ctx context.Context, data *logspb.LogsData) error {
 	}
 	req.Header.Set("Content-Type", "application/x-protobuf")
 	req.Header.Set("User-Agent", c.options.UserAgent)
+	for k, v := range c.options.Headers {
+		req.Header.Set(k, v)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

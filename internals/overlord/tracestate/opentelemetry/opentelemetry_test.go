@@ -147,6 +147,30 @@ func (*suite) TestServiceInstanceIDNotOverwritten(c *C) {
 	}
 }
 
+func (*suite) TestCustomHeaders(c *C) {
+	var gotAuth, gotCustom string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotCustom = r.Header.Get("X-Custom-Header")
+	}))
+	defer server.Close()
+
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location: server.URL,
+		Headers: map[string]string{
+			"Authorization":   "Bearer sometoken",
+			"X-Custom-Header": "custom-value",
+		},
+	})
+	err := client.Add("svc1", "", nil, []*tracepb.ResourceSpans{{}})
+	c.Assert(err, IsNil)
+
+	err = client.Flush(context.Background())
+	c.Assert(err, IsNil)
+	c.Assert(gotAuth, Equals, "Bearer sometoken")
+	c.Assert(gotCustom, Equals, "custom-value")
+}
+
 func (*suite) TestFlushEmptyIsNoOp(c *C) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

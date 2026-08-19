@@ -292,6 +292,7 @@ func newTracesClient(target *plan.TraceTarget) (tracesClient, error) {
 			TargetName: target.Name,
 			Location:   target.Location,
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			Headers:    target.Headers,
 		}), nil
 	default:
 		return nil, fmt.Errorf("unknown type %q for trace target %q", target.Type, target.Name)

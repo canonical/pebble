@@ -174,6 +174,30 @@ func (*suite) TestRequest(c *C) {
 	c.Assert(numRequests, Equals, 1)
 }
 
+func (*suite) TestCustomHeaders(c *C) {
+	var gotAuth, gotCustom string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotCustom = r.Header.Get("X-Custom-Header")
+	}))
+	defer server.Close()
+
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location: server.URL,
+		Headers: map[string]string{
+			"Authorization":   "Bearer sometoken",
+			"X-Custom-Header": "custom-value",
+		},
+	})
+	err := client.Add(servicelog.Entry{Message: "hello"})
+	c.Assert(err, IsNil)
+
+	err = client.Flush(context.Background())
+	c.Assert(err, IsNil)
+	c.Assert(gotAuth, Equals, "Bearer sometoken")
+	c.Assert(gotCustom, Equals, "custom-value")
+}
+
 func (*suite) TestFlushCancelContext(c *C) {
 	serverCtx, killServer := context.WithCancel(context.Background())
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

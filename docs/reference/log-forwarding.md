@@ -16,6 +16,8 @@ log-targets:
     services: [<service names>]
     labels:
       <label name>: <label value>
+    headers:
+      <header name>: <header value>
 ```
 
 Required configuration:
@@ -28,6 +30,7 @@ Optional configuration:
 
 - `services`: A list of services whose logs will be sent to this target. Use the special keyword `all` to match all services in the plan. It's possible to omit `services`, but in this case Pebble doesn't forward any logs.
 - `labels`: A list of key/value pairs defining extra labels which should be set on the outgoing logs.
+- `headers`: A list of key/value pairs defining extra HTTP headers to send with each request to the log target (for example, `Authorization`). Only supported for the `opentelemetry` target type.
 
 For more details, see [layer specification](../reference/layer-specification).
 

@@ -285,6 +285,12 @@ log-targets:
     labels:
       <label name>: <label value>
 
+    # (Optional) A list of key/value pairs defining extra HTTP headers to send
+    # with each request to the log target (for example, "Authorization").
+    # Only supported for the opentelemetry target type.
+    headers:
+      <header name>: <header value>
+
 # (Optional) HTTPS (using mTLS) communication between the client and server
 # requires both sides to be paired first. Pairing is currently only supported
 # for HTTPS transport (not HTTP or Unix socket).
