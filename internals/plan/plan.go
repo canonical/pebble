@@ -90,7 +90,7 @@ var (
 // builtinSections represents all the built-in layer sections. This list is used
 // for identifying built-in fields in this package. It is unit tested to match
 // the YAML fields exposed in the Layer type, to catch inconsistencies.
-var builtinSections = []string{"summary", "description", "services", "checks", "log-targets", "metric-targets", "trace-targets"}
+var builtinSections = []string{"summary", "description", "services", "checks", "log-targets", "metrics-targets", "trace-targets"}
 
 // RegisterSectionExtension adds a plan schema extension. All registrations must be
 // done before the plan library is used. The order in which extensions are
@@ -117,12 +117,12 @@ func UnregisterSectionExtension(field string) {
 }
 
 type Plan struct {
-	Layers        []*Layer                 `yaml:"-"`
-	Services      map[string]*Service      `yaml:"services,omitempty"`
-	Checks        map[string]*Check        `yaml:"checks,omitempty"`
-	LogTargets    map[string]*LogTarget    `yaml:"log-targets,omitempty"`
-	MetricTargets map[string]*MetricTarget `yaml:"metric-targets,omitempty"`
-	TraceTargets  map[string]*TraceTarget  `yaml:"trace-targets,omitempty"`
+	Layers         []*Layer                  `yaml:"-"`
+	Services       map[string]*Service       `yaml:"services,omitempty"`
+	Checks         map[string]*Check         `yaml:"checks,omitempty"`
+	LogTargets     map[string]*LogTarget     `yaml:"log-targets,omitempty"`
+	MetricsTargets map[string]*MetricsTarget `yaml:"metrics-targets,omitempty"`
+	TraceTargets   map[string]*TraceTarget   `yaml:"trace-targets,omitempty"`
 
 	Sections map[string]Section `yaml:",inline"`
 }
@@ -169,9 +169,9 @@ func (p *Plan) MarshalYAML() (any, error) {
 		Type: reflect.TypeFor[map[string]*LogTarget](),
 		Tag:  `yaml:"log-targets,omitempty"`,
 	}, {
-		Name: "MetricTargets",
-		Type: reflect.TypeFor[map[string]*MetricTarget](),
-		Tag:  `yaml:"metric-targets,omitempty"`,
+		Name: "MetricsTargets",
+		Type: reflect.TypeFor[map[string]*MetricsTarget](),
+		Tag:  `yaml:"metrics-targets,omitempty"`,
 	}, {
 		Name: "TraceTargets",
 		Type: reflect.TypeFor[map[string]*TraceTarget](),
@@ -192,7 +192,7 @@ func (p *Plan) MarshalYAML() (any, error) {
 	v.Field(0).Set(reflect.ValueOf(p.Services))
 	v.Field(1).Set(reflect.ValueOf(p.Checks))
 	v.Field(2).Set(reflect.ValueOf(p.LogTargets))
-	v.Field(3).Set(reflect.ValueOf(p.MetricTargets))
+	v.Field(3).Set(reflect.ValueOf(p.MetricsTargets))
 	v.Field(4).Set(reflect.ValueOf(p.TraceTargets))
 	for i, field := range sectionExtensionsOrder {
 		v.Field(sectionsIdx + i).Set(reflect.ValueOf(p.Sections[field]))
@@ -212,15 +212,15 @@ func (p *Plan) MarshalYAML() (any, error) {
 //
 // Please see ReadLayersDir for more details.
 type Layer struct {
-	Order         int                      `yaml:"-"`
-	Label         string                   `yaml:"-"`
-	Summary       string                   `yaml:"summary,omitempty"`
-	Description   string                   `yaml:"description,omitempty"`
-	Services      map[string]*Service      `yaml:"services,omitempty"`
-	Checks        map[string]*Check        `yaml:"checks,omitempty"`
-	LogTargets    map[string]*LogTarget    `yaml:"log-targets,omitempty"`
-	MetricTargets map[string]*MetricTarget `yaml:"metric-targets,omitempty"`
-	TraceTargets  map[string]*TraceTarget  `yaml:"trace-targets,omitempty"`
+	Order          int                       `yaml:"-"`
+	Label          string                    `yaml:"-"`
+	Summary        string                    `yaml:"summary,omitempty"`
+	Description    string                    `yaml:"description,omitempty"`
+	Services       map[string]*Service       `yaml:"services,omitempty"`
+	Checks         map[string]*Check         `yaml:"checks,omitempty"`
+	LogTargets     map[string]*LogTarget     `yaml:"log-targets,omitempty"`
+	MetricsTargets map[string]*MetricsTarget `yaml:"metrics-targets,omitempty"`
+	TraceTargets   map[string]*TraceTarget   `yaml:"trace-targets,omitempty"`
 
 	Sections map[string]Section `yaml:",inline"`
 }
@@ -430,7 +430,7 @@ func (s *Service) LogsTo(t *LogTarget) bool {
 }
 
 // MetricsTo returns true if the metrics from s should be forwarded to target t.
-func (s *Service) MetricsTo(t *MetricTarget) bool {
+func (s *Service) MetricsTo(t *MetricsTarget) bool {
 	// Iterate backwards through t.Services until we find something matching
 	// s.Name.
 	for i := len(t.Services) - 1; i >= 0; i-- {
@@ -746,10 +746,10 @@ func (t *LogTarget) Merge(other *LogTarget) {
 	}
 }
 
-// MetricTarget specifies a remote server to forward metrics to.
-type MetricTarget struct {
+// MetricsTarget specifies a remote server to forward metrics to.
+type MetricsTarget struct {
 	Name     string            `yaml:"-"`
-	Type     MetricTargetType  `yaml:"type"`
+	Type     MetricsTargetType `yaml:"type"`
 	Location string            `yaml:"location"`
 	Services []string          `yaml:"services"`
 	Override Override          `yaml:"override,omitempty"`
@@ -757,16 +757,16 @@ type MetricTarget struct {
 	Headers  map[string]string `yaml:"headers,omitempty"`
 }
 
-// MetricTargetType defines the protocol to use to forward metrics.
-type MetricTargetType string
+// MetricsTargetType defines the protocol to use to forward metrics.
+type MetricsTargetType string
 
 const (
-	OpenTelemetryMetricTarget MetricTargetType = "opentelemetry"
-	UnsetMetricTarget         MetricTargetType = ""
+	OpenTelemetryMetricsTarget MetricsTargetType = "opentelemetry"
+	UnsetMetricsTarget         MetricsTargetType = ""
 )
 
 // Copy returns a deep copy of the metric target configuration.
-func (t *MetricTarget) Copy() *MetricTarget {
+func (t *MetricsTarget) Copy() *MetricsTarget {
 	copied := *t
 	copied.Services = append([]string(nil), t.Services...)
 	copied.Labels = maps.Clone(t.Labels)
@@ -775,7 +775,7 @@ func (t *MetricTarget) Copy() *MetricTarget {
 }
 
 // Merge merges the fields set in other into t.
-func (t *MetricTarget) Merge(other *MetricTarget) {
+func (t *MetricsTarget) Merge(other *MetricsTarget) {
 	if other.Type != "" {
 		t.Type = other.Type
 	}
@@ -865,12 +865,12 @@ func (e *FormatError) Error() string {
 // validate the combined output if required.
 func CombineLayers(layers ...*Layer) (*Layer, error) {
 	combined := &Layer{
-		Services:      make(map[string]*Service),
-		Checks:        make(map[string]*Check),
-		LogTargets:    make(map[string]*LogTarget),
-		MetricTargets: make(map[string]*MetricTarget),
-		TraceTargets:  make(map[string]*TraceTarget),
-		Sections:      make(map[string]Section),
+		Services:       make(map[string]*Service),
+		Checks:         make(map[string]*Check),
+		LogTargets:     make(map[string]*LogTarget),
+		MetricsTargets: make(map[string]*MetricsTarget),
+		TraceTargets:   make(map[string]*TraceTarget),
+		Sections:       make(map[string]Section),
 	}
 
 	// Combine the same sections from each layer. Note that we do this before
@@ -967,16 +967,16 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 			}
 		}
 
-		for name, target := range layer.MetricTargets {
+		for name, target := range layer.MetricsTargets {
 			switch target.Override {
 			case MergeOverride:
-				if old, ok := combined.MetricTargets[name]; ok {
+				if old, ok := combined.MetricsTargets[name]; ok {
 					old.Merge(target)
 				} else {
-					combined.MetricTargets[name] = target.Copy()
+					combined.MetricsTargets[name] = target.Copy()
 				}
 			case ReplaceOverride:
-				combined.MetricTargets[name] = target.Copy()
+				combined.MetricsTargets[name] = target.Copy()
 			case UnknownOverride:
 				return nil, &FormatError{
 					Message: fmt.Sprintf(`layer %q must define "override" for metric target %q`,
@@ -1201,7 +1201,7 @@ func (layer *Layer) Validate() error {
 		}
 	}
 
-	for name, target := range layer.MetricTargets {
+	for name, target := range layer.MetricsTargets {
 		if target == nil {
 			return &FormatError{
 				Message: fmt.Sprintf("metric target object cannot be null for metric target %q", name),
@@ -1216,14 +1216,14 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		switch target.Type {
-		case OpenTelemetryMetricTarget:
+		case OpenTelemetryMetricsTarget:
 			// valid, continue
-		case UnsetMetricTarget:
+		case UnsetMetricsTarget:
 			// will be checked when the layers are combined
 		default:
 			return &FormatError{
 				Message: fmt.Sprintf(`metric target %q has unsupported type %q, must be %q`,
-					name, target.Type, OpenTelemetryMetricTarget),
+					name, target.Type, OpenTelemetryMetricsTarget),
 			}
 		}
 	}
@@ -1349,14 +1349,14 @@ func (p *Plan) Validate() error {
 		}
 	}
 
-	for name, target := range p.MetricTargets {
+	for name, target := range p.MetricsTargets {
 		switch target.Type {
-		case OpenTelemetryMetricTarget:
+		case OpenTelemetryMetricsTarget:
 			// valid, continue
-		case UnsetMetricTarget:
+		case UnsetMetricsTarget:
 			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "type" (%q) for metric target %q`,
-					OpenTelemetryMetricTarget, name),
+					OpenTelemetryMetricsTarget, name),
 			}
 		}
 
@@ -1602,12 +1602,12 @@ func (p *Plan) checkCycles() error {
 
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer := &Layer{
-		Services:      make(map[string]*Service),
-		Checks:        make(map[string]*Check),
-		LogTargets:    make(map[string]*LogTarget),
-		MetricTargets: make(map[string]*MetricTarget),
-		TraceTargets:  make(map[string]*TraceTarget),
-		Sections:      make(map[string]Section),
+		Services:       make(map[string]*Service),
+		Checks:         make(map[string]*Check),
+		LogTargets:     make(map[string]*LogTarget),
+		MetricsTargets: make(map[string]*MetricsTarget),
+		TraceTargets:   make(map[string]*TraceTarget),
+		Sections:       make(map[string]Section),
 	}
 
 	// The following manual approach is required because:
@@ -1620,13 +1620,13 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	// sections, and at the top field level, which includes Section field
 	// names.
 	builtins := map[string]any{
-		"summary":        &layer.Summary,
-		"description":    &layer.Description,
-		"services":       &layer.Services,
-		"checks":         &layer.Checks,
-		"log-targets":    &layer.LogTargets,
-		"metric-targets": &layer.MetricTargets,
-		"trace-targets":  &layer.TraceTargets,
+		"summary":         &layer.Summary,
+		"description":     &layer.Description,
+		"services":        &layer.Services,
+		"checks":          &layer.Checks,
+		"log-targets":     &layer.LogTargets,
+		"metrics-targets": &layer.MetricsTargets,
+		"trace-targets":   &layer.TraceTargets,
 	}
 
 	sections := make(map[string]yaml.Node)
@@ -1693,7 +1693,7 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 			target.Name = name
 		}
 	}
-	for name, target := range layer.MetricTargets {
+	for name, target := range layer.MetricsTargets {
 		if target != nil {
 			target.Name = name
 		}
@@ -1930,14 +1930,14 @@ func ReadDir(layersDir string, base *Plan) (*Plan, error) {
 			// be to use order "1" and, before prepending this layer, offset all
 			// other layers' orders by 1000 (which is what PlanManager.AppendLayer)
 			// does internally in order to support layer sub-directories.
-			Order:         0,
-			Label:         "pebble-base",
-			Services:      base.Services,
-			Checks:        base.Checks,
-			LogTargets:    base.LogTargets,
-			MetricTargets: base.MetricTargets,
-			TraceTargets:  base.TraceTargets,
-			Sections:      base.Sections,
+			Order:          0,
+			Label:          "pebble-base",
+			Services:       base.Services,
+			Checks:         base.Checks,
+			LogTargets:     base.LogTargets,
+			MetricsTargets: base.MetricsTargets,
+			TraceTargets:   base.TraceTargets,
+			Sections:       base.Sections,
 		}
 		layers = append([]*Layer{baseLayer}, layers...)
 	}
@@ -1947,13 +1947,13 @@ func ReadDir(layersDir string, base *Plan) (*Plan, error) {
 		return nil, err
 	}
 	plan := &Plan{
-		Layers:        layers,
-		Services:      combined.Services,
-		Checks:        combined.Checks,
-		LogTargets:    combined.LogTargets,
-		MetricTargets: combined.MetricTargets,
-		TraceTargets:  combined.TraceTargets,
-		Sections:      combined.Sections,
+		Layers:         layers,
+		Services:       combined.Services,
+		Checks:         combined.Checks,
+		LogTargets:     combined.LogTargets,
+		MetricsTargets: combined.MetricsTargets,
+		TraceTargets:   combined.TraceTargets,
+		Sections:       combined.Sections,
 	}
 	err = plan.Validate()
 	if err != nil {

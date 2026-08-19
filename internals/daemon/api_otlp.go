@@ -99,7 +99,7 @@ func v1PostOTLPLogs(c *Command, r *http.Request, _ *UserState) Response {
 // v1PostOTLPMetrics implements the local OTLP/HTTP metrics receiver endpoint,
 // POST /v1/services/{name}/otlp/v1/metrics. It accepts a JSON or Protobuf
 // encoded ExportMetricsServiceRequest, and buffers the resource metrics for
-// forwarding to any metric-targets the named service is enrolled in.
+// forwarding to any metrics-targets the named service is enrolled in.
 func v1PostOTLPMetrics(c *Command, r *http.Request, _ *UserState) Response {
 	serviceName := muxVars(r)["name"]
 

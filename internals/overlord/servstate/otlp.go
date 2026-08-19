@@ -98,8 +98,8 @@ func (m *ServiceManager) OTLPMetricsEnabled(name string) bool {
 // otlpMetricsEnabledFor reports whether a service is enrolled in at least
 // one opentelemetry metrics target.
 func otlpMetricsEnabledFor(p *plan.Plan, service *plan.Service) bool {
-	for _, target := range p.MetricTargets {
-		if target.Type != plan.OpenTelemetryMetricTarget {
+	for _, target := range p.MetricsTargets {
+		if target.Type != plan.OpenTelemetryMetricsTarget {
 			continue
 		}
 		if service.MetricsTo(target) {

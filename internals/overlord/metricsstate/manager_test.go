@@ -36,14 +36,14 @@ func (*managerSuite) SetUpSuite(c *C) {
 
 func newTestMetricsManager(clients map[string]*testClient) *MetricsManager {
 	m := NewMetricsManager()
-	m.newGatherer = func(t *plan.MetricTarget) (*metricsGatherer, error) {
+	m.newGatherer = func(t *plan.MetricsTarget) (*metricsGatherer, error) {
 		client := clients[t.Name]
 		if client == nil {
 			client = &testClient{}
 			clients[t.Name] = client
 		}
 		return newMetricsGathererInternal(t, &metricsGathererOptions{
-			newClient: func(*plan.MetricTarget) (metricsClient, error) { return client, nil },
+			newClient: func(*plan.MetricsTarget) (metricsClient, error) { return client, nil },
 		})
 	}
 	return m
@@ -58,7 +58,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 			"svc1": {Name: "svc1"},
 			"svc2": {Name: "svc2"},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{
+		MetricsTargets: map[string]*plan.MetricsTarget{
 			"tgt1": {Name: "tgt1", Services: []string{"all"}},
 			"tgt2": {Name: "tgt2", Services: []string{}},
 		},
@@ -76,7 +76,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 		Services: map[string]*plan.Service{
 			"svc1": {Name: "svc1"},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{
+		MetricsTargets: map[string]*plan.MetricsTarget{
 			"tgt1": {Name: "tgt1", Services: []string{"all"}},
 		},
 	})
@@ -93,7 +93,7 @@ func (*managerSuite) TestAddMetricsRouting(c *C) {
 			"svc1": {Name: "svc1"},
 			"svc2": {Name: "svc2"},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{
+		MetricsTargets: map[string]*plan.MetricsTarget{
 			"tgt1": {Name: "tgt1", Services: []string{"svc1"}},
 			"tgt2": {Name: "tgt2", Services: []string{"all"}},
 		},
@@ -120,7 +120,7 @@ func (*managerSuite) TestAddMetricsServiceNotEnrolledAnywhere(c *C) {
 		Services: map[string]*plan.Service{
 			"svc1": {Name: "svc1"},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{
+		MetricsTargets: map[string]*plan.MetricsTarget{
 			"tgt1": {Name: "tgt1", Services: []string{}},
 		},
 	})
@@ -140,7 +140,7 @@ func (*managerSuite) TestServiceStartedGeneratesNewInstanceID(c *C) {
 		Services: map[string]*plan.Service{
 			"svc1": svc,
 		},
-		MetricTargets: map[string]*plan.MetricTarget{
+		MetricsTargets: map[string]*plan.MetricsTarget{
 			"tgt1": {Name: "tgt1", Services: []string{"all"}},
 		},
 	})
@@ -180,7 +180,7 @@ func (*managerSuite) TestAddMetricsEvaluatesLabels(c *C) {
 		Services: map[string]*plan.Service{
 			"svc1": svc,
 		},
-		MetricTargets: map[string]*plan.MetricTarget{
+		MetricsTargets: map[string]*plan.MetricsTarget{
 			"tgt1": {
 				Name:     "tgt1",
 				Services: []string{"all"},
@@ -208,7 +208,7 @@ func (*managerSuite) TestStop(c *C) {
 		Services: map[string]*plan.Service{
 			"svc1": {Name: "svc1"},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{
+		MetricsTargets: map[string]*plan.MetricsTarget{
 			"tgt1": {Name: "tgt1", Services: []string{"all"}},
 			"tgt2": {Name: "tgt2", Services: []string{"all"}},
 		},

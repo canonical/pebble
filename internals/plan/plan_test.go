@@ -205,11 +205,11 @@ var planTests = []planTest{{
 				Startup:  plan.StartupUnknown,
 			},
 		},
-		Checks:        map[string]*plan.Check{},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		Checks:         map[string]*plan.Check{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}, {
 		Order:       1,
 		Label:       "layer-1",
@@ -258,11 +258,11 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks:        map[string]*plan.Check{},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		Checks:         map[string]*plan.Check{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}},
 	result: &plan.Layer{
 		Summary:     "Simple override layer.",
@@ -340,11 +340,11 @@ var planTests = []planTest{{
 				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
 			},
 		},
-		Checks:        map[string]*plan.Check{},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		Checks:         map[string]*plan.Check{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 	start: map[string][]string{
 		"srv1": {"srv2", "srv1", "srv3"},
@@ -405,11 +405,11 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks:        map[string]*plan.Check{},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		Checks:         map[string]*plan.Check{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}},
 }, {
 	summary: "Unknown keys are not accepted",
@@ -558,11 +558,11 @@ var planTests = []planTest{{
 				Command:  `cmd -v [ --foo bar -e "x [ y ] z" ]`,
 			},
 		},
-		Checks:        map[string]*plan.Check{},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		Checks:         map[string]*plan.Check{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}},
 }, {
 	summary: `Invalid service command: cannot have any arguments after [ ... ] group`,
@@ -674,10 +674,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Checks override replace works correctly",
@@ -754,10 +754,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Checks override merge works correctly",
@@ -840,10 +840,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Timeout is capped at period",
@@ -872,10 +872,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Unset timeout is capped at period",
@@ -903,10 +903,10 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "One of http, tcp, or exec must be present for check",
@@ -1050,9 +1050,9 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Overriding log targets",
@@ -1132,9 +1132,9 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}, {
 		Label: "layer-1",
 		Order: 1,
@@ -1166,9 +1166,9 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{
@@ -1208,9 +1208,9 @@ var planTests = []planTest{{
 				Override: plan.MergeOverride,
 			},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Log target requires type field",
@@ -1320,9 +1320,9 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}, {
 		Order:    1,
 		Label:    "layer-1",
@@ -1348,9 +1348,9 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	}},
 	result: &plan.Layer{
 		Services: map[string]*plan.Service{},
@@ -1378,9 +1378,9 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Reserved log target labels",
@@ -1429,11 +1429,11 @@ var planTests = []planTest{{
 				},
 			},
 		},
-		Checks:        map[string]*plan.Check{},
-		LogTargets:    map[string]*plan.LogTarget{},
-		MetricTargets: map[string]*plan.MetricTarget{},
-		TraceTargets:  map[string]*plan.TraceTarget{},
-		Sections:      map[string]plan.Section{},
+		Checks:         map[string]*plan.Check{},
+		LogTargets:     map[string]*plan.LogTarget{},
+		MetricsTargets: map[string]*plan.MetricsTarget{},
+		TraceTargets:   map[string]*plan.TraceTarget{},
+		Sections:       map[string]plan.Section{},
 	},
 }, {
 	summary: "Three layers missing command",
@@ -1978,7 +1978,7 @@ func (s *S) TestMetricsTo(c *C) {
 	}}
 
 	for _, test := range tests {
-		target := &plan.MetricTarget{
+		target := &plan.MetricsTarget{
 			Services: test.services,
 		}
 
@@ -2283,9 +2283,9 @@ func (s *S) TestStartStopOrderMultipleLanesRandomOrder(c *C) {
 // the plan library where required.
 func (s *S) TestSectionFieldStability(c *C) {
 	layerFields := structYamlFields(plan.Layer{})
-	c.Assert(layerFields, testutil.DeepUnsortedMatches, []string{"summary", "description", "services", "checks", "log-targets", "metric-targets", "trace-targets", "sections"})
+	c.Assert(layerFields, testutil.DeepUnsortedMatches, []string{"summary", "description", "services", "checks", "log-targets", "metrics-targets", "trace-targets", "sections"})
 	planFields := structYamlFields(*plan.NewPlan())
-	c.Assert(planFields, testutil.DeepUnsortedMatches, []string{"services", "checks", "log-targets", "metric-targets", "trace-targets", "sections"})
+	c.Assert(planFields, testutil.DeepUnsortedMatches, []string{"services", "checks", "log-targets", "metrics-targets", "trace-targets", "sections"})
 }
 
 // structYamlFields extracts the YAML fields from a struct. If the YAML tag

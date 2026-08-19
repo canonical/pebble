@@ -41,7 +41,7 @@ type MetricsManager struct {
 	instanceIDs map[string]string
 	plan        *plan.Plan
 
-	newGatherer func(*plan.MetricTarget) (*metricsGatherer, error)
+	newGatherer func(*plan.MetricsTarget) (*metricsGatherer, error)
 }
 
 // NewMetricsManager creates a new MetricsManager.
@@ -61,9 +61,9 @@ func (m *MetricsManager) PlanChanged(pl *plan.Plan) {
 
 	// Create a map to hold gatherers for the new plan. Old gatherers will be
 	// moved over or deleted.
-	newGatherers := make(map[string]*metricsGatherer, len(pl.MetricTargets))
+	newGatherers := make(map[string]*metricsGatherer, len(pl.MetricsTargets))
 
-	for _, target := range pl.MetricTargets {
+	for _, target := range pl.MetricsTargets {
 		gatherer := m.gatherers[target.Name]
 		if gatherer == nil {
 			// Create new gatherer
@@ -130,7 +130,7 @@ func (m *MetricsManager) AddMetrics(serviceName string, resourceMetrics []*metri
 	}
 
 	instanceID := m.instanceIDs[serviceName]
-	for _, target := range m.plan.MetricTargets {
+	for _, target := range m.plan.MetricsTargets {
 		if !service.MetricsTo(target) {
 			continue
 		}

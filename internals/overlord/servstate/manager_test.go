@@ -465,7 +465,7 @@ func (s *S) TestReplanOTLPMetricsEnrollmentChange(c *C) {
 	// test1's own configuration doesn't change, but it becomes enrolled in a
 	// new opentelemetry metrics target.
 	s.planAddLayer(c, `
-metric-targets:
+metrics-targets:
     otel-metrics:
         override: replace
         type: opentelemetry
@@ -1169,7 +1169,7 @@ services:
         override: replace
         command: /bin/sh -c "env | grep '^OTEL_' | sort > %s; {{.NotifyDoneCheck}}; sleep 10"
 
-metric-targets:
+metrics-targets:
     otel-metrics:
         override: replace
         type: opentelemetry
@@ -2410,13 +2410,13 @@ func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
 		return err
 	}
 	s.plan = &plan.Plan{
-		Layers:        layers,
-		Services:      combined.Services,
-		Checks:        combined.Checks,
-		LogTargets:    combined.LogTargets,
-		MetricTargets: combined.MetricTargets,
-		TraceTargets:  combined.TraceTargets,
-		Sections:      combined.Sections,
+		Layers:         layers,
+		Services:       combined.Services,
+		Checks:         combined.Checks,
+		LogTargets:     combined.LogTargets,
+		MetricsTargets: combined.MetricsTargets,
+		TraceTargets:   combined.TraceTargets,
+		Sections:       combined.Sections,
 	}
 	return s.plan.Validate()
 }
@@ -2444,13 +2444,13 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	c.Assert(err, IsNil)
 	c.Assert(combined.Validate(), IsNil)
 	s.plan = &plan.Plan{
-		Layers:        layers,
-		Services:      combined.Services,
-		Checks:        combined.Checks,
-		LogTargets:    combined.LogTargets,
-		MetricTargets: combined.MetricTargets,
-		TraceTargets:  combined.TraceTargets,
-		Sections:      combined.Sections,
+		Layers:         layers,
+		Services:       combined.Services,
+		Checks:         combined.Checks,
+		LogTargets:     combined.LogTargets,
+		MetricsTargets: combined.MetricsTargets,
+		TraceTargets:   combined.TraceTargets,
+		Sections:       combined.Sections,
 	}
 	c.Assert(s.plan.Validate(), IsNil)
 }

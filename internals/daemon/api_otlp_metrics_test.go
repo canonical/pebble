@@ -123,7 +123,7 @@ func (s *apiSuite) TestOTLPMetricsJSON(c *C) {
 	s.daemon(c)
 	s.startOverlord()
 	s.addLayer(c, fmt.Sprintf(`
-metric-targets:
+metrics-targets:
     otel-metrics:
         override: replace
         type: opentelemetry
@@ -163,7 +163,7 @@ func (s *apiSuite) TestOTLPMetricsProtobuf(c *C) {
 	s.daemon(c)
 	s.startOverlord()
 	s.addLayer(c, fmt.Sprintf(`
-metric-targets:
+metrics-targets:
     otel-metrics:
         override: replace
         type: opentelemetry
@@ -210,7 +210,7 @@ func (s *apiSuite) TestOTLPMetricsUnknownServiceDiscarded(c *C) {
 	s.daemon(c)
 	s.startOverlord()
 	s.addLayer(c, fmt.Sprintf(`
-metric-targets:
+metrics-targets:
     otel-metrics:
         override: replace
         type: opentelemetry

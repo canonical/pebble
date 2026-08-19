@@ -73,12 +73,12 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	received := make(chan []metricsBatch, 1)
 	options := metricsGathererOptions{
 		maxBufferedBatches: 2,
-		newClient: func(target *plan.MetricTarget) (metricsClient, error) {
+		newClient: func(target *plan.MetricsTarget) (metricsClient, error) {
 			return &testClient{sendCh: received}, nil
 		},
 	}
 
-	g, err := newMetricsGathererInternal(&plan.MetricTarget{Name: "tgt1"}, &options)
+	g, err := newMetricsGathererInternal(&plan.MetricsTarget{Name: "tgt1"}, &options)
 	c.Assert(err, IsNil)
 	defer g.Stop()
 
@@ -98,12 +98,12 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []metricsBatch, 1)
 	options := metricsGathererOptions{
 		bufferTimeout: 1 * time.Millisecond,
-		newClient: func(target *plan.MetricTarget) (metricsClient, error) {
+		newClient: func(target *plan.MetricsTarget) (metricsClient, error) {
 			return &testClient{sendCh: received}, nil
 		},
 	}
 
-	g, err := newMetricsGathererInternal(&plan.MetricTarget{Name: "tgt1"}, &options)
+	g, err := newMetricsGathererInternal(&plan.MetricsTarget{Name: "tgt1"}, &options)
 	c.Assert(err, IsNil)
 	defer g.Stop()
 
@@ -122,12 +122,12 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	fakeClient := &testClient{sendCh: received}
 	options := metricsGathererOptions{
 		bufferTimeout: 1 * time.Minute, // long enough that the timer won't fire
-		newClient: func(target *plan.MetricTarget) (metricsClient, error) {
+		newClient: func(target *plan.MetricsTarget) (metricsClient, error) {
 			return fakeClient, nil
 		},
 	}
 
-	g, err := newMetricsGathererInternal(&plan.MetricTarget{Name: "tgt1"}, &options)
+	g, err := newMetricsGathererInternal(&plan.MetricsTarget{Name: "tgt1"}, &options)
 	c.Assert(err, IsNil)
 
 	g.Add("svc1", "instance-1", nil, someResourceMetrics())
@@ -153,12 +153,12 @@ func (s *gathererSuite) TestGathererDropsWhenBufferFull(c *C) {
 
 	options := metricsGathererOptions{
 		queueSize: 1,
-		newClient: func(target *plan.MetricTarget) (metricsClient, error) {
+		newClient: func(target *plan.MetricsTarget) (metricsClient, error) {
 			return blockedClient, nil
 		},
 	}
 
-	g, err := newMetricsGathererInternal(&plan.MetricTarget{Name: "tgt1"}, &options)
+	g, err := newMetricsGathererInternal(&plan.MetricsTarget{Name: "tgt1"}, &options)
 	c.Assert(err, IsNil)
 	defer g.Stop()
 

@@ -84,7 +84,7 @@ type metricsGathererOptions struct {
 	timeoutFinalFlush  time.Duration
 	queueSize          int
 	// method to get a new client
-	newClient func(*plan.MetricTarget) (metricsClient, error)
+	newClient func(*plan.MetricsTarget) (metricsClient, error)
 }
 
 // metricsBatch represents a single OTLP export received on behalf of a
@@ -96,14 +96,14 @@ type metricsBatch struct {
 	resourceMetrics []*metricspb.ResourceMetrics
 }
 
-func newMetricsGatherer(target *plan.MetricTarget) (*metricsGatherer, error) {
+func newMetricsGatherer(target *plan.MetricsTarget) (*metricsGatherer, error) {
 	return newMetricsGathererInternal(target, &metricsGathererOptions{})
 }
 
 // newMetricsGathererInternal contains the actual creation code for a
 // metricsGatherer. This function is used in the real implementation, but
 // also allows overriding certain configuration values for testing.
-func newMetricsGathererInternal(target *plan.MetricTarget, options *metricsGathererOptions) (*metricsGatherer, error) {
+func newMetricsGathererInternal(target *plan.MetricsTarget, options *metricsGathererOptions) (*metricsGatherer, error) {
 	options = fillDefaultOptions(options)
 	client, err := options.newClient(target)
 	if err != nil {
@@ -285,9 +285,9 @@ type metricsClient interface {
 	Flush(context.Context) error
 }
 
-func newMetricsClient(target *plan.MetricTarget) (metricsClient, error) {
+func newMetricsClient(target *plan.MetricsTarget) (metricsClient, error) {
 	switch target.Type {
-	case plan.OpenTelemetryMetricTarget:
+	case plan.OpenTelemetryMetricsTarget:
 		return opentelemetry.NewClient(&opentelemetry.ClientOptions{
 			TargetName: target.Name,
 			Location:   target.Location,
