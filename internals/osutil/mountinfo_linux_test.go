@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2017 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -99,11 +99,27 @@ func (s *mountinfoSuite) TestParseMountInfoEntry3(c *C) {
 	c.Assert(entry.SuperOptions, DeepEquals, map[string]string{"rw ": "", "errors": "continue"})
 }
 
+func (s *mountinfoSuite) TestBrokenEscapingPlan9(c *C) {
+	// This is a real sample collected on WSL-2 with Docker installed on the Windows host.
+	mi, err := osutil.ParseMountInfoEntry(`1146 77 0:149 / /Docker/host rw,noatime - 9p drvfs rw,dirsync,aname=drvfs;path=C:\Program Files\Docker\Docker\resources;symlinkroot=/mnt/,mmap,access=client,msize=262144,trans=virtio`)
+	c.Assert(err, IsNil)
+	c.Check(mi.SuperOptions, DeepEquals, map[string]string{
+		"rw":      "",
+		"dirsync": "",
+		// XXX: what is the likelihood that comma is properly escaped in the mount option value?
+		"aname":  "drvfs;path=C:\\Program Files\\Docker\\Docker\\resources;symlinkroot=/mnt/",
+		"mmap":   "",
+		"access": "client",
+		"msize":  "262144",
+		"trans":  "virtio",
+	})
+}
+
 // Check that various malformed entries are detected.
 func (s *mountinfoSuite) TestParseMountInfoEntry4(c *C) {
-	var err error
-	_, err = osutil.ParseMountInfoEntry("36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw,errors=continue foo")
-	c.Assert(err, ErrorMatches, "incorrect number of tail fields, expected 3 but found 4")
+	mi, err := osutil.ParseMountInfoEntry("36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root rw,errors=continue foo")
+	c.Assert(err, IsNil)
+	c.Check(mi.SuperOptions, DeepEquals, map[string]string{"rw": "", "errors": "continue foo"})
 	_, err = osutil.ParseMountInfoEntry("36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3 /dev/root")
 	c.Assert(err, ErrorMatches, "incorrect number of tail fields, expected 3 but found 2")
 	_, err = osutil.ParseMountInfoEntry("36 35 98:0 /mnt1 /mnt2 rw,noatime master:1 - ext3")
@@ -136,6 +152,45 @@ func (s *mountinfoSuite) TestParseMountInfoEntry5(c *C) {
 	c.Assert(entry.MountDir, Equals, "/tmp/strange\rdir")
 }
 
+// TestParseMountInfoEntryBrokenOctalEscaping checks that partial octal escape
+// sequences (fewer than 3 octal digits after a backslash, including a trailing
+// backslash) do not cause a panic and are preserved verbatim, consistent with
+// the behaviour of the C mountinfo parser.
+func (s *mountinfoSuite) TestParseMountInfoEntryBrokenOctalEscaping(c *C) {
+	// Non-octal chars after backslash and trailing backslash in last field.
+	entry, err := osutil.ParseMountInfoEntry(
+		`2074 27 0:54 / /tmp/strange-dir rw,relatime shared:1039 - tmpfs no\888thing rw\`)
+	c.Assert(err, IsNil)
+	c.Assert(entry.MountSource, Equals, `no\888thing`)
+	c.Assert(entry.SuperOptions, DeepEquals, map[string]string{`rw\`: ""})
+
+	// Backslash followed by one octal digit at end of string.
+	entry, err = osutil.ParseMountInfoEntry(
+		`2074 27 0:54 / /tmp/dir rw - tmpfs source rw\0`)
+	c.Assert(err, IsNil)
+	c.Assert(entry.SuperOptions, DeepEquals, map[string]string{`rw\0`: ""})
+
+	// Backslash followed by two octal digits at end of string.
+	entry, err = osutil.ParseMountInfoEntry(
+		`2074 27 0:54 / /tmp/dir rw - tmpfs source rw\05`)
+	c.Assert(err, IsNil)
+	c.Assert(entry.SuperOptions, DeepEquals, map[string]string{`rw\05`: ""})
+
+	// Backslash followed by one octal digit in mount source (field ended by space).
+	entry, err = osutil.ParseMountInfoEntry(
+		`2074 27 0:54 / /tmp/dir rw - tmpfs source\5 rw`)
+	c.Assert(err, IsNil)
+	c.Assert(entry.MountSource, Equals, `source\5`)
+	c.Assert(entry.SuperOptions, DeepEquals, map[string]string{"rw": ""})
+
+	// Backslash followed by two octal digits in mount source.
+	entry, err = osutil.ParseMountInfoEntry(
+		`2074 27 0:54 / /tmp/dir rw - tmpfs source\57 rw`)
+	c.Assert(err, IsNil)
+	c.Assert(entry.MountSource, Equals, `source\57`)
+	c.Assert(entry.SuperOptions, DeepEquals, map[string]string{"rw": ""})
+}
+
 // Test that empty mountinfo is parsed without errors.
 func (s *mountinfoSuite) TestReadMountInfo1(c *C) {
 	entries, err := osutil.ReadMountInfo(strings.NewReader(""))
@@ -160,7 +215,9 @@ func (s *mountinfoSuite) TestLoadMountInfo1(c *C) {
 	fname := filepath.Join(c.MkDir(), "mountinfo")
 	err := os.WriteFile(fname, []byte(mountInfoSample), 0644)
 	c.Assert(err, IsNil)
-	entries, err := osutil.LoadMountInfo(fname)
+	restore := osutil.FakeProcSelfMountInfoLocation(fname)
+	defer restore()
+	entries, err := osutil.LoadMountInfo()
 	c.Assert(err, IsNil)
 	c.Assert(entries, HasLen, 3)
 }
@@ -168,6 +225,28 @@ func (s *mountinfoSuite) TestLoadMountInfo1(c *C) {
 // Test that loading mountinfo from a missing file reports an error.
 func (s *mountinfoSuite) TestLoadMountInfo2(c *C) {
 	fname := filepath.Join(c.MkDir(), "mountinfo")
-	_, err := osutil.LoadMountInfo(fname)
+	restore := osutil.FakeProcSelfMountInfoLocation(fname)
+	defer restore()
+	_, err := osutil.LoadMountInfo()
 	c.Assert(err, ErrorMatches, "*. no such file or directory")
+}
+
+// Test that trying to load mountinfo without permissions reports an error.
+func (s *mountinfoSuite) TestLoadMountInfo3(c *C) {
+	if os.Geteuid() == 0 {
+		c.Skip("cannot run test as root")
+	}
+	fname := filepath.Join(c.MkDir(), "mountinfo")
+	err := os.WriteFile(fname, []byte(mountInfoSample), 0644)
+	c.Assert(err, IsNil)
+	err = os.Chmod(fname, 0000)
+	c.Assert(err, IsNil)
+	restore := osutil.FakeProcSelfMountInfoLocation(fname)
+	defer restore()
+	_, err = osutil.LoadMountInfo()
+	c.Assert(err, ErrorMatches, "*. permission denied")
+}
+
+func (s *mountinfoSuite) TestLoadMountInfoComplainsWhenNotMockedInTest(c *C) {
+	c.Assert(func() { osutil.LoadMountInfo() }, PanicMatches, "/proc/self/mountinfo must be mocked in tests")
 }

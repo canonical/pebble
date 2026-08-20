@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2026 Canonical Ltd
+// Copyright (C) 2014-2020 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"testing"
 	"time"
 
 	"github.com/canonical/pebble/internals/osutil/sys"
@@ -34,8 +33,8 @@ type AtomicWriteFlags uint
 
 // Allow disabling sync for testing. This brings massive improvements on
 // certain filesystems (like btrfs) and very much noticeable improvements in
-// all unit tests in general.
-var unsafeIO bool = testing.Testing() && os.Getenv("UNSAFE_IO") == "1"
+// all unit tests in genreal.
+var snapdUnsafeIO bool = IsTestBinary() && GetenvBool("UNSAFE_IO", true)
 
 // An AtomicFile is similar to an os.File but it has an additional
 // Commit() method that does whatever needs to be done so the
@@ -158,7 +157,7 @@ func (aw *AtomicFile) commit() error {
 	}
 
 	var dir *os.File
-	if !unsafeIO {
+	if !snapdUnsafeIO {
 		// XXX: if go switches to use aio_fsync, we need to open the dir for writing
 		d, err := os.Open(filepath.Dir(aw.target))
 		if err != nil {
@@ -187,7 +186,7 @@ func (aw *AtomicFile) commit() error {
 	}
 	aw.renamed = true // it is now too late to Cancel()
 
-	if !unsafeIO {
+	if !snapdUnsafeIO {
 		return dir.Sync()
 	}
 
@@ -263,9 +262,9 @@ func AtomicWriteChown(filename string, reader io.Reader, perm os.FileMode, flags
 func AtomicRename(oldName, newName string) (err error) {
 	var oldDir, newDir *os.File
 
-	// unsafeIO controls the ability to ignore expensive disk
+	// snapdUnsafeIO controls the ability to ignore expensive disk
 	// synchronization. It is only used inside tests.
-	if !unsafeIO {
+	if !snapdUnsafeIO {
 		// if called with a path with trailing '/', filepath.Dir
 		// returns the dir itself instead of the parent
 		oldName = filepath.Clean(oldName)

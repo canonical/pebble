@@ -75,7 +75,10 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	// Inherit the pebble daemon environment.
 	// If the user is being changed, unset the HOME and USER env vars so that they
 	// can be set correctly later on in this method.
-	environment := osutil.Environ()
+	environment, err := osutil.OSEnvironment()
+	if err != nil {
+		return nil, ExecMetadata{}, fmt.Errorf("cannot get os environment: %w", err)
+	}
 	if args.UserID != nil && *args.UserID != os.Getuid() {
 		delete(environment, "HOME")
 		delete(environment, "USER")

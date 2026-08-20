@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2026 Canonical Ltd
+// Copyright (C) 2014-2015 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -16,6 +16,7 @@ package osutil_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,7 +71,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileOverwrite(c *C) {
 
 func (ts *AtomicWriteTestSuite) TestAtomicWriteFileSymlinkNoFollow(c *C) {
 	if os.Geteuid() == 0 {
-		c.Skip("cannot run test as root: directory permissions are bypassed")
+		c.Skip("cannot run test as root")
 	}
 	tmpdir := c.MkDir()
 	rodir := filepath.Join(tmpdir, "ro")
@@ -106,7 +107,7 @@ func (ts *AtomicWriteTestSuite) TestAtomicWriteFileAsteriskInBasenameError(c *C)
 
 func (ts *AtomicWriteTestSuite) TestAtomicWriteFileTmpFileCreateError(c *C) {
 	if os.Geteuid() == 0 {
-		c.Skip("cannot run test as root: directory permissions are bypassed")
+		c.Skip("cannot run test as root")
 	}
 	tmpdir := c.MkDir()
 
@@ -289,6 +290,9 @@ type AtomicSymlinkTestSuite struct{}
 var _ = Suite(&AtomicSymlinkTestSuite{})
 
 func (ts *AtomicSymlinkTestSuite) TestAtomicSymlink(c *C) {
+	if os.Geteuid() == 0 {
+		c.Skip("cannot run test as root")
+	}
 	mustReadSymlink := func(p, exp string) {
 		target, err := os.Readlink(p)
 		c.Assert(err, IsNil)
@@ -331,10 +335,6 @@ func (ts *AtomicSymlinkTestSuite) TestAtomicSymlink(c *C) {
 
 		err = os.Chmod(nested, 0755)
 		c.Assert(err, IsNil)
-	} else {
-		// running as root, dir permission checks are bypassed, so just
-		// create the directory needed by the rest of the test
-		c.Assert(os.MkdirAll(nested, 0755), IsNil)
 	}
 
 	err = osutil.AtomicSymlink("target", nestedBarSymlink)
@@ -385,6 +385,9 @@ type AtomicLinkTestSuite struct{}
 var _ = Suite(&AtomicLinkTestSuite{})
 
 func (ts *AtomicLinkTestSuite) TestAtomicLink(c *C) {
+	if os.Geteuid() == 0 {
+		c.Skip("cannot run test as root")
+	}
 	mustReadLink := func(target, link string) {
 		match, err := osutil.ComparePathsByDeviceInode(target, link)
 		c.Assert(err, IsNil)
@@ -415,7 +418,7 @@ func (ts *AtomicLinkTestSuite) TestAtomicLink(c *C) {
 	nested := filepath.Join(d, "nested")
 	nestedBarLink := filepath.Join(nested, "bar")
 	err = osutil.AtomicLink(target, nestedBarLink)
-	c.Assert(err, ErrorMatches, `stat /.*/nested: no such file or directory`)
+	c.Assert(err, ErrorMatches, fmt.Sprintf(`stat /.*/nested: no such file or directory`))
 	checkLeftoverFiles(nestedBarLink, nil)
 
 	if os.Geteuid() != 0 {
@@ -425,15 +428,11 @@ func (ts *AtomicLinkTestSuite) TestAtomicLink(c *C) {
 
 		// no permission to write in dir
 		err = osutil.AtomicLink(target, nestedBarLink)
-		c.Assert(err, ErrorMatches, `mkdir /.*/nested/bar\..*~: permission denied`)
+		c.Assert(err, ErrorMatches, fmt.Sprintf(`mkdir /.*/nested/bar\..*~: permission denied`))
 		checkLeftoverFiles(nestedBarLink, nil)
 
 		err = os.Chmod(nested, 0o755)
 		c.Assert(err, IsNil)
-	} else {
-		// running as root, dir permission checks are bypassed, so just
-		// create the directory needed by the rest of the test
-		c.Assert(os.MkdirAll(nested, 0o755), IsNil)
 	}
 
 	err = osutil.AtomicLink(target, nestedBarLink)
@@ -480,6 +479,9 @@ type AtomicRenameTestSuite struct{}
 var _ = Suite(&AtomicRenameTestSuite{})
 
 func (ts *AtomicRenameTestSuite) TestAtomicRenameFile(c *C) {
+	if os.Geteuid() == 0 {
+		c.Skip("cannot run test as root")
+	}
 	d := c.MkDir()
 
 	err := os.WriteFile(filepath.Join(d, "foo"), []byte("foobar"), 0644)
@@ -510,10 +512,6 @@ func (ts *AtomicRenameTestSuite) TestAtomicRenameFile(c *C) {
 
 		err = os.Chmod(nested, 0755)
 		c.Assert(err, IsNil)
-	} else {
-		// running as root, dir permission checks are bypassed, so just
-		// create the directory needed by the rest of the test
-		c.Assert(os.MkdirAll(nested, 0755), IsNil)
 	}
 
 	// all good now

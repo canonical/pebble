@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2017 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -24,24 +24,6 @@ import (
 	"strconv"
 	"strings"
 )
-
-// MountInfoEntry contains data from /proc/$PID/mountinfo
-//
-// For details please refer to mountinfo documentation at
-// https://www.kernel.org/doc/Documentation/filesystems/proc.txt
-type MountInfoEntry struct {
-	MountID        int
-	ParentID       int
-	DevMajor       int
-	DevMinor       int
-	Root           string
-	MountDir       string
-	MountOptions   map[string]string
-	OptionalFields []string
-	FsType         string
-	MountSource    string
-	SuperOptions   map[string]string
-}
 
 func flattenMap(m map[string]string) string {
 	keys := make([]string, 0, len(m))
@@ -86,12 +68,37 @@ func (mi *MountInfoEntry) String() string {
 		flattenMap(mi.SuperOptions))
 }
 
-// LoadMountInfo loads list of mounted entries from a given file.
-//
-// The file is typically ProcSelfMountInfo but any other process mount table
-// can be read the same way.
-func LoadMountInfo(fname string) ([]*MountInfoEntry, error) {
-	f, err := os.Open(fname)
+var openMountInfoFile = func() (io.ReadCloser, error) {
+	if IsTestBinary() {
+		panic("/proc/self/mountinfo must be mocked in tests")
+	}
+	return os.Open("/proc/self/mountinfo")
+}
+
+func mockMountInfo(mock func() (io.ReadCloser, error)) (restore func()) {
+	old := openMountInfoFile
+	openMountInfoFile = mock
+	return func() {
+		openMountInfoFile = old
+	}
+}
+
+// this should not be used except to test the actual implementation logic of
+// LoadMountInfo, if you are trying to mock /proc/self/mountinfo in a test,
+// use FakeMountInfo(), which is exported and the right way to do that.
+func FakeProcSelfMountInfoLocation(filename string) (restore func()) {
+	return mockMountInfo(func() (io.ReadCloser, error) { return os.Open(filename) })
+}
+
+func FakeMountInfo(content string) (restore func()) {
+	return mockMountInfo(func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewBufferString(content)), nil })
+}
+
+// LoadMountInfo loads list of mounted entries from /proc/self/mountinfo. This
+// can be mocked by using osutil.FakeMountInfo to hard-code a specific mountinfo
+// file content to be loaded by this function
+func LoadMountInfo() ([]*MountInfoEntry, error) {
+	f, err := openMountInfoFile()
 	if err != nil {
 		return nil, err
 	}
@@ -173,18 +180,19 @@ func ParseMountInfoEntry(s string) (*MountInfoEntry, error) {
 	}
 	// Parse the last three fixed fields.
 	tailFields := fields[i+1:]
-	if len(tailFields) != 3 {
+	// XXX: The last field (options) *may* contain spaces that are incorrectly escaped by some file-systems.
+	if len(tailFields) < 3 {
 		return nil, fmt.Errorf("incorrect number of tail fields, expected 3 but found %d", len(tailFields))
 	}
 	e.FsType = unescape(tailFields[0])
 	e.MountSource = unescape(tailFields[1])
-	e.SuperOptions = parseMountOpts(unescape(tailFields[2]))
+	e.SuperOptions = parseMountOpts(unescape(strings.Join(tailFields[2:], " ")))
 	return &e, nil
 }
 
 func parseMountOpts(opts string) map[string]string {
 	result := make(map[string]string)
-	for opt := range strings.SplitSeq(opts, ",") {
+	for _, opt := range strings.Split(opts, ",") {
 		keyValue := strings.SplitN(opt, "=", 2)
 		key := keyValue[0]
 		if len(keyValue) == 2 {

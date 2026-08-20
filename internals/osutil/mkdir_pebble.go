@@ -17,17 +17,10 @@ package osutil
 import (
 	"os"
 	"path/filepath"
-	"sync"
 	"syscall"
 
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
-
-// XXX: we need to come back and fix this; this is a hack to unblock us.
-// Have a lock so that if one goroutine tries to mkdirallchown /foo/bar, and
-// another tries to mkdirallchown /foo/baz, they can't both decide they need
-// to make /foo and then have one fail.
-var mu sync.Mutex
 
 // MkdirOptions holds the options for a call to Mkdir.
 type MkdirOptions struct {

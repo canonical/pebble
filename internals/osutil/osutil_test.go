@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2017 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -17,11 +17,8 @@ package osutil_test
 import (
 	"testing"
 
-	"github.com/canonical/pebble/internals/testutil"
 	. "gopkg.in/check.v1"
 )
 
 // Hook up check.v1 into the "go test" runner
-func Test(t *testing.T) {
-	testutil.PrintGoroutineLeaks(t, TestingT)
-}
+func Test(t *testing.T) { TestingT(t) }

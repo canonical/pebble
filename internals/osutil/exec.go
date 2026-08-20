@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2017 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -15,6 +15,8 @@
 package osutil
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -22,16 +24,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/canonical/x-go/strutil"
 	"gopkg.in/tomb.v2"
+
+	"github.com/canonical/x-go/strutil"
 )
 
 var (
-	cmdWaitTimeout = 5 * time.Second
-
 	syscallKill    = syscall.Kill
 	syscallGetpgid = syscall.Getpgid
 )
+
+var cmdWaitTimeout = 5 * time.Second
 
 // KillProcessGroup kills the process group associated with the given command.
 //
@@ -68,7 +71,7 @@ func RunAndWait(argv []string, env []string, timeout time.Duration, tomb *tomb.T
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.Env = append(os.Environ(), env...)
 
-	// Make sure we can obtain stdout and stderr. Same buffer so they're
+	// Make sure we can obtain stdout and stderror. Same buffer so they're
 	// combined.
 	buffer := strutil.NewLimitedBuffer(100, 10*1024)
 	command.Stdout = buffer
@@ -166,4 +169,27 @@ func StreamCommand(name string, args ...string) (io.ReadCloser, error) {
 	}
 
 	return &waitingReader{reader: pipe, cmd: cmd}, nil
+}
+
+// RunCmd runs a command and returns separately stdout and stderr
+// output, and an error.
+func RunCmd(c *exec.Cmd) ([]byte, []byte, error) {
+	if c.Stdout != nil {
+		return nil, nil, errors.New("osutil.Run: Stdout already set")
+	}
+	if c.Stderr != nil {
+		return nil, nil, errors.New("osutil.Run: Stderr already set")
+	}
+	var stdout, stderr bytes.Buffer
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	err := c.Run()
+	return stdout.Bytes(), stderr.Bytes(), err
+}
+
+// RunSplitOutput runs name command with arg arguments and returns
+// stdout, stderr, and an error.
+func RunSplitOutput(name string, arg ...string) ([]byte, []byte, error) {
+	cmd := exec.Command(name, arg...)
+	return RunCmd(cmd)
 }

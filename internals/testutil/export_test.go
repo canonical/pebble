@@ -21,3 +21,7 @@ import (
 func UnexpectedIntChecker(relation string) *intChecker {
 	return &intChecker{CheckerInfo: &check.CheckerInfo{Name: "unexpected", Params: []string{"a", "b"}}, rel: relation}
 }
+
+func FakeRuntimeARCH(new string) (restore func()) {
+	return Fake(&runtimeGOARCH, new)
+}

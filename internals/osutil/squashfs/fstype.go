@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2018 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -36,7 +36,11 @@ var needsFuseImpl = func() bool {
 	}
 
 	virt := strings.TrimSpace(string(out))
-	return virt != "none"
+	if virt != "none" {
+		return true
+	}
+
+	return false
 }
 
 // FakeNeedsFuse is exported so NeedsFuse can be overridden by testing.

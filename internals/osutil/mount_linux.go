@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2014-2016 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -14,12 +14,9 @@
 
 package osutil
 
-// ProcSelfMountInfo is a path to the mountinfo table of the current process.
-var procSelfMountInfo = "/proc/self/mountinfo"
-
 // IsMounted checks if a given directory is a mount point.
 func IsMounted(baseDir string) (bool, error) {
-	entries, err := LoadMountInfo(procSelfMountInfo)
+	entries, err := LoadMountInfo()
 	if err != nil {
 		return false, err
 	}

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2014-2015 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -22,6 +22,8 @@ import (
 // ExitCode extract the exit code from the error of a failed cmd.Run() or the
 // original error if its not a exec.ExitError
 func ExitCode(runErr error) (e int, err error) {
+	// TODO:GOVERSION: with golang-1.12 this becomes a bit nicer:
+	//       https://github.com/golang/go/issues/26539
 	// golang, you are kidding me, right?
 	if exitErr, ok := runErr.(*exec.ExitError); ok {
 		waitStatus := exitErr.Sys().(syscall.WaitStatus)

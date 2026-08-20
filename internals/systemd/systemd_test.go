@@ -708,6 +708,10 @@ func makeFakeMountUnit(c *C, mountDir string) string {
 // FIXME: also test for the "IsMounted" case
 func (s *SystemdTestSuite) TestRemoveMountUnit(c *C) {
 	mountDir := s.rootDir + "/snap/foo/42"
+
+	restore := osutil.FakeMountInfo("")
+	defer restore()
+
 	mountUnit := makeFakeMountUnit(c, "/snap/foo/42")
 	err := systemd.New(s.rootDir, systemd.SystemMode, nil).RemoveMountUnitFile(mountDir)
 	c.Assert(err, IsNil)

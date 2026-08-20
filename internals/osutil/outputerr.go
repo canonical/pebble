@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2016 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -31,4 +31,22 @@ func OutputErr(output []byte, err error) error {
 		}
 	}
 	return err
+}
+
+// CombineStdOutErr combines stdout and stderr byte arrays into a
+// single one.
+func CombineStdOutErr(stdout, stderr []byte) []byte {
+	msg := stdout
+	if stderr != nil && len(stderr) > 0 {
+		msg = bytes.Join([][]byte{stdout, stderr}, []byte("\nstderr:\n"))
+	}
+	msg = bytes.TrimSpace(msg)
+	return msg
+}
+
+// OutputErr formats an error based on output if its length is not zero,
+// or returns err otherwise.
+func OutputErrCombine(stdout, stderr []byte, err error) error {
+	msg := CombineStdOutErr(stdout, stderr)
+	return OutputErr(msg, err)
 }

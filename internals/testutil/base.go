@@ -44,3 +44,19 @@ func (s *BaseTest) TearDownTest(c *check.C) {
 func (s *BaseTest) AddCleanup(f func()) {
 	s.cleanupHandlers = append(s.cleanupHandlers, f)
 }
+
+// Backup a single element before further mocking.
+func Backup[T any](mockable *T) (restore func()) {
+	backup := *mockable
+
+	return func() {
+		*mockable = backup
+	}
+}
+
+// Fake provides a type safe way of faking a single thing.
+func Fake[T any](fakeable *T, newVal T) (restore func()) {
+	restore = Backup(fakeable)
+	*fakeable = newVal
+	return restore
+}

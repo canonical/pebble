@@ -134,7 +134,10 @@ func (c *execChecker) check(ctx context.Context) error {
 	}
 
 	// Similar to services and exec, inherit the daemon's environment.
-	environment := osutil.Environ()
+	environment, err := osutil.OSEnvironment()
+	if err != nil {
+		return fmt.Errorf("cannot get os environment: %w", err)
+	}
 	// Requested environment takes precedence.
 	maps.Copy(environment, c.environment)
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (C) 2016 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -27,11 +27,21 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/osutil/internal/dirs"
+	"github.com/canonical/pebble/internals/testutil"
 )
 
 type execSuite struct{}
 
 var _ = Suite(&execSuite{})
+
+func (s *execSuite) SetUpTest(c *C) {
+	dirs.SetRootDir(c.MkDir())
+}
+
+func (s *execSuite) TearDownTest(c *C) {
+	dirs.SetRootDir("")
+}
 
 func (s *execSuite) TestRunAndWaitRunsAndWaits(c *C) {
 	buf, err := osutil.RunAndWait([]string{"sh", "-c", "echo hello; sleep .1"}, nil, time.Second, &tomb.Tomb{})
@@ -145,4 +155,74 @@ func (s *execSuite) TestStreamCommandSad(c *C) {
 	// Depending on golang version the error is one of the two.
 	c.Check(wrf.(*os.File).Close(), ErrorMatches, "invalid argument|file already closed")
 	c.Check(wrc.ProcessState, NotNil) // i.e. already waited for
+}
+
+func (s *execSuite) TestRunCmdHappy(c *C) {
+	mc := testutil.FakeCommand(c, "testcmd", `echo "happy output"`)
+	defer mc.Restore()
+
+	cmd := exec.Command("testcmd")
+	sout, serr, err := osutil.RunCmd(cmd)
+	c.Check(err, IsNil)
+	c.Check(string(sout), Equals, "happy output\n")
+	c.Check(serr, DeepEquals, []byte{})
+
+	c.Check(mc.Calls(), DeepEquals, [][]string{{"testcmd"}})
+}
+
+func (s *execSuite) TestRunCmdHappySplitOutput(c *C) {
+	mc := testutil.FakeCommand(c, "testcmd", `echo "happy output" && >&2 echo "to stderr"`)
+	defer mc.Restore()
+
+	cmd := exec.Command("testcmd")
+	sout, serr, err := osutil.RunCmd(cmd)
+	c.Check(err, IsNil)
+	c.Check(string(sout), Equals, "happy output\n")
+	c.Check(string(serr), Equals, "to stderr\n")
+
+	c.Check(mc.Calls(), DeepEquals, [][]string{{"testcmd"}})
+}
+
+func (s *execSuite) TestRunCmdStdoutSet(c *C) {
+	mc := testutil.FakeCommand(c, "testcmd", `echo "happy output"`)
+	defer mc.Restore()
+
+	cmd := exec.Command("testcmd")
+	cmd.Stdout = &bytes.Buffer{}
+	sout, serr, err := osutil.RunCmd(cmd)
+	c.Check(err.Error(), Equals, "osutil.Run: Stdout already set")
+	c.Check(sout, IsNil)
+	c.Check(serr, IsNil)
+
+	cmd = exec.Command("testcmd")
+	cmd.Stderr = &bytes.Buffer{}
+	sout, serr, err = osutil.RunCmd(cmd)
+	c.Check(err.Error(), Equals, "osutil.Run: Stderr already set")
+	c.Check(sout, IsNil)
+	c.Check(serr, IsNil)
+
+	c.Check(len(mc.Calls()), Equals, 0)
+}
+
+func (s *execSuite) TestRunSplitOutput(c *C) {
+	mc := testutil.FakeCommand(c, "testcmd", `
+if [ $# != 2 ]
+then exit 1
+fi
+echo "happy output" && >&2 echo "to stderr"`)
+	defer mc.Restore()
+
+	sout, serr, err := osutil.RunSplitOutput("testcmd", "arg1", "arg2")
+	c.Check(err, IsNil)
+	c.Check(string(sout), Equals, "happy output\n")
+	c.Check(string(serr), Equals, "to stderr\n")
+
+	sout, serr, err = osutil.RunSplitOutput("testcmd")
+	c.Check(err.Error(), Equals, "exit status 1")
+	c.Check(len(sout), Equals, 0)
+	c.Check(len(serr), Equals, 0)
+
+	c.Check(mc.Calls(), DeepEquals, [][]string{
+		{"testcmd", "arg1", "arg2"},
+		{"testcmd"}})
 }
