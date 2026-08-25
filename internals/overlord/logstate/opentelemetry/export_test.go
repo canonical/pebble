@@ -21,5 +21,5 @@ func GetBuffer(c *Client) []EntryWithService {
 }
 
 func GetMessage(e EntryWithService) string {
-	return *e.entry.Body.StringValue
+	return e.entry.GetBody().GetStringValue()
 }

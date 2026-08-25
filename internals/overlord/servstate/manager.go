@@ -36,18 +36,45 @@ type ServiceManager struct {
 	randLock sync.Mutex
 	rand     *rand.Rand
 
-	logMgr LogManager
+	logMgr     LogManager
+	metricsMgr MetricsManager
+	traceMgr   TraceManager
+
+	otlpAddrLock sync.Mutex
+	otlpAddr     string
 }
 
 type LogManager interface {
 	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
+// MetricsManager is used by the service manager to notify the metrics manager
+// when a service starts, so it can generate a new service.instance.id resource
+// attribute for metrics enrichment.
+type MetricsManager interface {
+	ServiceStarted(service *plan.Service)
+}
+
+// TraceManager is used by the service manager to notify the trace manager when
+// a service starts, so it can generate a new service.instance.id resource
+// attribute for trace enrichment.
+type TraceManager interface {
+	ServiceStarted(service *plan.Service)
+}
+
 type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+func NewManager(
+	s *state.State,
+	runner *state.TaskRunner,
+	serviceOutput io.Writer,
+	restarter Restarter,
+	logMgr LogManager,
+	metricsMgr MetricsManager,
+	traceMgr TraceManager,
+) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),
@@ -55,6 +82,8 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logMgr:        logMgr,
+		metricsMgr:    metricsMgr,
+		traceMgr:      traceMgr,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -269,12 +298,20 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 	for name, s := range m.services {
 		if config, ok := currentPlan.Services[name]; ok {
 			// Don't restart the service unless the service configuration or its
-			// workload definition (if any) have changed
+			// workload definition (if any) have changed, or OTLP enrollment has
+			// changed.
 			var workload *workloads.Workload
 			if ws != nil {
 				workload = ws.Entries[s.config.Workload]
 			}
-			if config.Equal(s.config) && (workload == nil || workload.Equal(s.workload)) {
+			otlpLogsChanged := otlpLogsEnabledFor(currentPlan, config) != s.otlpLogsEnabled
+			otlpMetricsChanged := otlpMetricsEnabledFor(currentPlan, config) != s.otlpMetricsEnabled
+			otlpTracesChanged := otlpTracesEnabledFor(currentPlan, config) != s.otlpTracesEnabled
+			if config.Equal(s.config) &&
+				workload.Equal(s.workload) &&
+				!otlpLogsChanged &&
+				!otlpMetricsChanged &&
+				!otlpTracesChanged {
 				continue
 			}
 			// Update service config and workload from plan

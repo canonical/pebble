@@ -197,11 +197,12 @@ type errorResponder func(string, ...any) Response
 
 // Standard error responses.
 var (
-	BadRequest       = makeErrorResponder(http.StatusBadRequest)
-	Unauthorized     = makeErrorResponder(http.StatusUnauthorized)
-	Forbidden        = makeErrorResponder(http.StatusForbidden)
-	NotFound         = makeErrorResponder(http.StatusNotFound)
-	MethodNotAllowed = makeErrorResponder(http.StatusMethodNotAllowed)
-	ServerError      = makeErrorResponder(http.StatusInternalServerError)
-	GatewayTimeout   = makeErrorResponder(http.StatusGatewayTimeout)
+	BadRequest           = makeErrorResponder(http.StatusBadRequest)
+	Unauthorized         = makeErrorResponder(http.StatusUnauthorized)
+	Forbidden            = makeErrorResponder(http.StatusForbidden)
+	NotFound             = makeErrorResponder(http.StatusNotFound)
+	MethodNotAllowed     = makeErrorResponder(http.StatusMethodNotAllowed)
+	ServerError          = makeErrorResponder(http.StatusInternalServerError)
+	GatewayTimeout       = makeErrorResponder(http.StatusGatewayTimeout)
+	UnsupportedMediaType = makeErrorResponder(http.StatusUnsupportedMediaType)
 )

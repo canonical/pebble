@@ -70,6 +70,7 @@ type ClientOptions struct {
 	UserAgent         string
 	TargetName        string
 	Location          string
+	Headers           map[string]string
 }
 
 func fillDefaultOptions(options *ClientOptions) {
@@ -154,6 +155,9 @@ func (c *Client) Flush(ctx context.Context) error {
 	}
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	httpReq.Header.Set("User-Agent", c.options.UserAgent)
+	for k, v := range c.options.Headers {
+		httpReq.Header.Set(k, v)
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {

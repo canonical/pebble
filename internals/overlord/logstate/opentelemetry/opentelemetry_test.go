@@ -15,18 +15,19 @@
 package opentelemetry_test
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
 	. "gopkg.in/check.v1"
 
+	commonpb "github.com/canonical/pebble/internals/otlp/common/v1"
+	logspb "github.com/canonical/pebble/internals/otlp/logs/v1"
+	resourcepb "github.com/canonical/pebble/internals/otlp/resource/v1"
 	"github.com/canonical/pebble/internals/overlord/logstate/opentelemetry"
 	"github.com/canonical/pebble/internals/servicelog"
 	"github.com/canonical/pebble/internals/testutil"
@@ -38,6 +39,24 @@ var _ = Suite(&suite{})
 
 func Test(t *testing.T) {
 	testutil.PrintGoroutineLeaks(t, TestingT)
+}
+
+func stringValue(s string) *commonpb.AnyValue {
+	return &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: s}}
+}
+
+func attr(key, value string) *commonpb.KeyValue {
+	return &commonpb.KeyValue{
+		Key:   key,
+		Value: stringValue(value),
+	}
+}
+
+func logRecord(unixNano int64, message string) *logspb.LogRecord {
+	return &logspb.LogRecord{
+		TimeUnixNano: uint64(unixNano),
+		Body:         stringValue(message),
+	}
 }
 
 func (*suite) TestRequest(c *C) {
@@ -79,89 +98,64 @@ func (*suite) TestRequest(c *C) {
 		Message: "log line #9\n",
 	}}
 
-	expected := compactJSON(`
-{"resourceLogs": [
-	{
-		"resource": {
-			"attributes": null
+	expected := &logspb.LogsData{
+		ResourceLogs: []*logspb.ResourceLogs{
+			{
+				Resource: &resourcepb.Resource{},
+				ScopeLogs: []*logspb.ScopeLogs{{
+					Scope: &commonpb.InstrumentationScope{Name: "pebble"},
+					LogRecords: []*logspb.LogRecord{
+						logRecord(1704026090000000000, "log line #1"),
+						logRecord(1704026092000000000, "log line #3"),
+						logRecord(1704026094000000000, "log line #5"),
+						logRecord(1704026097000000000, "log line #8"),
+					},
+				}},
+			},
+			{
+				Resource: &resourcepb.Resource{},
+				ScopeLogs: []*logspb.ScopeLogs{{
+					Scope: &commonpb.InstrumentationScope{Name: "pebble"},
+					LogRecords: []*logspb.LogRecord{
+						logRecord(1704026091000000000, "log line #2"),
+						logRecord(1704026096000000000, "log line #7"),
+					},
+				}},
+			},
+			{
+				Resource: &resourcepb.Resource{},
+				ScopeLogs: []*logspb.ScopeLogs{{
+					Scope: &commonpb.InstrumentationScope{Name: "pebble"},
+					LogRecords: []*logspb.LogRecord{
+						logRecord(1704026093000000000, "log line #4"),
+						logRecord(1704026095000000000, "log line #6"),
+					},
+				}},
+			},
+			{
+				Resource: &resourcepb.Resource{},
+				ScopeLogs: []*logspb.ScopeLogs{{
+					Scope: &commonpb.InstrumentationScope{Name: "pebble"},
+					LogRecords: []*logspb.LogRecord{
+						logRecord(1704026098000000000, "log line #9"),
+					},
+				}},
+			},
 		},
-		"scopeLogs": [{
-			"scope": {"name": "pebble"},
-			"logRecords": [
-				{
-					"timeUnixNano": "1704026090000000000",
-					"body": {"stringValue": "log line #1"}
-				},
-				{
-					"timeUnixNano": "1704026092000000000",
-					"body": {"stringValue": "log line #3"}
-				},
-				{
-					"timeUnixNano": "1704026094000000000",
-					"body": {"stringValue": "log line #5"}
-				},
-				{
-					"timeUnixNano": "1704026097000000000",
-					"body": {"stringValue": "log line #8"}
-				}
-			]
-		}]
-	},{
-		"resource": {
-			"attributes": null
-		},
-		"scopeLogs": [{
-			"scope": {"name": "pebble"},
-			"logRecords": [
-				{
-					"timeUnixNano": "1704026091000000000",
-					"body": {"stringValue": "log line #2"}
-				},
-				{
-					"timeUnixNano": "1704026096000000000",
-					"body": {"stringValue": "log line #7"}
-				}
-			]
-		}]
-	},{
-		"resource": {
-			"attributes": null
-		},
-		"scopeLogs": [{
-			"scope": {"name": "pebble"},
-			"logRecords": [
-				{
-					"timeUnixNano": "1704026093000000000",
-					"body": {"stringValue": "log line #4"}
-				},
-				{
-					"timeUnixNano": "1704026095000000000",
-					"body": {"stringValue": "log line #6"}
-				}
-			]
-		}]
-	},{
-		"resource": {
-			"attributes": null
-		},
-		"scopeLogs": [{
-			"scope": {"name": "pebble"},
-			"logRecords": [{
-				"timeUnixNano": "1704026098000000000",
-				"body": {"stringValue": "log line #9"}
-			}]
-		}]
 	}
-]}`)
+
 	numRequests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.Assert(r.Method, Equals, http.MethodPost)
-		c.Assert(r.Header.Get("Content-Type"), Equals, "application/json")
+		c.Assert(r.Header.Get("Content-Type"), Equals, "application/x-protobuf")
 		c.Assert(r.Header.Get("User-Agent"), Equals, "pebble/1.23.0")
 		numRequests++
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
-		c.Assert(string(reqBody), DeepEquals, string(expected))
+		var data logspb.LogsData
+		err = proto.Unmarshal(reqBody, &data)
+		c.Assert(err, IsNil)
+		c.Assert(proto.Equal(&data, expected), Equals, true, Commentf("got: %v\nwant: %v", &data, expected))
 	}))
 	defer server.Close()
 
@@ -178,6 +172,30 @@ func (*suite) TestRequest(c *C) {
 	err := client.Flush(context.Background())
 	c.Assert(err, IsNil)
 	c.Assert(numRequests, Equals, 1)
+}
+
+func (*suite) TestCustomHeaders(c *C) {
+	var gotAuth, gotCustom string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		gotCustom = r.Header.Get("X-Custom-Header")
+	}))
+	defer server.Close()
+
+	client := opentelemetry.NewClient(&opentelemetry.ClientOptions{
+		Location: server.URL,
+		Headers: map[string]string{
+			"Authorization":   "Bearer sometoken",
+			"X-Custom-Header": "custom-value",
+		},
+	})
+	err := client.Add(servicelog.Entry{Message: "hello"})
+	c.Assert(err, IsNil)
+
+	err = client.Flush(context.Background())
+	c.Assert(err, IsNil)
+	c.Assert(gotAuth, Equals, "Bearer sometoken")
+	c.Assert(gotCustom, Equals, "custom-value")
 }
 
 func (*suite) TestFlushCancelContext(c *C) {
@@ -293,13 +311,16 @@ func (*suite) TestBufferFull(c *C) {
 }
 
 func (*suite) TestLabels(c *C) {
-	var expected []byte
+	var expected *logspb.LogsData
 
 	received := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqBody, err := io.ReadAll(r.Body)
 		c.Assert(err, IsNil)
-		c.Assert(string(reqBody), Equals, string(expected))
+		var data logspb.LogsData
+		err = proto.Unmarshal(reqBody, &data)
+		c.Assert(err, IsNil)
+		c.Assert(proto.Equal(&data, expected), Equals, true, Commentf("got: %v\nwant: %v", &data, expected))
 		close(received)
 	}))
 	defer server.Close()
@@ -321,23 +342,23 @@ func (*suite) TestLabels(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	expected = compactJSON(`
-{"resourceLogs": [{
-	"resource": {
-		"attributes": [
-			{"key": "service.name", "value": {"stringValue": "svc1"}},
-			{"key": "label1", "value": {"stringValue": "val1"}},
-			{"key": "label2", "value": {"stringValue": "val2"}}
-		]
-	},
-	"scopeLogs": [{
-		"scope": {"name": "pebble"},
-		"logRecords": [{
-			"timeUnixNano": "1696306833000000000",
-			"body": {"stringValue": "hello"}
-		}]
-	}]
-}]}`)
+	expected = &logspb.LogsData{
+		ResourceLogs: []*logspb.ResourceLogs{{
+			Resource: &resourcepb.Resource{
+				Attributes: []*commonpb.KeyValue{
+					attr("service.name", "svc1"),
+					attr("label1", "val1"),
+					attr("label2", "val2"),
+				},
+			},
+			ScopeLogs: []*logspb.ScopeLogs{{
+				Scope: &commonpb.InstrumentationScope{Name: "pebble"},
+				LogRecords: []*logspb.LogRecord{
+					logRecord(1696306833000000000, "hello"),
+				},
+			}},
+		}},
+	}
 
 	err = client.Flush(context.Background())
 	c.Assert(err, IsNil)
@@ -346,14 +367,4 @@ func (*suite) TestLabels(c *C) {
 	case <-time.After(1 * time.Second):
 		c.Fatal("timed out waiting for request")
 	}
-}
-
-// Strips all extraneous whitespace from JSON
-func compactJSON(s string) []byte {
-	var buf bytes.Buffer
-	err := json.Compact(&buf, []byte(s))
-	if err != nil {
-		panic(fmt.Sprintf("error compacting JSON: %v", err))
-	}
-	return buf.Bytes()
 }

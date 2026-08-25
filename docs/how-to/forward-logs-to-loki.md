@@ -47,7 +47,7 @@ To specify which services to forward logs from, list the service names in `servi
     services: [svc1, svc2]
 ```
 
-For more information on `services` configuration, see {ref}`log_forwarding_specify_services`.
+For more information on `services` configuration, see {ref}`telemetry_forwarding_specify_services`.
 
 ## Query logs in Loki
 
@@ -220,14 +220,14 @@ pebble_service: svc2  # default label
 owner: user-bob       # env var $OWNER substituted
 ```
 
-For more information on `labels`, see {ref}`log_forwarding_labels`.
+For more information on `labels`, see {ref}`telemetry_forwarding_labels`.
 
 ## See more
 
 Pebble:
 
 - [Layer specification](../reference/layer-specification)
-- [Log forwarding](../reference/log-forwarding)
+- [Telemetry forwarding](../reference/telemetry-forwarding)
 
 Loki:
 

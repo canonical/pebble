@@ -13,7 +13,7 @@ Pebble's key features:
 
 - [Layer](https://ubuntu.com/docs/pebble/reference/layer-specification/)-based configuration
 - Service [dependencies](https://ubuntu.com/docs/pebble/explanation/service-dependencies/)
-- Service [logs](https://ubuntu.com/docs/pebble/reference/cli-commands/#logs) and [log forwarding](https://ubuntu.com/docs/pebble/reference/log-forwarding/)
+- Service [logs](https://ubuntu.com/docs/pebble/reference/cli-commands/#logs) and [telemetry forwarding](https://ubuntu.com/docs/pebble/reference/telemetry-forwarding/)
 - [Health checks](https://ubuntu.com/docs/pebble/reference/health-checks/)
 - [Notices](https://ubuntu.com/docs/pebble/reference/notices/) (aggregated events)
 - [Identities](https://ubuntu.com/docs/pebble/how-to/manage-identities/)

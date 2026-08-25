@@ -374,6 +374,7 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 			TargetName: target.Name,
 			Location:   target.Location,
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
+			Headers:    target.Headers,
 		}), nil
 	case plan.OpenTelemetryTarget:
 		return opentelemetry.NewClient(&opentelemetry.ClientOptions{
@@ -381,6 +382,7 @@ func newLogClient(target *plan.LogTarget) (logClient, error) {
 			Location:   target.Location,
 			UserAgent:  fmt.Sprintf("%s/%s", cmd.ProgramName, cmd.Version),
 			ScopeName:  cmd.ProgramName,
+			Headers:    target.Headers,
 		}), nil
 	case plan.SyslogTarget:
 		hostname, err := os.Hostname()

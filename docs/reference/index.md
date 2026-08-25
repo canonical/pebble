@@ -18,9 +18,9 @@ Environment variables <environment-variables>
 Health checks <health-checks>
 Identities <identities>
 Layer specification <layer-specification>
-Log forwarding <log-forwarding>
 Notices <notices>
 Service auto-restart <service-auto-restart>
+Telemetry forwarding <telemetry-forwarding>
 ```
 
 
@@ -74,18 +74,19 @@ You can set up named "identities" to control access to the API.
 * [Identities](./identities)
 
 
-## Log forwarding
-
-Pebble can send service logs to a centralized logging system.
-
-* [Log forwarding](./log-forwarding)
-
-
 ## Notices
 
 Pebble records events as "notices". In addition to the built-in notices, clients can report custom notices.
 
 * [Notices](./notices)
+
+
+## Telemetry forwarding
+
+Pebble can send service logs, metrics and traces to centralized observability systems.
+
+* [Telemetry forwarding](./telemetry-forwarding)
+
 
 ## Accessing the API
 

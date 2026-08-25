@@ -15,6 +15,7 @@
 package daemon
 
 import (
+	"net"
 	"net/http"
 
 	"github.com/canonical/pebble/internals/overlord/identities"
@@ -149,4 +150,34 @@ func (ac PairingAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState)
 	}
 
 	return Unauthorized(accessDenied)
+}
+
+// OTLPAccess is used for Pebble's local OTLP endpoints. These endpoints are
+// intended to be reachable only by services managed by Pebble, so access is
+// allowed over unix domain sockets, and over plain HTTP only when the request
+// originates from a loopback address. Non-local requests are denied.
+type OTLPAccess struct{}
+
+func (ac OTLPAccess) CheckAccess(d *Daemon, r *http.Request, user *UserState) Response {
+	switch RequestTransportType(r) {
+	case TransportTypeUnixSocket:
+		return nil
+	case TransportTypeHTTP:
+		if isLoopbackRemoteAddr(r.RemoteAddr) {
+			return nil
+		}
+		return Forbidden(accessDenied)
+	default:
+		return Forbidden(accessDenied)
+	}
+}
+
+// isLoopbackRemoteAddr reports whether remoteAddr refers to a loopback address.
+func isLoopbackRemoteAddr(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

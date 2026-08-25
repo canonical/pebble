@@ -30,6 +30,7 @@ type accessSuite struct{}
 var _ = Suite(&accessSuite{})
 
 var errUnauthorized = daemon.Unauthorized("access denied")
+var errForbidden = daemon.Forbidden("access denied")
 
 func (s *accessSuite) TestAccess(c *C) {
 	tests := []struct {
@@ -238,4 +239,39 @@ func (s *accessSuite) TestPairingAccessWithPairingWindow(c *C) {
 
 	err = pairingAccess.CheckAccess(nil, r, nil)
 	c.Assert(err, IsNil)
+}
+
+// TestOTLPAccess tests the OTLP receiver's access checker, which allows unix
+// domain sockets, and TCP only from a loopback remote address.
+func (s *accessSuite) TestOTLPAccess(c *C) {
+	access := daemon.OTLPAccess{}
+
+	// Unix domain socket: always allowed, regardless of remote address.
+	r := &http.Request{URL: &url.URL{}, RemoteAddr: "203.0.113.5:1234"}
+	r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, daemon.TransportTypeUnixSocket))
+	c.Check(access.CheckAccess(nil, r, nil), IsNil)
+
+	// HTTP from a loopback address: allowed.
+	r = &http.Request{URL: &url.URL{}, RemoteAddr: "127.0.0.1:5555"}
+	r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, daemon.TransportTypeHTTP))
+	c.Check(access.CheckAccess(nil, r, nil), IsNil)
+
+	r = &http.Request{URL: &url.URL{}, RemoteAddr: "[::1]:5555"}
+	r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, daemon.TransportTypeHTTP))
+	c.Check(access.CheckAccess(nil, r, nil), IsNil)
+
+	// HTTP from a non-loopback address: forbidden.
+	r = &http.Request{URL: &url.URL{}, RemoteAddr: "203.0.113.5:5555"}
+	r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, daemon.TransportTypeHTTP))
+	c.Check(access.CheckAccess(nil, r, nil), DeepEquals, errForbidden)
+
+	// HTTPS: forbidden, even from loopback.
+	r = &http.Request{URL: &url.URL{}, RemoteAddr: "127.0.0.1:5555"}
+	r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, daemon.TransportTypeHTTPS))
+	c.Check(access.CheckAccess(nil, r, nil), DeepEquals, errForbidden)
+
+	// Unknown transport: forbidden.
+	r = &http.Request{URL: &url.URL{}, RemoteAddr: "127.0.0.1:5555"}
+	r = r.WithContext(context.WithValue(context.Background(), daemon.TransportTypeKey{}, daemon.TransportTypeUnknown))
+	c.Check(access.CheckAccess(nil, r, nil), DeepEquals, errForbidden)
 }
