@@ -66,4 +66,4 @@ See the {external+rockcraft:doc}`Rockcraft documentation <index>` to learn more.
 ## See more
 
 - After capturing logs, you can [forward the logs to Loki](./forward-logs-to-loki).
-- [Log forwarding](../reference/log-forwarding.md) also supports the OpenTelemetry protocol (OTLP).
+- [Telemetry forwarding](../reference/telemetry-forwarding.md) also supports the OpenTelemetry protocol (OTLP); see [how to forward telemetry to an OpenTelemetry endpoint](./forward-telemetry-to-opentelemetry).

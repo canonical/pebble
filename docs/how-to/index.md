@@ -54,6 +54,18 @@ Check health based on logs <check-health-based-on-logs>
 ```
 
 
+## Telemetry forwarding
+
+To send logs, metrics and traces to a centralized observability backend, forward them to an OpenTelemetry endpoint.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Forward telemetry to an OpenTelemetry endpoint <forward-telemetry-to-opentelemetry>
+```
+
+
 ## Identities
 
 Use named "identities" to allow additional users to access the API.

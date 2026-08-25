@@ -291,6 +291,96 @@ log-targets:
     headers:
       <header name>: <header value>
 
+# (Optional) A list of remote metrics receivers, to which service metrics
+# gathered via the OpenTelemetry HTTP API can be forwarded.
+metrics-targets:
+
+  <metrics target name>:
+
+    # (Required) Control how this metrics target definition is combined with
+    # other pre-existing definitions with the same name in the Pebble plan.
+    #
+    # The value 'merge' will ensure that values in this layer specification
+    # are merged over existing definitions, whereas 'replace' will entirely
+    # override the existing target spec in the plan with the same name.
+    override: merge | replace
+
+    # (Required) The type of metrics target, which determines the format in
+    # which metrics will be sent. Currently, only "opentelemetry" is
+    # supported, which uses the OpenTelemetry protocol (OTLP). A
+    # "service.name" label is added automatically, with the name of the
+    # Pebble service as its value.
+    type: opentelemetry
+
+    # (Required) The URL of the remote metrics target. This needs to include
+    # the TCP port (normally 4318) without the API endpoint, for example:
+    #     http://<host-or-ip>:4318
+    location: <url>
+
+    # (Optional) A list of services whose metrics will be sent to this target.
+    # Use the special keyword 'all' to match all services in the plan.
+    # When merging metrics targets, the 'services' lists are appended. Prefix
+    # a service name with a minus (for example '-svc1') to remove a
+    # previously added service. '-all' will remove all services.
+    services: [<service names>]
+
+    # (Optional) A list of key/value pairs defining labels which should be set
+    # on the outgoing metrics. The label values may contain $ENV_VARS, which
+    # will be substituted using the environment for the corresponding
+    # service.
+    labels:
+      <label name>: <label value>
+
+    # (Optional) A list of key/value pairs defining extra HTTP headers to send
+    # with each request to the metrics target (for example, "Authorization").
+    headers:
+      <header name>: <header value>
+
+# (Optional) A list of remote trace receivers, to which service traces
+# gathered via the OpenTelemetry HTTP API can be forwarded.
+trace-targets:
+
+  <trace target name>:
+
+    # (Required) Control how this trace target definition is combined with
+    # other pre-existing definitions with the same name in the Pebble plan.
+    #
+    # The value 'merge' will ensure that values in this layer specification
+    # are merged over existing definitions, whereas 'replace' will entirely
+    # override the existing target spec in the plan with the same name.
+    override: merge | replace
+
+    # (Required) The type of trace target, which determines the format in
+    # which traces will be sent. Currently, only "opentelemetry" is
+    # supported, which uses the OpenTelemetry protocol (OTLP). A
+    # "service.name" label is added automatically, with the name of the
+    # Pebble service as its value.
+    type: opentelemetry
+
+    # (Required) The URL of the remote trace target. This needs to include
+    # the TCP port (normally 4318) without the API endpoint, for example:
+    #     http://<host-or-ip>:4318
+    location: <url>
+
+    # (Optional) A list of services whose traces will be sent to this target.
+    # Use the special keyword 'all' to match all services in the plan.
+    # When merging trace targets, the 'services' lists are appended. Prefix a
+    # service name with a minus (for example '-svc1') to remove a previously
+    # added service. '-all' will remove all services.
+    services: [<service names>]
+
+    # (Optional) A list of key/value pairs defining labels which should be set
+    # on the outgoing traces. The label values may contain $ENV_VARS, which
+    # will be substituted using the environment for the corresponding
+    # service.
+    labels:
+      <label name>: <label value>
+
+    # (Optional) A list of key/value pairs defining extra HTTP headers to send
+    # with each request to the trace target (for example, "Authorization").
+    headers:
+      <header name>: <header value>
+
 # (Optional) HTTPS (using mTLS) communication between the client and server
 # requires both sides to be paired first. Pairing is currently only supported
 # for HTTPS transport (not HTTP or Unix socket).
