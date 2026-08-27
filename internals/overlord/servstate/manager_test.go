@@ -251,7 +251,16 @@ func (s *S) TestStartStopServices(c *C) {
 		return
 	}
 
+	buf1 := s.manager.ServiceLogBuffer("test1")
+	c.Assert(buf1, NotNil)
+	c.Check(buf1.Closed(), Equals, false)
+
 	s.stopTestServices(c)
+
+	c.Check(buf1.Closed(), Equals, true)
+	buf2 := s.manager.ServiceLogBuffer("test2")
+	c.Assert(buf2, NotNil)
+	c.Check(buf2.Closed(), Equals, true)
 }
 
 func (s *S) TestStartStopServicesIdempotency(c *C) {
@@ -984,6 +993,10 @@ services:
 	s.waitUntilService(c, "test2", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusInactive
 	})
+
+	buf := s.manager.ServiceLogBuffer("test2")
+	c.Assert(buf, NotNil)
+	c.Check(buf.Closed(), Equals, true)
 }
 
 // The aim of this test is to make sure that the actioned check

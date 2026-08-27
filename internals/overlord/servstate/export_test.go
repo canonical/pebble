@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/servicelog"
 )
 
 var CalculateNextBackoff = calculateNextBackoff
@@ -58,6 +59,17 @@ func (m *ServiceManager) Config(serviceName string) *plan.Service {
 		return nil
 	}
 	return s.config
+}
+
+func (m *ServiceManager) ServiceLogBuffer(serviceName string) *servicelog.RingBuffer {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	s := m.services[serviceName]
+	if s == nil {
+		return nil
+	}
+	return s.logs
 }
 
 func (m *ServiceManager) GetJitter(duration time.Duration) time.Duration {

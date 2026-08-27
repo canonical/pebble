@@ -229,6 +229,9 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 		// Start allowed when service is backing off, was stopped, or has exited.
 		service.backoffNum = 0
 		service.backoffTime = 0
+		if service.logs == nil || service.logs.Closed() {
+			service.logs = servicelog.NewRingBuffer(maxLogBytes)
+		}
 		service.transition(stateInitial)
 		return service, ""
 	default:
@@ -597,6 +600,7 @@ func (s *serviceData) exited(exitCode int) error {
 			s.doBackoff(plan.ActionRestart, "on-check-failure")
 		} else {
 			logger.Noticef("Service %q stopped", s.config.Name)
+			_ = s.logs.Close()
 			s.stopped <- nil
 			s.transition(stateStopped)
 		}
@@ -734,6 +738,7 @@ func (s *serviceData) stop() error {
 
 	case stateBackoff:
 		logger.Noticef("Service %q stopped while waiting for backoff", s.config.Name)
+		_ = s.logs.Close()
 		s.stopped <- nil
 		s.transition(stateStopped)
 
