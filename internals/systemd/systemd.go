@@ -653,14 +653,11 @@ func (s *systemd) AddMountUnitFile(snapName, revision, what, where, fstype strin
 
 	options := []string{"nodev"}
 	if fstype == "squashfs" {
-		newFSType, newOptions, err := squashfs.FSType()
-		if err != nil {
-			return "", err
-		}
+		newFSType, newOptions := squashfs.FsType()
 		options = append(options, newOptions...)
 		fstype = newFSType
 	}
-	if osutil.IsDir(what) {
+	if osutil.IsDirectory(what) {
 		options = append(options, "bind")
 		fstype = "none"
 	}
@@ -715,7 +712,7 @@ func (s *systemd) RemoveMountUnitFile(mountedDir string) error {
 	}
 
 	unit := MountUnitPath(unitNamePath)
-	if !osutil.CanStat(unit) {
+	if !osutil.FileExists(unit) {
 		return nil
 	}
 

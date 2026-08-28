@@ -166,6 +166,26 @@ func sanityCheck() error {
 	return nil
 }
 
+// setupTLSOptions returns the TLS options for the daemon based on the
+// configured HTTPS address. If HTTPS is not requested no identity key is
+// loaded. If HTTPS is requested, an identity key is loaded (or generated)
+// from pebbleDir; this requires persistent state, so an error is returned
+// when persist is overlord.PersistNever.
+func setupTLSOptions(pebbleDir, httpsAddress string, persist overlord.PersistMode) (tlsstate.Options, error) {
+	if httpsAddress == "" {
+		return tlsstate.Options{}, nil
+	}
+	if persist == overlord.PersistNever {
+		return tlsstate.Options{}, fmt.Errorf("cannot use --https with PEBBLE_PERSIST=never: identity key requires persistent state")
+	}
+	idPath := filepath.Join(pebbleDir, "identity")
+	idSigner, err := idkey.Get(idPath)
+	if err != nil {
+		return tlsstate.Options{}, err
+	}
+	return tlsstate.Options{Signer: idSigner}, nil
+}
+
 func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	err := reaper.Start()
 	if err != nil {
@@ -194,16 +214,9 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 
-	idPath := filepath.Join(rcmd.pebbleDir, "identity")
-	idSigner, err := idkey.Get(idPath)
-	if err != nil {
-		return err
-	}
-
 	dopts := daemon.Options{
 		Dir:          rcmd.pebbleDir,
 		SocketPath:   rcmd.socketPath,
-		TLSOptions:   tlsstate.Options{Signer: idSigner},
 		HTTPAddress:  rcmd.HTTP,
 		HTTPSAddress: rcmd.HTTPS,
 	}
@@ -213,6 +226,12 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	if os.Getenv("PEBBLE_PERSIST") == "never" {
 		dopts.Persist = overlord.PersistNever
 	}
+
+	tlsOpts, err := setupTLSOptions(rcmd.pebbleDir, rcmd.HTTPS, dopts.Persist)
+	if err != nil {
+		return err
+	}
+	dopts.TLSOptions = tlsOpts
 
 	d, err := daemon.New(&dopts)
 	if err != nil {

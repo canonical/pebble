@@ -84,6 +84,11 @@ func SetUnsafeIO(b bool) (restore func()) {
 	}
 }
 
+func GetUnsafeIO() bool {
+	// a getter so that tests do not attempt to modify that directly
+	return unsafeIO
+}
+
 func SetAtomicFileRenamed(aw *AtomicFile, renamed bool) {
 	aw.renamed = renamed
 }
@@ -125,10 +130,18 @@ func FakeEnviron(f func() []string) (restore func()) {
 	}
 }
 
-func FakeRandomString(f func(int) string) (restore func()) {
-	old := randomString
-	randomString = f
+func FakeFChmod(f func(file *os.File, mode os.FileMode) error) (restore func()) {
+	old := fChmod
+	fChmod = f
 	return func() {
-		randomString = old
+		fChmod = old
+	}
+}
+
+func FakeLookPath(new func(string) (string, error)) (restore func()) {
+	old := lookPath
+	lookPath = new
+	return func() {
+		lookPath = old
 	}
 }

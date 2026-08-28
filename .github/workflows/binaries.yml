@@ -15,22 +15,24 @@ jobs:
   create-binaries:
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         goos: [linux]
-        goarch: [amd64, arm64, ppc64le, riscv64, s390x]
+        goarch: [amd64, arm64, armv6, ppc64le, riscv64, s390x]
 
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v6
+      uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
       with:
         persist-credentials: false
         fetch-depth: 0
 
     - name: Set up Go
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
       with:
         go-version-file: "go.mod"
         cache: false
@@ -44,6 +46,13 @@ jobs:
       run: |
         echo Generating version file
         go generate ./cmd
+
+        # If GOARCH is armvN (e.g. armv6, armv5), set GOARCH=arm and GOARM=N
+        if [[ "$GOARCH" == armv* ]]; then
+          export GOARM="${GOARCH#armv}"
+          export GOARCH=arm
+          echo Using GOARM=$GOARM
+        fi
 
         echo Building for $GOOS $GOARCH
         go build -trimpath -ldflags='-s -w' -o dist/build/pebble ./cmd/pebble
@@ -61,8 +70,14 @@ jobs:
         echo "ARCHIVE_FILE=${ARCHIVE_FILE}" >>$GITHUB_OUTPUT
         echo "PEBBLE_VERSION=${PEBBLE_VERSION}" >>$GITHUB_OUTPUT
 
+    - name: Attest build provenance
+      if: ${{ github.event_name == 'release' }}
+      uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+      with:
+        subject-path: dist/${{ steps.build.outputs.ARCHIVE_FILE }}
+
     - name: Upload archive as Actions artifact
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
       with:
         name: ${{ steps.build.outputs.ARCHIVE_FILE }}
         path: dist/${{ steps.build.outputs.ARCHIVE_FILE }}

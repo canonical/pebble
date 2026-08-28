@@ -502,7 +502,7 @@ func makeFakeFile(c *C, path string) {
 }
 
 func (s *SystemdTestSuite) TestAddMountUnit(c *C) {
-	restore := squashfs.FakeUseFuse(false)
+	restore := squashfs.FakeNeedsFuse(false)
 	defer restore()
 
 	fakeSnapPath := filepath.Join(c.MkDir(), "/var/lib/snappy/snaps/foo_1.0.snap")
@@ -521,7 +521,7 @@ Before=snapd.service
 What=%s
 Where=/snap/snapname/123
 Type=squashfs
-Options=nodev,ro,x-gdu.hide
+Options=nodev,ro,x-gdu.hide,x-gvfs-hide
 
 [Install]
 WantedBy=multi-user.target
@@ -535,7 +535,7 @@ WantedBy=multi-user.target
 }
 
 func (s *SystemdTestSuite) TestAddMountUnitForDirs(c *C) {
-	restore := squashfs.FakeUseFuse(false)
+	restore := squashfs.FakeNeedsFuse(false)
 	defer restore()
 
 	// a directory instead of a file produces a different output
@@ -553,7 +553,7 @@ Before=snapd.service
 What=%s
 Where=/snap/snapname/x1
 Type=none
-Options=nodev,ro,x-gdu.hide,bind
+Options=nodev,ro,x-gdu.hide,x-gvfs-hide,bind
 
 [Install]
 WantedBy=multi-user.target
@@ -567,7 +567,7 @@ WantedBy=multi-user.target
 }
 
 func (s *SystemdTestSuite) TestFuseInContainer(c *C) {
-	if !osutil.CanStat("/dev/fuse") {
+	if !osutil.FileExists("/dev/fuse") {
 		c.Skip("No /dev/fuse on the system")
 	}
 
@@ -601,7 +601,7 @@ Before=snapd.service
 What=%s
 Where=/snap/snapname/123
 Type=fuse.squashfuse
-Options=nodev,ro,x-gdu.hide,allow_other
+Options=nodev,ro,x-gdu.hide,x-gvfs-hide,allow_other
 
 [Install]
 WantedBy=multi-user.target
@@ -639,7 +639,7 @@ Before=snapd.service
 What=%s
 Where=/snap/snapname/123
 Type=squashfs
-Options=nodev,ro,x-gdu.hide
+Options=nodev,ro,x-gdu.hide,x-gvfs-hide
 
 [Install]
 WantedBy=multi-user.target
@@ -713,7 +713,7 @@ func (s *SystemdTestSuite) TestRemoveMountUnit(c *C) {
 	c.Assert(err, IsNil)
 
 	// the file is gone
-	c.Check(osutil.CanStat(mountUnit), Equals, false)
+	c.Check(osutil.FileExists(mountUnit), Equals, false)
 	// and the unit is disabled and the daemon reloaded
 	c.Check(s.argses, DeepEquals, [][]string{
 		{"--root", s.rootDir, "disable", "snap-foo-42.mount"},

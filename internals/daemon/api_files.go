@@ -500,7 +500,7 @@ func writeFile(item writeFilesItem, source io.Reader) error {
 	if uid != nil && gid != nil {
 		sysUid, sysGid = sys.UserID(*uid), sys.GroupID(*gid)
 	}
-	return atomicWriteChown(item.Path, source, perm, osutil.AtomicWriteChmod, sysUid, sysGid)
+	return atomicWriteChown(item.Path, source, perm, osutil.AtomicWriteFlags(0), sysUid, sysGid)
 }
 
 func mkdirAllUserGroup(path string, perm os.FileMode, uid, gid *int) error {

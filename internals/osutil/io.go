@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2014-2026 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -17,12 +17,14 @@ package osutil
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
-
-	"github.com/canonical/x-go/randutil"
+	"time"
 
 	"github.com/canonical/pebble/internals/osutil/sys"
 )
@@ -30,21 +32,10 @@ import (
 // AtomicWriteFlags are a bitfield of flags for AtomicWriteFile
 type AtomicWriteFlags uint
 
-const (
-	// AtomicWriteFollow makes AtomicWriteFile follow symlinks
-	AtomicWriteFollow AtomicWriteFlags = 1 << iota
-	// AtomicWriteChmod performs an explicit chmod to file permissions after
-	// creation for e.g. overcoming any umask modifications.
-	AtomicWriteChmod
-)
-
 // Allow disabling sync for testing. This brings massive improvements on
 // certain filesystems (like btrfs) and very much noticeable improvements in
 // all unit tests in general.
 var unsafeIO bool = testing.Testing() && os.Getenv("UNSAFE_IO") == "1"
-
-// For testing
-var randomString = randutil.RandomString
 
 // An AtomicFile is similar to an os.File but it has an additional
 // Commit() method that does whatever needs to be done so the
@@ -58,6 +49,7 @@ type AtomicFile struct {
 	tmpname string
 	uid     sys.UserID
 	gid     sys.GroupID
+	mtime   time.Time
 	closed  bool
 	renamed bool
 }
@@ -65,10 +57,10 @@ type AtomicFile struct {
 // NewAtomicFile builds an AtomicFile backed by an *os.File that will have
 // the given filename, permissions and uid/gid when Committed.
 //
-// It _might_ be implemented using O_TMPFILE (see open(2)).
+//	It _might_ be implemented using O_TMPFILE (see open(2)).
 //
 // Note that it won't follow symlinks and will replace existing symlinks with
-// the real file, unless the AtomicWriteFollow flag is specified.
+// the real file. Also, umask is ignored when setting the file's permissions.
 //
 // It is the caller's responsibility to clean up on error, by calling Cancel().
 //
@@ -78,15 +70,11 @@ type AtomicFile struct {
 // Also note that there are a number of scenarios where Commit fails and then
 // Cancel also fails. In all these scenarios your filesystem was probably in a
 // rather poor state. Good luck.
-func NewAtomicFile(filename string, perm os.FileMode, flags AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) (aw *AtomicFile, err error) {
-	if flags&AtomicWriteFollow != 0 {
-		if fn, err := os.Readlink(filename); err == nil || (fn != "" && os.IsNotExist(err)) {
-			if filepath.IsAbs(fn) {
-				filename = fn
-			} else {
-				filename = filepath.Join(filepath.Dir(filename), fn)
-			}
-		}
+func NewAtomicFile(filename string, perm os.FileMode, _ AtomicWriteFlags, uid sys.UserID, gid sys.GroupID) (aw *AtomicFile, err error) {
+	basename := filepath.Base(filename)
+	dirname := filepath.Dir(filename)
+	if strings.Contains(basename, "*") {
+		return nil, fmt.Errorf("cannot create tempfile for filename containing '*': %q", basename)
 	}
 	// The tilde is appended so that programs that inspect all files in some
 	// directory are more likely to ignore this file as an editor backup file.
@@ -95,28 +83,32 @@ func NewAtomicFile(filename string, perm os.FileMode, flags AtomicWriteFlags, ui
 	// aa-enforce. Tools from this package enumerate all profiles by loading
 	// parsing any file found in /etc/apparmor.d/, skipping only very specific
 	// suffixes, such as the one we selected below.
-	tmp := filename + "." + randomString(12) + "~"
-
-	fd, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, perm)
+	fd, err := os.CreateTemp(dirname, basename+".*~")
 	if err != nil {
 		return nil, err
 	}
-
-	if flags&AtomicWriteChmod != 0 {
-		err := fd.Chmod(perm)
+	defer func() {
 		if err != nil {
-			return nil, err
+			fd.Close()
+			os.Remove(fd.Name())
 		}
+	}()
+
+	// Chmod ignores umask
+	if err = fChmod(fd, perm); err != nil {
+		return nil, err
 	}
 
 	return &AtomicFile{
 		File:    fd,
 		target:  filename,
-		tmpname: tmp,
+		tmpname: fd.Name(),
 		uid:     uid,
 		gid:     gid,
 	}, nil
 }
+
+var fChmod = (*os.File).Chmod
 
 // ErrCannotCancel means the Commit operation failed at the last step, and
 // your luck has run out.
@@ -153,12 +145,12 @@ var chown = sys.Chown
 
 const NoChown = sys.FlagID
 
-// Commit the modification; make it permanent.
-//
-// If Commit succeeds, the writer is closed and further attempts to
-// write will fail. If Commit fails, the writer _might_ be closed;
-// Cancel() needs to be called to clean up.
-func (aw *AtomicFile) Commit() error {
+// SetModTime sets the given modification time on the created file.
+func (aw *AtomicFile) SetModTime(t time.Time) {
+	aw.mtime = t
+}
+
+func (aw *AtomicFile) commit() error {
 	if aw.uid != NoChown || aw.gid != NoChown {
 		if err := chown(aw.File, aw.uid, aw.gid); err != nil {
 			return err
@@ -184,6 +176,12 @@ func (aw *AtomicFile) Commit() error {
 		return err
 	}
 
+	if !aw.mtime.IsZero() {
+		if err := os.Chtimes(aw.tmpname, time.Now(), aw.mtime); err != nil {
+			return err
+		}
+	}
+
 	if err := os.Rename(aw.tmpname, aw.target); err != nil {
 		return err
 	}
@@ -194,6 +192,31 @@ func (aw *AtomicFile) Commit() error {
 	}
 
 	return nil
+}
+
+// Commit the modification; make it permanent.
+//
+// If Commit succeeds, the writer is closed and further attempts to
+// write will fail. If Commit fails, the writer _might_ be closed;
+// Cancel() needs to be called to clean up.
+func (aw *AtomicFile) Commit() error {
+	return aw.commit()
+}
+
+// CommitAs commits the file under a new target name, following the same rules
+// as Commit. The new target name must be located in the same directory as the
+// original filename provided when creating AtomicFile.
+//
+// The call is useful when the target name is not known until the end (eg. it
+// may depend on data being written to the file), in which case one can create
+// AtomicFile using a temporary name and later override the actual name by
+// calling CommitAs.
+func (aw *AtomicFile) CommitAs(filename string) error {
+	if dir := filepath.Dir(filename); dir != filepath.Dir(aw.target) {
+		return fmt.Errorf("cannot commit as %q to a different directory %q", filepath.Base(filename), dir)
+	}
+	aw.target = filename
+	return aw.commit()
 }
 
 // The AtomicWrite* family of functions work like os.WriteFile(), but the
@@ -234,4 +257,99 @@ func AtomicWriteChown(filename string, reader io.Reader, perm os.FileMode, flags
 	}
 
 	return aw.Commit()
+}
+
+// AtomicRename attempts to rename a path from oldName to newName atomically.
+func AtomicRename(oldName, newName string) (err error) {
+	var oldDir, newDir *os.File
+
+	// unsafeIO controls the ability to ignore expensive disk
+	// synchronization. It is only used inside tests.
+	if !unsafeIO {
+		// if called with a path with trailing '/', filepath.Dir
+		// returns the dir itself instead of the parent
+		oldName = filepath.Clean(oldName)
+		newName = filepath.Clean(newName)
+
+		oldDirPath := filepath.Dir(oldName)
+		newDirPath := filepath.Dir(newName)
+
+		oldDir, err = os.Open(oldDirPath)
+		if err != nil {
+			return err
+		}
+		defer oldDir.Close()
+
+		newDir, err = os.Open(newDirPath)
+		if err != nil {
+			return err
+		}
+		defer newDir.Close()
+
+		oldInfo, err := oldDir.Stat()
+		if err != nil {
+			return err
+		}
+		newInfo, err := newDir.Stat()
+		if err != nil {
+			return err
+		}
+		if oldStat, ok := oldInfo.Sys().(*syscall.Stat_t); ok {
+			if newStat, ok := newInfo.Sys().(*syscall.Stat_t); ok {
+				// Old and new directories refer to the same location. We can only sync once.
+				if oldStat.Dev == newStat.Dev && oldStat.Ino == newStat.Ino {
+					newDir = nil
+				}
+			}
+		}
+	}
+
+	if err := os.Rename(oldName, newName); err != nil {
+		return err
+	}
+	var err1, err2 error
+	if oldDir != nil {
+		err1 = oldDir.Sync()
+	}
+	if newDir != nil {
+		err2 = newDir.Sync()
+	}
+	if err1 != nil {
+		return err1
+	}
+	return err2
+}
+
+func atomicLinkOp(target, linkPath string, op func(target, tmp string) error) error {
+	basename := filepath.Base(linkPath)
+	dirname := filepath.Dir(linkPath)
+	if strings.Contains(basename, "*") {
+		return fmt.Errorf("cannot create tempfile for link path containing '*': %q", basename)
+	}
+	tmpDir, err := os.MkdirTemp(dirname, basename+".*~")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tmpDir)
+	tmp := filepath.Join(tmpDir, "link")
+	if err := op(target, tmp); err != nil {
+		return err
+	}
+	return AtomicRename(tmp, linkPath)
+}
+
+// AtomicSymlink attempts to atomically create a symlink at linkPath, pointing
+// to a given target. The process creates a temporary symlink object pointing to
+// the target, and then proceeds to rename it atomically, replacing the
+// linkPath.
+func AtomicSymlink(target, linkPath string) error {
+	return atomicLinkOp(target, linkPath, os.Symlink)
+}
+
+// AtomicLink attempts to atomically create a hardlink at linkPath, referencing
+// the given target. The process creates a temporary hardlink object pointing
+// to the target, and then proceeds to rename it atomically, replacing the
+// linkPath.
+func AtomicLink(target, linkPath string) error {
+	return atomicLinkOp(target, linkPath, os.Link)
 }

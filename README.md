@@ -11,15 +11,15 @@ _Take control of your internal daemons!_
 
 Pebble's key features:
 
-- [Layer](https://documentation.ubuntu.com/pebble/reference/layer-specification/)-based configuration
-- Service [dependencies](https://documentation.ubuntu.com/pebble/explanation/service-dependencies/)
-- Service [logs](https://documentation.ubuntu.com/pebble/reference/cli-commands/#logs) and [log forwarding](https://documentation.ubuntu.com/pebble/reference/log-forwarding/)
-- [Health checks](https://documentation.ubuntu.com/pebble/reference/health-checks/)
-- [Notices](https://documentation.ubuntu.com/pebble/reference/notices/) (aggregated events)
-- [Identities](https://documentation.ubuntu.com/pebble/how-to/manage-identities/)
-- Can be used in [virtual machines and containers](https://documentation.ubuntu.com/pebble/how-to/manage-a-remote-system/)
-- [CLI commands](https://documentation.ubuntu.com/pebble/reference/cli-commands/)
-- [HTTP API](https://documentation.ubuntu.com/pebble/explanation/api-and-clients/) with a [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) and a [Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py)
+- [Layer](https://ubuntu.com/docs/pebble/reference/layer-specification/)-based configuration
+- Service [dependencies](https://ubuntu.com/docs/pebble/explanation/service-dependencies/)
+- Service [logs](https://ubuntu.com/docs/pebble/reference/cli-commands/#logs) and [log forwarding](https://ubuntu.com/docs/pebble/reference/log-forwarding/)
+- [Health checks](https://ubuntu.com/docs/pebble/reference/health-checks/)
+- [Notices](https://ubuntu.com/docs/pebble/reference/notices/) (aggregated events)
+- [Identities](https://ubuntu.com/docs/pebble/how-to/manage-identities/)
+- Can be used in [virtual machines and containers](https://ubuntu.com/docs/pebble/how-to/manage-a-remote-system/)
+- [CLI commands](https://ubuntu.com/docs/pebble/reference/cli-commands/)
+- [HTTP API](https://ubuntu.com/docs/pebble/explanation/api-and-clients/) with a [Go client](https://pkg.go.dev/github.com/canonical/pebble/client) and a [Python client](https://github.com/canonical/operator/blob/main/ops/pebble.py)
 
 ## Quick start
 
@@ -41,13 +41,13 @@ services:
 pebble run
 ```
 
-Read more about Pebble's general model [here](https://documentation.ubuntu.com/pebble/explanation/general-model/).
+Read more about Pebble's general model [here](https://ubuntu.com/docs/pebble/explanation/general-model/).
 
-For a hands-on introduction to Pebble, we recommend going through the [tutorial](https://documentation.ubuntu.com/pebble/tutorial/getting-started/).
+For a hands-on introduction to Pebble, we recommend going through the [tutorial](https://ubuntu.com/docs/pebble/tutorial/getting-started/).
 
 ## Getting help
 
-To get the most out of Pebble, we recommend starting with the [documentation](https://documentation.ubuntu.com/pebble/).
+To get the most out of Pebble, we recommend starting with the [documentation](https://ubuntu.com/docs/pebble/).
 
 You can [create an issue](https://github.com/canonical/pebble/issues/new) and we will help!
 

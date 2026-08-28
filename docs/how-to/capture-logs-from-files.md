@@ -59,7 +59,7 @@ by staging the `coreutils_bins` slice in your `rockcraft.yaml` file:
 
 The `coreutils_bins` slice brings in around a dozen shared objects and some hundred binaries.
 For a truly minimal rock, consider
-{external+rockcraft:ref}`defining a custom chisel slice <how-to-create-a-package-slice-for-chisel>`.
+{external+chisel:doc}`defining a custom chisel slice <how-to/slice-a-package>`.
 
 See the {external+rockcraft:doc}`Rockcraft documentation <index>` to learn more.
 

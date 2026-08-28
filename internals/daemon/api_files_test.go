@@ -405,7 +405,7 @@ func (s *filesSuite) TestMakeDirsSingle(c *C) {
 	c.Check(r.Result, HasLen, 1)
 	checkFileResult(c, r.Result[0], tmpDir+"/newdir", "", "")
 
-	c.Check(osutil.IsDir(tmpDir+"/newdir"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/newdir"), Equals, true)
 }
 
 func (s *filesSuite) TestMakeDirsMultiple(c *C) {
@@ -439,9 +439,9 @@ func (s *filesSuite) TestMakeDirsMultiple(c *C) {
 	checkFileResult(c, r.Result[1], tmpDir+"/will/not/work", "not-found", ".*")
 	checkFileResult(c, r.Result[2], tmpDir+"/make/my/parents", "", "")
 
-	c.Check(osutil.IsDir(tmpDir+"/newdir"), Equals, true)
-	c.Check(osutil.IsDir(tmpDir+"/will/not/work"), Equals, false)
-	c.Check(osutil.IsDir(tmpDir+"/make/my/parents"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/newdir"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/will/not/work"), Equals, false)
+	c.Check(osutil.IsDirectory(tmpDir+"/make/my/parents"), Equals, true)
 	st, err := os.Stat(tmpDir + "/newdir")
 	c.Assert(err, IsNil)
 	c.Check(st.Mode().Perm(), Equals, os.FileMode(0o755))
@@ -528,11 +528,11 @@ func (s *filesSuite) testMakeDirsUserGroup(c *C, uid, gid int, user, group strin
 	checkFileResult(c, r.Result[3], tmpDir+"/nested1/normal", "", "")
 	checkFileResult(c, r.Result[4], tmpDir+"/nested2/user-group", "", "")
 
-	c.Check(osutil.IsDir(tmpDir+"/normal"), Equals, true)
-	c.Check(osutil.IsDir(tmpDir+"/uid-gid"), Equals, true)
-	c.Check(osutil.IsDir(tmpDir+"/user-group"), Equals, true)
-	c.Check(osutil.IsDir(tmpDir+"/nested1/normal"), Equals, true)
-	c.Check(osutil.IsDir(tmpDir+"/nested2/user-group"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/normal"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/uid-gid"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/user-group"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/nested1/normal"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/nested2/user-group"), Equals, true)
 
 	return tmpDir
 }
@@ -630,7 +630,7 @@ func (s *filesSuite) TestRemoveSingle(c *C) {
 	c.Check(r.Result, HasLen, 1)
 	checkFileResult(c, r.Result[0], tmpDir+"/file", "", "")
 
-	c.Check(osutil.CanStat(tmpDir+"/file"), Equals, false)
+	c.Check(osutil.FileExists(tmpDir+"/file"), Equals, false)
 }
 
 func (s *filesSuite) TestRemoveMultiple(c *C) {
@@ -672,10 +672,10 @@ func (s *filesSuite) TestRemoveMultiple(c *C) {
 	checkFileResult(c, r.Result[2], tmpDir+"/non-empty", "generic-file-error", ".*directory not empty")
 	checkFileResult(c, r.Result[3], tmpDir+"/recursive", "", "")
 
-	c.Check(osutil.CanStat(tmpDir+"/file"), Equals, false)
-	c.Check(osutil.IsDir(tmpDir+"/empty"), Equals, false)
-	c.Check(osutil.IsDir(tmpDir+"/non-empty"), Equals, true)
-	c.Check(osutil.IsDir(tmpDir+"/recursive"), Equals, false)
+	c.Check(osutil.FileExists(tmpDir+"/file"), Equals, false)
+	c.Check(osutil.IsDirectory(tmpDir+"/empty"), Equals, false)
+	c.Check(osutil.IsDirectory(tmpDir+"/non-empty"), Equals, true)
+	c.Check(osutil.IsDirectory(tmpDir+"/recursive"), Equals, false)
 }
 
 func (s *filesSuite) TestWriteNoMetadata(c *C) {
@@ -1204,10 +1204,10 @@ group not found
 	checkFileResult(c, r.Result[4], pathUserNotFound, "generic-file-error", ".*unknown user.*")
 	checkFileResult(c, r.Result[5], pathGroupNotFound, "generic-file-error", ".*unknown group.*")
 
-	c.Check(osutil.CanStat(pathNoContent), Equals, false)
-	c.Check(osutil.CanStat(pathNotAbsolute), Equals, false)
-	c.Check(osutil.CanStat(pathNotFound), Equals, false)
-	c.Check(osutil.CanStat(pathPermissionDenied), Equals, false)
+	c.Check(osutil.FileExists(pathNoContent), Equals, false)
+	c.Check(osutil.FileExists(pathNotAbsolute), Equals, false)
+	c.Check(osutil.FileExists(pathNotFound), Equals, false)
+	c.Check(osutil.FileExists(pathPermissionDenied), Equals, false)
 }
 
 func assertFile(c *C, path string, perm os.FileMode, content string) {
