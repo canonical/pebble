@@ -2,6 +2,14 @@ name: SBOM and secscan
 
 on:
   workflow_call:
+    inputs:
+      release-tag:
+        description: >-
+          Tag of the GitHub release to upload the secscan report to. If
+          empty, the report is only kept as an Actions artifact.
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
 
 permissions: {}
@@ -13,9 +21,49 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           persist-credentials: false
+
+      # Idempotency: if a report is already attached to the release (e.g.
+      # from a previous run of this workflow), don't scan/upload again.
+      - name: Check if report already uploaded to the release
+        id: check
+        if: inputs.release-tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release-tag }}
+        run: |
+          set -eu
+          if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "secscan-report-upload-snap.tar.gz"; then
+            echo "Secscan report already attached to release $TAG, skipping."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: sbomber
+        if: steps.check.outputs.exists != 'true'
         uses: canonical/sbomber/.github/actions/run@cf7a76e810497ec932e8285b2c9d6b373d225e79  # main -- the sbomber-ref input below should match
         with:
           manifest: '${{ github.workspace }}/.github/.sbomber-manifest-snap.yaml'
           artifact-name: secscan-report-upload-snap
           sbomber-ref: cf7a76e810497ec932e8285b2c9d6b373d225e79  # should match the ref in 'uses' above
+
+      # sbomber uploads its report as an Actions artifact (named above), but
+      # doesn't tell us its on-disk path, so download that artifact back
+      # down (it's available within the same workflow run) and re-upload it
+      # to the release as a single archive.
+      - name: Download secscan report artifact
+        if: steps.check.outputs.exists != 'true' && inputs.release-tag != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+        with:
+          name: secscan-report-upload-snap
+          path: secscan-report-upload-snap
+
+      - name: Upload report to release
+        if: steps.check.outputs.exists != 'true' && inputs.release-tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release-tag }}
+        run: |
+          set -eu
+          tar -czf secscan-report-upload-snap.tar.gz -C secscan-report-upload-snap .
+          gh release upload "$TAG" secscan-report-upload-snap.tar.gz

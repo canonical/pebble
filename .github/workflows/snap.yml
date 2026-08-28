@@ -1,12 +1,60 @@
 name: Pebble snap
 
+# Channel strategy:
+#   - push to master: builds and publishes straight to latest/edge, as a
+#     continuous "this is what's on master right now" channel.
+#   - called from release.yml (workflow_call): builds and publishes straight to
+#     latest/candidate for the version being released.
+#   - a GitHub release is published: promotes the already-published
+#     latest/candidate build to latest/stable. This never (re)builds anything,
+#     it assumes release.yml already published the candidate for that release.
+#   - pull_request: just a test build (see local-build below), never published.
+
 on:
-  pull_request:
-    branches: [master]
   push:
+    branches: [master]
+  pull_request:
     branches: [master]
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      release-tag:
+        description: >-
+          Tag of the (possibly draft) GitHub release to check out, build,
+          and upload the built snap to.
+        required: false
+        type: string
+        default: ""
+      skip-build:
+        description: "Skip building/publishing snaps entirely"
+        required: false
+        type: boolean
+        default: false
+      skip-amd64:
+        required: false
+        type: boolean
+        default: false
+      skip-arm64:
+        required: false
+        type: boolean
+        default: false
+      skip-armhf:
+        required: false
+        type: boolean
+        default: false
+      skip-ppc64el:
+        required: false
+        type: boolean
+        default: false
+      skip-riscv64:
+        required: false
+        type: boolean
+        default: false
+      skip-s390x:
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -17,14 +65,26 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 env:
   DEFAULT_TRACK: latest
-  DEFAULT_RISK: edge
+  EDGE_RISK: edge
+  CANDIDATE_RISK: candidate
+  STABLE_RISK: stable
 
 jobs:
   local-build:
-    runs-on: ubuntu-latest
-    # PRS usually come from forks, which are not allowed to access repo secrets.
-    # So this job builds the snap locally, and not via LP.
+    # PRs usually come from forks, which are not allowed to access repo secrets.
+    # So this job builds the snap locally (using each architecture's own native
+    # GitHub-hosted runner), rather than via LP. This tests that a PR has not
+    # broken snap building.
     if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runs-on: ubuntu-latest
+          - arch: arm64
+            runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
@@ -47,7 +107,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         if: failure()
         with:
-          name: snapcraft-logs
+          name: snapcraft-logs-${{ matrix.arch }}
           path: |
             ~/.cache/snapcraft/log/
             ~/.local/state/snapcraft/log/
@@ -56,7 +116,7 @@ jobs:
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
         with:
-          name: pebble-snap-amd64
+          name: pebble-snap-${{ matrix.arch }}
           path: ${{ steps.build-snap.outputs.snap }}
 
   remote-build:
@@ -66,7 +126,14 @@ jobs:
       id-token: write
       attestations: write
       contents: read
-    if: github.event_name != 'pull_request'
+    # Runs for a push to master, or when called from release.yml -- but
+    # never for a plain pull_request build (see local-build above) or a
+    # bare release-published event (which only promotes an existing
+    # candidate build to stable; see the promote job below).
+    if: |
+      github.event_name != 'pull_request' &&
+      github.event_name != 'release' &&
+      !inputs.skip-build
     strategy:
       fail-fast: true
       matrix:
@@ -77,8 +144,41 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+          ref: ${{ inputs.release-tag }}
+
+      # Skip this architecture if it was explicitly requested via input, or
+      # (idempotency) if it's already attached to the release -- e.g. a
+      # previous run of this workflow already built and uploaded it, and
+      # we're only re-running to pick up an architecture that failed. We
+      # treat "asset attached to the release" as the single source of truth
+      # for "this architecture is done" -- it's uploaded together with (and
+      # right after) publishing to the Snap Store, so the two shouldn't
+      # normally get out of sync.
+      - name: Check if this architecture should be skipped
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release-tag }}
+          ARCH: ${{ matrix.arch }}
+          SKIP_ARCH: ${{ inputs[format('skip-{0}', matrix.arch)] }}
+        run: |
+          set -eu
+          if [[ "$SKIP_ARCH" == "true" ]]; then
+            echo "Architecture $ARCH skipped via input."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -n "$TAG" ]] && gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qE "^pebble.*${ARCH}.*\.snap$"; then
+            echo "Snap for $ARCH already attached to release $TAG, skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Set LP credentials for remote build
+        if: steps.check.outputs.skip != 'true'
         env:
           LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
           PEBBLE_DEV_MAILING_LIST: ${{ secrets.PEBBLE_DEV_MAILING_LIST }}
@@ -90,33 +190,36 @@ jobs:
           git config --global user.name "pebble-dev"
 
       - name: Set up Go
+        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
         with:
           go-version-file: "go.mod"
 
       # Ensure Snapcraft will ship the generated version files to LP.
-      - run: |
+      - if: steps.check.outputs.skip != 'true'
+        run: |
           go generate ./cmd
           git add -f ./cmd/VERSION ./cmd/version_generated.go
 
       - name: Build Snap for ${{ matrix.arch }}
         id: build-snap
+        if: steps.check.outputs.skip != 'true'
         uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
 
       - name: Attest build provenance
-        if: steps.build-snap.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.build-snap.outcome == 'success'
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
         with:
           subject-path: ${{ steps.build-snap.outputs.snap }}
 
       - name: Rename the logs file, for colons are not allowed in the artifact name
-        if: always()
+        if: steps.check.outputs.skip != 'true' && always()
         run: cat snapcraft-pebble-*.txt > snapcraft-logs.txt || echo "no log files"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        if: always()
+        if: steps.check.outputs.skip != 'true' && always()
         with:
           name: snapcraft-logs-${{ matrix.arch }}
           path: |
@@ -127,7 +230,7 @@ jobs:
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        if: steps.build-snap.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.build-snap.outcome == 'success'
         with:
           name: pebble-snap-${{ matrix.arch }}
           path: ${{ steps.build-snap.outputs.snap }}
@@ -146,11 +249,23 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           pattern: pebble-snap-amd64
+          if-no-artifact-found: ignore
 
+      # Idempotency: if the amd64 snap wasn't (re)built above (either
+      # skipped via input, or already uploaded to the release in a
+      # previous run), there's nothing to test.
       - id: get-snap
-        run: echo "filename=$(echo pebble*${TEST_ON}*.snap)" >> $GITHUB_OUTPUT
+        run: |
+          shopt -s nullglob
+          files=(pebble*${TEST_ON}*.snap)
+          if [[ ${#files[@]} -gt 0 ]]; then
+            echo "filename=${files[0]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "filename=" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install and test snap
+        if: steps.get-snap.outputs.filename != ''
         env:
           SNAP_FILENAME: ${{ steps.get-snap.outputs.filename }}
         run: |
@@ -167,73 +282,199 @@ jobs:
     runs-on: ubuntu-latest
     environment: snap-build
     needs: [test]
-    if: github.event_name != 'pull_request' && needs.test.result == 'success' && always()
+    permissions:
+      contents: write
+    # The channel to publish to depends on why we're building: a push to master
+    # goes to the continuous edge channel, while a release build goes straight
+    # to candidate, ready for the promote job below to move it to stable once
+    # the corresponding GitHub release is published.
+    env:
+      GH_REPO: ${{ github.repository }}
+      RELEASE_RISK: ${{ github.event_name == 'push' && 'edge' || 'candidate' }}
+    if: |
+      github.event_name != 'pull_request' &&
+      github.event_name != 'release' &&
+      !inputs.skip-build &&
+      needs.test.result == 'success' &&
+      always()
     strategy:
       fail-fast: false
       matrix:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+      # This check is independent of whether remote-build actually built
+      # anything in this run, so that this job is idempotent whether we're
+      # resuming a run that partially failed (e.g. this step didn't get to
+      # run last time) or starting a brand new run for the same release tag.
+      - name: Check if this architecture should be skipped
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release-tag }}
+          ARCH: ${{ matrix.arch }}
+          SKIP_ARCH: ${{ inputs[format('skip-{0}', matrix.arch)] }}
+        run: |
+          set -eu
+          if [[ "$SKIP_ARCH" == "true" ]]; then
+            echo "Architecture $ARCH skipped via input."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ -n "$TAG" ]] && gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qE "^pebble.*${ARCH}.*\.snap$"; then
+            echo "Snap for $ARCH already attached to release $TAG, skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - if: steps.check.outputs.skip != 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           pattern: pebble-snap-${{ matrix.arch }}
+          if-no-artifact-found: ignore
 
+      # There's nothing to publish/upload if this architecture's snap
+      # wasn't (re)built above -- e.g. its build failed, or `remote-build`
+      # itself was skipped this run for some other reason.
       - id: get-snap
+        if: steps.check.outputs.skip != 'true'
         env:
           ARCH: ${{ matrix.arch }}
-        run: echo "filename=$(echo pebble*${ARCH}*.snap)" >> $GITHUB_OUTPUT
+        run: |
+          shopt -s nullglob
+          files=(pebble*${ARCH}*.snap)
+          if [[ ${#files[@]} -gt 0 ]]; then
+            echo "filename=${files[0]}" >> "$GITHUB_OUTPUT"
+          else
+            echo "filename=" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Release snap to ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
+      - name: Release snap to ${{ env.DEFAULT_TRACK }}/${{ env.RELEASE_RISK }}
+        if: steps.get-snap.outputs.filename != ''
         uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40  # v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.get-snap.outputs.filename }}
-          release: ${{ env.DEFAULT_TRACK }}/${{ env.DEFAULT_RISK }}
+          release: ${{ env.DEFAULT_TRACK }}/${{ env.RELEASE_RISK }}
 
+      - name: Upload snap to release
+        if: steps.get-snap.outputs.filename != '' && inputs.release-tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.release-tag }}
+          SNAP_FILE: ${{ steps.get-snap.outputs.filename }}
+        run: gh release upload "$TAG" "$SNAP_FILE" --clobber
+
+  # Records, as hidden HTML comments in the release body, which architectures
+  # ended up with no candidate snap published this run (whether skipped via
+  # input, or because the build/publish failed) -- so that the promote job below
+  # (which runs much later, triggered by the release being published, and has no
+  # other way to know what happened here) knows which architectures to leave
+  # alone rather than promoting a stale or nonexistent candidate.
+  record-skipped-architectures:
+    runs-on: ubuntu-latest
+    needs: [release]
+    if: always() && inputs.release-tag != ''
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ inputs.release-tag }}
+    steps:
+      - name: Update release notes with skipped architectures
+        run: |
+          set -eu
+          ARCHES=(amd64 arm64 armhf ppc64el riscv64 s390x)
+          ASSETS=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+
+          SKIPPED=()
+          for ARCH in "${ARCHES[@]}"; do
+            if ! echo "$ASSETS" | grep -qE "^pebble.*${ARCH}.*\.snap$"; then
+              SKIPPED+=("$ARCH")
+            fi
+          done
+          echo "Architectures with no candidate snap: ${SKIPPED[*]:-none}"
+
+          CURRENT_BODY=$(gh release view "$TAG" --json body --jq .body)
+          # Drop any markers from a previous run of this job, so re-runs
+          # don't accumulate stale/duplicate entries.
+          STRIPPED_BODY=$(printf '%s\n' "$CURRENT_BODY" | grep -vE '^<!-- pebble-snap-skip-arch: [a-z0-9]+ -->$' || true)
+
+          NEW_BODY="$STRIPPED_BODY"
+          for ARCH in "${SKIPPED[@]}"; do
+            NEW_BODY="${NEW_BODY}"$'\n'"<!-- pebble-snap-skip-arch: ${ARCH} -->"
+          done
+
+          if [[ "$NEW_BODY" != "$CURRENT_BODY" ]]; then
+            gh release edit "$TAG" --notes "$NEW_BODY"
+          fi
+
+  # Promotes the already-published latest/candidate build to latest/stable,
+  # once a maintainer publishes the corresponding GitHub release. This never
+  # builds or publishes anything new -- it assumes the `release` job above
+  # already published the exact candidate build being promoted (as part of
+  # release.yml's run for that release), and skips any architecture the 
+  # record-skipped-architectures job marked as having no candidate snap.
   promote:
     runs-on: ubuntu-latest
     environment: snap-build
-    needs: [release]
-    if: github.event_name == 'release' && needs.release.result == 'success' && always()
+    permissions:
+      contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.release.tag_name }}
+    if: github.event_name == 'release'
     strategy:
       fail-fast: false
       matrix:
-        # TODO: temporarily pause ppc64el, s390x, and riscv64 builds while builders are broken
-        # arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
-        arch: ["amd64", "arm64", "armhf"]
-    env:
-      TO_TRACK: latest
-      TO_RISK: candidate
+        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
+      - name: Check if this architecture was skipped when the release was drafted
+        id: check
+        run: |
+          set -eu
+          if gh release view "$TAG" --json body --jq .body | grep -qxF "<!-- pebble-snap-skip-arch: ${{ matrix.arch }} -->"; then
+            echo "Architecture ${{ matrix.arch }} has no candidate snap, skipping promotion."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Snapcraft
+        if: steps.check.outputs.skip != 'true'
         run: sudo snap install snapcraft --classic
 
-      - name: Get current ${{ matrix.arch }} snap in ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+      # Idempotency: skip promoting if stable is already at the same
+      # revision as candidate (i.e. this was already promoted).
+      - name: Get current ${{ matrix.arch }} snap in ${{ env.DEFAULT_TRACK }}/${{ env.CANDIDATE_RISK }}
         id: get-snap
+        if: steps.check.outputs.skip != 'true'
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
-          snapcraft status pebble \
-            --track ${{ env.DEFAULT_TRACK }} --arch ${{ matrix.arch }} \
-            | awk 'NR==1 { pos = index($0, "Revision") }  /edge/ { print 0+substr($0, pos) }' \
-            > revision.txt
+          set -eu
+          STATUS=$(snapcraft status pebble --track "$DEFAULT_TRACK" --arch ${{ matrix.arch }})
+          CANDIDATE_REV=$(echo "$STATUS" | awk 'NR==1 { pos = index($0, "Revision") } /candidate/ { print 0+substr($0, pos) }')
+          STABLE_REV=$(echo "$STATUS" | awk 'NR==1 { pos = index($0, "Revision") } /stable/ { print 0+substr($0, pos) }')
+          echo "Candidate revision: $CANDIDATE_REV, stable revision: $STABLE_REV"
+          echo "revision=${CANDIDATE_REV}" >> "$GITHUB_OUTPUT"
+          if [[ "$CANDIDATE_REV" == "$STABLE_REV" ]]; then
+            echo "already-promoted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already-promoted=false" >> "$GITHUB_OUTPUT"
+          fi
 
-          echo "Revision $(cat revision.txt)"
-          echo "revision=$(cat revision.txt)" >> $GITHUB_OUTPUT
-
-      # It would be easier to use `snapcraft promote`, but there's an error when trying
-      # to avoid the prompt with the "--yes" option:
-      # > 'latest/edge' is not a valid set value for --from-channel when using --yes.
-      - name: Promote snap to ${{ env.TO_TRACK }}/${{ env.TO_RISK }}
+      - name: Promote snap to ${{ env.DEFAULT_TRACK }}/${{ env.STABLE_RISK }}
+        if: steps.check.outputs.skip != 'true' && steps.get-snap.outputs.already-promoted == 'false'
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           REVISION: ${{ steps.get-snap.outputs.revision }}
         run: |
           snapcraft release pebble \
             "${REVISION}" \
-            "${TO_TRACK}/${TO_RISK}"
-
-  sbom-secscan:
-    needs: [release]
-    if: github.event_name == 'release' && needs.release.result == 'success' && always()
-    uses: ./.github/workflows/sbom-secscan.yaml
+            "${DEFAULT_TRACK}/${STABLE_RISK}"

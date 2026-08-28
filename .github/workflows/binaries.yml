@@ -1,13 +1,42 @@
 name: Binaries
 
 on:
-  push:
-    tags: [v*]
-    branches: [master]
   pull_request:
     branches: [master]
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      release-tag:
+        description: >-
+          Tag of the (possibly draft) GitHub release to check out, build,
+          and upload binaries to. If empty, binaries are still built for
+          validation but not uploaded anywhere.
+        required: false
+        type: string
+        default: ""
+      skip-amd64:
+        required: false
+        type: boolean
+        default: false
+      skip-arm64:
+        required: false
+        type: boolean
+        default: false
+      skip-armv6:
+        required: false
+        type: boolean
+        default: false
+      skip-ppc64le:
+        required: false
+        type: boolean
+        default: false
+      skip-riscv64:
+        required: false
+        type: boolean
+        default: false
+      skip-s390x:
+        required: false
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -20,7 +49,9 @@ jobs:
     strategy:
       matrix:
         goos: [linux]
-        goarch: [amd64, arm64, armv6, ppc64le, riscv64, s390x]
+        # Pull request runs are just a test to check that everything still
+        # compiles, so amd64 and arm64 are sufficient.
+        goarch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64","arm64"]') || fromJSON('["amd64","arm64","armv6","ppc64le","riscv64","s390x"]') }}
 
     runs-on: ubuntu-latest
 
@@ -30,6 +61,7 @@ jobs:
       with:
         persist-credentials: false
         fetch-depth: 0
+        ref: ${{ inputs.release-tag }}
 
     - name: Set up Go
       uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
@@ -37,8 +69,44 @@ jobs:
         go-version-file: "go.mod"
         cache: false
 
+    - name: Determine release tag
+      id: release
+      run: echo "tag=${{ inputs.release-tag }}" >> "$GITHUB_OUTPUT"
+
+    # Skip this architecture if it was explicitly requested via input, or
+    # (idempotency) if it's already attached to the release -- e.g. a
+    # previous run of this workflow already uploaded it, and we're only
+    # re-running to pick up a different architecture that failed.
+    - name: Check if this architecture should be skipped
+      id: check
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAG: ${{ steps.release.outputs.tag }}
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        SKIP_ARCH: ${{ inputs[format('skip-{0}', matrix.goarch)] }}
+      run: |
+        set -eu
+        if [[ "$SKIP_ARCH" == "true" ]]; then
+          echo "Architecture $GOARCH skipped via input."
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        if [[ -n "$TAG" ]]; then
+          PATTERN="pebble_${TAG}_${GOOS}_${GOARCH}.tar.gz"
+          if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "$PATTERN"; then
+            echo "Archive $PATTERN already attached to release $TAG, skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+        fi
+
+        echo "skip=false" >> "$GITHUB_OUTPUT"
+
     - name: Build binary and create archive
       id: build
+      if: steps.check.outputs.skip != 'true'
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
@@ -71,12 +139,13 @@ jobs:
         echo "PEBBLE_VERSION=${PEBBLE_VERSION}" >>$GITHUB_OUTPUT
 
     - name: Attest build provenance
-      if: ${{ github.event_name == 'release' }}
+      if: steps.check.outputs.skip != 'true' && steps.release.outputs.tag != ''
       uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
       with:
         subject-path: dist/${{ steps.build.outputs.ARCHIVE_FILE }}
 
     - name: Upload archive as Actions artifact
+      if: steps.check.outputs.skip != 'true'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
       with:
         name: ${{ steps.build.outputs.ARCHIVE_FILE }}
@@ -85,9 +154,9 @@ jobs:
     - name: Upload archive to release
       env:
         ARCHIVE_FILE: ${{ steps.build.outputs.ARCHIVE_FILE }}
-        PEBBLE_VERSION: ${{ steps.build.outputs.PEBBLE_VERSION }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      if: ${{ github.event_name == 'release' }}
+        TAG: ${{ steps.release.outputs.tag }}
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      if: steps.check.outputs.skip != 'true' && steps.release.outputs.tag != ''
       run: |
-        echo Uploading $ARCHIVE_FILE to release $PEBBLE_VERSION
-        gh release upload $PEBBLE_VERSION dist/$ARCHIVE_FILE
+        echo Uploading $ARCHIVE_FILE to release $TAG
+        gh release upload "$TAG" "dist/$ARCHIVE_FILE"
