@@ -1,0 +1,6 @@
+name: tools
+
+plugs:
+  pi-data:
+    interface: mount
+    workshop-target: /home/workshop/.pi

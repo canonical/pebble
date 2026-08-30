@@ -1,0 +1,6 @@
+name: dev
+base: ubuntu@26.04
+sdks:
+  - name: go
+    channel: 1.26/stable
+  - name: project-tools
