@@ -30,7 +30,7 @@ on:
         type: string
         default: fips-merge-resolved
     secrets:
-      openrouter-api-key:
+      OPENROUTER_API_KEY:
         required: true
 
 permissions: {}
@@ -64,7 +64,7 @@ jobs:
 
       - name: Resolve conflicts with opencode
         env:
-          OPENROUTER_API_KEY: ${{ secrets.openrouter-api-key }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PROMPT: |
             This repository checkout is in the middle of a git merge with
             conflicts: merging tag ${{ inputs.version }} into the fips

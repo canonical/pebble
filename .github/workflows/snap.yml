@@ -55,6 +55,16 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      LP_CREDENTIALS:
+        description: "Launchpad credentials used for the remote snap build"
+        required: true
+      PEBBLE_DEV_MAILING_LIST:
+        description: "Mailing list address notified of remote build results"
+        required: true
+      SNAPCRAFT_STORE_CREDENTIALS:
+        description: "Snapcraft Store credentials used to publish/promote the snap"
+        required: true
 
 permissions: {}
 
@@ -87,7 +97,7 @@ jobs:
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout Pebble repo
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           persist-credentials: false
           fetch-depth: 0
@@ -140,7 +150,7 @@ jobs:
         arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
     steps:
       - name: Checkout Pebble repo
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           persist-credentials: false
           fetch-depth: 0

@@ -162,7 +162,7 @@ jobs:
           fi
 
       - name: Checkout ${{ steps.vars.outputs.base-branch }}
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           ref: ${{ steps.vars.outputs.base-branch }}
           fetch-depth: 0
@@ -186,11 +186,12 @@ jobs:
         id: current
         env:
           EXPECTED_VERSION: ${{ steps.vars.outputs.expected-version }}
+          BASE_BRANCH: ${{ steps.vars.outputs.base-branch }}
         run: |
           set -eu
           CURRENT=$(sed -n 's/^var Version = "\(.*\)"$/\1/p' cmd/version.go)
           if [[ "$CURRENT" == "$EXPECTED_VERSION" ]]; then
-            echo "${{ steps.vars.outputs.base-branch }} is already at ${EXPECTED_VERSION}."
+            echo "${BASE_BRANCH} is already at ${EXPECTED_VERSION}."
             echo "done=true" >> "$GITHUB_OUTPUT"
           else
             echo "done=false" >> "$GITHUB_OUTPUT"
@@ -365,7 +366,10 @@ jobs:
       - name: Determine pull request URL
         id: pr
         if: steps.current.outputs.done != 'true' && !(inputs.fips && steps.merge.outputs.conflicts == 'true')
-        run: echo "url=${{ steps.existing.outputs.url }}${{ steps.create.outputs.url }}" >> "$GITHUB_OUTPUT"
+        env:
+          EXISTING_URL: ${{ steps.existing.outputs.url }}
+          CREATE_URL: ${{ steps.create.outputs.url }}
+        run: echo "url=${EXISTING_URL}${CREATE_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Wait for the pull request to merge
         if: steps.current.outputs.done != 'true' && !(inputs.fips && steps.merge.outputs.conflicts == 'true')
@@ -414,7 +418,7 @@ jobs:
     with:
       version: ${{ inputs.version }}
     secrets:
-      openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
   # Picks up where prepare's "Merge tag into fips branch" step left off, once
   # resolve-fips-conflicts has resolved the conflicts. Only runs when there
@@ -551,7 +555,7 @@ jobs:
       exists: ${{ steps.existing.outputs.exists }}
     steps:
       - name: Checkout ${{ needs.prepare.outputs.target-branch }}
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           ref: ${{ needs.prepare.outputs.target-branch }}
           fetch-depth: 0
@@ -655,7 +659,7 @@ jobs:
       fips: ${{ inputs.fips }}
       target-branch: ${{ needs.prepare.outputs.target-branch }}
     secrets:
-      openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 
   draft-release-finish:
     needs: [prepare, draft-release, generate-release-notes]
@@ -697,7 +701,6 @@ jobs:
       id-token: write
       attestations: write
     uses: ./.github/workflows/binaries.yml
-    secrets: inherit
     with:
       release-tag: ${{ needs.draft-release.outputs.version }}
       skip-amd64: ${{ inputs.skip-arch-amd64 }}
@@ -719,7 +722,10 @@ jobs:
       id-token: write
       attestations: write
     uses: ./.github/workflows/snap.yml
-    secrets: inherit
+    secrets:
+      LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
+      PEBBLE_DEV_MAILING_LIST: ${{ secrets.PEBBLE_DEV_MAILING_LIST }}
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
     with:
       release-tag: ${{ needs.draft-release.outputs.version }}
       skip-amd64: ${{ inputs.skip-arch-amd64 }}
@@ -740,6 +746,5 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/sbom-secscan.yaml
-    secrets: inherit
     with:
       release-tag: ${{ needs.draft-release.outputs.version }}

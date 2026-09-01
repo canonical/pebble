@@ -25,7 +25,7 @@ on:
         required: true
         type: string
     secrets:
-      openrouter-api-key:
+      OPENROUTER_API_KEY:
         required: true
     outputs:
       title:
@@ -51,7 +51,7 @@ jobs:
       previous-tag: ${{ steps.previous.outputs.previous-tag }}
     steps:
       - name: Checkout ${{ inputs.target-branch }}
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           ref: ${{ inputs.target-branch }}
           fetch-depth: 0
@@ -102,7 +102,7 @@ jobs:
 
       - name: Generate release title and notes with opencode
         env:
-          OPENROUTER_API_KEY: ${{ secrets.openrouter-api-key }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           PROMPT: |
             Write GitHub release notes for Pebble version ${{ inputs.version }}.
 
