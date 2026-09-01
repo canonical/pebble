@@ -1,0 +1,140 @@
+name: Release / Generate release notes
+
+# Isolated, read-only job that generates a release title and notes with
+# opencode.
+#
+# This is split out from release.yml so that the agentic (and therefore less
+# predictable) part of drafting the release runs in its own job, with
+# read-only permissions and access to nothing but the OPENROUTER_API_KEY
+# secret. The caller (which has the `contents: write` permission needed to
+# actually create the release) consumes the `title` and `notes` outputs.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Version being released, e.g. v1.33.0"
+        required: true
+        type: string
+      fips:
+        description: "Whether this is a FIPS release"
+        required: true
+        type: boolean
+      target-branch:
+        description: "Branch the release is being cut from"
+        required: true
+        type: string
+    secrets:
+      openrouter-api-key:
+        required: true
+    outputs:
+      title:
+        description: "Generated release title"
+        value: ${{ jobs.generate.outputs.title }}
+      notes:
+        description: "Generated release notes (Markdown)"
+        value: ${{ jobs.generate.outputs.notes }}
+      previous-tag:
+        description: "Most recent previous release tag of the same kind (fips or non-fips), if any"
+        value: ${{ jobs.generate.outputs.previous-tag }}
+
+permissions: {}
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      title: ${{ steps.output.outputs.title }}
+      notes: ${{ steps.output.outputs.notes }}
+      previous-tag: ${{ steps.previous.outputs.previous-tag }}
+    steps:
+      - name: Checkout ${{ inputs.target-branch }}
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          ref: ${{ inputs.target-branch }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Gather previous release notes for context
+        id: previous
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FIPS: ${{ inputs.fips }}
+        run: |
+          set -eu
+          mkdir -p .release
+          if [[ "$FIPS" == "true" ]]; then
+            MATCH_PATTERN='-fips$'
+          else
+            MATCH_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+$'
+          fi
+
+          gh release list --exclude-drafts --limit 50 --json tagName \
+            --jq '.[].tagName' | grep -E "$MATCH_PATTERN" | head -n 5 > .release/previous-tags.txt || true
+
+          : > .release/previous-notes.md
+          while read -r tag; do
+            [[ -z "$tag" ]] && continue
+            echo "## ${tag}" >> .release/previous-notes.md
+            gh release view "$tag" --json body --jq .body >> .release/previous-notes.md
+            printf '\n---\n\n' >> .release/previous-notes.md
+          done < .release/previous-tags.txt
+
+          PREV_TAG=$(head -n 1 .release/previous-tags.txt || true)
+          echo "previous-tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Gather commit log since previous release
+        env:
+          VERSION: ${{ inputs.version }}
+          PREV_TAG: ${{ steps.previous.outputs.previous-tag }}
+        run: |
+          set -eu
+          if [[ -n "$PREV_TAG" ]]; then
+            git --no-pager log --no-merges --pretty=format:'- %s (%h)' "${PREV_TAG}..${VERSION}" > .release/commits.txt
+          else
+            git --no-pager log --no-merges --pretty=format:'- %s (%h)' "${VERSION}" > .release/commits.txt
+          fi
+
+      - name: Install opencode
+        run: sudo snap install opencode --classic
+
+      - name: Generate release title and notes with opencode
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.openrouter-api-key }}
+          PROMPT: |
+            Write GitHub release notes for Pebble version ${{ inputs.version }}.
+
+            Read `.release/previous-notes.md`: it contains the notes from the
+            previous few ${{ inputs.fips && 'FIPS' || 'non-FIPS' }} Pebble
+            releases. Use them purely as style/format/tone/detail-level
+            examples -- don't reuse their content.
+
+            Read `.release/commits.txt`: it's the list of commits included in
+            this release. Use it to understand what actually changed, and
+            group/describe the changes sensibly (e.g. features, fixes).
+
+            Write your output to exactly these two files, and don't modify,
+            commit, or push anything else:
+              - `.release/title.txt`: a single-line release title that
+                includes the version number and a short summary of the
+                release.
+              - `.release/notes.md`: the full release notes body in Markdown.
+                If `.release/previous-tags.txt` has a previous tag on its
+                first line, end the notes with a link to the full diff:
+                https://github.com/${{ github.repository }}/compare/<previous-tag>...${{ inputs.version }}
+        run: |
+          opencode run --auto --model openrouter/google/gemini-flash-latest "$PROMPT"
+
+      - name: Expose generated title and notes as outputs
+        id: output
+        run: |
+          set -eu
+          echo "title=$(cat .release/title.txt)" >> "$GITHUB_OUTPUT"
+          DELIMITER="EOF_$(openssl rand -hex 16)"
+          {
+            echo "notes<<${DELIMITER}"
+            cat .release/notes.md
+            echo "${DELIMITER}"
+          } >> "$GITHUB_OUTPUT"
