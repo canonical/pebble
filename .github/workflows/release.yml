@@ -344,17 +344,6 @@ jobs:
             git commit --all --message "$PR_TITLE"
           fi
 
-      - name: Create label
-        if: steps.current.outputs.done != 'true' && steps.existing.outputs.found != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LABEL: ${{ steps.vars.outputs.label }}
-        run: |
-          gh label create "$LABEL" \
-            --color 0E8A16 \
-            --description "Automated pull request for a Pebble release" \
-            --force
-
       - name: Push branch and open pull request
         id: create
         if: steps.current.outputs.done != 'true' && steps.existing.outputs.found != 'true'
