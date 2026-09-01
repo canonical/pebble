@@ -271,28 +271,34 @@ jobs:
             Run `git status` to find every conflicted file, and resolve all
             of them, using this guidance:
 
-            - The fips branch intentionally excludes standard TLS/crypto
-              functionality in favour of FIPS-approved alternatives. Whenever
-              a conflict touches TLS or crypto code, resolve it by dropping
-              the incoming TLS/crypto usage/functionality rather than
-              reintroducing it, adapting surrounding code as needed so it
-              still builds and makes sense without it.
-            - The fips branch also intentionally carries its own
-              infrastructure differences from master (for example CI
-              workflow files under .github/workflows that target the fips
-              branch instead of master, and other fips-specific build/CI
-              configuration). For conflicts in this kind of infrastructure
-              file, prefer the fips branch's side unless the incoming change
-              is clearly an unrelated improvement that should carry over
-              (e.g. fixing an unrelated bug in a shared step) -- use your
-              judgement, and keep any fips-specific customization intact.
-            - For all other conflicts (regular application code, docs,
-              tests, etc. with no TLS/crypto/infrastructure angle), take the
-              incoming change from ${{ inputs.version }}.
+            - The fips branch intentionally excludes standard TLS/crypto usage,
+              including any custom cryptographic code. Whenever a conflict
+              touches TLS or crypto code, resolve it by dropping the incoming
+              TLS/crypto usage/functionality rather than reintroducing it,
+              adapting surrounding code as needed so it still builds and makes
+              sense without it.
+            - The fips branch also intentionally carries its own infrastructure
+              differences from master (for example CI workflow files under
+              .github/workflows that target the fips branch instead of master,
+              and other fips-specific build/CI configuration). For conflicts in
+              this kind of infrastructure file, prefer the fips branch's side
+              unless the incoming change is clearly an unrelated improvement
+              that should carry over (e.g. fixing an unrelated bug in a shared
+              step) -- use your judgement, and keep any fips-specific
+              customization intact.
+            - For all other conflicts (regular application code, docs, tests,
+            - etc. with no TLS/crypto/infrastructure angle), take the incoming
+            - change from ${{ inputs.version }}.
 
             After resolving every conflict: make sure no conflict markers
             (<<<<<<<, =======, >>>>>>>) remain anywhere, make sure
             `go build ./...` succeeds, and `git add` every resolved file.
+
+            Run `go test ./...`, and if failures occur, run that test again. If
+            it still fails, attempt to fix the test or the implementation by
+            looking at how that code, feature or test has changed. If after a
+            few attempts to fix it are in vain, then ignore it. They will be
+            fixed manually later.
 
             Do not commit, push, or open a pull request yourself -- leave the
             resolved changes staged.
