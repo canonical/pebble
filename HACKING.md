@@ -286,10 +286,17 @@ Do this after you've published the main release.
 
 1. Run the [Release](https://github.com/canonical/pebble/actions/workflows/release.yml) workflow again with the same version tag, for example `v1.27.0`, this time checking the `fips` checkbox. It merges that tag into `fips` and bumps the version to `v1.27.0-fips`.
 2. Review the pull request it opens carefully. AI resolves the merge conflicts for you, so check each resolution, especially anything touching TLS or crypto. Then approve the CI actions to run and approve the pull request. Don't merge it yourself -- auto-merge is already enabled, and the release workflow carries on as soon as it merges.
-4. Follow steps 3 to 6 above to publish the `v1.27.0-fips` draft release.
+3. Follow steps 3 to 6 above to publish the `v1.27.0-fips` draft release.
 
 ### If a stage fails
 
 Re-run the workflow with the same inputs. Each stage checks whether its work is already done and skips itself, so only the parts that failed run again. Do the same if the run hits GitHub's 6-hour job limit while waiting for the pull request to be reviewed.
 
 To take a stage on yourself, use the `skip-*` inputs: the version bump pull request, the draft release, binaries, snaps, individual architectures, and sbomber. If you skip a stage that creates something, that thing has to exist already -- the workflow checks, and fails if it doesn't.
+
+### Release configuration requirements
+
+1. A secret called `OPENROUTER_API_KEY` with an OpenRouter API Key with at least a few USD per release.
+2. A secret called `SNAPCRAFT_STORE_CREDENTIALS` with snapcraft credentials (e.g. `snapcraft login` then copy from gnome keyring).
+3. A secret called `LP_CREDENTIALS` with snapcraft LP credentials (e.g. `snapcraft remote-build ...` then copy the contents from `~/.local/share/snapcraft/launchpad-credentials`).
+4. A secret called `PEBBLE_DEV_MAILING_LIST` with an email associated with the Ubuntu One user the snapcraft/LP credentials relate to (or any other email).
