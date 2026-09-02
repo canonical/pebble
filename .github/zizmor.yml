@@ -1,0 +1,18 @@
+rules:
+  secrets-outside-env:
+    # `config.allow` for this rule requires zizmor >= 1.24.0; this repo
+    # pins 1.23.1 (see .github/workflows/zizmor.yml), so ignore the specific
+    # findings by location instead.
+    ignore:
+      # The isolated opencode job in release-merge-fips.yaml: deliberately
+      # scoped to read-only permissions plus this one secret. A dedicated
+      # GitHub Environment doesn't interact well with secrets forwarded
+      # explicitly (rather than via `secrets: inherit`) to reusable
+      # workflows, so we rely on the narrow job permissions instead.
+      - release-merge-fips.yaml:67:35
+      # Same as above, for the isolated opencode job in
+      # release-generate-notes.yaml.
+      - release-generate-notes.yaml:105:35
+      # tiobe.yaml only runs on a schedule/workflow_dispatch from this
+      # repository, not from untrusted forks.
+      - tiobe.yaml:43:30
