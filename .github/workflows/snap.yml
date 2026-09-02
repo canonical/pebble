@@ -400,11 +400,12 @@ jobs:
         run: gh release upload "$TAG" "$SNAP_FILE" --clobber
 
   # Records, as hidden HTML comments in the release body, which architectures
-  # ended up with no candidate snap published this run (whether skipped via
-  # input, or because the build/publish failed) -- so that the promote job below
-  # (which runs much later, triggered by the release being published, and has no
-  # other way to know what happened here) knows which architectures to leave
-  # alone rather than promoting a stale or nonexistent candidate.
+  # were skipped via input this run, and whether this run was a dry run --
+  # so that the promote job below (which runs much later, triggered by the
+  # release being published, and has no other way to know what happened
+  # here) knows which architectures to leave alone rather than promoting a
+  # stale or nonexistent candidate, and skips promotion entirely for a
+  # dry-run draft (since nothing was actually published to the store).
   record-skipped-architectures:
     runs-on: ubuntu-latest
     needs: [release]
@@ -427,30 +428,48 @@ jobs:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ inputs.release-tag }}
+      SKIP_AMD64: ${{ inputs.skip-amd64 }}
+      SKIP_ARM64: ${{ inputs.skip-arm64 }}
+      SKIP_ARMHF: ${{ inputs.skip-armhf }}
+      SKIP_PPC64EL: ${{ inputs.skip-ppc64el }}
+      SKIP_RISCV64: ${{ inputs.skip-riscv64 }}
+      SKIP_S390X: ${{ inputs.skip-s390x }}
+      DRY_RUN: ${{ inputs.dry-run-snap-publish }}
     steps:
       - name: Update release notes with skipped architectures
         run: |
           set -eu
-          ARCHES=(amd64 arm64 armhf ppc64el riscv64 s390x)
-          ASSETS=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+          declare -A ARCH_SKIP=(
+            [amd64]="$SKIP_AMD64"
+            [arm64]="$SKIP_ARM64"
+            [armhf]="$SKIP_ARMHF"
+            [ppc64el]="$SKIP_PPC64EL"
+            [riscv64]="$SKIP_RISCV64"
+            [s390x]="$SKIP_S390X"
+          )
 
           SKIPPED=()
-          for ARCH in "${ARCHES[@]}"; do
-            if ! echo "$ASSETS" | grep -qE "^pebble.*${ARCH}.*\.snap$"; then
+          for ARCH in "${!ARCH_SKIP[@]}"; do
+            if [[ "${ARCH_SKIP[$ARCH]}" == "true" ]]; then
               SKIPPED+=("$ARCH")
             fi
           done
-          echo "Architectures with no candidate snap: ${SKIPPED[*]:-none}"
+          echo "Architectures skipped: ${SKIPPED[*]:-none}"
 
           CURRENT_BODY=$(gh release view "$TAG" --json body --jq .body)
           # Drop any markers from a previous run of this job, so re-runs
           # don't accumulate stale/duplicate entries.
-          STRIPPED_BODY=$(printf '%s\n' "$CURRENT_BODY" | grep -vE '^<!-- pebble-snap-skip-arch: [a-z0-9]+ -->$' || true)
+          STRIPPED_BODY=$(printf '%s\n' "$CURRENT_BODY" \
+            | grep -vE '^<!-- pebble-snap-skip-arch: [a-z0-9]+ -->$' \
+            | grep -vE '^<!-- pebble-snap-dry-run: (true|false) -->$' || true)
 
           NEW_BODY="$STRIPPED_BODY"
           for ARCH in "${SKIPPED[@]}"; do
             NEW_BODY="${NEW_BODY}"$'\n'"<!-- pebble-snap-skip-arch: ${ARCH} -->"
           done
+          if [[ "$DRY_RUN" == "true" ]]; then
+            NEW_BODY="${NEW_BODY}"$'\n'"<!-- pebble-snap-dry-run: true -->"
+          fi
 
           if [[ "$NEW_BODY" != "$CURRENT_BODY" ]]; then
             gh release edit "$TAG" --notes "$NEW_BODY"
@@ -460,8 +479,9 @@ jobs:
   # once a maintainer publishes the corresponding GitHub release. This never
   # builds or publishes anything new -- it assumes the `release` job above
   # already published the exact candidate build being promoted (as part of
-  # release.yml's run for that release), and skips any architecture the 
-  # record-skipped-architectures job marked as having no candidate snap.
+  # release.yml's run for that release), and skips any architecture the
+  # record-skipped-architectures job marked as having no candidate snap, or
+  # all architectures if that job marked the release as a dry run.
   promote:
     runs-on: ubuntu-latest
     environment: snap-build
@@ -484,7 +504,11 @@ jobs:
         id: check
         run: |
           set -eu
-          if gh release view "$TAG" --json body --jq .body | grep -qxF "<!-- pebble-snap-skip-arch: ${{ matrix.arch }} -->"; then
+          BODY=$(gh release view "$TAG" --json body --jq .body)
+          if echo "$BODY" | grep -qxF "<!-- pebble-snap-dry-run: true -->"; then
+            echo "Release was drafted as a dry run; no candidate snap was published, skipping promotion."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif echo "$BODY" | grep -qxF "<!-- pebble-snap-skip-arch: ${{ matrix.arch }} -->"; then
             echo "Architecture ${{ matrix.arch }} has no candidate snap, skipping promotion."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
