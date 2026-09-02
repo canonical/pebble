@@ -408,7 +408,19 @@ jobs:
   record-skipped-architectures:
     runs-on: ubuntu-latest
     needs: [release]
-    if: always() && inputs.release-tag != ''
+    # `release`'s own `if:` requires `needs.test.result == 'success'`
+    # (strictly, not `skipped`) -- so a genuine build/test failure upstream
+    # cascades as `release.result == 'skipped'`, indistinguishable at this
+    # level from a legitimate skip. The only legitimate reason for
+    # `release` to not succeed while still wanting to record skipped
+    # architectures is `skip-build` (which means every architecture was
+    # deliberately never attempted). Anything else non-successful means a
+    # real failure occurred somewhere upstream, and must not be recorded as
+    # an intentional per-architecture skip.
+    if: |
+      always() &&
+      inputs.release-tag != '' &&
+      (needs.release.result == 'success' || inputs.skip-build)
     permissions:
       contents: write
     env:
