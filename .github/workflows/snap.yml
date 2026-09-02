@@ -4,10 +4,13 @@ name: Pebble snap
 #   - push to master: builds and publishes straight to latest/edge, as a
 #     continuous "this is what's on master right now" channel.
 #   - called from release.yml (workflow_call): builds and publishes straight to
-#     latest/candidate for the version being released.
+#     latest/candidate for the version being released, or fips/candidate if
+#     the release tag ends in "-fips".
 #   - a GitHub release is published: promotes the already-published
-#     latest/candidate build to latest/stable. This never (re)builds anything,
-#     it assumes release.yml already published the candidate for that release.
+#     candidate build to stable, on the same track (latest or fips, again
+#     based on whether the release tag ends in "-fips"). This never
+#     (re)builds anything, it assumes release.yml already published the
+#     candidate for that release.
 #   - pull_request: just a test build (see local-build below), never published.
 
 on:
@@ -309,6 +312,9 @@ jobs:
     env:
       GH_REPO: ${{ github.repository }}
       RELEASE_RISK: ${{ github.event_name == 'push' && 'edge' || 'candidate' }}
+      # FIPS releases are tagged with a "-fips" suffix (see cmd/version.go),
+      # and published to the separate "fips" track rather than "latest".
+      DEFAULT_TRACK: ${{ endsWith(inputs.release-tag, '-fips') && 'fips' || 'latest' }}
     if: |
       github.event_name != 'pull_request' &&
       github.event_name != 'release' &&
@@ -453,6 +459,9 @@ jobs:
       GH_REPO: ${{ github.repository }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ github.event.release.tag_name }}
+      # FIPS releases are tagged with a "-fips" suffix (see cmd/version.go),
+      # and promoted on the separate "fips" track rather than "latest".
+      DEFAULT_TRACK: ${{ endsWith(github.event.release.tag_name, '-fips') && 'fips' || 'latest' }}
     if: github.event_name == 'release'
     strategy:
       fail-fast: false
