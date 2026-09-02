@@ -135,6 +135,9 @@ jobs:
           DELIMITER="EOF_$(openssl rand -hex 16)"
           {
             echo "notes<<${DELIMITER}"
-            cat .release/notes.md
+            # Command substitution strips trailing newlines, so this
+            # guarantees exactly one -- putting the closing delimiter on
+            # its own line even if notes.md lacks a trailing newline.
+            printf '%s\n' "$(cat .release/notes.md)"
             echo "${DELIMITER}"
           } >> "$GITHUB_OUTPUT"

@@ -711,7 +711,7 @@ jobs:
       !inputs.skip-build-binaries &&
       always() &&
       needs.draft-release.result == 'success' &&
-      (needs.draft-release-finish.result == 'success' || needs.draft-release-finish.result == 'skipped')
+      (needs.draft-release.outputs.exists == 'true' || needs.draft-release-finish.result == 'success')
     permissions:
       contents: write
       id-token: write
@@ -732,7 +732,7 @@ jobs:
       !inputs.skip-build-snaps &&
       always() &&
       needs.draft-release.result == 'success' &&
-      (needs.draft-release-finish.result == 'success' || needs.draft-release-finish.result == 'skipped')
+      (needs.draft-release.outputs.exists == 'true' || needs.draft-release-finish.result == 'success')
     permissions:
       contents: write
       id-token: write
@@ -758,7 +758,7 @@ jobs:
       !inputs.skip-sbomber &&
       always() &&
       needs.draft-release.result == 'success' &&
-      (needs.draft-release-finish.result == 'success' || needs.draft-release-finish.result == 'skipped') &&
+      (needs.draft-release.outputs.exists == 'true' || needs.draft-release-finish.result == 'success') &&
       (needs.snap.result == 'success' || needs.snap.result == 'skipped')
     permissions:
       contents: write
