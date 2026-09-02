@@ -124,7 +124,6 @@ jobs:
       target-branch: ${{ steps.vars.outputs.base-branch }}
       branch: ${{ steps.vars.outputs.branch }}
       pr-title: ${{ steps.vars.outputs.pr-title }}
-      label: ${{ steps.vars.outputs.label }}
       merge-method: ${{ steps.vars.outputs.merge-method }}
       conflicts: ${{ steps.merge.outputs.conflicts }}
     steps:
@@ -147,14 +146,12 @@ jobs:
           set -eu
           if [[ "$FIPS" == "true" ]]; then
             echo "base-branch=fips" >> "$GITHUB_OUTPUT"
-            echo "label=automated-fips-release" >> "$GITHUB_OUTPUT"
             echo "branch=fips-merge/${VERSION}" >> "$GITHUB_OUTPUT"
             echo "pr-title=chore: merge ${VERSION} into fips branch" >> "$GITHUB_OUTPUT"
             echo "merge-method=--merge" >> "$GITHUB_OUTPUT"
             echo "expected-version=${VERSION}-fips" >> "$GITHUB_OUTPUT"
           else
             echo "base-branch=master" >> "$GITHUB_OUTPUT"
-            echo "label=automated-release" >> "$GITHUB_OUTPUT"
             echo "branch=release/${VERSION}" >> "$GITHUB_OUTPUT"
             echo "pr-title=chore: bump version to ${VERSION}" >> "$GITHUB_OUTPUT"
             echo "merge-method=--squash" >> "$GITHUB_OUTPUT"
@@ -204,9 +201,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ steps.vars.outputs.branch }}
           BASE_BRANCH: ${{ steps.vars.outputs.base-branch }}
+          PR_TITLE: ${{ steps.vars.outputs.pr-title }}
         run: |
           set -eu
-          URL=$(gh pr list --head "$BRANCH" --base "$BASE_BRANCH" --state open --json url --jq '.[0].url // empty')
+          URL=$(gh pr list --head "$BRANCH" --base "$BASE_BRANCH" --state open --json url,title,author \
+            | jq -r --arg title "$PR_TITLE" \
+              '[.[] | select(.title == $title and .author.login == "github-actions[bot]")] | .[0].url // empty')
           echo "url=${URL}" >> "$GITHUB_OUTPUT"
           if [[ -n "$URL" ]]; then
             echo "Found existing pull request: $URL"
@@ -325,7 +325,6 @@ jobs:
           BASE_BRANCH: ${{ steps.vars.outputs.base-branch }}
           BRANCH: ${{ steps.vars.outputs.branch }}
           PR_TITLE: ${{ steps.vars.outputs.pr-title }}
-          LABEL: ${{ steps.vars.outputs.label }}
           MERGE_METHOD: ${{ steps.vars.outputs.merge-method }}
         run: |
           set -eu
@@ -345,8 +344,7 @@ jobs:
             --base "$BASE_BRANCH" \
             --head "$BRANCH" \
             --title "$PR_TITLE" \
-            --body "$BODY" \
-            --label "$LABEL")
+            --body "$BODY")
           echo "Opened $PR_URL"
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
 
@@ -483,7 +481,6 @@ jobs:
           BASE_BRANCH: ${{ needs.prepare.outputs.target-branch }}
           BRANCH: ${{ needs.prepare.outputs.branch }}
           PR_TITLE: ${{ needs.prepare.outputs.pr-title }}
-          LABEL: ${{ needs.prepare.outputs.label }}
           MERGE_METHOD: ${{ needs.prepare.outputs.merge-method }}
         run: |
           set -eu
@@ -497,8 +494,7 @@ jobs:
             --base "$BASE_BRANCH" \
             --head "$BRANCH" \
             --title "$PR_TITLE" \
-            --body "$BODY" \
-            --label "$LABEL")
+            --body "$BODY")
           echo "Opened $PR_URL"
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
 
