@@ -26,6 +26,14 @@ on:
         required: false
         type: string
         default: ""
+      dry-run-snap-publish:
+        description: >-
+          Build, test, and upload snaps as normal, but don't actually
+          publish/promote them on the Snap Store (the `snapcraft release`
+          and snapcore/action-publish steps become no-ops).
+        required: false
+        type: boolean
+        default: false
       skip-build:
         description: "Skip building/publishing snaps entirely"
         required: false
@@ -362,13 +370,20 @@ jobs:
           fi
 
       - name: Release snap to ${{ env.DEFAULT_TRACK }}/${{ env.RELEASE_RISK }}
-        if: steps.get-snap.outputs.filename != ''
+        if: steps.get-snap.outputs.filename != '' && !inputs.dry-run-snap-publish
         uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40  # v1
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.get-snap.outputs.filename }}
           release: ${{ env.DEFAULT_TRACK }}/${{ env.RELEASE_RISK }}
+
+      - name: Skip publishing to ${{ env.DEFAULT_TRACK }}/${{ env.RELEASE_RISK }} (dry run)
+        if: steps.get-snap.outputs.filename != '' && inputs.dry-run-snap-publish
+        env:
+          SNAP_FILE: ${{ steps.get-snap.outputs.filename }}
+        run: |
+          echo "Dry run: would have published ${SNAP_FILE} to ${DEFAULT_TRACK}/${RELEASE_RISK}."
 
       - name: Upload snap to release
         if: steps.get-snap.outputs.filename != '' && inputs.release-tag != ''
@@ -480,7 +495,7 @@ jobs:
           fi
 
       - name: Promote snap to ${{ env.DEFAULT_TRACK }}/${{ env.STABLE_RISK }}
-        if: steps.check.outputs.skip != 'true' && steps.get-snap.outputs.already-promoted == 'false'
+        if: steps.check.outputs.skip != 'true' && steps.get-snap.outputs.already-promoted == 'false' && !inputs.dry-run-snap-publish
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
           REVISION: ${{ steps.get-snap.outputs.revision }}
@@ -488,3 +503,10 @@ jobs:
           snapcraft release pebble \
             "${REVISION}" \
             "${DEFAULT_TRACK}/${STABLE_RISK}"
+
+      - name: Skip promoting to ${{ env.DEFAULT_TRACK }}/${{ env.STABLE_RISK }} (dry run)
+        if: steps.check.outputs.skip != 'true' && steps.get-snap.outputs.already-promoted == 'false' && inputs.dry-run-snap-publish
+        env:
+          REVISION: ${{ steps.get-snap.outputs.revision }}
+        run: |
+          echo "Dry run: would have promoted revision ${REVISION} to ${DEFAULT_TRACK}/${STABLE_RISK}."

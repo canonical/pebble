@@ -72,6 +72,15 @@ on:
         required: false
         type: boolean
         default: false
+      dry-run-snap-publish:
+        description: >-
+          Build, test, and upload snaps as normal, but don't actually
+          publish/promote them on the Snap Store (the `snapcraft release`
+          and snapcore/action-publish steps become no-ops). Also marks the
+          created GitHub release as a pre-release.
+        required: false
+        type: boolean
+        default: false
       skip-arch-amd64:
         description: "Skip the amd64 architecture (binaries and snap)"
         required: false
@@ -676,14 +685,25 @@ jobs:
           TARGET_BRANCH: ${{ needs.prepare.outputs.target-branch }}
           TITLE: ${{ needs.generate-release-notes.outputs.title }}
           NOTES: ${{ needs.generate-release-notes.outputs.notes }}
+          DRY_RUN_SNAP_PUBLISH: ${{ inputs.dry-run-snap-publish }}
         run: |
           set -eu
           printf '%s' "$NOTES" > /tmp/notes.md
+
+          # Mark the release as a pre-release when dry-running the snap
+          # publish step, so it's obvious this release didn't actually
+          # publish/promote snaps to the Snap Store.
+          PRERELEASE_ARGS=()
+          if [[ "$DRY_RUN_SNAP_PUBLISH" == "true" ]]; then
+            PRERELEASE_ARGS=(--prerelease)
+          fi
+
           gh release create "$VERSION" \
             --draft \
             --target "$TARGET_BRANCH" \
             --title "$TITLE" \
-            --notes-file /tmp/notes.md
+            --notes-file /tmp/notes.md \
+            "${PRERELEASE_ARGS[@]}"
 
   binaries:
     needs: [prepare, draft-release, draft-release-finish]
@@ -724,6 +744,7 @@ jobs:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
     with:
       release-tag: ${{ needs.draft-release.outputs.version }}
+      dry-run-snap-publish: ${{ inputs.dry-run-snap-publish }}
       skip-amd64: ${{ inputs.skip-arch-amd64 }}
       skip-arm64: ${{ inputs.skip-arch-arm64 }}
       skip-armhf: ${{ inputs.skip-arch-armv6 }}
