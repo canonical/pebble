@@ -105,7 +105,7 @@ jobs:
             Do not commit, push, or open a pull request yourself -- leave the
             resolved changes staged.
         run: |
-          opencode run --auto --model openrouter/google/gemini-flash-latest "$PROMPT"
+          opencode run --auto --model openrouter/google/gemini-3.7-flash "$PROMPT"
 
       - name: Verify conflicts are resolved
         run: |

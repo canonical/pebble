@@ -125,7 +125,7 @@ jobs:
                 first line, end the notes with a link to the full diff:
                 https://github.com/${{ github.repository }}/compare/<previous-tag>...${{ inputs.version }}
         run: |
-          opencode run --auto --model openrouter/google/gemini-flash-latest "$PROMPT"
+          opencode run --auto --model openrouter/google/gemini-3.7-flash "$PROMPT"
 
       - name: Expose generated title and notes as outputs
         id: output
