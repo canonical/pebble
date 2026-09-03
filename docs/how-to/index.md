@@ -23,6 +23,7 @@ As your needs grow, you may want to use advanced Pebble features to run services
 :maxdepth: 1
 
 Run services reliably <run-services-reliably>
+Run services on a schedule <schedule-services>
 Manage service dependencies <service-dependencies>
 Use layers <use-layers>
 ```

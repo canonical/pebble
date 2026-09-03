@@ -72,8 +72,8 @@ waitExit:
 
 	output := runPebbleCommand(t, pebbleDir, "services")
 	expected := `
-Service  Startup   Current   Since
-svc1     disabled  inactive  -
+Service  Startup   Scheduled  Current   Since
+svc1     disabled  -          inactive  -
 `[1:]
 	if output != expected {
 		t.Fatalf("unexpected services output\nWant:\n%s\nGot:\n%s", expected, output)

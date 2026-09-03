@@ -59,6 +59,22 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
+	// doServiceSchedule decides whether to start a service once its scheduled
+	// time arrives.
+	runner.AddHandler(serviceScheduleKind, manager.doServiceSchedule, nil)
+
+	// Schedule changes persist for as long as a service has a schedule
+	// configured. This ensures they don't get pruned.
+	s.RegisterPendingChangeByAttr(scheduleNoPruneAttr, func(*state.Change) bool {
+		return true
+	})
+
+	// Chain service-schedule changes: once one becomes ready (its scheduled
+	// start fired and any resulting start task(s) finished), create a new
+	// one to track the service's next scheduled occurrence.
+	s.Lock()
+	s.AddChangeStatusChangedHandler(manager.scheduleChangeReady)
+	s.Unlock()
 
 	return manager, nil
 }
@@ -66,8 +82,10 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 // PlanChanged informs the service manager that the plan has been updated.
 func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
 	m.planLock.Lock()
-	defer m.planLock.Unlock()
 	m.plan = plan
+	m.planLock.Unlock()
+
+	m.scheduleChanged(plan)
 }
 
 // getPlan returns the current plan pointer in a concurrency-safe way. The
@@ -96,6 +114,7 @@ type ServiceInfo struct {
 	Startup      ServiceStartup
 	Current      ServiceStatus
 	CurrentSince time.Time
+	Scheduled    time.Time
 }
 
 type ServiceStartup string
@@ -118,6 +137,11 @@ const (
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	currentPlan := m.getPlan()
+
+	m.state.Lock()
+	scheduled := m.scheduledStartTimes()
+	m.state.Unlock()
+
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -144,6 +168,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			info.Current = stateToStatus(s.state)
 			info.CurrentSince = s.currentSince
 		}
+		info.Scheduled = scheduled[name]
 		services = append(services, info)
 	}
 	sort.Slice(services, func(i, j int) bool {
