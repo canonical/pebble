@@ -1,4 +1,4 @@
-# How to run services reliably
+# How to run services reliably with health checks
 
 Microservice architectures offer flexibility, but they can introduce reliability challenges such as network interruptions, resource exhaustion, problems with dependent services, cascading failures, and deployment issues. Health checks can address these issues by monitoring resource usage, checking the availability of dependencies, catching problems with new deployments, and preventing downtime by redirecting traffic away from failing services.
 

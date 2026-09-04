@@ -13,3 +13,8 @@ By default, this is done whether the exit code is zero or non-zero, but you can 
 In `restart` mode, the first time a service exits, Pebble waits the `backoff-delay`, which defaults to half a second. If the service exits again, Pebble calculates the next backoff delay by multiplying the current delay by `backoff-factor`, which defaults to 2.0 (doubling). The increasing delay is capped at `backoff-limit`, which defaults to 30 seconds.
 
 The `backoff-limit` value is also used as a "backoff reset" time. If the service stays running after a restart for `backoff-limit` seconds, the backoff process is reset and the delay reverts to `backoff-delay`.
+ 
+## See more
+ 
+- [How to run services reliably with health checks](/how-to/run-services-reliably)
+- [Health checks](health-checks)
