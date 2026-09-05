@@ -117,10 +117,22 @@ func (m *LogManager) Ensure() error {
 // Stop implements overlord.StateStopper and stops all log forwarding.
 func (m *LogManager) Stop() {
 	m.mu.Lock()
-	defer m.mu.Unlock()
+
+	// Close all ring buffers first so that logPuller iterators blocked in
+	// iterator.Next() see the buffer as closed and exit promptly, rather than
+	// waiting for the timeoutPullers deadline (default 2 s) to force-kill them.
+	for _, buf := range m.buffers {
+		_ = buf.Close()
+	}
+
+	gatherers := make([]*logGatherer, 0, len(m.gatherers))
+	for _, g := range m.gatherers {
+		gatherers = append(gatherers, g)
+	}
+	m.mu.Unlock()
 
 	wg := sync.WaitGroup{}
-	for _, gatherer := range m.gatherers {
+	for _, gatherer := range gatherers {
 		wg.Add(1)
 		go func(gatherer *logGatherer) {
 			gatherer.Stop()

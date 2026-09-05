@@ -180,6 +180,61 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	}
 }
 
+// TestStopClosesBuffers verifies that LogManager.Stop() closes all tracked
+// ring buffers before waiting for gatherers to finish. This ensures that
+// logPuller goroutines blocked in iterator.Next() see the buffer as closed and
+// exit promptly — without the caller having to close the buffer first and
+// without waiting for the timeoutPullers deadline (default 2 s).
+func (s *managerSuite) TestStopClosesBuffers(c *C) {
+	gathererOptions := logGathererOptions{
+		timeoutCurrentFlush: 5 * time.Millisecond,
+		timeoutFinalFlush:   5 * time.Millisecond,
+		// timeoutPullers is a hardcoded 2 s constant on this branch; the
+		// 200 ms budget below will catch any regression where Stop() does
+		// not close the buffers before waiting for pullers.
+		newClient: func(_ *plan.LogTarget) (logClient, error) {
+			return &testClient{}, nil
+		},
+	}
+
+	m := NewLogManager()
+	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
+		return newLogGathererInternal(t, &gathererOptions)
+	}
+
+	svc1 := newTestService("svc1")
+	m.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{
+			"svc1": svc1.config,
+		},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {Name: "tgt1", Services: []string{"all"}},
+		},
+	})
+	m.ServiceStarted(svc1.config, svc1.ringBuffer)
+
+	svc1.writeLog("hello")
+	svc1.writeLog("world")
+
+	// Do NOT close the ring buffer before calling Stop() — the manager must
+	// close it internally so the log puller can exit without hitting the
+	// timeoutPullers (2 s) deadline.
+	done := make(chan struct{})
+	go func() {
+		m.Stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		c.Fatal("LogManager.Stop() blocked waiting for pullers; ring buffers not closed by Stop()")
+	}
+
+	// The ring buffer must be closed after Stop() returns.
+	c.Check(svc1.ringBuffer.Closed(), Equals, true)
+}
+
+
 type slowFlushingClient struct {
 	flushTime time.Duration
 	mu        sync.Mutex
@@ -298,6 +353,9 @@ func (s *managerSuite) TestLabels(c *C) {
 			"foo":     "bar",
 		},
 	})
+
+	// Shut down the manager to release all gatherer goroutines.
+	m.Stop()
 }
 
 // Fake logClient implementation which just stores the passed-in labels
