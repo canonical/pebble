@@ -1,0 +1,134 @@
+name: Release / Resolve fips merge conflicts
+
+# Isolated, read-only job that resolves git merge conflicts with opencode.
+#
+# This is split out from release.yml so that the agentic (and therefore less
+# predictable) part of the fips merge runs in its own job, with read-only
+# permissions and access to nothing but the OPENROUTER_API_KEY secret.
+#
+# It communicates with its caller purely via artifacts: the caller uploads a
+# tarball of its checkout (mid-merge, with conflicts) as the
+# `merge-state-artifact` input; this workflow downloads it, resolves
+# conflicts, and uploads a tarball of the resolved checkout as
+# `resolved-state-artifact` for the caller to download and continue from.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: "Tag being merged into the fips branch, e.g. v1.33.0"
+        required: true
+        type: string
+      merge-state-artifact:
+        description: "Name of the artifact containing the tarball of the in-progress (conflicted) merge"
+        required: false
+        type: string
+        default: fips-merge-state
+      resolved-state-artifact:
+        description: "Name of the artifact this workflow uploads, containing the tarball of the resolved merge"
+        required: false
+        type: string
+        default: fips-merge-resolved
+    secrets:
+      OPENROUTER_API_KEY:
+        required: true
+
+permissions: {}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download in-progress merge state
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+        with:
+          name: ${{ inputs.merge-state-artifact }}
+          path: /tmp/merge-state
+
+      - name: Extract in-progress merge state
+        run: |
+          set -eu
+          tar -xzf /tmp/merge-state/fips-merge-state.tar.gz -C "$GITHUB_WORKSPACE"
+          rm -rf /tmp/merge-state
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
+        with:
+          go-version-file: "go.mod"
+          cache: false
+
+      - name: Install opencode
+        run: sudo snap install opencode --classic
+
+      - name: Resolve conflicts with opencode
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          PROMPT: |
+            This repository checkout is in the middle of a git merge with
+            conflicts: merging tag ${{ inputs.version }} into the fips
+            branch.
+
+            Run `git status` to find every conflicted file, and resolve all
+            of them, using this guidance:
+
+            - The fips branch intentionally excludes standard TLS/crypto usage,
+              including any custom cryptographic code. Whenever a conflict
+              touches TLS or crypto code, resolve it by dropping the incoming
+              TLS/crypto usage/functionality rather than reintroducing it,
+              adapting surrounding code as needed so it still builds and makes
+              sense without it.
+            - The fips branch also intentionally carries its own infrastructure
+              differences from master (for example CI workflow files under
+              .github/workflows that target the fips branch instead of master,
+              and other fips-specific build/CI configuration). For conflicts in
+              this kind of infrastructure file, prefer the fips branch's side
+              unless the incoming change is clearly an unrelated improvement
+              that should carry over (e.g. fixing an unrelated bug in a shared
+              step) -- use your judgement, and keep any fips-specific
+              customization intact.
+            - For all other conflicts (regular application code, docs, tests,
+            - etc. with no TLS/crypto/infrastructure angle), take the incoming
+            - change from ${{ inputs.version }}.
+
+            After resolving every conflict: make sure no conflict markers
+            (<<<<<<<, =======, >>>>>>>) remain anywhere, make sure
+            `go build ./...` succeeds, and `git add` every resolved file.
+
+            Run `go test ./...`, and if failures occur, run that test again. If
+            it still fails, attempt to fix the test or the implementation by
+            looking at how that code, feature or test has changed. If after a
+            few attempts to fix it are in vain, then ignore it. They will be
+            fixed manually later.
+
+            Do not commit, push, or open a pull request yourself -- leave the
+            resolved changes staged.
+        run: |
+          opencode run --auto --model openrouter/google/gemini-3.7-flash "$PROMPT"
+
+      - name: Verify conflicts are resolved
+        run: |
+          set -eu
+          if grep -RIl --exclude-dir=.git -e '^<<<<<<< ' -e '^=======$' -e '^>>>>>>> ' .; then
+            echo "::error::Conflict markers remain after opencode resolution"
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "::error::No staged changes after conflict resolution"
+            exit 1
+          fi
+          go build ./...
+
+      - name: Archive resolved merge state
+        run: |
+          set -eu
+          mkdir -p /tmp/resolved-state
+          tar -czf /tmp/resolved-state/fips-merge-resolved.tar.gz -C "$GITHUB_WORKSPACE" .
+
+      - name: Upload resolved merge state
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        with:
+          name: ${{ inputs.resolved-state-artifact }}
+          path: /tmp/resolved-state/fips-merge-resolved.tar.gz
+          retention-days: 1

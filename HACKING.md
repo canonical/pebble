@@ -269,27 +269,34 @@ Recommended tone:
 
 ## Creating a release
 
-When releasing, you need to release the `master` branch and the `fips` branch.
-
-Binaries will be created and uploaded automatically to this release by the [binaries.yml](https://github.com/canonical/pebble/blob/master/.github/workflows/binaries.yml) GitHub Action. In addition, a new Snap version is built and uploaded to the [Snap Store](https://snapcraft.io/pebble) (but promotion to `stable` is a manual step).
-
-Follow these steps:
+Release the `master` branch first, then the `fips` branch. The [Release](https://github.com/canonical/pebble/actions/workflows/release.yml) workflow does the mechanical work -- bumping the version (or merging into `fips`), opening a pull request, tagging the branch, drafting the GitHub release, and building and attaching the binaries, snaps and security scan report. Your job is to trigger it, review its pull request, and publish the draft release it leaves you.
 
 ### Main release (master branch)
 
-- Update `Version` in `cmd/version.go` to the version you're about to publish, for example `v1.27.0`, open a pull request, have it reviewed and merged into the `master` branch.
-- [Draft a new GitHub release](https://github.com/canonical/pebble/releases/new).
-- Enter the version tag (for example `v1.27.0`) and select "Create new tag: on publish".
-- Enter a release title: include the version tag and a short summary of the release.
-- Write release notes: describe new features and bug fixes, and include a link to the full list of commits.
-- Click "Publish release".
-- Monitor the release [GitHub Actions](https://github.com/canonical/pebble/actions) and check that the [snap](https://snapcraft.io/pebble) is uploaded correctly.
-- If you're confident it's a compatible release, [promote the `candidate` snap to `stable`](https://snapcraft.io/pebble/releases).
-- Find the security scan artifact on the corresponding [SBOM and secscan](https://github.com/canonical/pebble/actions/workflows/sbom-secscan.yaml) run, and upload it to the [SSDLC Pebble folder in Drive](https://drive.google.com/drive/folders/11WR629JFPJ8IMPI0kcsNp_qdf39c6no3). Open the artifact and verify that the security scan has not found any vulnerabilities.
+1. Run the [Release](https://github.com/canonical/pebble/actions/workflows/release.yml) workflow with the version you're about to publish, for example `v1.27.0`. Leave the `fips` checkbox unchecked.
+2. Review the PR it opens, approve the CI actions to run and approve the pull request. Don't merge it yourself -- auto-merge is already enabled, and the release workflow carries on as soon as it merges.
+3. When the workflow finishes, open the [draft release](https://github.com/canonical/pebble/releases). Edit the AI generated title and notes as required, and check that the binaries, snaps and security scan report are all attached.
+4. Publish the release. This also promotes the `latest/candidate` snap to `latest/stable`, so wait until you're confident in the release before you do.
+5. Check that the [snap](https://snapcraft.io/pebble) reaches `latest/stable`.
+6. Download the security scan report from the release, verify it found no vulnerabilities, and upload it to the [SSDLC Pebble folder in Drive](https://drive.google.com/drive/folders/11WR629JFPJ8IMPI0kcsNp_qdf39c6no3).
 
 ### FIPS release (fips branch)
 
-- Open a pull request to merge the `master` branch into the `fips` branch, resolve any conflicts, and have it reviewed and merged. **Important:** merge using a true merge commit, rather than a squash-and-merge commit.
-- Open a second PR on the `fips` branch to bump the `Version` in `cmd/version.go` to the FIPS version, for example `v1.27.0-fips`, and have it reviewed and merged.
-- Publish a FIPS GitHub release (for example `v1.27.0-fips`) targeting the tip of the `fips` branch.
-- As with the main release, monitor the release [GitHub Actions](https://github.com/canonical/pebble/actions), check that the FIPS snap is uploaded, and promote it to stable.
+Do this after you've published the main release.
+
+1. Run the [Release](https://github.com/canonical/pebble/actions/workflows/release.yml) workflow again with the same version tag, for example `v1.27.0`, this time checking the `fips` checkbox. It merges that tag into `fips` and bumps the version to `v1.27.0-fips`.
+2. Review the pull request it opens carefully. AI resolves the merge conflicts for you, so check each resolution, especially anything touching TLS or crypto. Then approve the CI actions to run and approve the pull request. Don't merge it yourself -- auto-merge is already enabled, and the release workflow carries on as soon as it merges.
+3. Follow steps 3 to 6 above to publish the `v1.27.0-fips` draft release.
+
+### If a stage fails
+
+Re-run the workflow with the same inputs. Each stage checks whether its work is already done and skips itself, so only the parts that failed run again. Do the same if the run hits GitHub's 6-hour job limit while waiting for the pull request to be reviewed.
+
+To take a stage on yourself, use the `skip-*` inputs: the version bump pull request, the draft release, binaries, snaps, individual architectures, and sbomber. If you skip a stage that creates something, that thing has to exist already -- the workflow checks, and fails if it doesn't.
+
+### Release configuration requirements
+
+1. A secret called `OPENROUTER_API_KEY` with an OpenRouter API Key with at least a few USD per release.
+2. A secret called `SNAPCRAFT_STORE_CREDENTIALS` with snapcraft credentials (e.g. `snapcraft login` then copy from gnome keyring).
+3. A secret called `LP_CREDENTIALS` with snapcraft LP credentials (e.g. `snapcraft remote-build ...` then copy the contents from `~/.local/share/snapcraft/launchpad-credentials`).
+4. A secret called `PEBBLE_DEV_MAILING_LIST` with an email associated with the Ubuntu One user the snapcraft/LP credentials relate to (or any other email).
