@@ -444,7 +444,12 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: |
           set -eu
-          IMAGE_URL="https://cloud-images.ubuntu.com/releases/${CODENAME}/release/${CODENAME}-server-cloudimg-${ARCH}.img"
+          # Note: releases/${CODENAME}/release/ names its files with the
+          # Ubuntu version number (e.g. ubuntu-22.04-server-cloudimg-*.img),
+          # not the codename -- ${CODENAME}/current/ is the tree that uses
+          # codename-based filenames for every architecture, including
+          # riscv64 (arch name "riscv64" here matches Ubuntu's own naming).
+          IMAGE_URL="https://cloud-images.ubuntu.com/${CODENAME}/current/${CODENAME}-server-cloudimg-${ARCH}.img"
           echo "Downloading $IMAGE_URL"
           curl -fSL "$IMAGE_URL" -o vm-base.img
           qemu-img resize vm-base.img +8G
