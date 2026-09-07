@@ -114,6 +114,8 @@ special_chars{key_with_underscore="value_with_underscore",key-with-dash="value-w
 		writer := metrics.NewOpenTelemetryWriter(buf)
 		err := writer.Write(tc.metric)
 		c.Assert(err, IsNil)
+		err = writer.Flush()
+		c.Assert(err, IsNil)
 		c.Assert(buf.String(), Equals, tc.expected)
 	}
 }
