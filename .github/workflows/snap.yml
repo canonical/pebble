@@ -509,7 +509,7 @@ jobs:
             -drive if=virtio,format=qcow2,file=vm-disk.qcow2 \
             -drive if=virtio,format=raw,file=seed.img \
             -netdev user,id=net0,hostfwd=tcp::2222-:22 \
-            -device virtio-net-pci,netdev=net0 \
+            -device virtio-net-pci,netdev=net0,romfile= \
             -nographic -serial file:serial.log \
             &
           echo $! > qemu.pid
