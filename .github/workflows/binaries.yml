@@ -48,8 +48,11 @@ jobs:
   # it has nothing to do.
   plan:
     runs-on: ubuntu-latest
+    # contents: write (not just read) is required for `gh release view` to
+    # see a draft release -- drafts are only visible to callers with push
+    # access to the repo.
     permissions:
-      contents: read
+      contents: write
     outputs:
       goarch: ${{ steps.plan.outputs.goarch }}
     steps:
@@ -57,6 +60,7 @@ jobs:
         id: plan
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.release-tag }}
           EVENT_NAME: ${{ github.event_name }}
           SKIP_AMD64: ${{ inputs.skip-amd64 }}

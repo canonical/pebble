@@ -193,8 +193,11 @@ jobs:
     if: |
       github.event_name != 'pull_request' &&
       github.event_name != 'release'
+    # contents: write (not just read) is required for `gh release view` to
+    # see a draft release -- drafts are only visible to callers with push
+    # access to the repo.
     permissions:
-      contents: read
+      contents: write
     outputs:
       remote-arch: ${{ steps.plan.outputs.remote-arch }}
       qemu-arch: ${{ steps.plan.outputs.qemu-arch }}
@@ -205,6 +208,7 @@ jobs:
         id: plan
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ inputs.release-tag }}
           SKIP_BUILD: ${{ inputs.skip-build }}
           SKIP_AMD64: ${{ inputs.skip-amd64 }}
@@ -259,11 +263,16 @@ jobs:
                 continue
               fi
 
-              if [[ "${QEMU_OPT[$ARCH]}" == "true" ]]; then
+              # skip-<arch> always wins over qemu-<arch>: it must fully
+              # disable building/publishing that architecture (matching
+              # record-skipped-architectures' bookkeeping below, which is
+              # driven purely by the skip-<arch> inputs), even if someone
+              # also opted it into a QEMU build.
+              if [[ "${SKIP[$ARCH]}" == "true" ]]; then
+                echo "Architecture $ARCH skipped via input."
+              elif [[ "${QEMU_OPT[$ARCH]}" == "true" ]]; then
                 echo "Architecture $ARCH will be built via QEMU emulation."
                 QEMU+=("$ARCH")
-              elif [[ "${SKIP[$ARCH]}" == "true" ]]; then
-                echo "Architecture $ARCH skipped via input."
               else
                 echo "Architecture $ARCH will be built via remote-build."
                 REMOTE+=("$ARCH")
@@ -688,20 +697,23 @@ jobs:
   # dry-run draft (since nothing was actually published to the store).
   record-skipped-architectures:
     runs-on: ubuntu-latest
-    needs: [release]
+    needs: [release, plan-snap-builds]
     # `release`'s own `if:` requires `needs.test.result == 'success'`
     # (strictly, not `skipped`) -- so a genuine build/test failure upstream
     # cascades as `release.result == 'skipped'`, indistinguishable at this
-    # level from a legitimate skip. The only legitimate reason for
+    # level from a legitimate "nothing to build" skip. We disambiguate by
+    # checking plan-snap-builds directly: if it succeeded and selected zero
+    # architectures to build this run (via skip-build, every individual
+    # skip-<arch>, or idempotency), that's the only legitimate reason for
     # `release` to not succeed while still wanting to record skipped
-    # architectures is `skip-build` (which means every architecture was
-    # deliberately never attempted). Anything else non-successful means a
-    # real failure occurred somewhere upstream, and must not be recorded as
-    # an intentional per-architecture skip.
+    # architectures. Anything else non-successful means a real failure
+    # occurred somewhere upstream, and must not be recorded as an
+    # intentional per-architecture skip.
     if: |
       always() &&
       inputs.release-tag != '' &&
-      (needs.release.result == 'success' || inputs.skip-build)
+      needs.plan-snap-builds.result == 'success' &&
+      (needs.release.result == 'success' || needs.plan-snap-builds.outputs.built-arch == '[]')
     permissions:
       contents: write
     env:
