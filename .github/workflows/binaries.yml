@@ -96,7 +96,15 @@ jobs:
         fi
 
         if [[ -n "$TAG" ]]; then
-          PATTERN="pebble_${TAG}_${GOOS}_${GOARCH}.tar.gz"
+          # Match the GOARCH rewrite done in the build step below, where
+          # armvN (e.g. armv6) becomes arm (with GOARM=N), so the archive
+          # name reflects "arm" rather than "armv6".
+          ARCHIVE_GOARCH="$GOARCH"
+          if [[ "$GOARCH" == armv* ]]; then
+            ARCHIVE_GOARCH=arm
+          fi
+
+          PATTERN="pebble_${TAG}_${GOOS}_${ARCHIVE_GOARCH}.tar.gz"
           if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "$PATTERN"; then
             echo "Archive $PATTERN already attached to release $TAG, skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
