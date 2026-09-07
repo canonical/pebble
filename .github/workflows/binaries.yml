@@ -41,7 +41,86 @@ on:
 permissions: {}
 
 jobs:
+  # Computes which goarch values actually need a build/upload this run,
+  # before any build runners are spun up. This accounts for skip-<arch>
+  # inputs and (idempotency) architectures whose archive is already attached
+  # to the release, so a build runner never gets allocated just to discover
+  # it has nothing to do.
+  plan:
+    runs-on: ubuntu-latest
+    # contents: write (not just read) is required for `gh release view` to
+    # see a draft release -- drafts are only visible to callers with push
+    # access to the repo.
+    permissions:
+      contents: write
+    outputs:
+      goarch: ${{ steps.plan.outputs.goarch }}
+    steps:
+      - name: Compute architectures to build
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release-tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          SKIP_AMD64: ${{ inputs.skip-amd64 }}
+          SKIP_ARM64: ${{ inputs.skip-arm64 }}
+          SKIP_ARMV6: ${{ inputs.skip-armv6 }}
+          SKIP_PPC64LE: ${{ inputs.skip-ppc64le }}
+          SKIP_RISCV64: ${{ inputs.skip-riscv64 }}
+          SKIP_S390X: ${{ inputs.skip-s390x }}
+        run: |
+          set -eu
+
+          # Pull request runs are just a test to check that everything
+          # still compiles, so amd64 and arm64 are sufficient.
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            CANDIDATES=(amd64 arm64)
+          else
+            CANDIDATES=(amd64 arm64 armv6 ppc64le riscv64 s390x)
+          fi
+
+          declare -A SKIP=(
+            [amd64]="$SKIP_AMD64"     [arm64]="$SKIP_ARM64"
+            [armv6]="$SKIP_ARMV6"     [ppc64le]="$SKIP_PPC64LE"
+            [riscv64]="$SKIP_RISCV64" [s390x]="$SKIP_S390X"
+          )
+
+          SELECTED=()
+          for GOARCH in "${CANDIDATES[@]}"; do
+            if [[ "${SKIP[$GOARCH]}" == "true" ]]; then
+              echo "Architecture $GOARCH skipped via input."
+              continue
+            fi
+
+            if [[ -n "$TAG" ]]; then
+              # Match the GOARCH rewrite done in the build step, where
+              # armvN (e.g. armv6) becomes arm (with GOARM=N), so the
+              # archive name reflects "arm" rather than "armv6".
+              ARCHIVE_GOARCH="$GOARCH"
+              if [[ "$GOARCH" == armv* ]]; then
+                ARCHIVE_GOARCH=arm
+              fi
+
+              PATTERN="pebble_${TAG}_linux_${ARCHIVE_GOARCH}.tar.gz"
+              if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "$PATTERN"; then
+                echo "Archive $PATTERN already attached to release $TAG, skipping $GOARCH."
+                continue
+              fi
+            fi
+
+            echo "Architecture $GOARCH will be built."
+            SELECTED+=("$GOARCH")
+          done
+
+          GOARCH_JSON=$(jq -nc '$ARGS.positional' --args "${SELECTED[@]}")
+          echo "Building for: ${SELECTED[*]:-<none>}"
+          echo "goarch=$GOARCH_JSON" >> "$GITHUB_OUTPUT"
+
   create-binaries:
+    needs: [plan]
+    # Only runs at all if plan actually selected at least one architecture.
+    if: needs.plan.outputs.goarch != '[]'
     permissions:
       contents: write
       id-token: write
@@ -49,9 +128,7 @@ jobs:
     strategy:
       matrix:
         goos: [linux]
-        # Pull request runs are just a test to check that everything still
-        # compiles, so amd64 and arm64 are sufficient.
-        goarch: ${{ github.event_name == 'pull_request' && fromJSON('["amd64","arm64"]') || fromJSON('["amd64","arm64","armv6","ppc64le","riscv64","s390x"]') }}
+        goarch: ${{ fromJSON(needs.plan.outputs.goarch) }}
 
     runs-on: ubuntu-latest
 
@@ -69,54 +146,8 @@ jobs:
         go-version-file: "go.mod"
         cache: false
 
-    - name: Determine release tag
-      id: release
-      env:
-        RELEASE_TAG: ${{ inputs.release-tag }}
-      run: echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
-
-    # Skip this architecture if it was explicitly requested via input, or
-    # (idempotency) if it's already attached to the release -- e.g. a
-    # previous run of this workflow already uploaded it, and we're only
-    # re-running to pick up a different architecture that failed.
-    - name: Check if this architecture should be skipped
-      id: check
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        TAG: ${{ steps.release.outputs.tag }}
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-        SKIP_ARCH: ${{ inputs[format('skip-{0}', matrix.goarch)] }}
-      run: |
-        set -eu
-        if [[ "$SKIP_ARCH" == "true" ]]; then
-          echo "Architecture $GOARCH skipped via input."
-          echo "skip=true" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        if [[ -n "$TAG" ]]; then
-          # Match the GOARCH rewrite done in the build step below, where
-          # armvN (e.g. armv6) becomes arm (with GOARM=N), so the archive
-          # name reflects "arm" rather than "armv6".
-          ARCHIVE_GOARCH="$GOARCH"
-          if [[ "$GOARCH" == armv* ]]; then
-            ARCHIVE_GOARCH=arm
-          fi
-
-          PATTERN="pebble_${TAG}_${GOOS}_${ARCHIVE_GOARCH}.tar.gz"
-          if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "$PATTERN"; then
-            echo "Archive $PATTERN already attached to release $TAG, skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-        fi
-
-        echo "skip=false" >> "$GITHUB_OUTPUT"
-
     - name: Build binary and create archive
       id: build
-      if: steps.check.outputs.skip != 'true'
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
@@ -149,13 +180,12 @@ jobs:
         echo "PEBBLE_VERSION=${PEBBLE_VERSION}" >>$GITHUB_OUTPUT
 
     - name: Attest build provenance
-      if: steps.check.outputs.skip != 'true' && steps.release.outputs.tag != ''
+      if: inputs.release-tag != ''
       uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
       with:
         subject-path: dist/${{ steps.build.outputs.ARCHIVE_FILE }}
 
     - name: Upload archive as Actions artifact
-      if: steps.check.outputs.skip != 'true'
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
       with:
         name: ${{ steps.build.outputs.ARCHIVE_FILE }}
@@ -164,9 +194,9 @@ jobs:
     - name: Upload archive to release
       env:
         ARCHIVE_FILE: ${{ steps.build.outputs.ARCHIVE_FILE }}
-        TAG: ${{ steps.release.outputs.tag }}
+        TAG: ${{ inputs.release-tag }}
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      if: steps.check.outputs.skip != 'true' && steps.release.outputs.tag != ''
+      if: inputs.release-tag != ''
       run: |
         echo Uploading $ARCHIVE_FILE to release $TAG
         gh release upload "$TAG" "dist/$ARCHIVE_FILE"
