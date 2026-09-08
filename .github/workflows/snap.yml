@@ -415,6 +415,7 @@ jobs:
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
         with:
           go-version-file: "pebble/go.mod"
+          cache: false
 
       # Generate the version files on the host; they're copied into the VM
       # along with the rest of the source tree below.
@@ -448,6 +449,7 @@ jobs:
             core20) CODENAME=focal ;;
             core22) CODENAME=jammy ;;
             core24) CODENAME=noble ;;
+            core26) CODENAME=resolute ;;
             *) echo "Unrecognised build-base '$BUILD_BASE' in pebble/snap/snapcraft.yaml" >&2; exit 1 ;;
           esac
           echo "Using Ubuntu $CODENAME cloud image (snapcraft.yaml build-base: $BUILD_BASE)"
@@ -610,8 +612,9 @@ jobs:
           disown
 
           echo "Waiting for SSH to come up..."
+          SSH_OPTS=(-i vm-key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
           for i in $(seq 1 60); do
-            if ssh -i vm-key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 builder@127.0.0.1 true 2>/dev/null; then
+            if ssh "${SSH_OPTS[@]}" builder@127.0.0.1 true 2>/dev/null; then
               echo "VM is up."
               exit 0
             fi
@@ -667,13 +670,7 @@ jobs:
           ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "stat /home/builder/pebble/${SNAP_NAME}"
           echo "::endgroup::"
 
-          # scp (both the SFTP and legacy -O protocols) reliably fails to
-          # fetch this file with "No such file or directory", despite the
-          # remote stat above proving it exists with the expected owner,
-          # permissions and size. rsync is already proven to work over this
-          # same SSH tunnel (it's how the source got into the VM above), so
-          # use it for the return trip too rather than continuing to chase
-          # scp's exact failure mode.
+          # Copy the snap back to the host.
           rsync -av -e "ssh ${SSH_OPTS[*]}" "builder@127.0.0.1:/home/builder/pebble/${SNAP_NAME}" "./${SNAP_NAME}"
 
           echo "::group::Diagnostics: local file after rsync"
