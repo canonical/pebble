@@ -145,7 +145,7 @@ on:
           Launchpad's remote-build service.
         required: false
         type: boolean
-        default: false
+        default: true # use QEMU until riscv64 LP builders are more reliable.
       qemu-build-arch-s390x:
         description: >-
           Build the s390x snap locally via QEMU emulation instead of
