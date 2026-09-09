@@ -171,13 +171,13 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     outputs:
       target-branch: ${{ steps.vars.outputs.base-branch }}
       branch: ${{ steps.vars.outputs.branch }}
       pr-title: ${{ steps.vars.outputs.pr-title }}
       merge-method: ${{ steps.vars.outputs.merge-method }}
       conflicts: ${{ steps.merge.outputs.conflicts }}
+      base-sha: ${{ steps.merge.outputs.base-sha }}
     steps:
       - name: Validate version format
         env:
@@ -301,6 +301,11 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
+          # Record the pre-merge commit explicitly, so later steps can diff
+          # against exactly the changes this merge commit introduces (rather
+          # than relying on the implicit, easily-clobbered ORIG_HEAD ref).
+          echo "base-sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
           if git merge-base --is-ancestor "$VERSION" HEAD 2>/dev/null; then
             echo "Tag $VERSION is already merged."
             echo "conflicts=false" >> "$GITHUB_OUTPUT"
@@ -312,6 +317,66 @@ jobs:
               echo "conflicts=true" >> "$GITHUB_OUTPUT"
             fi
           fi
+
+      # GITHUB_TOKEN cannot push changes to workflow files (GitHub rejects
+      # it with "refusing to allow ... to create or update workflow ...
+      # without `workflows` permission", which isn't a grantable GITHUB_TOKEN
+      # permission). So any .github/workflows changes pulled in by the merge
+      # are reverted back to the pre-merge (fips branch) state here, and
+      # packaged as a standalone commit (not pushed) so its diff can be
+      # posted on the PR for manual review/application instead.
+      - name: Revert .github/workflows changes from merge
+        id: revert-workflows
+        if: inputs.fips && steps.current.outputs.done != 'true' && steps.existing.outputs.found != 'true' && steps.merge.outputs.conflicts != 'true'
+        env:
+          VERSION: ${{ inputs.version }}
+          BASE_SHA: ${{ steps.merge.outputs.base-sha }}
+        run: |
+          set -eu
+          if git diff --quiet "$BASE_SHA" -- .github/workflows/; then
+            echo "reverted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Snapshot the post-merge .github/workflows content before
+          # reverting it, so it can be packaged as a standalone commit below.
+          rm -rf /tmp/workflow-merged
+          mkdir -p /tmp/workflow-merged
+          cp -a .github/workflows /tmp/workflow-merged/workflows
+
+          # Revert .github/workflows in this checkout back to its pre-merge
+          # ($BASE_SHA) state, so the merge commit doesn't touch it. Only
+          # this merge's own changes (conflicts or clean auto-merges) are
+          # reverted here -- anything already on the base branch from other
+          # commits is left untouched, since it's unaffected by this diff.
+          rm -rf .github/workflows
+          git rm -rf --cached --ignore-unmatch .github/workflows >/dev/null
+          if git cat-file -e "$BASE_SHA:.github/workflows" 2>/dev/null; then
+            git checkout "$BASE_SHA" -- .github/workflows
+          fi
+          git add -A .github/workflows
+
+          # Package the excluded changes as a standalone commit (on its own
+          # detached worktree, never pushed) on top of the pre-merge tip, so
+          # it can be reviewed and applied manually.
+          WORKTREE=$(mktemp -d)
+          git worktree add --detach --quiet "$WORKTREE" "$BASE_SHA"
+          rm -rf "$WORKTREE/.github/workflows"
+          cp -a /tmp/workflow-merged/workflows "$WORKTREE/.github/workflows"
+          git -C "$WORKTREE" add -A .github/workflows
+          git -C "$WORKTREE" commit --quiet -m "chore: apply .github/workflows changes from the $VERSION merge
+
+          These changes were excluded from the automated fips merge commit
+          because GITHUB_TOKEN cannot push changes to workflow files. Apply
+          this commit manually (e.g. via the GitHub UI) if it should be
+          carried over."
+          WORKFLOW_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
+          git worktree remove "$WORKTREE" --force
+
+          mkdir -p /tmp/workflow-diff
+          git format-patch -1 "$WORKFLOW_COMMIT" --stdout > /tmp/workflow-diff/workflow-changes.patch
+
+          echo "reverted=true" >> "$GITHUB_OUTPUT"
 
       # Conflicts, if any, are resolved by the isolated release-merge-fips.yaml
       # workflow (see the resolve-fips-conflicts job below), which has no
@@ -400,10 +465,30 @@ jobs:
           echo "Opened $PR_URL"
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
 
-          # Requires branch protection + "Allow auto-merge". A true merge
-          # commit (not squash) is used for the fips branch, to preserve its
-          # history.
-          gh pr merge $MERGE_METHOD --auto "$PR_URL"
+          # Requires branch protection + "Allow auto-merge" so a true
+          # merge commit (not squash) lands once required checks pass,
+          # preserving the fips branch's history. If auto-merge can't be
+          # enabled (e.g. no branch protection configured on this repo),
+          # just log it and leave the PR open for manual review/merge.
+          if ! MERGE_ERR=$(gh pr merge $MERGE_METHOD --auto "$PR_URL" 2>&1); then
+            echo "::warning::Could not enable auto-merge for $PR_URL: $MERGE_ERR"
+          fi
+
+      - name: Post excluded .github/workflows changes as a PR comment
+        if: steps.revert-workflows.outputs.reverted == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ steps.create.outputs.url }}
+        run: |
+          set -eu
+          {
+            echo "This merge excluded the following .github/workflows changes, since GITHUB_TOKEN cannot push changes to workflow files. Apply this commit manually (e.g. via the GitHub UI) if it should be carried over to this branch:"
+            echo
+            echo '```diff'
+            cat /tmp/workflow-diff/workflow-changes.patch
+            echo '```'
+          } > /tmp/workflow-diff/comment.md
+          gh pr comment "$PR_URL" --body-file /tmp/workflow-diff/comment.md
 
       - name: Re-affirm auto-merge on existing pull request
         if: steps.existing.outputs.found == 'true'
@@ -411,7 +496,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ steps.existing.outputs.url }}
           MERGE_METHOD: ${{ steps.vars.outputs.merge-method }}
-        run: gh pr merge $MERGE_METHOD --auto "$PR_URL"
+        run: |
+          set -eu
+          if ! MERGE_ERR=$(gh pr merge $MERGE_METHOD --auto "$PR_URL" 2>&1); then
+            echo "::warning::Could not enable auto-merge for $PR_URL: $MERGE_ERR"
+          fi
 
       - name: Determine pull request URL
         id: pr
@@ -484,7 +573,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      actions: write
     steps:
       - name: Download resolved merge state
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
@@ -497,6 +585,60 @@ jobs:
           set -eu
           tar -xzf /tmp/resolved-state/fips-merge-resolved.tar.gz -C "$GITHUB_WORKSPACE"
           rm -rf /tmp/resolved-state
+
+      # See the equivalent step in the prepare job above for why this is
+      # needed: GITHUB_TOKEN cannot push changes to workflow files.
+      - name: Revert .github/workflows changes from merge
+        id: revert-workflows
+        env:
+          VERSION: ${{ inputs.version }}
+          BASE_SHA: ${{ needs.prepare.outputs.base-sha }}
+        run: |
+          set -eu
+          if git diff --quiet "$BASE_SHA" -- .github/workflows/; then
+            echo "reverted=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Snapshot the post-merge .github/workflows content before
+          # reverting it, so it can be packaged as a standalone commit below.
+          rm -rf /tmp/workflow-merged
+          mkdir -p /tmp/workflow-merged
+          cp -a .github/workflows /tmp/workflow-merged/workflows
+
+          # Revert .github/workflows in this checkout back to its pre-merge
+          # ($BASE_SHA) state, so the merge commit doesn't touch it. Only
+          # this merge's own changes (conflicts or clean auto-merges) are
+          # reverted here -- anything already on the base branch from other
+          # commits is left untouched, since it's unaffected by this diff.
+          rm -rf .github/workflows
+          git rm -rf --cached --ignore-unmatch .github/workflows >/dev/null
+          if git cat-file -e "$BASE_SHA:.github/workflows" 2>/dev/null; then
+            git checkout "$BASE_SHA" -- .github/workflows
+          fi
+          git add -A .github/workflows
+
+          # Package the excluded changes as a standalone commit (on its own
+          # detached worktree, never pushed) on top of the pre-merge tip, so
+          # it can be reviewed and applied manually.
+          WORKTREE=$(mktemp -d)
+          git worktree add --detach --quiet "$WORKTREE" "$BASE_SHA"
+          rm -rf "$WORKTREE/.github/workflows"
+          cp -a /tmp/workflow-merged/workflows "$WORKTREE/.github/workflows"
+          git -C "$WORKTREE" add -A .github/workflows
+          git -C "$WORKTREE" commit --quiet -m "chore: apply .github/workflows changes from the $VERSION merge
+
+          These changes were excluded from the automated fips merge commit
+          because GITHUB_TOKEN cannot push changes to workflow files. Apply
+          this commit manually (e.g. via the GitHub UI) if it should be
+          carried over."
+          WORKFLOW_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
+          git worktree remove "$WORKTREE" --force
+
+          mkdir -p /tmp/workflow-diff
+          git format-patch -1 "$WORKFLOW_COMMIT" --stdout > /tmp/workflow-diff/workflow-changes.patch
+
+          echo "reverted=true" >> "$GITHUB_OUTPUT"
 
       - name: Update cmd/version.go (FIPS)
         env:
@@ -551,10 +693,30 @@ jobs:
           echo "Opened $PR_URL"
           echo "url=${PR_URL}" >> "$GITHUB_OUTPUT"
 
-          # Requires branch protection + "Allow auto-merge". A true merge
-          # commit (not squash) is used for the fips branch, to preserve its
-          # history.
-          gh pr merge $MERGE_METHOD --auto "$PR_URL"
+          # Requires branch protection + "Allow auto-merge" so a true
+          # merge commit (not squash) lands once required checks pass,
+          # preserving the fips branch's history. If auto-merge can't be
+          # enabled (e.g. no branch protection configured on this repo),
+          # just log it and leave the PR open for manual review/merge.
+          if ! MERGE_ERR=$(gh pr merge $MERGE_METHOD --auto "$PR_URL" 2>&1); then
+            echo "::warning::Could not enable auto-merge for $PR_URL: $MERGE_ERR"
+          fi
+
+      - name: Post excluded .github/workflows changes as a PR comment
+        if: steps.revert-workflows.outputs.reverted == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ steps.create.outputs.url }}
+        run: |
+          set -eu
+          {
+            echo "This merge excluded the following .github/workflows changes, since GITHUB_TOKEN cannot push changes to workflow files. Apply this commit manually (e.g. via the GitHub UI) if it should be carried over to this branch:"
+            echo
+            echo '```diff'
+            cat /tmp/workflow-diff/workflow-changes.patch
+            echo '```'
+          } > /tmp/workflow-diff/comment.md
+          gh pr comment "$PR_URL" --body-file /tmp/workflow-diff/comment.md
 
       - name: Wait for the pull request to merge
         env:
