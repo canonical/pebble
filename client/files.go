@@ -105,17 +105,11 @@ func (fi *FileInfo) GroupID() *int {
 }
 
 // User is the string representing the owner user name.
-//
-// Because Pebble is built with CGO_ENABLED=0, user lookups rely on /etc/passwd
-// and will not resolve usernames managed via NSS, SSSD, or LDAP.
 func (fi *FileInfo) User() string {
 	return fi.user
 }
 
 // Group is the string representing the owner user group.
-//
-// Because Pebble is built with CGO_ENABLED=0, group lookups rely on /etc/group
-// and will not resolve group names managed via NSS, SSSD, or LDAP.
 func (fi *FileInfo) Group() string {
 	return fi.group
 }
