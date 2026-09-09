@@ -66,6 +66,48 @@ on:
         required: false
         type: boolean
         default: false
+      qemu-amd64:
+        description: >-
+          Build the amd64 snap locally inside a QEMU-emulated VM instead of
+          via Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-arm64:
+        description: >-
+          Build the arm64 snap locally inside a QEMU-emulated VM instead of
+          via Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-armhf:
+        description: >-
+          Build the armhf snap locally inside a QEMU-emulated VM instead of
+          via Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-ppc64el:
+        description: >-
+          Build the ppc64el snap locally inside a QEMU-emulated VM instead
+          of via Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-riscv64:
+        description: >-
+          Build the riscv64 snap locally inside a QEMU-emulated VM instead
+          of via Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-s390x:
+        description: >-
+          Build the s390x snap locally inside a QEMU-emulated VM instead of
+          via Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
     secrets:
       LP_CREDENTIALS:
         description: "Launchpad credentials used for the remote snap build"
@@ -140,25 +182,135 @@ jobs:
           name: pebble-snap-${{ matrix.arch }}
           path: ${{ steps.build-snap.outputs.snap }}
 
+  # Centralises every "should we build/publish this architecture, and if so
+  # how" decision in one place, before spinning up any runners for
+  # remote-build/qemu-build/release. Those jobs' matrices are generated entirely
+  # from this job's outputs, so an architecture that's skipped via input,
+  # already built via the other method, or already attached to the release,
+  # never gets a runner of its own at all.
+  plan-snap-builds:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'pull_request' &&
+      github.event_name != 'release'
+    # contents: write (not just read) is required for `gh release view` to
+    # see a draft release -- drafts are only visible to callers with push
+    # access to the repo.
+    permissions:
+      contents: write
+    outputs:
+      remote-arch: ${{ steps.plan.outputs.remote-arch }}
+      qemu-arch: ${{ steps.plan.outputs.qemu-arch }}
+      qemu-matrix: ${{ steps.plan.outputs.qemu-matrix }}
+      built-arch: ${{ steps.plan.outputs.built-arch }}
+    steps:
+      - name: Compute which architectures to build, and via which method
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.release-tag }}
+          SKIP_BUILD: ${{ inputs.skip-build }}
+          SKIP_AMD64: ${{ inputs.skip-amd64 }}
+          SKIP_ARM64: ${{ inputs.skip-arm64 }}
+          SKIP_ARMHF: ${{ inputs.skip-armhf }}
+          SKIP_PPC64EL: ${{ inputs.skip-ppc64el }}
+          SKIP_RISCV64: ${{ inputs.skip-riscv64 }}
+          SKIP_S390X: ${{ inputs.skip-s390x }}
+          QEMU_AMD64: ${{ inputs.qemu-amd64 }}
+          QEMU_ARM64: ${{ inputs.qemu-arm64 }}
+          QEMU_ARMHF: ${{ inputs.qemu-armhf }}
+          QEMU_PPC64EL: ${{ inputs.qemu-ppc64el }}
+          QEMU_RISCV64: ${{ inputs.qemu-riscv64 }}
+          QEMU_S390X: ${{ inputs.qemu-s390x }}
+        run: |
+          set -eu
+
+          # Per-architecture QEMU boot configuration for qemu-build, kept
+          # here (rather than as a static matrix on that job) so it can be
+          # filtered down to only the architectures actually selected below.
+          QEMU_CONFIG='[
+            {"arch":"amd64","qemu-pkg":"qemu-system-x86","qemu-bin":"qemu-system-x86_64","machine":"pc","accel-flags":"-cpu host -enable-kvm"},
+            {"arch":"arm64","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-aarch64","machine":"virt","accel-flags":"-cpu max","firmware-pkg":"qemu-efi-aarch64","firmware-path":"/usr/share/AAVMF/AAVMF_CODE.fd"},
+            {"arch":"armhf","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-arm","machine":"virt","accel-flags":"-cpu cortex-a15","firmware-pkg":"qemu-efi-arm","firmware-path":"/usr/share/AAVMF/AAVMF32_CODE.fd"},
+            {"arch":"ppc64el","qemu-pkg":"qemu-system-ppc","qemu-bin":"qemu-system-ppc64","machine":"pseries","accel-flags":"-cpu POWER9"},
+            {"arch":"riscv64","qemu-pkg":"qemu-system-misc","qemu-bin":"qemu-system-riscv64","machine":"virt","accel-flags":"-cpu rv64","firmware-flags":"-bios default","direct-kernel-append":"root=LABEL=cloudimg-rootfs ro console=ttyS0"},
+            {"arch":"s390x","qemu-pkg":"qemu-system-s390x","qemu-bin":"qemu-system-s390x","machine":"s390-ccw-virtio","accel-flags":"-cpu max"}
+          ]'
+
+          REMOTE=()
+          QEMU=()
+
+          if [[ "$SKIP_BUILD" != "true" ]]; then
+            declare -A SKIP=(
+              [amd64]="$SKIP_AMD64"     [arm64]="$SKIP_ARM64"
+              [armhf]="$SKIP_ARMHF"     [ppc64el]="$SKIP_PPC64EL"
+              [riscv64]="$SKIP_RISCV64" [s390x]="$SKIP_S390X"
+            )
+            declare -A QEMU_OPT=(
+              [amd64]="$QEMU_AMD64"     [arm64]="$QEMU_ARM64"
+              [armhf]="$QEMU_ARMHF"     [ppc64el]="$QEMU_PPC64EL"
+              [riscv64]="$QEMU_RISCV64" [s390x]="$QEMU_S390X"
+            )
+
+            # Idempotency: treat "asset attached to the release" as the
+            # single source of truth for "this architecture is done" -- it's
+            # uploaded together with (and right after) publishing to the
+            # Snap Store, so the two shouldn't normally get out of sync.
+            for ARCH in amd64 arm64 armhf ppc64el riscv64 s390x; do
+              if [[ -n "$TAG" ]] && gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qE "^pebble.*${ARCH}.*\.snap$"; then
+                echo "Snap for $ARCH already attached to release $TAG, nothing to build."
+                continue
+              fi
+
+              # skip-<arch> always wins over qemu-<arch>: it must fully
+              # disable building/publishing that architecture (matching
+              # record-skipped-architectures' bookkeeping below, which is
+              # driven purely by the skip-<arch> inputs), even if someone
+              # also opted it into a QEMU build.
+              if [[ "${SKIP[$ARCH]}" == "true" ]]; then
+                echo "Architecture $ARCH skipped via input."
+              elif [[ "${QEMU_OPT[$ARCH]}" == "true" ]]; then
+                echo "Architecture $ARCH will be built via QEMU emulation."
+                QEMU+=("$ARCH")
+              else
+                echo "Architecture $ARCH will be built via remote-build."
+                REMOTE+=("$ARCH")
+              fi
+            done
+          fi
+
+          REMOTE_JSON=$(jq -nc '$ARGS.positional' --args "${REMOTE[@]}")
+          QEMU_JSON=$(jq -nc '$ARGS.positional' --args "${QEMU[@]}")
+          QEMU_MATRIX_JSON=$(jq -c --argjson sel "$QEMU_JSON" '[.[] | select(.arch as $a | $sel | index($a) != null)]' <<<"$QEMU_CONFIG")
+          BUILT_JSON=$(jq -nc '$ARGS.positional' --args "${REMOTE[@]}" "${QEMU[@]}")
+
+          echo "Selected for remote-build: ${REMOTE[*]:-<none>}"
+          echo "Selected for qemu-build:   ${QEMU[*]:-<none>}"
+
+          echo "remote-arch=$REMOTE_JSON" >> "$GITHUB_OUTPUT"
+          echo "qemu-arch=$QEMU_JSON" >> "$GITHUB_OUTPUT"
+          echo "qemu-matrix=$QEMU_MATRIX_JSON" >> "$GITHUB_OUTPUT"
+          echo "built-arch=$BUILT_JSON" >> "$GITHUB_OUTPUT"
+
   remote-build:
     runs-on: ubuntu-latest
     environment: snap-build
+    needs: [plan-snap-builds]
     permissions:
       id-token: write
       attestations: write
       contents: read
-    # Runs for a push to master, or when called from release.yml -- but
-    # never for a plain pull_request build (see local-build above) or a
-    # bare release-published event (which only promotes an existing
-    # candidate build to stable; see the promote job below).
+    # Only runs at all if plan-snap-builds actually selected at least one
+    # architecture for remote-build (it already accounts for skip-build,
+    # skip-<arch>, qemu-<arch>, and idempotency -- see its own comments).
     if: |
-      github.event_name != 'pull_request' &&
-      github.event_name != 'release' &&
-      !inputs.skip-build
+      needs.plan-snap-builds.result == 'success' &&
+      needs.plan-snap-builds.outputs.remote-arch != '[]'
     strategy:
       fail-fast: true
       matrix:
-        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
+        arch: ${{ fromJSON(needs.plan-snap-builds.outputs.remote-arch) }}
     steps:
       - name: Checkout Pebble repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -167,39 +319,7 @@ jobs:
           fetch-depth: 0
           ref: ${{ inputs.release-tag }}
 
-      # Skip this architecture if it was explicitly requested via input, or
-      # (idempotency) if it's already attached to the release -- e.g. a
-      # previous run of this workflow already built and uploaded it, and
-      # we're only re-running to pick up an architecture that failed. We
-      # treat "asset attached to the release" as the single source of truth
-      # for "this architecture is done" -- it's uploaded together with (and
-      # right after) publishing to the Snap Store, so the two shouldn't
-      # normally get out of sync.
-      - name: Check if this architecture should be skipped
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.release-tag }}
-          ARCH: ${{ matrix.arch }}
-          SKIP_ARCH: ${{ inputs[format('skip-{0}', matrix.arch)] }}
-        run: |
-          set -eu
-          if [[ "$SKIP_ARCH" == "true" ]]; then
-            echo "Architecture $ARCH skipped via input."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ -n "$TAG" ]] && gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qE "^pebble.*${ARCH}.*\.snap$"; then
-            echo "Snap for $ARCH already attached to release $TAG, skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-
       - name: Set LP credentials for remote build
-        if: steps.check.outputs.skip != 'true'
         env:
           LP_CREDENTIALS: ${{ secrets.LP_CREDENTIALS }}
           PEBBLE_DEV_MAILING_LIST: ${{ secrets.PEBBLE_DEV_MAILING_LIST }}
@@ -211,36 +331,33 @@ jobs:
           git config --global user.name "pebble-dev"
 
       - name: Set up Go
-        if: steps.check.outputs.skip != 'true'
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
         with:
           go-version-file: "go.mod"
 
       # Ensure Snapcraft will ship the generated version files to LP.
-      - if: steps.check.outputs.skip != 'true'
-        run: |
+      - run: |
           go generate ./cmd
           git add -f ./cmd/VERSION ./cmd/version_generated.go
 
       - name: Build Snap for ${{ matrix.arch }}
         id: build-snap
-        if: steps.check.outputs.skip != 'true'
         uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
         with:
           snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
 
       - name: Attest build provenance
-        if: steps.check.outputs.skip != 'true' && steps.build-snap.outcome == 'success'
+        if: steps.build-snap.outcome == 'success'
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
         with:
           subject-path: ${{ steps.build-snap.outputs.snap }}
 
       - name: Rename the logs file, for colons are not allowed in the artifact name
-        if: steps.check.outputs.skip != 'true' && always()
+        if: always()
         run: cat snapcraft-pebble-*.txt > snapcraft-logs.txt || echo "no log files"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        if: steps.check.outputs.skip != 'true' && always()
+        if: always()
         with:
           name: snapcraft-logs-${{ matrix.arch }}
           path: |
@@ -251,21 +368,354 @@ jobs:
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        if: steps.check.outputs.skip != 'true' && steps.build-snap.outcome == 'success'
+        if: steps.build-snap.outcome == 'success'
+        with:
+          name: pebble-snap-${{ matrix.arch }}
+          path: ${{ steps.build-snap.outputs.snap }}
+
+  qemu-build:
+    # Alternative to remote-build: builds a snap for an architecture the
+    # runner can't run natively by booting a full-system QEMU VM of that
+    # architecture (running the Ubuntu release matching snapcraft.yaml's
+    # build-base), and building inside it with `snapcraft pack
+    # --destructive-mode`. This produces an unsigned ("dangerous") .snap,
+    # same as any locally-built snap. Opt in per architecture via the
+    # qemu-<arch> inputs; plan-snap-builds routes any architecture built
+    # this way away from remote-build.
+    runs-on: ubuntu-latest
+    needs: [plan-snap-builds]
+    permissions:
+      id-token: write
+      attestations: write
+      contents: read
+    # Only runs at all if plan-snap-builds actually selected at least one
+    # architecture for a QEMU build.
+    if: |
+      needs.plan-snap-builds.result == 'success' &&
+      needs.plan-snap-builds.outputs.qemu-arch != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan-snap-builds.outputs.qemu-matrix) }}
+    steps:
+      # Checked out into a subdirectory, rather than the job's default
+      # working directory, so the QEMU working files created by later steps
+      # (vm-*.img, seed.img, vm-key*, qemu.pid, serial.log, etc.) stay as
+      # siblings of the source tree instead of polluting it -- otherwise
+      # they'd all get copied into the VM by the rsync below too.
+      - name: Checkout Pebble repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ inputs.release-tag }}
+          path: pebble
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16  # v6
+        with:
+          go-version-file: "pebble/go.mod"
+          cache: false
+
+      # Generate the version files on the host; they're copied into the VM
+      # along with the rest of the source tree below.
+      - run: cd pebble && go generate ./cmd
+
+      - name: Install QEMU and supporting tools
+        env:
+          QEMU_PKG: ${{ matrix.qemu-pkg }}
+          FIRMWARE_PKG: ${{ matrix.firmware-pkg }}
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            "$QEMU_PKG" qemu-utils cloud-image-utils genisoimage openssh-client rsync \
+            ${FIRMWARE_PKG:+$FIRMWARE_PKG}
+
+      # The target Ubuntu release comes straight from snapcraft.yaml, so the
+      # VM matches whatever base the snap actually builds against.
+      - name: Determine Ubuntu base image for this build
+        id: base
+        run: |
+          set -eu
+          # Prefer build-base (required whenever base: bare is used, as it
+          # is here) and only fall back to base if build-base is absent.
+          BUILD_BASE=$(grep -E '^build-base:' pebble/snap/snapcraft.yaml | head -n1 | awk '{print $2}')
+          if [[ -z "$BUILD_BASE" ]]; then
+            BUILD_BASE=$(grep -E '^base:' pebble/snap/snapcraft.yaml | head -n1 | awk '{print $2}')
+          fi
+          case "$BUILD_BASE" in
+            core18) CODENAME=bionic ;;
+            core20) CODENAME=focal ;;
+            core22) CODENAME=jammy ;;
+            core24) CODENAME=noble ;;
+            core26) CODENAME=resolute ;;
+            *) echo "Unrecognised build-base '$BUILD_BASE' in pebble/snap/snapcraft.yaml" >&2; exit 1 ;;
+          esac
+          echo "Using Ubuntu $CODENAME cloud image (snapcraft.yaml build-base: $BUILD_BASE)"
+          echo "codename=$CODENAME" >> "$GITHUB_OUTPUT"
+
+      - name: Download Ubuntu cloud image for ${{ matrix.arch }}
+        env:
+          CODENAME: ${{ steps.base.outputs.codename }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -eu
+          # Note: releases/${CODENAME}/release/ names its files with the
+          # Ubuntu version number (e.g. ubuntu-22.04-server-cloudimg-*.img),
+          # not the codename -- ${CODENAME}/current/ is the tree that uses
+          # codename-based filenames for every architecture, including
+          # riscv64 (arch name "riscv64" here matches Ubuntu's own naming).
+          IMAGE_URL="https://cloud-images.ubuntu.com/${CODENAME}/current/${CODENAME}-server-cloudimg-${ARCH}.img"
+          echo "Downloading $IMAGE_URL"
+          curl -fSL "$IMAGE_URL" -o vm-base.img
+          qemu-img resize vm-base.img +8G
+          qemu-img create -f qcow2 -F qcow2 -b vm-base.img vm-disk.qcow2
+
+      # riscv64's packaged U-Boot (qemu-riscv64_smode) has a known bug where
+      # it can crash with "FDT creation failed! hanging..." while relocating
+      # the device tree during extlinux boot. Sidestep it entirely by
+      # pulling the kernel/initrd straight out of the cloud image here, and
+      # booting them directly with QEMU's -kernel/-initrd (OpenSBI then
+      # hands off straight to Linux, no bootloader involved).
+      #
+      # This uses qemu-nbd + a plain mount rather than libguestfs/guestfish:
+      # guestfish relies on supermin to build a throwaway "appliance" VM on
+      # first use, which is fragile on ephemeral CI runners (kernel/module
+      # mismatches, no cached appliance, etc.) and fails outright there.
+      - name: Extract kernel and initrd for direct boot
+        if: matrix.direct-kernel-append != ''
+        run: |
+          set -euo pipefail
+          sudo modprobe nbd max_part=16
+          sudo qemu-nbd --connect=/dev/nbd0 --read-only vm-base.img
+
+          # Wait for the kernel to notice and create partition device nodes.
+          for i in $(seq 1 30); do
+            [[ -e /dev/nbd0p1 ]] && break
+            sleep 1
+          done
+          sudo udevadm settle || true
+
+          # Find the partition labelled cloudimg-rootfs (Ubuntu cloud
+          # images' root filesystem label) rather than assuming a fixed
+          # partition number.
+          shopt -s nullglob
+          ROOT_PART=""
+          for PART in /dev/nbd0p*; do
+            if sudo blkid -o value -s LABEL "$PART" 2>/dev/null | grep -qxF cloudimg-rootfs; then
+              ROOT_PART="$PART"
+              break
+            fi
+          done
+          if [[ -z "$ROOT_PART" ]]; then
+            echo "Could not find the cloudimg-rootfs partition on /dev/nbd0" >&2
+            sudo qemu-nbd --disconnect /dev/nbd0
+            exit 1
+          fi
+
+          MOUNTPOINT=$(mktemp -d)
+          sudo mount -o ro "$ROOT_PART" "$MOUNTPOINT"
+
+          VMLINUZ=$(sudo find "$MOUNTPOINT/boot" -maxdepth 1 -name 'vmlinuz-*' | sort | tail -n1)
+          INITRD=$(sudo find "$MOUNTPOINT/boot" -maxdepth 1 -name 'initrd.img-*' | sort | tail -n1)
+          if [[ -z "$VMLINUZ" || -z "$INITRD" ]]; then
+            echo "Could not locate a kernel/initrd inside the cloud image" >&2
+            sudo umount "$MOUNTPOINT"
+            sudo qemu-nbd --disconnect /dev/nbd0
+            exit 1
+          fi
+          echo "Found kernel: $VMLINUZ"
+          echo "Found initrd: $INITRD"
+
+          sudo cp "$VMLINUZ" ./vmlinuz
+          sudo cp "$INITRD" ./initrd.img
+          sudo chown "$(id -u):$(id -g)" ./vmlinuz ./initrd.img
+
+          sudo umount "$MOUNTPOINT"
+          sudo qemu-nbd --disconnect /dev/nbd0
+
+      - name: Prepare cloud-init seed
+        run: |
+          set -eu
+          ssh-keygen -t ed25519 -N "" -f vm-key
+          cat > user-data <<CLOUDEOF
+          #cloud-config
+          hostname: qemu-build
+          ssh_pwauth: false
+          package_update: false
+          users:
+            - name: builder
+              sudo: ALL=(ALL) NOPASSWD:ALL
+              shell: /bin/bash
+              ssh_authorized_keys:
+                - $(cat vm-key.pub)
+          CLOUDEOF
+          cat > meta-data <<METAEOF
+          instance-id: qemu-build
+          local-hostname: qemu-build
+          METAEOF
+          cloud-localds seed.img user-data meta-data
+
+      - name: Boot QEMU VM for ${{ matrix.arch }}
+        env:
+          QEMU_BIN: ${{ matrix.qemu-bin }}
+          MACHINE: ${{ matrix.machine }}
+          ACCEL_FLAGS: ${{ matrix.accel-flags }}
+          FIRMWARE_FLAGS: ${{ matrix.firmware-flags }}
+          FIRMWARE_PATH: ${{ matrix.firmware-path }}
+          DIRECT_KERNEL_APPEND: ${{ matrix.direct-kernel-append }}
+        run: |
+          set -eu
+          FW_ARGS=()
+          if [[ -n "${FIRMWARE_PATH:-}" ]]; then
+            FW_ARGS=(-drive "if=pflash,format=raw,readonly=on,file=${FIRMWARE_PATH}")
+          elif [[ -n "${FIRMWARE_FLAGS:-}" ]]; then
+            FW_ARGS=(${FIRMWARE_FLAGS})
+          fi
+
+          # Architectures with a direct-kernel-append boot the kernel and
+          # initrd extracted above straight from OpenSBI/firmware, bypassing
+          # a bootloader entirely (see the extraction step's comment for why).
+          BOOT_ARGS=()
+          if [[ -n "${DIRECT_KERNEL_APPEND:-}" ]]; then
+            BOOT_ARGS=(-kernel vmlinuz -initrd initrd.img -append "${DIRECT_KERNEL_APPEND}")
+          fi
+
+          # Give the VM the same vCPU count as the runner, and 60% of its
+          # RAM rounded down to the nearest 1024MB (1GB) multiple (with a
+          # 4096MB floor applied after rounding), rather than fixed,
+          # possibly undersized values.
+          VCPUS=$(nproc)
+          HOST_MEM_MB=$(($(awk '/^MemTotal:/ { print $2 }' /proc/meminfo) / 1024))
+          RAW_MEM_MB=$((HOST_MEM_MB * 60 / 100))
+
+          VM_MEM_MB=$(((RAW_MEM_MB / 1024) * 1024))
+
+          if (( VM_MEM_MB < 4096 )); then
+            VM_MEM_MB=4096
+          fi
+          echo "Host has ${VCPUS} vCPUs and ${HOST_MEM_MB}MB RAM; giving the VM ${VCPUS} vCPUs and ${VM_MEM_MB}MB RAM (60% = ${RAW_MEM_MB}MB, rounded down to nearest 1024MB)"
+
+          "$QEMU_BIN" \
+            -machine "$MACHINE" ${ACCEL_FLAGS} \
+            -m "${VM_MEM_MB}" -smp "${VCPUS}" \
+            "${FW_ARGS[@]}" \
+            "${BOOT_ARGS[@]}" \
+            -drive if=virtio,format=qcow2,file=vm-disk.qcow2 \
+            -drive if=virtio,format=raw,file=seed.img \
+            -netdev user,id=net0,hostfwd=tcp::2222-:22 \
+            -device virtio-net-pci,netdev=net0,romfile= \
+            -nographic -serial file:serial.log \
+            &
+          echo $! > qemu.pid
+          disown
+
+          echo "Waiting for SSH to come up..."
+          SSH_OPTS=(-i vm-key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5)
+          for i in $(seq 1 60); do
+            if ssh "${SSH_OPTS[@]}" builder@127.0.0.1 true 2>/dev/null; then
+              echo "VM is up."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Timed out waiting for the VM to boot" >&2
+          cat serial.log || true
+          exit 1
+
+      - name: Copy Pebble source into the VM
+        run: |
+          set -eu
+          SSH_OPTS=(-i vm-key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+          # Use an absolute path rather than ~ everywhere below: it's
+          # ambiguous whether/how a remote ~-relative path gets expanded
+          # (differs between ssh's remote shell, and scp's SCP vs SFTP
+          # protocol path resolution), but builder's home is deterministic
+          # since we created that user ourselves via cloud-init above.
+          echo "::group::Diagnostics: remote account/home sanity check"
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "whoami; echo HOME=\$HOME; id; ls -la /home/"
+          echo "::endgroup::"
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "mkdir -p /home/builder/pebble"
+          rsync -az --exclude .git -e "ssh ${SSH_OPTS[*]}" ./pebble/ builder@127.0.0.1:/home/builder/pebble/
+          echo "::group::Diagnostics: copied source tree"
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "ls -la /home/builder/pebble | head -n 30"
+          echo "::endgroup::"
+
+      - name: Build snap inside the VM
+        id: build-snap
+        run: |
+          set -eu
+          SSH_OPTS=(-i vm-key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "sudo snap install snapcraft --classic"
+          # snapcraft runs under sudo, so the resulting .snap is root-owned;
+          # hand it back to builder so the unprivileged SSH session below can
+          # actually read it.
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "cd /home/builder/pebble && sudo snapcraft pack --destructive-mode && sudo chown builder:builder *.snap"
+
+          echo "::group::Diagnostics: post-build directory listing"
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "ls -la /home/builder/pebble/*.snap"
+          echo "::endgroup::"
+
+          SNAP_NAME=$(ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "cd /home/builder/pebble && ls -1 *.snap" | tail -n1)
+          # Bracket the value and hexdump it so any unexpected whitespace,
+          # CR characters, or other invisible junk in the captured filename
+          # is immediately obvious rather than silently breaking the scp path.
+          echo "::group::Diagnostics: captured SNAP_NAME"
+          echo "SNAP_NAME=[${SNAP_NAME}]"
+          printf '%s' "$SNAP_NAME" | od -c | tail -n 5
+          echo "::endgroup::"
+
+          echo "::group::Diagnostics: remote stat of the file we're about to fetch"
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "stat /home/builder/pebble/${SNAP_NAME}"
+          echo "::endgroup::"
+
+          # Copy the snap back to the host.
+          rsync -av -e "ssh ${SSH_OPTS[*]}" "builder@127.0.0.1:/home/builder/pebble/${SNAP_NAME}" "./${SNAP_NAME}"
+
+          echo "::group::Diagnostics: local file after rsync"
+          ls -la "./${SNAP_NAME}"
+          echo "::endgroup::"
+
+          echo "snap=${SNAP_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Shut down the VM
+        if: always()
+        run: |
+          if [[ -f qemu.pid ]]; then
+            kill "$(cat qemu.pid)" 2>/dev/null || true
+          fi
+
+      - name: Attest build provenance
+        if: steps.build-snap.outcome == 'success'
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # v4.1.1
+        with:
+          subject-path: ${{ steps.build-snap.outputs.snap }}
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: always()
+        with:
+          name: qemu-build-logs-${{ matrix.arch }}
+          path: serial.log
+
+      - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        if: steps.build-snap.outcome == 'success'
         with:
           name: pebble-snap-${{ matrix.arch }}
           path: ${{ steps.build-snap.outputs.snap }}
 
   test:
     runs-on: ubuntu-latest
-    needs: [local-build, remote-build]
+    needs: [local-build, remote-build, qemu-build]
     env:
       # Testing is only enabled on amd64. We can add arm64 once we have such runners.
       TEST_ON: amd64
     if: |
       always() &&
       (needs.local-build.result == 'success' || needs.local-build.result == 'skipped') &&
-      (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped')
+      (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped') &&
+      (needs.qemu-build.result == 'success' || needs.qemu-build.result == 'skipped')
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
@@ -302,7 +752,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     environment: snap-build
-    needs: [test]
+    needs: [test, plan-snap-builds]
     permissions:
       contents: write
     # The channel to publish to depends on why we're building: a push to master
@@ -315,55 +765,28 @@ jobs:
       # FIPS releases are tagged with a "-fips" suffix (see cmd/version.go),
       # and published to the separate "fips" track rather than "latest".
       DEFAULT_TRACK: ${{ endsWith(inputs.release-tag, '-fips') && 'fips' || 'latest' }}
+    # Only runs for architectures plan-snap-builds actually selected for a
+    # build this run (via either remote-build or qemu-build) -- it already
+    # excludes anything skipped via input or already attached to the
+    # release, so there's nothing for this job to (no-op) iterate over.
     if: |
-      github.event_name != 'pull_request' &&
-      github.event_name != 'release' &&
-      !inputs.skip-build &&
+      always() &&
       needs.test.result == 'success' &&
-      always()
+      needs.plan-snap-builds.result == 'success' &&
+      needs.plan-snap-builds.outputs.built-arch != '[]'
     strategy:
       fail-fast: false
       matrix:
-        arch: ["amd64", "arm64", "armhf", "ppc64el", "riscv64", "s390x"]
+        arch: ${{ fromJSON(needs.plan-snap-builds.outputs.built-arch) }}
     steps:
-      # This check is independent of whether remote-build actually built
-      # anything in this run, so that this job is idempotent whether we're
-      # resuming a run that partially failed (e.g. this step didn't get to
-      # run last time) or starting a brand new run for the same release tag.
-      - name: Check if this architecture should be skipped
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.release-tag }}
-          ARCH: ${{ matrix.arch }}
-          SKIP_ARCH: ${{ inputs[format('skip-{0}', matrix.arch)] }}
-        run: |
-          set -eu
-          if [[ "$SKIP_ARCH" == "true" ]]; then
-            echo "Architecture $ARCH skipped via input."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ -n "$TAG" ]] && gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qE "^pebble.*${ARCH}.*\.snap$"; then
-            echo "Snap for $ARCH already attached to release $TAG, skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-
-      - if: steps.check.outputs.skip != 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
           pattern: pebble-snap-${{ matrix.arch }}
           if-no-artifact-found: ignore
 
       # There's nothing to publish/upload if this architecture's snap
-      # wasn't (re)built above -- e.g. its build failed, or `remote-build`
-      # itself was skipped this run for some other reason.
+      # wasn't actually produced above -- e.g. its build failed.
       - id: get-snap
-        if: steps.check.outputs.skip != 'true'
         env:
           ARCH: ${{ matrix.arch }}
         run: |
@@ -408,20 +831,23 @@ jobs:
   # dry-run draft (since nothing was actually published to the store).
   record-skipped-architectures:
     runs-on: ubuntu-latest
-    needs: [release]
+    needs: [release, plan-snap-builds]
     # `release`'s own `if:` requires `needs.test.result == 'success'`
     # (strictly, not `skipped`) -- so a genuine build/test failure upstream
     # cascades as `release.result == 'skipped'`, indistinguishable at this
-    # level from a legitimate skip. The only legitimate reason for
+    # level from a legitimate "nothing to build" skip. We disambiguate by
+    # checking plan-snap-builds directly: if it succeeded and selected zero
+    # architectures to build this run (via skip-build, every individual
+    # skip-<arch>, or idempotency), that's the only legitimate reason for
     # `release` to not succeed while still wanting to record skipped
-    # architectures is `skip-build` (which means every architecture was
-    # deliberately never attempted). Anything else non-successful means a
-    # real failure occurred somewhere upstream, and must not be recorded as
-    # an intentional per-architecture skip.
+    # architectures. Anything else non-successful means a real failure
+    # occurred somewhere upstream, and must not be recorded as an
+    # intentional per-architecture skip.
     if: |
       always() &&
       inputs.release-tag != '' &&
-      (needs.release.result == 'success' || inputs.skip-build)
+      needs.plan-snap-builds.result == 'success' &&
+      (needs.release.result == 'success' || needs.plan-snap-builds.outputs.built-arch == '[]')
     permissions:
       contents: write
     env:

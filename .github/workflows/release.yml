@@ -111,6 +111,48 @@ on:
         required: false
         type: boolean
         default: false
+      qemu-build-arch-amd64:
+        description: >-
+          Build the amd64 snap locally via QEMU emulation instead of
+          Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-build-arch-arm64:
+        description: >-
+          Build the arm64 snap locally via QEMU emulation instead of
+          Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-build-arch-armv6:
+        description: >-
+          Build the armv6/armhf snap locally via QEMU emulation instead of
+          Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-build-arch-ppc64le:
+        description: >-
+          Build the ppc64le/ppc64el snap locally via QEMU emulation instead
+          of Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
+      qemu-build-arch-riscv64:
+        description: >-
+          Build the riscv64 snap locally via QEMU emulation instead of
+          Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: true # use QEMU until riscv64 LP builders are more reliable.
+      qemu-build-arch-s390x:
+        description: >-
+          Build the s390x snap locally via QEMU emulation instead of
+          Launchpad's remote-build service.
+        required: false
+        type: boolean
+        default: false
       skip-sbomber:
         description: "Skip running sbomber and uploading its report to the release"
         required: false
@@ -129,6 +171,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     outputs:
       target-branch: ${{ steps.vars.outputs.base-branch }}
       branch: ${{ steps.vars.outputs.branch }}
@@ -441,6 +484,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - name: Download resolved merge state
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
@@ -751,6 +795,12 @@ jobs:
       skip-ppc64el: ${{ inputs.skip-arch-ppc64le }}
       skip-riscv64: ${{ inputs.skip-arch-riscv64 }}
       skip-s390x: ${{ inputs.skip-arch-s390x }}
+      qemu-amd64: ${{ inputs.qemu-build-arch-amd64 }}
+      qemu-arm64: ${{ inputs.qemu-build-arch-arm64 }}
+      qemu-armhf: ${{ inputs.qemu-build-arch-armv6 }}
+      qemu-ppc64el: ${{ inputs.qemu-build-arch-ppc64le }}
+      qemu-riscv64: ${{ inputs.qemu-build-arch-riscv64 }}
+      qemu-s390x: ${{ inputs.qemu-build-arch-s390x }}
 
   sbomber:
     needs: [draft-release, draft-release-finish, snap]
