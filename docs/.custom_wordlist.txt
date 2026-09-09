@@ -17,3 +17,6 @@ systemd
 UIDs
 Ulrich
 Utils
+NSS
+SSSD
+LDAP

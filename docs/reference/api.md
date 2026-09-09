@@ -116,6 +116,16 @@ A timestamp is a string in the [RFC 3339](https://datatracker.ietf.org/doc/html/
 - "1985-04-12T23:20:50.52Z"
 - "1996-12-19T16:39:57.123456789-08:00"
 
+### User and group resolution
+
+Pebble is statically compiled with `CGO_ENABLED=0`. Consequently, user and
+group lookups in file operations (such as resolving `user` and `group` in
+`GET /v1/files`) use the pure-Go resolver in Go's standard library, which
+reads `/etc/passwd` and `/etc/group` directly. Lookups cannot query NSS, SSSD,
+or LDAP. On systems where users and groups are managed via NSS or network
+directory services, user and group names may be empty in file metadata even
+though the numeric `user-id` and `group-id` are reported correctly.
+
 ## Errors
 
 API endpoints may return errors as 4xx [status codes](https://www.iana.org/assignments/http-status-codes/http-status-codes.xhtml) (client errors) and 5xx status codes (server errors).

@@ -518,6 +518,14 @@ pebble run --verbose
 
 The `ls` command is used to list path contents.
 
+```{note}
+Pebble is statically compiled with `CGO_ENABLED=0`, which means Go's user
+and group lookup uses a pure-Go implementation reading directly from
+`/etc/passwd` and `/etc/group`. On systems where users and groups are managed
+by NSS, SSSD, or LDAP, usernames and group names may not resolve in `pebble ls -l`
+output and will display as numeric IDs or empty fields.
+```
+
 <!-- START AUTOMATED OUTPUT FOR ls -->
 ```{terminal}
 pebble ls --help
