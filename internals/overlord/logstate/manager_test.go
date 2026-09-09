@@ -180,7 +180,6 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	}
 }
 
-
 type slowFlushingClient struct {
 	flushTime time.Duration
 	mu        sync.Mutex

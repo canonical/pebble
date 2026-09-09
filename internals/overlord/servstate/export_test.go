@@ -61,6 +61,8 @@ func (m *ServiceManager) Config(serviceName string) *plan.Service {
 	return s.config
 }
 
+// ServiceLogBuffer returns the ring buffer for the named service, or nil if
+// the service or its log buffer does not exist.
 func (m *ServiceManager) ServiceLogBuffer(serviceName string) *servicelog.RingBuffer {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
