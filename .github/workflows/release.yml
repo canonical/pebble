@@ -171,6 +171,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     outputs:
       target-branch: ${{ steps.vars.outputs.base-branch }}
       branch: ${{ steps.vars.outputs.branch }}
@@ -483,6 +484,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write
     steps:
       - name: Download resolved merge state
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
