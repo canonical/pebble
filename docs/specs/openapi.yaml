@@ -1439,13 +1439,19 @@ components:
           description: User ID of the owner.
         user:
           type: string
-          description: Username of the owner.
+          description: |
+            Username of the owner. Note that because Pebble is built without CGO,
+            lookup relies on /etc/passwd and will not resolve usernames managed
+            externally via NSS, SSSD, or LDAP.
         group-id:
           type: integer
           description: Group ID of the owner.
         group:
           type: string
-          description: Group name of the owner.
+          description: |
+            Group name of the owner. Note that because Pebble is built without CGO,
+            lookup relies on /etc/group and will not resolve group names managed
+            externally via NSS, SSSD, or LDAP.
       required:
         - path
         - name
