@@ -52,7 +52,9 @@ func Start() error {
 	}
 
 	started = true
-	reaperTomb.Go(reapChildren)
+	sigChld := make(chan os.Signal, 1)
+	signal.Notify(sigChld, unix.SIGCHLD)
+	reaperTomb.Go(func() error { return reapChildren(sigChld) })
 	return nil
 }
 
@@ -100,10 +102,8 @@ func setChildSubreaper(set int) error {
 
 // reapChildren "reaps" (waits for) child processes whose parents didn't
 // wait() for them. It stops when the reaper tomb is killed.
-func reapChildren() error {
+func reapChildren(sigChld chan os.Signal) error {
 	logger.Debugf("Reaper started, waiting for SIGCHLD.")
-	sigChld := make(chan os.Signal, 1)
-	signal.Notify(sigChld, unix.SIGCHLD)
 	for {
 		select {
 		case <-sigChld:
