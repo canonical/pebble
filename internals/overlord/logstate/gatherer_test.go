@@ -48,6 +48,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -85,6 +86,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -170,6 +172,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 		},
 	)
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	testSvc := newTestService("svc1")
 	g.PlanChanged(&plan.Plan{

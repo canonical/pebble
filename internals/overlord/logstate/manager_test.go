@@ -45,6 +45,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 		},
 	}
 	m := NewLogManager()
+	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
 		return newLogGathererInternal(t, &gathererOptions)
 	}
@@ -131,6 +132,8 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 
 	gathererOptions := logGathererOptions{
 		timeoutCurrentFlush: 5 * time.Millisecond,
+		timeoutPullers:      5 * time.Millisecond,
+		timeoutMainLoop:     5 * time.Millisecond,
 		timeoutFinalFlush:   5 * time.Millisecond,
 		newClient: func(_ *plan.LogTarget) (logClient, error) {
 			return client, nil
@@ -220,6 +223,7 @@ func (s *managerSuite) TestLabels(c *C) {
 	}
 
 	m := NewLogManager()
+	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
 		return newLogGathererInternal(t, &logGathererOptions{
 			newClient: func(_ *plan.LogTarget) (logClient, error) { return fakeClient, nil },
