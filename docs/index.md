@@ -28,6 +28,7 @@ Pebble is useful for developers who are building {external+operator:ref}`Juju ch
 ```{grid-item-card} [How-to guides](how-to/index)
 **Step-by-step guides** covering key operations and common tasks
 - [Install Pebble](how-to/install-pebble)
+- [Configure health checks to run services reliably](how-to/run-services-reliably)
 - [Manage service dependencies](how-to/service-dependencies)
 - [Manage identities](how-to/manage-identities)
 ```
