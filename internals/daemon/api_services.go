@@ -33,6 +33,7 @@ type serviceInfo struct {
 	Startup      string     `json:"startup"`
 	Current      string     `json:"current"`
 	CurrentSince *time.Time `json:"current-since,omitempty"` // pointer as omitempty doesn't work with time.Time directly
+	Scheduled    *time.Time `json:"scheduled,omitempty"`     // pointer as omitempty doesn't work with time.Time directly
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
@@ -53,6 +54,9 @@ func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
 		}
 		if !svc.CurrentSince.IsZero() {
 			info.CurrentSince = &svc.CurrentSince
+		}
+		if !svc.Scheduled.IsZero() {
+			info.Scheduled = &svc.Scheduled
 		}
 		infos = append(infos, info)
 	}

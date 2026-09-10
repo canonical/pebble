@@ -116,9 +116,9 @@ func (s *PebbleSuite) TestEnterUnknownCommand(c *C) {
 
 func (s *PebbleSuite) TestEnterServicesStatus(c *C) {
 	expectedOutput := dumbDedent(`
-		Service           Startup   Current   Since
-		write-message-01  enabled   inactive  -
-		write-message-02  disabled  inactive  -
+		Service           Startup   Scheduled  Current   Since
+		write-message-01  enabled   -          inactive  -
+		write-message-02  disabled  -          inactive  -
 	`)
 
 	writeMessageServices(s)

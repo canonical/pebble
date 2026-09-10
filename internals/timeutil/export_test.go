@@ -20,9 +20,11 @@ var (
 	ParseClockSpan = parseClockSpan
 	ParseWeekSpan  = parseWeekSpan
 	HumanTimeSince = humanTimeSince
+	MonthNext      = monthNext
 )
 
-func MockTimeNow(f func() time.Time) (restorer func()) {
+// FakeTimeNow mocks the time.Now() calls used in the timeutil package.
+func FakeTimeNow(f func() time.Time) (restorer func()) {
 	origTimeNow := timeNow
 	timeNow = f
 	return func() { timeNow = origTimeNow }

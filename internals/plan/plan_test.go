@@ -124,6 +124,7 @@ var planTests = []planTest{{
 			srv6:
 				override: replace
 				command: cmd6a
+				schedule: 9:00
 		`, `
 		summary: Simple override layer.
 		description: The second layer.
@@ -203,6 +204,7 @@ var planTests = []planTest{{
 				Override: "replace",
 				Command:  "cmd6a",
 				Startup:  plan.StartupUnknown,
+				Schedule: "9:00",
 			},
 		},
 		Checks:     map[string]*plan.Check{},
@@ -324,6 +326,7 @@ var planTests = []planTest{{
 				Name:     "srv6",
 				Override: "replace",
 				Command:  "cmd6b",
+				Schedule: "9:00",
 				Environment: map[string]string{
 					"foo": "bar",
 					"baz": "buz",
@@ -580,6 +583,15 @@ var planTests = []planTest{{
 			"svc1":
 				override: replace
 				command: cmd -v [ foo [ --bar ] ]
+	`},
+}, {
+	summary: `Invalid service schedule: cannot nest [ ... ] groups`,
+	error:   `plan service \"svc1\" schedule \"fry\" invalid: cannot parse \"fry\": \"fry\" is not a valid weekday`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				schedule: fry
 	`},
 }, {
 	summary: "Checks fields parse correctly and defaults are correct",
@@ -1031,6 +1043,36 @@ var planTests = []planTest{{
 			},
 		},
 		Sections: map[string]plan.Section{},
+	},
+}, {
+	summary: "Merging service schedule across layers",
+	input: []string{`
+		services:
+			svc1:
+				command: foo
+				override: replace
+				schedule: 9:00-11:00
+	`, `
+		services:
+			svc1:
+				override: merge
+				schedule: 13:00-15:00
+	`},
+	result: &plan.Layer{
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:          "svc1",
+				Command:       "foo",
+				Override:      plan.ReplaceOverride,
+				Schedule:      "13:00-15:00",
+				BackoffDelay:  plan.OptionalDuration{Value: defaultBackoffDelay},
+				BackoffFactor: plan.OptionalFloat{Value: defaultBackoffFactor},
+				BackoffLimit:  plan.OptionalDuration{Value: defaultBackoffLimit},
+			},
+		},
+		Checks:     map[string]*plan.Check{},
+		LogTargets: map[string]*plan.LogTarget{},
+		Sections:   map[string]plan.Section{},
 	},
 }, {
 	summary: "Overriding log targets",
