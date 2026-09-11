@@ -21,6 +21,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
@@ -110,6 +111,18 @@ type serviceData struct {
 	restarting   bool
 	currentSince time.Time
 	startCount   atomic.Int64
+	// trustContext holds a reference to the resolved trust context used by
+	// the currently running (or most recently started) process, if any. It
+	// is held until the process has finished, and released (closed) by the
+	// goroutine that waits for the process to exit.
+	trustContext *truststate.TrustContext
+	// trustContextVersion is the resolved content version (see
+	// truststate.TrustContext.Version) of the trust context configured for
+	// this service, as of the last time it was (re)started. It's used by
+	// Replan to detect changes to the trust context (or a trust context it
+	// transitively includes) that require the service to be restarted, even
+	// if the service's own configuration hasn't changed.
+	trustContextVersion string
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -367,6 +380,7 @@ func (s *serviceData) startInternal() error {
 		return err
 	}
 	args := append(base, extra...)
+	serviceName := s.config.Name
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -434,6 +448,31 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
+	// Resolve the trust context configured for this service (falling back
+	// to the "default" trust context if none is set), and hold on to a
+	// reference to it for as long as the service process is running, so its
+	// CA bundle file remains valid. The reference is released once the
+	// process has finished (see the goroutine below).
+	hasCertFileEnv := s.config.Environment["SSL_CERT_FILE"] != "" ||
+		s.workload != nil && s.workload.Environment["SSL_CERT_FILE"] != ""
+	if s.manager.trustMgr == nil {
+		logger.Noticef("Cannot resolve trust context %q for service %q: no trust manager", s.config.TrustContext, serviceName)
+	} else if trustContext, err := s.manager.trustMgr.TrustContext(s.config.TrustContext); err != nil {
+		logger.Noticef("Cannot resolve trust context %q for service %q: %v", s.config.TrustContext, serviceName, err)
+	} else if trustContext.IsSystemCA() || hasCertFileEnv {
+		s.trustContextVersion = trustContext.Version()
+		trustContext.Close()
+	} else {
+		s.trustContext = trustContext
+		s.trustContextVersion = trustContext.Version()
+		caBundleFile, err := trustContext.CABundleFile()
+		if err != nil {
+			logger.Noticef("Cannot get CA bundle file for trust context %q: %v", s.config.TrustContext, err)
+		} else {
+			environment["SSL_CERT_FILE"] = caBundleFile
+		}
+	}
+
 	// Pass service description's environment variables to child process.
 	s.cmd.Env = os.Environ()
 	for k, v := range environment {
@@ -447,7 +486,6 @@ func (s *serviceData) startInternal() error {
 		// started (previous logs have already been copied).
 		outputIterator = s.logs.HeadIterator(0)
 	}
-	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter
@@ -474,6 +512,10 @@ func (s *serviceData) startInternal() error {
 		if outputIterator != nil {
 			_ = outputIterator.Close()
 		}
+		if s.trustContext != nil {
+			s.trustContext.Close()
+			s.trustContext = nil
+		}
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
@@ -482,6 +524,7 @@ func (s *serviceData) startInternal() error {
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
 	cmd := s.cmd
+	trustContext := s.trustContext
 	go func() {
 		exitCode, waitErr := reaper.WaitCommand(cmd)
 		if waitErr != nil {
@@ -490,6 +533,10 @@ func (s *serviceData) startInternal() error {
 			logger.Debugf("Service %q exited with code %d.", serviceName, exitCode)
 		}
 		close(done)
+		if trustContext != nil {
+			trustContext.Close()
+			trustContext = nil
+		}
 		err := s.exited(exitCode)
 		if err != nil {
 			logger.Noticef("Cannot transition state after service exit: %v", err)

@@ -41,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/overlord/tlsstate"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/timing"
 )
 
@@ -128,6 +129,7 @@ type Overlord struct {
 	checkMgr      *checkstate.CheckManager
 	logMgr        *logstate.LogManager
 	tlsMgr        *tlsstate.TLSManager
+	trustMgr      *truststate.TrustManager
 	identitiesMgr *identities.Manager
 	pairingMgr    *pairingstate.PairingManager
 
@@ -211,6 +213,11 @@ func New(opts *Options) (*Overlord, error) {
 	o.tlsMgr = tlsstate.NewManager(&tlsOpts)
 	o.stateEng.AddManager(o.tlsMgr)
 
+	trustDir := filepath.Join(opts.PebbleDir, "trust")
+	o.trustMgr = truststate.NewManager(trustDir)
+	o.stateEng.AddManager(o.trustMgr)
+	o.planMgr.AddChangeListener(o.trustMgr.PlanChanged)
+
 	o.identitiesMgr, err = identities.NewManager(s)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create identities manager: %w", err)
@@ -224,14 +231,15 @@ func New(opts *Options) (*Overlord, error) {
 	o.stateEng.AddManager(o.pairingMgr)
 	o.planMgr.AddChangeListener(o.pairingMgr.PlanChanged)
 
-	o.logMgr = logstate.NewLogManager()
+	o.logMgr = logstate.NewLogManager(o.trustMgr)
 
 	o.serviceMgr, err = servstate.NewManager(
 		s,
 		o.runner,
 		opts.ServiceOutput,
 		opts.RestartHandler,
-		o.logMgr)
+		o.logMgr,
+		o.trustMgr)
 	if err != nil {
 		return nil, fmt.Errorf("cannot create service manager: %w", err)
 	}
@@ -248,7 +256,7 @@ func New(opts *Options) (*Overlord, error) {
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.stateEng.AddManager(o.commandMgr)
 
-	o.checkMgr = checkstate.NewManager(s, o.runner, o.planMgr)
+	o.checkMgr = checkstate.NewManager(s, o.runner, o.planMgr, o.trustMgr)
 	o.stateEng.AddManager(o.checkMgr)
 
 	// Tell check manager about plan updates.
@@ -667,6 +675,12 @@ func (o *Overlord) TLSManager() *tlsstate.TLSManager {
 	return o.tlsMgr
 }
 
+// TrustManager returns the manager responsible for managing trust contexts
+// declared in the plan.
+func (o *Overlord) TrustManager() *truststate.TrustManager {
+	return o.trustMgr
+}
+
 // IdentitiesManager returns the manager responsible for managing client
 // identities.
 func (o *Overlord) IdentitiesManager() *identities.Manager {
@@ -698,7 +712,7 @@ func FakeWithState(handleRestart func(restart.RestartType)) *Overlord {
 	s := state.New(fakeBackend{o: o})
 	o.stateEng = NewStateEngine(s)
 	o.runner = state.NewTaskRunner(s)
-	o.serviceMgr, _ = servstate.NewManager(s, o.runner, nil, nil, nil)
+	o.serviceMgr, _ = servstate.NewManager(s, o.runner, nil, nil, nil, nil)
 	return o
 }
 

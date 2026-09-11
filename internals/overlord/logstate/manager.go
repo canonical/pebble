@@ -18,23 +18,33 @@ import (
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
+
+// TrustManager provides access to the trust context, so that log targets
+// (such as loki and opentelemetry) can validate the remote server's
+// certificate against the trust context configured for the log target.
+type TrustManager interface {
+	TrustContext(name string) (*truststate.TrustContext, error)
+}
 
 type LogManager struct {
 	mu        sync.Mutex
 	gatherers map[string]*logGatherer
 	buffers   map[string]*servicelog.RingBuffer
 	plan      *plan.Plan
+	trustMgr  TrustManager
 
-	newGatherer func(*plan.LogTarget) (*logGatherer, error)
+	newGatherer func(*plan.LogTarget, TrustManager) (*logGatherer, error)
 }
 
-func NewLogManager() *LogManager {
+func NewLogManager(trustMgr TrustManager) *LogManager {
 	return &LogManager{
 		gatherers:   map[string]*logGatherer{},
 		buffers:     map[string]*servicelog.RingBuffer{},
+		trustMgr:    trustMgr,
 		newGatherer: newLogGatherer,
 	}
 }
@@ -54,7 +64,7 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 		if gatherer == nil {
 			// Create new gatherer
 			var err error
-			gatherer, err = m.newGatherer(target)
+			gatherer, err = m.newGatherer(target, m.trustMgr)
 			if err != nil {
 				logger.Noticef("Internal error: cannot create gatherer for target %q: %v",
 					target.Name, err)

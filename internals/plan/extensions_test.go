@@ -475,10 +475,11 @@ func (s *S) TestSectionOrderExt(c *C) {
 	combined, err := plan.CombineLayers(layer)
 	c.Assert(err, IsNil)
 	plan := plan.Plan{
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		TrustContexts: combined.TrustContexts,
+		Sections:      combined.Sections,
 	}
 	data, err := yaml.Marshal(plan)
 	c.Assert(err, IsNil)

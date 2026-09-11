@@ -40,13 +40,13 @@ func (*managerSuite) SetUpSuite(c *C) {
 
 func (*managerSuite) TestPlanChange(c *C) {
 	gathererOptions := logGathererOptions{
-		newClient: func(target *plan.LogTarget) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
 			return &testClient{}, nil
 		},
 	}
-	m := NewLogManager()
-	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
-		return newLogGathererInternal(t, &gathererOptions)
+	m := NewLogManager(nil)
+	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+		return newLogGathererInternal(t, trustMgr, &gathererOptions)
 	}
 
 	svc1 := newTestService("svc1")
@@ -132,14 +132,14 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	gathererOptions := logGathererOptions{
 		timeoutCurrentFlush: 5 * time.Millisecond,
 		timeoutFinalFlush:   5 * time.Millisecond,
-		newClient: func(_ *plan.LogTarget) (logClient, error) {
+		newClient: func(_ *plan.LogTarget, _ TrustManager) (logClient, error) {
 			return client, nil
 		},
 	}
 
-	m := NewLogManager()
-	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
-		return newLogGathererInternal(t, &gathererOptions)
+	m := NewLogManager(nil)
+	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+		return newLogGathererInternal(t, trustMgr, &gathererOptions)
 	}
 
 	svc1 := newTestService("svc1")
@@ -219,10 +219,10 @@ func (s *managerSuite) TestLabels(c *C) {
 		notifySetLabels: make(chan struct{}, 2),
 	}
 
-	m := NewLogManager()
-	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
-		return newLogGathererInternal(t, &logGathererOptions{
-			newClient: func(_ *plan.LogTarget) (logClient, error) { return fakeClient, nil },
+	m := NewLogManager(nil)
+	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+		return newLogGathererInternal(t, trustMgr, &logGathererOptions{
+			newClient: func(_ *plan.LogTarget, _ TrustManager) (logClient, error) { return fakeClient, nil },
 		})
 	}
 
