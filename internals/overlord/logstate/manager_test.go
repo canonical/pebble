@@ -298,6 +298,9 @@ func (s *managerSuite) TestLabels(c *C) {
 			"foo":     "bar",
 		},
 	})
+
+	// Shut down the manager to release all gatherer goroutines.
+	m.Stop()
 }
 
 // Fake logClient implementation which just stores the passed-in labels

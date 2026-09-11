@@ -2573,3 +2573,28 @@ func (s *S) TestPruneSortByCurrentSince(c *C) {
 		c.Assert(service.CurrentSince, Not(Equals), time.Time{})
 	}
 }
+
+func (s *S) TestStopClosesLogBuffers(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	s.startTestServices(c, true)
+	if c.Failed() {
+		return
+	}
+
+	buf1 := s.manager.ServiceLogBuffer("test1")
+	c.Assert(buf1, NotNil)
+	c.Check(buf1.Closed(), Equals, false)
+
+	buf2 := s.manager.ServiceLogBuffer("test2")
+	c.Assert(buf2, NotNil)
+	c.Check(buf2.Closed(), Equals, false)
+
+	s.manager.Stop()
+
+	c.Check(buf1.Closed(), Equals, true)
+	c.Check(buf2.Closed(), Equals, true)
+}
+

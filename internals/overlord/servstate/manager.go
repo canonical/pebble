@@ -91,6 +91,19 @@ func (m *ServiceManager) Ensure() error {
 	return nil
 }
 
+// Stop implements overlord.StateStopper and closes all service ring buffers
+// during daemon shutdown.
+func (m *ServiceManager) Stop() {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	for _, s := range m.services {
+		if s.logs != nil {
+			_ = s.logs.Close()
+		}
+	}
+}
+
 type ServiceInfo struct {
 	Name         string
 	Startup      ServiceStartup
