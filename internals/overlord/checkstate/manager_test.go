@@ -938,6 +938,7 @@ func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
+	c.Assert(writer.Flush(), IsNil)
 	expectedRegex := `
 # HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
 # TYPE pebble_check_up gauge
@@ -983,6 +984,7 @@ func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
+	c.Assert(writer.Flush(), IsNil)
 	expectedRegex := `
 # HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
 # TYPE pebble_check_up gauge
@@ -1021,6 +1023,7 @@ func (s *ManagerSuite) TestMetricsInactiveCheck(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
+	c.Assert(writer.Flush(), IsNil)
 	// Inactive check's pebble_check_up metric is not reported.
 	expected := `
 # HELP pebble_check_success_count Number of times the check has succeeded
