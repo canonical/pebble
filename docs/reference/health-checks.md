@@ -4,7 +4,7 @@ Separate from the service manager, Pebble implements custom "health checks" that
 
 ## Usage
  
-For a step-by-step guide on configuring checks and automatic service restarts, see [How to run services reliably with health checks](/how-to/run-services-reliably).
+For a step-by-step guide on configuring checks and automatic service restarts, see {ref}`run-services-reliably`.
 
 Checks are configured in the layer configuration using the top-level field `checks`:
 
@@ -118,8 +118,8 @@ checks:
 
 See also:
  
-- [How to run services reliably with health checks](/how-to/run-services-reliably)
-- [](/how-to/check-health-based-on-logs)
+- {ref}`run-services-reliably`
+- {ref}`check-health-based-on-logs`
 
 ## Checks command
 

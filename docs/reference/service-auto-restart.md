@@ -16,5 +16,5 @@ The `backoff-limit` value is also used as a "backoff reset" time. If the service
  
 ## See more
  
-- [How to run services reliably with health checks](/how-to/run-services-reliably)
+- {ref}`run-services-reliably`
 - [Health checks](health-checks)
