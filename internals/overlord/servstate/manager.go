@@ -96,6 +96,7 @@ type ServiceInfo struct {
 	Startup      ServiceStartup
 	Current      ServiceStatus
 	CurrentSince time.Time
+	Obsolete     bool
 }
 
 type ServiceStartup string
@@ -127,6 +128,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	}
 
 	var services []*ServiceInfo
+	ws, _ := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 	matchNames := len(names) > 0
 	for name, config := range currentPlan.Services {
 		if matchNames && !requested[name] {
@@ -143,6 +145,14 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		if s, ok := m.services[name]; ok {
 			info.Current = stateToStatus(s.state)
 			info.CurrentSince = s.currentSince
+
+			var workload *workloads.Workload
+			if ws != nil {
+				workload = ws.Entries[s.config.Workload]
+			}
+			if !config.Equal(s.config) || (workload != nil && !workload.Equal(s.workload)) {
+				info.Obsolete = true
+			}
 		}
 		services = append(services, info)
 	}

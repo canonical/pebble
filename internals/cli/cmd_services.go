@@ -16,6 +16,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/canonical/go-flags"
 
@@ -86,16 +87,29 @@ func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Service\tStartup\tCurrent\tSince")
+	fmt.Fprintln(w, "Service\tStartup\tCurrent\tSince\tNotes")
 
 	for _, svc := range services {
 		since := "-"
 		if !svc.CurrentSince.IsZero() {
 			since = cmd.fmtTime(svc.CurrentSince)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since, serviceNotes(svc))
 	}
 	return nil
+}
+
+// serviceNotes returns a formatted string of notes characterizing the status
+// of the given service, or "-" if there are none.
+func serviceNotes(svc *client.ServiceInfo) string {
+	var notes []string
+	if svc.Obsolete {
+		notes = append(notes, "obsolete")
+	}
+	if len(notes) == 0 {
+		return "-"
+	}
+	return strings.Join(notes, ",")
 }
 
 type servicesMap struct {

@@ -806,6 +806,22 @@ func (s *S) TestServices(c *C) {
 		{Name: "test4", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
+
+	// Add a layer modifying test2's configuration and verify it's reported as obsolete
+	s.planAddLayer(c, `
+services:
+    test2:
+        override: merge
+        command: /bin/sh -c "echo updated; sleep 10"
+`)
+	s.planChanged(c)
+
+	services, err = s.manager.Services([]string{"test2"})
+	c.Assert(err, IsNil)
+	services[0].CurrentSince = time.Time{}
+	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
+		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled, Obsolete: true},
+	})
 }
 
 func (s *S) TestEnvironment(c *C) {
