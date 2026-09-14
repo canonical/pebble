@@ -23,6 +23,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,6 +41,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
@@ -120,6 +122,7 @@ type S struct {
 	manager    *servstate.ServiceManager
 	runner     *state.TaskRunner
 	stopDaemon chan restart.RestartType
+	trustMgr   *truststate.TrustManager
 
 	plan           *plan.Plan
 	planPropagated bool
@@ -167,6 +170,8 @@ func (s *S) SetUpTest(c *C) {
 	s.AddCleanup(restore)
 	restore = func() { plan.UnregisterSectionExtension(workloads.WorkloadsField) }
 	s.AddCleanup(restore)
+
+	s.trustMgr = truststate.NewManager(filepath.Join(s.dir, "trust"))
 
 	s.plan = plan.NewPlan()
 	s.planPropagated = false
@@ -515,6 +520,70 @@ services:
 	c.Check(config.Command, Equals, command)
 }
 
+// TestReplanTrustContextChanged checks that Replan detects a change to the
+// resolved content of a service's trust context (for example, because a
+// trust context it includes was updated) and flags the service for restart,
+// even though the service's own configuration, and the name of the trust
+// context it references, are unchanged.
+func (s *S) TestReplanTrustContextChanged(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, fmt.Sprintf(`
+trust-contexts:
+    base:
+        override: replace
+        tls:
+            ca-cert: |
+%s
+    vendorA:
+        override: replace
+        include: [base]
+services:
+    ssltest:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        trust-context: vendorA
+`, indentPEM(testCACertPEM, 16)))
+	s.planChanged(c)
+
+	s.startServices(c, [][]string{{"ssltest"}})
+	defer s.stopServices(c, [][]string{{"ssltest"}})
+
+	// Nothing has changed yet, so Replan shouldn't flag the service.
+	// (testPlanLayer's test1/test2 are startup:enabled, so they always show
+	// up in "starts", regardless of whether they need restarting.)
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(lanesContain(stops, "ssltest"), Equals, false)
+	c.Check(lanesContain(starts, "ssltest"), Equals, false)
+
+	// Change what "vendorA" includes, without touching the service or the
+	// name of the trust context it references: the resolved trust content
+	// changes, so the service should be flagged to stop and restart.
+	s.planAddLayer(c, `
+trust-contexts:
+    vendorA:
+        override: replace
+        include: [base, system]
+`)
+	s.planChanged(c)
+
+	stops, starts, err = s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(lanesContain(stops, "ssltest"), Equals, true)
+	c.Check(lanesContain(starts, "ssltest"), Equals, true)
+}
+
+// lanesContain reports whether name appears in any lane of lanes.
+func lanesContain(lanes [][]string, name string) bool {
+	for _, lane := range lanes {
+		if slices.Contains(lane, name) {
+			return true
+		}
+	}
+	return false
+}
+
 func resetWorkloadsSectionExtension() {
 	plan.UnregisterSectionExtension(workloads.WorkloadsField)
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
@@ -859,6 +928,115 @@ PEBBLE_ENV_TEST_PARENT=from-parent
 `[1:])
 }
 
+// testCACertPEM is a self-signed CA certificate used to exercise trust
+// context resolution in tests. It has no corresponding private key checked
+// in; it's only used as CA certificate data, never to sign anything.
+const testCACertPEM = `-----BEGIN CERTIFICATE-----
+MIIDEzCCAfugAwIBAgIUIvvZuKuTEAhQ3k+mSVtSdYkODUYwDQYJKoZIhvcNAQEL
+BQAwGTEXMBUGA1UEAwwOcGViYmxlLXRlc3QtY2EwHhcNMjYwODEwMDUyNTM2WhcN
+MzYwODA3MDUyNTM2WjAZMRcwFQYDVQQDDA5wZWJibGUtdGVzdC1jYTCCASIwDQYJ
+KoZIhvcNAQEBBQADggEPADCCAQoCggEBAPHveEb1T/2cYyhJElZM1qeMoDs4DthU
+no3Y07E8aDOvSR6OIF4xG27eJeQZBYqClmNxpgvUmzdycbQia5InZxlnikyAXsjL
+0hgPDNzLkxNZZtKTeQdOjLaUuBWN8lLXnz+5Mq5584fbbd5nOtVPmH3hhcbL07LW
+rABj9/9qrxKbAGeZfQBYpwRtwiZR5KUaQ3Ed+uuA4eLV5PxAmYos3xI2ibLbwG98
+mG6IFbk0x1FoJ5T4nyouNwrCfaX8NNaa8KX+SiVBRRj+tzJiklKLHTe5kpxsX6cH
+ky/YTIC2Gb6RyWQrkPXe0uOX4NamNHIF+Kl3wYKl2AoAtDdM9mjvd9MCAwEAAaNT
+MFEwHQYDVR0OBBYEFIa+M4EWaY5tLSHawLqId6sYqHutMB8GA1UdIwQYMBaAFIa+
+M4EWaY5tLSHawLqId6sYqHutMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEL
+BQADggEBAHq4o4YxsqcfJlUS9XgkTynt6VUgUiDDgd2fFU2NsjKCUyGQFm3wQ177
+dGm0XbBUtzxnHGELKCmmU9Yve8SOy3ez4yC2dSSdi4OO1eMydjMeipfu2oWOKhn2
+n4w4B7LrGGqKGWrCqXCw3cfXNit0AzyS6Qe+EtLFrCF91UeOcJAwBzmrJGSIZfck
+P+z0FL8MP8rx2X8eHYldHgb1AIa1r47qJ8oF/Jd7vmyddit0ZMIu8udxQ0hYaOe/
+eR5T5RBSrkwDisFdU2q8XOkzbXvQtYDtTRifUVbnBAgppl9H5PHaJP+WHnJCLjBX
+yqWyrDYJ7zt3gver4qn7zSZ4TTVl6/4=
+-----END CERTIFICATE-----`
+
+// indentPEM indents each line of a PEM block by the given number of spaces,
+// so it can be embedded in a YAML literal block scalar at the right nesting
+// level.
+func indentPEM(pemData string, spaces int) string {
+	prefix := strings.Repeat(" ", spaces)
+	lines := strings.Split(strings.TrimSpace(pemData), "\n")
+	for i, line := range lines {
+		lines[i] = prefix + line
+	}
+	return strings.Join(lines, "\n")
+}
+
+// TestTrustContextSetsSSLCertFile checks that, when a service declares a
+// trust context, its resolved CA bundle file is exposed to the service via
+// the SSL_CERT_FILE environment variable.
+func (s *S) TestTrustContextSetsSSLCertFile(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
+	dir := c.MkDir()
+	logPath := filepath.Join(dir, "log.txt")
+	layer := fmt.Sprintf(`
+trust-contexts:
+    vendorA:
+        override: replace
+        tls:
+            ca-cert: |
+%s
+
+services:
+    ssltest:
+        override: replace
+        command: /bin/sh -c "echo -n $SSL_CERT_FILE > %s; {{.NotifyDoneCheck}}; sleep 10"
+        trust-context: vendorA
+`, indentPEM(testCACertPEM, 16), logPath)
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"ssltest"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	s.waitForDoneCheck(c, "ssltest")
+
+	data, err := os.ReadFile(logPath)
+	c.Assert(err, IsNil)
+	sslCertFile := string(data)
+	c.Assert(sslCertFile, Not(Equals), "")
+
+	bundle, err := os.ReadFile(sslCertFile)
+	c.Assert(err, IsNil)
+	c.Assert(strings.Contains(string(bundle), strings.TrimSpace(testCACertPEM)), Equals, true)
+}
+
+// TestTrustContextSSLCertFileNotOverridden checks that SSL_CERT_FILE is left
+// untouched when the service has set it manually.
+func (s *S) TestTrustContextSSLCertFileNotOverridden(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+
+	dir := c.MkDir()
+	logPath := filepath.Join(dir, "log.txt")
+	layer := fmt.Sprintf(`
+services:
+    sslmanual:
+        override: replace
+        command: /bin/sh -c "echo -n $SSL_CERT_FILE > %s; {{.NotifyDoneCheck}}; sleep 10"
+        environment:
+            SSL_CERT_FILE: /custom/path/ca.pem
+`, logPath)
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"sslmanual"}})
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+
+	s.waitForDoneCheck(c, "sslmanual")
+
+	data, err := os.ReadFile(logPath)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, "/custom/path/ca.pem")
+}
+
 // TestActionRestart makes sure that the service restart backoff mechanism
 // works as designed, including the reset of backoff once a service runs
 // continuously for at least the backoff limit duration.
@@ -996,7 +1174,7 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
@@ -1091,7 +1269,7 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
@@ -1183,7 +1361,7 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
@@ -1268,7 +1446,7 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 	s.planAddLayer(c, testPlanLayer)
 
 	// Create check manager and tell it about plan updates
-	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
+	checkMgr := checkstate.NewManager(s.st, s.runner, nil, s.trustMgr)
 	defer checkMgr.PlanChanged(plan.NewPlan())
 
 	// Tell service manager about check failures
@@ -1975,23 +2153,25 @@ func (s *S) tryPlanAddLayer(c *C, layerYAML string) error {
 		return err
 	}
 	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		TrustContexts: combined.TrustContexts,
+		Sections:      combined.Sections,
 	}
 	return s.plan.Validate()
 }
 
 func (s *S) newServiceManager(c *C) {
 	var err error
-	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{}, s.trustMgr)
 	c.Assert(err, IsNil)
 }
 
 func (s *S) planChanged(c *C) {
 	c.Assert(s.plan, NotNil)
+	s.trustMgr.PlanChanged(s.plan)
 	s.manager.PlanChanged(s.plan)
 	s.planPropagated = true
 }
@@ -2007,11 +2187,12 @@ func (s *S) planAddLayer(c *C, layerYAML string) {
 	c.Assert(err, IsNil)
 	c.Assert(combined.Validate(), IsNil)
 	s.plan = &plan.Plan{
-		Layers:     layers,
-		Services:   combined.Services,
-		Checks:     combined.Checks,
-		LogTargets: combined.LogTargets,
-		Sections:   combined.Sections,
+		Layers:        layers,
+		Services:      combined.Services,
+		Checks:        combined.Checks,
+		LogTargets:    combined.LogTargets,
+		TrustContexts: combined.TrustContexts,
+		Sections:      combined.Sections,
 	}
 	c.Assert(s.plan.Validate(), IsNil)
 }

@@ -253,6 +253,87 @@ func (s *execSuite) TestContextOverrides(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+// testCACertPEM is a self-signed CA certificate used to exercise trust
+// context resolution in tests.
+const testCACertPEM = `-----BEGIN CERTIFICATE-----
+MIIDEzCCAfugAwIBAgIUIvvZuKuTEAhQ3k+mSVtSdYkODUYwDQYJKoZIhvcNAQEL
+BQAwGTEXMBUGA1UEAwwOcGViYmxlLXRlc3QtY2EwHhcNMjYwODEwMDUyNTM2WhcN
+MzYwODA3MDUyNTM2WjAZMRcwFQYDVQQDDA5wZWJibGUtdGVzdC1jYTCCASIwDQYJ
+KoZIhvcNAQEBBQADggEPADCCAQoCggEBAPHveEb1T/2cYyhJElZM1qeMoDs4DthU
+no3Y07E8aDOvSR6OIF4xG27eJeQZBYqClmNxpgvUmzdycbQia5InZxlnikyAXsjL
+0hgPDNzLkxNZZtKTeQdOjLaUuBWN8lLXnz+5Mq5584fbbd5nOtVPmH3hhcbL07LW
+rABj9/9qrxKbAGeZfQBYpwRtwiZR5KUaQ3Ed+uuA4eLV5PxAmYos3xI2ibLbwG98
+mG6IFbk0x1FoJ5T4nyouNwrCfaX8NNaa8KX+SiVBRRj+tzJiklKLHTe5kpxsX6cH
+ky/YTIC2Gb6RyWQrkPXe0uOX4NamNHIF+Kl3wYKl2AoAtDdM9mjvd9MCAwEAAaNT
+MFEwHQYDVR0OBBYEFIa+M4EWaY5tLSHawLqId6sYqHutMB8GA1UdIwQYMBaAFIa+
+M4EWaY5tLSHawLqId6sYqHutMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZIhvcNAQEL
+BQADggEBAHq4o4YxsqcfJlUS9XgkTynt6VUgUiDDgd2fFU2NsjKCUyGQFm3wQ177
+dGm0XbBUtzxnHGELKCmmU9Yve8SOy3ez4yC2dSSdi4OO1eMydjMeipfu2oWOKhn2
+n4w4B7LrGGqKGWrCqXCw3cfXNit0AzyS6Qe+EtLFrCF91UeOcJAwBzmrJGSIZfck
+P+z0FL8MP8rx2X8eHYldHgb1AIa1r47qJ8oF/Jd7vmyddit0ZMIu8udxQ0hYaOe/
+eR5T5RBSrkwDisFdU2q8XOkzbXvQtYDtTRifUVbnBAgppl9H5PHaJP+WHnJCLjBX
+yqWyrDYJ7zt3gver4qn7zSZ4TTVl6/4=
+-----END CERTIFICATE-----`
+
+// TestContextTrustContextSSLCertFile checks that, when a command references a
+// service context whose service declares a trust context, the resolved CA
+// bundle is exposed to the command via the SSL_CERT_FILE env var.
+func (s *execSuite) TestContextTrustContextSSLCertFile(c *C) {
+	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		TrustContexts: map[string]*plan.TrustContext{"vendorA": {
+			Name:     "vendorA",
+			Override: "replace",
+			TLS:      &plan.TLSTrustContext{CACert: testCACertPEM},
+		}},
+		Services: map[string]*plan.Service{"svc1": {
+			Name:         "svc1",
+			Override:     "replace",
+			Command:      "dummy",
+			TrustContext: "vendorA",
+		}},
+	}, false)
+	c.Assert(err, IsNil)
+
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command:        []string{"/bin/sh", "-c", "cat $SSL_CERT_FILE"},
+		ServiceContext: "svc1",
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stderr, Equals, "")
+	c.Check(strings.Contains(stdout, strings.TrimSpace(testCACertPEM)), Equals, true)
+}
+
+// TestContextTrustContextSSLCertFileNotOverridden checks that SSL_CERT_FILE
+// is left untouched when it is already set via the exec payload environment,
+// even though the referenced service declares a trust context.
+func (s *execSuite) TestContextTrustContextSSLCertFileNotOverridden(c *C) {
+	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		TrustContexts: map[string]*plan.TrustContext{"vendorA": {
+			Name:     "vendorA",
+			Override: "replace",
+			TLS:      &plan.TLSTrustContext{CACert: testCACertPEM},
+		}},
+		Services: map[string]*plan.Service{"svc1": {
+			Name:         "svc1",
+			Override:     "replace",
+			Command:      "dummy",
+			TrustContext: "vendorA",
+		}},
+	}, false)
+	c.Assert(err, IsNil)
+
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command:        []string{"/bin/sh", "-c", "echo -n $SSL_CERT_FILE"},
+		ServiceContext: "svc1",
+		Environment:    map[string]string{"SSL_CERT_FILE": "/custom/path/ca.pem"},
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stderr, Equals, "")
+	c.Check(stdout, Equals, "/custom/path/ca.pem")
+}
+
 func (s *execSuite) TestCurrentUserGroup(c *C) {
 	current, err := user.Current()
 	c.Assert(err, IsNil)

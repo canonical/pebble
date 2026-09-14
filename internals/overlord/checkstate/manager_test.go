@@ -72,7 +72,7 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 	s.planMgr, err = planstate.NewManager(layersDir)
 	c.Assert(err, IsNil)
 	s.overlord.AddManager(s.planMgr)
-	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.planMgr)
+	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.planMgr, nil)
 	s.planMgr.AddChangeListener(s.manager.PlanChanged)
 	s.overlord.AddManager(s.manager)
 	s.overlord.AddManager(s.overlord.TaskRunner())

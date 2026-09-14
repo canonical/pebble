@@ -66,6 +66,18 @@ Manage identities <manage-identities>
 ```
 
 
+## Trust contexts
+
+Use named "trust contexts" to make services, checks, and log targets trust custom TLS CA certificates.
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+Use TLS CA certificates with trust contexts <use-tls-ca-certs-with-trust-context>
+```
+
+
 ## API
 
 To integrate Pebble with your automated workflows, you can use the Pebble API.

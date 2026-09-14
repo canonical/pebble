@@ -27,6 +27,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 )
 
 // ExecArgs holds the arguments for a command execution.
@@ -42,6 +43,8 @@ type ExecArgs struct {
 	SplitStderr bool
 	Width       int
 	Height      int
+	// TrustContext is optionally set to the trust context to be used.
+	TrustContext *truststate.TrustContext
 }
 
 // ExecMetadata is the metadata returned from an Exec call.
@@ -53,17 +56,18 @@ type ExecMetadata struct {
 
 // execSetup is stored on a task to specify the args for an execution.
 type execSetup struct {
-	Command     []string
-	Environment map[string]string
-	Timeout     time.Duration
-	Terminal    bool
-	Interactive bool
-	SplitStderr bool
-	Width       int
-	Height      int
-	UserID      *int
-	GroupID     *int
-	WorkingDir  string
+	Command      []string
+	Environment  map[string]string
+	Timeout      time.Duration
+	Terminal     bool
+	Interactive  bool
+	SplitStderr  bool
+	Width        int
+	Height       int
+	UserID       *int
+	GroupID      *int
+	WorkingDir   string
+	TrustContext *truststate.TrustContext
 }
 
 // Exec creates a task that will execute the command with the given arguments.
@@ -117,6 +121,17 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		environment["LANG"] = "C.UTF-8"
 	}
 
+	// Set SSL_CERT_FILE if not already set.
+	if args.TrustContext != nil &&
+		!args.TrustContext.IsSystemCA() &&
+		args.Environment["SSL_CERT_FILE"] == "" {
+		caBundleFile, err := args.TrustContext.CABundleFile()
+		if err != nil {
+			return nil, ExecMetadata{}, err
+		}
+		environment["SSL_CERT_FILE"] = caBundleFile
+	}
+
 	workingDir, err := getWorkingDir(args.WorkingDir, environment["HOME"])
 	if err != nil {
 		return nil, ExecMetadata{}, err
@@ -125,17 +140,18 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	// Create a task for this execution (though it's not started here).
 	task := st.NewTask("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
 	setup := execSetup{
-		Command:     args.Command,
-		Environment: environment,
-		Timeout:     args.Timeout,
-		Terminal:    args.Terminal,
-		Interactive: args.Interactive,
-		SplitStderr: args.SplitStderr,
-		Width:       args.Width,
-		Height:      args.Height,
-		UserID:      args.UserID,
-		GroupID:     args.GroupID,
-		WorkingDir:  workingDir,
+		Command:      args.Command,
+		Environment:  environment,
+		Timeout:      args.Timeout,
+		Terminal:     args.Terminal,
+		Interactive:  args.Interactive,
+		SplitStderr:  args.SplitStderr,
+		Width:        args.Width,
+		Height:       args.Height,
+		UserID:       args.UserID,
+		GroupID:      args.GroupID,
+		WorkingDir:   workingDir,
+		TrustContext: args.TrustContext,
 	}
 	st.Cache(execSetupKey{task.ID()}, &setup)
 

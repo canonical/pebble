@@ -24,6 +24,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 )
 
@@ -79,9 +80,17 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 		return BadRequest("%v", err)
 	}
 
+	trustContext, err := resolveExecTrustContext(c, p, payload.ServiceContext)
+	if err != nil {
+		return BadRequest("%v", err)
+	}
+
 	// Convert User/UserID and Group/GroupID combinations into raw uid/gid.
 	uid, gid, err := osutil.NormalizeUidGid(merged.UserID, merged.GroupID, merged.User, merged.Group)
 	if err != nil {
+		if trustContext != nil {
+			trustContext.Close()
+		}
 		return BadRequest("%v", err)
 	}
 
@@ -90,20 +99,24 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 	defer st.Unlock()
 
 	args := &cmdstate.ExecArgs{
-		Command:     payload.Command,
-		Environment: merged.Environment,
-		WorkingDir:  merged.WorkingDir,
-		Timeout:     timeout,
-		UserID:      uid,
-		GroupID:     gid,
-		Terminal:    payload.Terminal,
-		Interactive: payload.Interactive,
-		SplitStderr: payload.SplitStderr,
-		Width:       payload.Width,
-		Height:      payload.Height,
+		Command:      payload.Command,
+		Environment:  merged.Environment,
+		WorkingDir:   merged.WorkingDir,
+		Timeout:      timeout,
+		UserID:       uid,
+		GroupID:      gid,
+		Terminal:     payload.Terminal,
+		Interactive:  payload.Interactive,
+		SplitStderr:  payload.SplitStderr,
+		Width:        payload.Width,
+		Height:       payload.Height,
+		TrustContext: trustContext,
 	}
 	task, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
+		if trustContext != nil {
+			trustContext.Close()
+		}
 		return ServerError("cannot call exec: %v", err)
 	}
 
@@ -121,4 +134,34 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 		"working-dir": metadata.WorkingDir,
 	}
 	return AsyncResponse(result, change.ID())
+}
+
+// resolveExecTrustContext resolves the trust context configured for the
+// service/workload. If a trust context is returned, it must be closed by the
+// caller.
+func resolveExecTrustContext(c *Command, p *plan.Plan, serviceContextName string) (*truststate.TrustContext, error) {
+	if serviceContextName == "" {
+		return nil, nil
+	}
+	service, ok := p.Services[serviceContextName]
+	if !ok {
+		return nil, nil
+	}
+
+	trustMgr := c.d.overlord.TrustManager()
+	if trustMgr == nil {
+		return nil, fmt.Errorf(
+			"cannot resolve trust context %q for service context %q: no trust manager",
+			service.TrustContext, serviceContextName,
+		)
+	}
+	trustContext, err := trustMgr.TrustContext(service.TrustContext)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"cannot resolve trust context %q for service context %q: %v",
+			service.TrustContext, serviceContextName, err,
+		)
+	}
+
+	return trustContext, nil
 }
