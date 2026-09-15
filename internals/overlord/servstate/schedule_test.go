@@ -23,6 +23,7 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 // scheduleDetails mirrors the JSON shape of servstate's internal
@@ -44,7 +45,8 @@ services:
 
 // scheduleChange returns the pending (not yet ready) service-schedule
 // change, or nil if none exists. There should be at most one such change per
-// service at any given time.
+// service at any given time, and it persists (rather than being recreated)
+// for as long as the service has a schedule.
 func (s *S) scheduleChange(c *C) *state.Change {
 	s.st.Lock()
 	defer s.st.Unlock()
@@ -56,15 +58,19 @@ func (s *S) scheduleChange(c *C) *state.Change {
 	return nil
 }
 
-// scheduleTask returns the first task of chg, which is always the
-// service-schedule task (a "start" task set may follow it once the schedule
-// has fired).
+// scheduleTask returns the task in chg that's still waiting for its
+// scheduled time to arrive (i.e. the one tracking the service's next
+// scheduled occurrence). It fails the test if there's no such task.
 func (s *S) scheduleTask(c *C, chg *state.Change) *state.Task {
 	s.st.Lock()
 	defer s.st.Unlock()
-	tasks := chg.Tasks()
-	c.Assert(len(tasks) >= 1, Equals, true)
-	return tasks[0]
+	for _, t := range chg.Tasks() {
+		if t.Status() == state.DoStatus && t.Has(servstate.ScheduleDetailsAttr) {
+			return t
+		}
+	}
+	c.Fatalf("no pending schedule task found in change %s", chg.ID())
+	return nil
 }
 
 func (s *S) scheduleDetails(c *C, chg *state.Change) scheduleDetails {
@@ -104,6 +110,27 @@ func waitTaskLogContains(c *C, runner *state.TaskRunner, st *state.State, task *
 		select {
 		case <-timeout:
 			c.Fatalf("timeout waiting for task log to contain %q", substr)
+		default:
+			time.Sleep(time.Millisecond)
+		}
+	}
+}
+
+// waitTaskReady runs the task runner until the task's status becomes Ready
+// (Done, Error, etc), or fails the test after a timeout.
+func waitTaskReady(c *C, runner *state.TaskRunner, st *state.State, task *state.Task) {
+	timeout := time.After(10 * time.Second)
+	for {
+		runner.Ensure()
+		st.Lock()
+		ready := task.Status().Ready()
+		st.Unlock()
+		if ready {
+			return
+		}
+		select {
+		case <-timeout:
+			c.Fatalf("timeout waiting for task %s to become ready", task.ID())
 		default:
 			time.Sleep(time.Millisecond)
 		}
@@ -194,6 +221,7 @@ func (s *S) TestScheduleCreatedOnPlanChanged(c *C) {
 
 	chg := s.scheduleChange(c)
 	c.Assert(chg, NotNil)
+	c.Check(chg.Summary(), Equals, `Schedule service "sched1"`)
 
 	details := s.scheduleDetails(c, chg)
 	c.Check(details.ServiceName, Equals, "sched1")
@@ -244,6 +272,7 @@ func (s *S) TestScheduleChangedUpdatesNextAndReusesChange(c *C) {
 
 	chg := s.scheduleChange(c)
 	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
 
 	s.planAddLayer(c, `
 services:
@@ -257,6 +286,8 @@ services:
 	c.Check(s.countChangesOfKind(c, servstate.ServiceScheduleKind), Equals, 1)
 	chg2 := s.scheduleChange(c)
 	c.Assert(chg2.ID(), Equals, chg.ID())
+	task2 := s.scheduleTask(c, chg2)
+	c.Check(task2.ID(), Equals, task.ID())
 
 	details2 := s.scheduleDetails(c, chg2)
 	c.Check(details2.Schedule, Equals, "13:00-15:00")
@@ -272,6 +303,7 @@ func (s *S) TestScheduleRemovedRetiresChange(c *C) {
 
 	chg := s.scheduleChange(c)
 	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
 
 	// Replace the service definition with one that has no schedule.
 	s.planAddLayer(c, `
@@ -285,12 +317,40 @@ services:
 	s.st.Lock()
 	ready := chg.IsReady()
 	status := chg.Status()
+	logs := task.Log()
 	s.st.Unlock()
 	c.Check(ready, Equals, true)
-	c.Check(status, Equals, state.HoldStatus)
+	c.Check(status, Equals, state.DoneStatus)
+	c.Check(logContains(logs, "unscheduled"), Equals, true)
 
 	// No new schedule change should have been created for the service.
 	c.Check(s.countChangesOfKind(c, servstate.ServiceScheduleKind), Equals, 1)
+}
+
+func (s *S) TestScheduleRemovedWithServiceRetiresChange(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+
+	// Remove the service entirely from the plan (rather than merely
+	// dropping its schedule) by feeding the manager a plan that doesn't
+	// mention it at all.
+	emptyPlan := &plan.Plan{
+		Services: map[string]*plan.Service{},
+	}
+	s.manager.PlanChanged(emptyPlan)
+
+	s.st.Lock()
+	status := chg.Status()
+	logs := task.Log()
+	s.st.Unlock()
+	c.Check(status, Equals, state.DoneStatus)
+	c.Check(logContains(logs, "unscheduled"), Equals, true)
+	c.Check(logContains(logs, "removed from the plan"), Equals, true)
 }
 
 // -- Ensure behaviour --
@@ -302,33 +362,42 @@ func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {
 
 	chg := s.scheduleChange(c)
 	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
 
 	// Force the schedule to be due right now.
 	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
 
-	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
+	waitTaskReady(c, s.runner, s.st, task)
 
 	// No independent "start" change should have been created; the start
-	// task is added to the same schedule change.
+	// task lives directly in the persistent schedule change.
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
 
 	s.waitUntilService(c, "sched1", func(svc *servstate.ServiceInfo) bool {
 		return svc.Current == servstate.StatusActive
 	})
 
-	logs := s.scheduleTaskLog(c, chg)
+	s.st.Lock()
+	logs := task.Log()
+	taskStatus := task.Status()
+	s.st.Unlock()
 	c.Check(logContains(logs, "Started service"), Equals, true)
+	c.Check(taskStatus, Equals, state.DoneStatus)
 
-	// A new pending change should have been created to track the next
-	// scheduled occurrence, distinct from the now-finished one, and there
-	// should only be one pending service-schedule change.
+	// The same persistent change should be used to track the next
+	// occurrence, rather than a new one.
+	c.Check(s.countChangesOfKind(c, servstate.ServiceScheduleKind), Equals, 1)
 	newChg := s.scheduleChange(c)
 	c.Assert(newChg, NotNil)
-	c.Check(newChg.ID() != chg.ID(), Equals, true)
+	c.Check(newChg.ID(), Equals, chg.ID())
+
+	newTask := s.scheduleTask(c, newChg)
+	c.Check(newTask.ID() != task.ID(), Equals, true)
+
 	s.st.Lock()
 	ready := chg.IsReady()
 	s.st.Unlock()
-	c.Check(ready, Equals, true)
+	c.Check(ready, Equals, false)
 }
 
 func (s *S) TestEnsureLogsMissedScheduleButStillRuns(c *C) {
@@ -338,13 +407,14 @@ func (s *S) TestEnsureLogsMissedScheduleButStillRuns(c *C) {
 
 	chg := s.scheduleChange(c)
 	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
 
 	// Missed by 30 seconds (well over the "missed" logging threshold), but
 	// still much closer to now than the next (daily) occurrence, so it
 	// should run anyway.
 	s.setScheduleNext(c, chg, time.Now().Add(-30*time.Second))
 
-	waitChangeReady(c, s.runner, chg, "scheduled service start to complete")
+	waitTaskReady(c, s.runner, s.st, task)
 
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
 
@@ -352,7 +422,9 @@ func (s *S) TestEnsureLogsMissedScheduleButStillRuns(c *C) {
 		return svc.Current == servstate.StatusActive
 	})
 
-	logs := s.scheduleTaskLog(c, chg)
+	s.st.Lock()
+	logs := task.Log()
+	s.st.Unlock()
 	c.Check(logContains(logs, "Missed scheduled start"), Equals, true)
 }
 
@@ -369,18 +441,25 @@ func (s *S) TestEnsureSkipsStartWhenAlreadyRunning(c *C) {
 
 	chg := s.scheduleChange(c)
 	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
 	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
 
-	task := s.scheduleTask(c, chg)
 	waitTaskLogContains(c, s.runner, s.st, task, "already running")
+	waitTaskReady(c, s.runner, s.st, task)
 
 	// No "start" change should have been created by the schedule, and the
-	// schedule change should still be pending (not finished).
+	// schedule change should still be pending (not finished), since a new
+	// task should have been queued for the next occurrence.
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
 	s.st.Lock()
 	ready := chg.IsReady()
+	taskStatus := task.Status()
 	s.st.Unlock()
 	c.Check(ready, Equals, false)
+	c.Check(taskStatus, Equals, state.DoneStatus)
+
+	newTask := s.scheduleTask(c, chg)
+	c.Check(newTask.ID() != task.ID(), Equals, true)
 }
 
 func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
@@ -390,12 +469,13 @@ func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
 
 	chg := s.scheduleChange(c)
 	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
 
 	longAgo := time.Now().Add(-240 * time.Hour) // 10 days ago
 	s.setScheduleNext(c, chg, longAgo)
 
-	task := s.scheduleTask(c, chg)
 	waitTaskLogContains(c, s.runner, s.st, task, "Skipped scheduled start")
+	waitTaskReady(c, s.runner, s.st, task)
 
 	// No service should have been started because of this.
 	c.Check(s.countChangesOfKind(c, "start"), Equals, 0)
@@ -405,4 +485,41 @@ func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
 	// schedule fires daily, so the new Next should be close to now, not
 	// close to the 10-day-old missed time).
 	c.Check(details.Next.After(longAgo.Add(48*time.Hour)), Equals, true)
+}
+
+// TestScheduleHistoryPruned checks that a service-schedule change never
+// accumulates more than MaxScheduleHistory finished tasks, alongside the one
+// pending task tracking the next occurrence.
+func (s *S) TestScheduleHistoryPruned(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+
+	for i := 0; i < servstate.MaxScheduleHistory+2; i++ {
+		task := s.scheduleTask(c, chg)
+		s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
+		waitTaskReady(c, s.runner, s.st, task)
+	}
+
+	s.waitUntilService(c, "sched1", func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	s.st.Lock()
+	tasks := chg.Tasks()
+	var finished, pending int
+	for _, t := range tasks {
+		if t.Status().Ready() {
+			finished++
+		} else {
+			pending++
+		}
+	}
+	s.st.Unlock()
+
+	c.Check(pending, Equals, 1)
+	c.Check(finished, Equals, servstate.MaxScheduleHistory)
 }

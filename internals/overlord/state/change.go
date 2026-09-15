@@ -644,6 +644,31 @@ func (c *Change) AddAll(ts *TaskSet) {
 	}
 }
 
+// RemoveTask unlinks a Ready task from the change. The task must currently
+// belong to this change. The task's data remains in the state until it's
+// cleaned up in the usual way for tasks no longer linked to any change (see
+// Prune).
+//
+// This is meant for managers that maintain a long-lived change with a
+// bounded amount of task history (for example, retiring old completed tasks
+// as new ones are added), rather than for general task removal.
+func (c *Change) RemoveTask(t *Task) {
+	c.state.writing()
+	if t.change != c.id {
+		panic(fmt.Sprintf("internal error: cannot remove task %q from change %q: task does not belong to that change", t.ID(), c.id))
+	}
+	if !t.Status().Ready() {
+		panic(fmt.Sprintf("internal error: cannot remove task %q from change %q: task is not ready", t.ID(), c.id))
+	}
+	for i, tid := range c.taskIDs {
+		if tid == t.ID() {
+			c.taskIDs = append(c.taskIDs[:i], c.taskIDs[i+1:]...)
+			break
+		}
+	}
+	t.change = ""
+}
+
 // Tasks returns all the tasks this state change depends on.
 func (c *Change) Tasks() []*Task {
 	c.state.reading()

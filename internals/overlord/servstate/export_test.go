@@ -25,6 +25,7 @@ import (
 const (
 	ServiceScheduleKind = serviceScheduleKind
 	ScheduleDetailsAttr = scheduleDetailsAttr
+	MaxScheduleHistory  = maxScheduleHistory
 )
 
 var (
