@@ -26,6 +26,7 @@ _TYPES = frozenset({
     'fix',
     'perf',
     'refactor',
+    'revert',
     'style',
     'test',
 })
