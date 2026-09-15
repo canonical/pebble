@@ -19,8 +19,6 @@ import (
 	"sort"
 	"time"
 
-	"gopkg.in/tomb.v2"
-
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -28,24 +26,39 @@ import (
 )
 
 const (
-	// serviceScheduleKind is the kind used for both the change and the first
-	// task in it, which tracks a service's next scheduled start time. There
-	// is at most one such change per service at any given time.
+	// serviceScheduleKind is the kind used for the long-lived change that
+	// tracks a service's scheduled starts. There is at most one such change
+	// per service at any given time, and it persists for as long as the
+	// service has a schedule configured: it's never recreated, only ever
+	// added to (and trimmed).
 	//
-	// The change starts out with just this one task, in DoingStatus, while
-	// waiting for the scheduled time. Once that time arrives and the service
-	// is actually started, a "start" task (or task set, if the service has
-	// dependencies) is added to the same change and the service-schedule
-	// task is marked Done. Once the start task(s) finish, the whole change
-	// becomes ready, and scheduleChangeReady creates a new service-schedule
-	// change to track the next occurrence.
+	// The change holds a sequence of "start" tasks (the same kind used for
+	// manually-requested starts), one per occurrence of the schedule. All
+	// but (at most) one of them are Ready (Done or Error), forming a bounded
+	// history (see maxScheduleHistory); the remaining one is still pending
+	// (DoStatus) with its At time set to the next occurrence, so the task
+	// runner starts it automatically once that time arrives.
+	//
+	// When a pending task's time arrives and it's processed (see
+	// prepareScheduledStart, called from doStart), a new pending task
+	// tracking the following occurrence is added to the same change before
+	// the current one is allowed to finish, so the change never becomes
+	// ready while the service still has a schedule. The only time the
+	// change does become ready is when the service's schedule is removed
+	// (see scheduleChanged), at which point it's marked Done.
 	serviceScheduleKind = "service-schedule"
 
-	// scheduleDetailsAttr is the task attribute holding scheduleDetails.
+	// scheduleDetailsAttr is the task attribute holding scheduleDetails. It's
+	// set on every task created to track a scheduled occurrence (see
+	// newScheduledStartTask), and is what distinguishes those tasks from
+	// ordinary "start" tasks created by other means (for example, a manual
+	// start request).
 	scheduleDetailsAttr = "service-schedule-details"
 
 	// scheduleNoPruneAttr marks the schedule change as one that must never
-	// be pruned while it's still tracking a service's schedule.
+	// be aborted while it's still tracking a service's schedule (it has no
+	// natural "abandoned" state, since it's expected to stay unready
+	// indefinitely).
 	scheduleNoPruneAttr = "service-schedule-no-prune"
 
 	// maxScheduleLookahead bounds how far in the future we search for the next
@@ -55,10 +68,17 @@ const (
 	// scheduleMissThreshold is how overdue a scheduled start has to be before
 	// we call it out explicitly as "missed" in the task log.
 	scheduleMissThreshold = 5 * time.Second
+
+	// maxScheduleHistory is the maximum number of finished (Done or Error)
+	// tasks kept as history in a service-schedule change. Once a new
+	// occurrence is scheduled, the oldest finished task is removed if the
+	// change already holds this many.
+	maxScheduleHistory = 5
 )
 
-// scheduleDetails is persisted on the service-schedule task, and records the
-// schedule string, with the next time the service should be started.
+// scheduleDetails is persisted on every task tracking a scheduled occurrence,
+// and records the schedule string, along with the time the service should be
+// (or was) started for that occurrence.
 type scheduleDetails struct {
 	ServiceName string    `json:"service-name"`
 	Schedule    string    `json:"schedule"`
@@ -121,52 +141,113 @@ func scheduleShouldRunNow(now, missed, following time.Time) bool {
 	return missedDelta <= followingDelta
 }
 
-// serviceScheduleChange creates the change/task pair used to track name's next
-// scheduled start time, and returns the change ID.
-// The caller must hold the state lock.
-func serviceScheduleChange(st *state.State, name, scheduleStr string, next time.Time) string {
-	taskSummary := fmt.Sprintf("Wait for scheduled start of service %q", name)
-	task := st.NewTask(serviceScheduleKind, taskSummary)
+// newScheduledStartTask creates (but doesn't add to any change) a "start"
+// task tracking a service's scheduled occurrence at next. It's exactly like
+// a task created by Start, except it also carries scheduleDetailsAttr, which
+// is what identifies it (to prepareScheduledStart and scheduleChanged) as
+// tracking a scheduled occurrence rather than a manually-requested start.
+func newScheduledStartTask(st *state.State, name, scheduleStr string, next time.Time) *state.Task {
+	task := st.NewTask("start", fmt.Sprintf("Start service %q", name))
+	task.Set("service-request", &ServiceRequest{Name: name})
 	task.Set(scheduleDetailsAttr, &scheduleDetails{
 		ServiceName: name,
 		Schedule:    scheduleStr,
 		Next:        next,
 	})
-	task.SetStatus(state.DoingStatus)
 	task.At(next)
+	return task
+}
 
-	changeSummary := fmt.Sprintf("Scheduled start of service %q", name)
+// serviceScheduleChange creates the long-lived change used to track name's
+// scheduled starts, with a single pending task tracking the occurrence at
+// next, and returns the change ID.
+// The caller must hold the state lock.
+func serviceScheduleChange(st *state.State, name, scheduleStr string, next time.Time) string {
+	task := newScheduledStartTask(st, name, scheduleStr, next)
+
+	changeSummary := fmt.Sprintf("Schedule service %q", name)
 	change := st.NewChange(serviceScheduleKind, changeSummary)
 	change.Set(scheduleNoPruneAttr, true)
 	change.AddTask(task)
 	return change.ID()
 }
 
-// doServiceSchedule is the TaskRunner handler for serviceScheduleKind tasks.
-// The task runner invokes it once the task's scheduled time arrives (set via
-// task.At, see serviceScheduleChange and scheduleChanged).
+// pendingScheduleTask returns the task in a service-schedule change that's
+// still waiting for its scheduled time to arrive, i.e. the one tracking the
+// service's next scheduled occurrence, or nil if there is currently none.
 //
-// It decides whether to start the service now (adding a "start" task set to
-// the same change, after which the task runner marks this task Done once we
-// return) or to keep waiting for the next occurrence (rescheduling ourselves
-// and return Retry, so the task runner invokes us again then).
-func (m *ServiceManager) doServiceSchedule(task *state.Task, _ *tomb.Tomb) error {
-	m.state.Lock()
-	defer m.state.Unlock()
+// The latter is normally only the case right after the service's schedule
+// has been removed (see scheduleChanged); while a scheduled occurrence is
+// being processed (see prepareScheduledStart), the task for the following
+// occurrence is added before the current one finishes, so there's a brief
+// window with two unready tasks in the change (the one being processed, and
+// the newly-added pending one) rather than none.
+func pendingScheduleTask(chg *state.Change) *state.Task {
+	for _, t := range chg.Tasks() {
+		if t.Status() == state.DoStatus && t.Has(scheduleDetailsAttr) {
+			return t
+		}
+	}
+	return nil
+}
 
+// scheduleHasPendingTask reports whether chg already has a task (other than
+// exclude) that isn't Ready yet.
+func scheduleHasPendingTask(chg *state.Change, exclude *state.Task) bool {
+	for _, t := range chg.Tasks() {
+		if t.ID() == exclude.ID() {
+			continue
+		}
+		if !t.Status().Ready() {
+			return true
+		}
+	}
+	return false
+}
+
+// pruneScheduleHistory removes the oldest finished (Done or Error) tasks
+// from a service-schedule change, keeping at most maxScheduleHistory of
+// them. reserve accounts for additional tasks (not yet Ready) that are
+// guaranteed to become finished imminently but aren't Ready yet at the
+// time of this call -- the task currently being processed by
+// prepareScheduledStart, still Doing at this point, is one such task.
+// The caller must hold the state lock.
+func pruneScheduleHistory(chg *state.Change, reserve int) {
+	tasks := chg.Tasks()
+	finished := make([]*state.Task, 0, len(tasks))
+	for _, t := range tasks {
+		if t.Status().Ready() {
+			finished = append(finished, t)
+		}
+	}
+	excess := len(finished) + reserve - maxScheduleHistory
+	for i := range excess {
+		chg.RemoveTask(finished[i])
+	}
+}
+
+// prepareScheduledStart is called from doStart, while holding the state
+// lock, for every "start" task. If task isn't tracking a scheduled
+// occurrence (i.e. wasn't created by newScheduledStartTask), it's a no-op.
+//
+// Otherwise, it queues up a task to track the service's following scheduled
+// occurrence in the same change (pruning old history in the process, and
+// guarding against doing so twice if Pebble restarted partway through
+// handling this occurrence), then decides whether the actual start should
+// proceed now, logging the outcome either way. It returns skip=true if the
+// caller should not go on to actually start the service (either because the
+// scheduled start was missed by too long, or because the service is already
+// running).
+func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err error) {
+	if !task.Has(scheduleDetailsAttr) {
+		return false, nil
+	}
 	var details scheduleDetails
-	err := task.Get(scheduleDetailsAttr, &details)
-	if err != nil {
-		return fmt.Errorf("cannot get service-schedule-details from task: %w", err)
+	if err := task.Get(scheduleDetailsAttr, &details); err != nil {
+		return false, fmt.Errorf("cannot get service-schedule-details from task: %w", err)
 	}
 
 	now := timeNow()
-	if now.Before(details.Next) {
-		// Woken up early, go back to sleep.
-		task.At(details.Next)
-		return &state.Retry{}
-	}
-
 	missed := details.Next
 	following, err := nextScheduleTimeAfter(details.Schedule, missed)
 	if err != nil {
@@ -174,48 +255,40 @@ func (m *ServiceManager) doServiceSchedule(task *state.Task, _ *tomb.Tomb) error
 		task.Errorf("Cannot compute next scheduled start for service %q: %v", details.ServiceName, err)
 	}
 
+	// Queue up the following occurrence in the same change (pruning old
+	// history if needed) before deciding what to do about the occurrence
+	// that's due now, so the change never becomes ready while there's still
+	// a schedule to track. The pending-task check guards against doing this
+	// twice for the same occurrence, in case Pebble restarted between
+	// queuing the next occurrence and finishing this task.
+	if chg := task.Change(); chg != nil && !following.IsZero() && !scheduleHasPendingTask(chg, task) {
+		next := newScheduledStartTask(m.state, details.ServiceName, details.Schedule, following)
+		chg.AddTask(next)
+		pruneScheduleHistory(chg, 1)
+		m.state.EnsureBefore(0)
+	}
+
 	followingMsg := "not scheduled again"
 	if !following.IsZero() {
 		followingMsg = fmt.Sprintf("next scheduled start at %s", following.Format(time.RFC3339))
 	}
 
-	fired := false
 	if !scheduleShouldRunNow(now, missed, following) {
 		task.Logf("Skipped scheduled start at %s for service %q (missed by too long); %s.",
 			missed.Format(time.RFC3339), details.ServiceName, followingMsg)
-	} else {
-		if now.Sub(missed) > scheduleMissThreshold {
-			task.Logf("Missed scheduled start at %s for service %q; starting it now.",
-				missed.Format(time.RFC3339), details.ServiceName)
-		}
-		if m.serviceIsActive(details.ServiceName) {
-			task.Logf("Service %q is already running; %s.", details.ServiceName, followingMsg)
-		} else if lanes, err := m.StartOrder([]string{details.ServiceName}); err != nil {
-			task.Errorf("Cannot start service %q on schedule: %v", details.ServiceName, err)
-		} else if taskSet, err := Start(m.state, lanes); err != nil {
-			task.Errorf("Cannot start service %q on schedule: %v", details.ServiceName, err)
-		} else {
-			task.Change().AddAll(taskSet)
-			task.Logf("Started service %q on schedule; %s.", details.ServiceName, followingMsg)
-			fired = true
-		}
+		return true, nil
 	}
 
-	// Record the following occurrence, whether we fired or not: if we fired,
-	// scheduleChangeReady reads this back once the change becomes ready, to
-	// create the following change.
-	details.Next = following
-	task.Set(scheduleDetailsAttr, &details)
-
-	if fired {
-		m.state.EnsureBefore(0)
-		return nil
+	if now.Sub(missed) > scheduleMissThreshold {
+		task.Logf("Missed scheduled start at %s for service %q; starting it now.",
+			missed.Format(time.RFC3339), details.ServiceName)
+	}
+	if m.serviceIsActive(details.ServiceName) {
+		task.Logf("Service %q is already running; %s.", details.ServiceName, followingMsg)
+		return true, nil
 	}
 
-	// Reschedule ourselves for the next occurrence and ask the task runner to
-	// start this task again then.
-	task.At(following)
-	return &state.Retry{}
+	return false, nil
 }
 
 // scheduleChanged is called from PlanChanged to create, update, or retire
@@ -231,12 +304,11 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 		if change.Kind() != serviceScheduleKind || change.IsReady() {
 			continue
 		}
-		// The first task is always the service-schedule task. It may already
-		// be Done at this point (with a "start" task set alongside it in the
-		// same change, still running) if the scheduled time has already
-		// passed; that's fine, we still want to update/retire it below.
-		task := change.Tasks()[0]
-		if !task.Has(scheduleDetailsAttr) {
+		task := pendingScheduleTask(change)
+		if task == nil {
+			// No task currently waiting on its scheduled time (for example,
+			// a scheduled start is being processed right now): nothing to
+			// update here; it'll be picked up on a following PlanChanged.
 			continue
 		}
 		var details scheduleDetails
@@ -251,11 +323,16 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 		config, inPlan := newPlan.Services[details.ServiceName]
 		if !inPlan || config.Schedule == "" {
 			// Service removed from the plan, or no longer has a schedule:
-			// retire this change directly (rather than via change.Abort(),
-			// which would go through the Abort/Undo dance) since there's
-			// nothing to undo here.
-			task.Logf("Service %q no longer has a schedule configured; no more scheduled starts.", details.ServiceName)
-			task.SetStatus(state.HoldStatus)
+			// mark the pending task (and so the change) Done directly
+			// (rather than via change.Abort(), which would go through the
+			// Abort/Undo dance) since there's nothing to undo here.
+			reason := "its schedule was removed from the plan"
+			if !inPlan {
+				reason = "it was removed from the plan"
+			}
+			task.Logf("Service %q unscheduled: %s; no more scheduled starts.", details.ServiceName, reason)
+			task.SetStatus(state.DoneStatus)
+			change.SetStatus(state.DoneStatus)
 			shouldEnsure = true
 			continue
 		}
@@ -266,7 +343,7 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 		}
 
 		// Schedule string changed: recompute the next scheduled start time, but
-		// reuse the existing change/task rather than creating a new one.
+		// reuse the existing task rather than creating a new one.
 		next, err := nextScheduleTimeAfter(config.Schedule, details.Next)
 		if err != nil {
 			logger.Noticef("Cannot parse schedule %q for service %q: %v", config.Schedule, details.ServiceName, err)
@@ -279,7 +356,6 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 			Schedule:    config.Schedule,
 			Next:        next,
 		})
-		// If the task hasn't fired yet, reschedule it.
 		task.At(next)
 		shouldEnsure = true
 	}
@@ -332,8 +408,7 @@ func (m *ServiceManager) serviceIsActive(name string) bool {
 }
 
 // scheduledStartTimes returns the next scheduled start time for every
-// service that currently has a service-schedule task in the Doing status,
-// i.e. is waiting for its next scheduled start.
+// service that currently has a task waiting on its scheduled time.
 //
 // The caller must hold the state lock.
 func (m *ServiceManager) scheduledStartTimes() map[string]time.Time {
@@ -342,58 +417,15 @@ func (m *ServiceManager) scheduledStartTimes() map[string]time.Time {
 		if change.Kind() != serviceScheduleKind {
 			continue
 		}
-		for _, task := range change.Tasks() {
-			if task.Kind() != serviceScheduleKind || task.Status() != state.DoingStatus {
-				continue
-			}
-			var details scheduleDetails
-			if err := task.Get(scheduleDetailsAttr, &details); err != nil {
-				continue
-			}
-			scheduled[details.ServiceName] = details.Next
+		task := pendingScheduleTask(change)
+		if task == nil {
+			continue
 		}
+		var details scheduleDetails
+		if err := task.Get(scheduleDetailsAttr, &details); err != nil {
+			continue
+		}
+		scheduled[details.ServiceName] = details.Next
 	}
 	return scheduled
-}
-
-// scheduleChangeReady is called whenever a change's status changes; it looks
-// for service-schedule changes that have just become ready (i.e. their
-// service-schedule task fired and any start task(s) added alongside it have
-// now finished), and creates a new service-schedule change to track the
-// service's next scheduled occurrence.
-//
-// The caller must hold the state lock; this is guaranteed by the state
-// package for change-status-changed handlers.
-func (m *ServiceManager) scheduleChangeReady(chg *state.Change, old, new state.Status) {
-	if chg.Kind() != serviceScheduleKind || old.Ready() || !new.Ready() {
-		return
-	}
-
-	tasks := chg.Tasks()
-	if len(tasks) == 0 {
-		return
-	}
-	// The first task is always the service-schedule task.
-	task := tasks[0]
-	if task.Status() != state.DoneStatus {
-		// The change became ready for some other reason (for example, it was
-		// retired via HoldStatus because the service or its schedule was
-		// removed from the plan): don't schedule a follow-up.
-		return
-	}
-
-	var details scheduleDetails
-	err := task.Get(scheduleDetailsAttr, &details)
-	if err != nil {
-		logger.Noticef("Cannot get %s change %s schedule details: %v", chg.Kind(), chg.ID(), err)
-		return
-	}
-	if details.Next.IsZero() {
-		// No further occurrence (schedule string yielded nothing within the
-		// lookahead window, or failed to parse).
-		return
-	}
-
-	serviceScheduleChange(m.state, details.ServiceName, details.Schedule, details.Next)
-	m.state.EnsureBefore(0)
 }

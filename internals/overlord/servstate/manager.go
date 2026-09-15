@@ -59,22 +59,12 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
-	// doServiceSchedule decides whether to start a service once its scheduled
-	// time arrives.
-	runner.AddHandler(serviceScheduleKind, manager.doServiceSchedule, nil)
 
 	// Schedule changes persist for as long as a service has a schedule
 	// configured. This ensures they don't get pruned.
 	s.RegisterPendingChangeByAttr(scheduleNoPruneAttr, func(*state.Change) bool {
 		return true
 	})
-
-	// Chain service-schedule changes: once one becomes ready (its scheduled
-	// start fired and any resulting start task(s) finished), create a new
-	// one to track the service's next scheduled occurrence.
-	s.Lock()
-	s.AddChangeStatusChangedHandler(manager.scheduleChangeReady)
-	s.Unlock()
 
 	return manager, nil
 }
