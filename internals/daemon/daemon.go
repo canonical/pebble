@@ -714,6 +714,16 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		time.Sleep(rebootNoticeWait)
 	}
 
+	// Stop the overlord (which kills any activities running concurrently,
+	// such as exec commands and their I/O) before shutting down the HTTP
+	// server. Long-poll requests such as GET /v1/changes/{id}/wait for an
+	// exec command stay "active" on the server's connection until the
+	// exec's change is ready, which only happens once the overlord kills
+	// the running command. Stopping the overlord first means those
+	// connections go idle promptly, so serve.Shutdown below doesn't have
+	// to wait out its full timeout (see issue #682).
+	d.overlord.Stop()
+
 	// We're using the background context here because the tomb's
 	// context will likely already have been cancelled when we are
 	// called.
@@ -740,7 +750,6 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 			d.requestedRestart = requestedRestart
 		}
 	}
-	d.overlord.Stop()
 
 	err = d.tomb.Wait()
 	if err != nil {
