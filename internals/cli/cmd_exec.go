@@ -141,9 +141,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 	if terminal && stdinIsTerminal {
 		oldState, err := ptyutil.MakeRaw(unix.Stdin)
 		if err != nil {
-			return fmt.Errorf("cannot change terminal to raw mode: %v", err)
+			logger.Debugf("Cannot change terminal to raw mode, continuing without raw mode: %v", err)
+		} else {
+			defer ptyutil.Restore(unix.Stdin, oldState)
 		}
-		defer ptyutil.Restore(unix.Stdin, oldState)
 	}
 
 	// Grab current terminal dimensions.
