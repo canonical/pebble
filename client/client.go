@@ -125,8 +125,8 @@ func (s SocketNotFoundError) Unwrap() error {
 	return s.Err
 }
 
-func unixDialer(socketPath string) func(string, string) (net.Conn, error) {
-	return func(_, _ string) (net.Conn, error) {
+func unixDialer(socketPath string) func(context.Context, string, string) (net.Conn, error) {
+	return func(_ context.Context, _, _ string) (net.Conn, error) {
 		_, err := os.Stat(socketPath)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, &SocketNotFoundError{Err: err, Path: socketPath}
@@ -654,7 +654,7 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 
 	if opts.BaseURL == "" {
 		// By default talk over a unix socket.
-		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
+		transport := &http.Transport{DialContext: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
 		baseURL := &url.URL{Scheme: "http", Host: "localhost"}
 		requester = &defaultRequester{
 			baseURL:       baseURL,
