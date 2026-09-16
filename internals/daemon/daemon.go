@@ -59,6 +59,7 @@ var (
 	ErrRestartExternal       = fmt.Errorf("daemon stop requested due to externally-handled reboot")
 
 	systemdSdNotify = systemd.SdNotify
+	stopOverlord    = func(o *overlord.Overlord) { _ = o.Stop() }
 )
 
 // TransportType defines the possible API transport types we support. The
@@ -163,19 +164,21 @@ type Options struct {
 
 // A Daemon listens for requests and routes them to the right command
 type Daemon struct {
-	Version         string
-	StartTime       time.Time
-	options         *Options
-	overlord        *overlord.Overlord
-	state           *state.State
-	generalListener net.Listener
-	httpListener    net.Listener
-	httpsListener   net.Listener
-	connTracker     *connTracker
-	serve           *http.Server
-	tomb            tomb.Tomb
-	router          *mux.Router
-	standbyOpinions *standby.StandbyOpinions
+	Version                 string
+	StartTime               time.Time
+	options                 *Options
+	overlord                *overlord.Overlord
+	state                   *state.State
+	generalListener         net.Listener
+	httpListener            net.Listener
+	httpsListener           net.Listener
+	connTracker             *connTracker
+	serve                   *http.Server
+	httpListenersClosed     chan struct{}
+	httpListenersClosedOnce sync.Once
+	tomb                    tomb.Tomb
+	router                  *mux.Router
+	standbyOpinions         *standby.StandbyOpinions
 
 	// set to what kind of restart was requested (if any)
 	requestedRestart restart.RestartType
@@ -605,6 +608,14 @@ func (d *Daemon) Start() error {
 		ConnState: d.connTracker.trackConn,
 	}
 
+	d.httpListenersClosed = make(chan struct{})
+	d.httpListenersClosedOnce = sync.Once{}
+	d.serve.RegisterOnShutdown(func() {
+		d.httpListenersClosedOnce.Do(func() {
+			close(d.httpListenersClosed)
+		})
+	})
+
 	d.initStandbyHandling()
 
 	d.overlord.Loop()
@@ -716,10 +727,26 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 
 	// We're using the background context here because the tomb's
 	// context will likely already have been cancelled when we are
-	// called.
+	// called. Start shutting down the HTTP server in a separate goroutine:
+	// Shutdown closes the listeners before waiting for active requests, and
+	// its shutdown callback above tells us when new requests can no longer
+	// be accepted.
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	d.tomb.Kill(d.serve.Shutdown(ctx))
+	shutdownErr := make(chan error, 1)
+	go func() {
+		shutdownErr <- d.serve.Shutdown(ctx)
+	}()
+	<-d.httpListenersClosed
+
+	// Stop the overlord only after the HTTP listeners have been closed. This
+	// prevents new requests from starting while the overlord is stopping,
+	// while still allowing active requests such as exec change waits to
+	// finish after their tasks are cancelled.
+	stopOverlord(d.overlord)
+
+	shutdownErrValue := <-shutdownErr
 	cancel()
+	d.tomb.Kill(shutdownErrValue)
 
 	if requestedRestart != restart.RestartSystem {
 		// tell systemd that we are stopping
@@ -740,7 +767,6 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 			d.requestedRestart = requestedRestart
 		}
 	}
-	d.overlord.Stop()
 
 	err = d.tomb.Wait()
 	if err != nil {

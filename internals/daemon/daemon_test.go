@@ -99,6 +99,7 @@ func (s *daemonSuite) SetUpTest(c *C) {
 
 func (s *daemonSuite) TearDownTest(c *C) {
 	systemdSdNotify = systemd.SdNotify
+	stopOverlord = func(o *overlord.Overlord) { _ = o.Stop() }
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
@@ -812,6 +813,36 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 	case <-time.After(2 * time.Second):
 		c.Fatal("never got proper response")
 	}
+}
+
+func (s *daemonSuite) TestShutdownClosesListenersBeforeOverlord(c *C) {
+	d := s.newDaemon(c)
+
+	generalL, err := net.Listen("tcp", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	generalAccept := make(chan struct{})
+	generalClosed := make(chan struct{})
+	d.generalListener = &witnessAcceptListener{Listener: generalL, accept: generalAccept, closed: generalClosed}
+
+	listenerClosedBeforeOverlord := false
+	stopOverlord = func(o *overlord.Overlord) {
+		select {
+		case <-generalClosed:
+			listenerClosedBeforeOverlord = true
+		default:
+		}
+		_ = o.Stop()
+	}
+
+	c.Assert(d.Start(), IsNil)
+	select {
+	case <-generalAccept:
+	case <-time.After(2 * time.Second):
+		c.Fatal("general accept was not called")
+	}
+
+	c.Assert(d.Stop(nil), IsNil)
+	c.Check(listenerClosedBeforeOverlord, Equals, true)
 }
 
 func (s *daemonSuite) TestRestartSystemWiring(c *C) {
