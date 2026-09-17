@@ -37,7 +37,7 @@ var servicesLayer = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1 >> /dev/null; sleep 300"
+        command: /bin/sh -c "sleep 300"
         startup: enabled
         requires:
             - test2

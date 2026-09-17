@@ -158,9 +158,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			if ws != nil {
 				workload = ws.Entries[s.config.Workload]
 			}
-			if !(config.Equal(s.config) && (workload == nil || workload.Equal(s.workload))) {
-				info.Outdated = true
-			}
+			info.Outdated = serviceOutdated(config, workload, s)
 		}
 		services = append(services, info)
 	}
