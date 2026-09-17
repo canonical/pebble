@@ -188,6 +188,7 @@ func (s *daemonSuite) TestExternalManager(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 	err = d.overlord.StartUp()
 	c.Assert(err, IsNil)
 	err = d.overlord.StateEngine().Ensure()
@@ -206,6 +207,7 @@ func (s *daemonSuite) TestNoExtension(c *C) {
 		HTTPAddress: s.httpAddress,
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	extension := d.overlord.Extension()
 	c.Assert(extension, IsNil)
@@ -219,6 +221,7 @@ func (s *daemonSuite) TestWrongExtension(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	_, ok := d.overlord.Extension().(*otherFakeExtension)
 	c.Assert(ok, Equals, false)
