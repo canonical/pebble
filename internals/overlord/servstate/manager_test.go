@@ -2613,4 +2613,3 @@ func (s *S) TestStopClosesLogBuffers(c *C) {
 	c.Check(buf1.Closed(), Equals, true)
 	c.Check(buf2.Closed(), Equals, true)
 }
-
