@@ -46,7 +46,7 @@ services:
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 >> /dev/null; sleep 300"
+        command: /bin/sh -c "sleep 300"
 
     test3:
         override: replace
