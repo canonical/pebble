@@ -1611,6 +1611,9 @@ components:
           type: string
           format: date-time
           description: "[Time](#time) the service transitioned to the current status."
+        outdated:
+          type: boolean
+          description: True if the service was started with an older plan definition and is now outdated.
     changeInfo:
       type: object
       properties:
