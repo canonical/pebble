@@ -86,14 +86,18 @@ func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
 	w := tabWriter()
 	defer w.Flush()
 
-	fmt.Fprintln(w, "Service\tStartup\tCurrent\tSince")
+	fmt.Fprintln(w, "Service\tStartup\tScheduled\tCurrent\tSince")
 
 	for _, svc := range services {
+		scheduled := "-"
+		if !svc.Scheduled.IsZero() {
+			scheduled = cmd.fmtTime(svc.Scheduled)
+		}
 		since := "-"
 		if !svc.CurrentSince.IsZero() {
 			since = cmd.fmtTime(svc.CurrentSince)
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, svc.Current, since)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", svc.Name, svc.Startup, scheduled, svc.Current, since)
 	}
 	return nil
 }

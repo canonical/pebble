@@ -22,6 +22,18 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 )
 
+const (
+	ServiceScheduleKind = serviceScheduleKind
+	ScheduleDetailsAttr = scheduleDetailsAttr
+	MaxScheduleHistory  = maxScheduleHistory
+)
+
+var (
+	ScheduleShouldRunNow  = scheduleShouldRunNow
+	NextScheduleTime      = nextScheduleTime
+	NextScheduleTimeAfter = nextScheduleTimeAfter
+)
+
 var CalculateNextBackoff = calculateNextBackoff
 var GetAction = getAction
 
