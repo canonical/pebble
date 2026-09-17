@@ -77,6 +77,7 @@ type daemonSuite struct {
 	authorized   bool
 	err          error
 	notified     []string
+	daemons      []*Daemon
 }
 
 var _ = Suite(&daemonSuite{})
@@ -98,7 +99,15 @@ func (s *daemonSuite) SetUpTest(c *C) {
 }
 
 func (s *daemonSuite) TearDownTest(c *C) {
+	for _, d := range s.daemons {
+		func() {
+			defer func() { _ = recover() }()
+			_ = d.Overlord().Stop()
+		}()
+	}
+	s.daemons = nil
 	systemdSdNotify = systemd.SdNotify
+	stopOverlord = func(o *overlord.Overlord) { _ = o.Stop() }
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
@@ -120,6 +129,7 @@ func (s *daemonSuite) newDaemon(c *C) *Daemon {
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
+	s.daemons = append(s.daemons, d)
 	return d
 }
 
@@ -187,6 +197,7 @@ func (s *daemonSuite) TestExternalManager(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 	err = d.overlord.StartUp()
 	c.Assert(err, IsNil)
 	err = d.overlord.StateEngine().Ensure()
@@ -205,6 +216,7 @@ func (s *daemonSuite) TestNoExtension(c *C) {
 		HTTPAddress: s.httpAddress,
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	extension := d.overlord.Extension()
 	c.Assert(extension, IsNil)
@@ -218,6 +230,7 @@ func (s *daemonSuite) TestWrongExtension(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	_, ok := d.overlord.Extension().(*otherFakeExtension)
 	c.Assert(ok, Equals, false)
@@ -812,6 +825,36 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 	case <-time.After(2 * time.Second):
 		c.Fatal("never got proper response")
 	}
+}
+
+func (s *daemonSuite) TestShutdownClosesListenersBeforeOverlord(c *C) {
+	d := s.newDaemon(c)
+
+	generalL, err := net.Listen("tcp", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	generalAccept := make(chan struct{})
+	generalClosed := make(chan struct{})
+	d.generalListener = &witnessAcceptListener{Listener: generalL, accept: generalAccept, closed: generalClosed}
+
+	listenerClosedBeforeOverlord := false
+	stopOverlord = func(o *overlord.Overlord) {
+		select {
+		case <-generalClosed:
+			listenerClosedBeforeOverlord = true
+		default:
+		}
+		_ = o.Stop()
+	}
+
+	c.Assert(d.Start(), IsNil)
+	select {
+	case <-generalAccept:
+	case <-time.After(2 * time.Second):
+		c.Fatal("general accept was not called")
+	}
+
+	c.Assert(d.Stop(nil), IsNil)
+	c.Check(listenerClosedBeforeOverlord, Equals, true)
 }
 
 func (s *daemonSuite) TestRestartSystemWiring(c *C) {

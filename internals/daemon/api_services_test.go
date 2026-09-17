@@ -29,6 +29,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
@@ -36,7 +37,7 @@ var servicesLayer = `
 services:
     test1:
         override: replace
-        command: /bin/sh -c "echo test1 >> %s; sleep 300"
+        command: /bin/sh -c "sleep 300"
         startup: enabled
         requires:
             - test2
@@ -45,7 +46,7 @@ services:
 
     test2:
         override: replace
-        command: /bin/sh -c "echo test2 >> %s; sleep 300"
+        command: /bin/sh -c "sleep 300"
 
     test3:
         override: replace
@@ -233,6 +234,62 @@ func (s *apiSuite) TestServicesGet(c *C) {
 	})
 }
 
+func (s *apiSuite) TestServicesGetNotes(c *C) {
+	writeTestLayer(s.pebbleDir, servicesLayer)
+	d := s.daemon(c)
+	s.startOverlord()
+
+	// Start test2
+	req, err := http.NewRequest("POST", "/v1/services", strings.NewReader(`{"action": "start", "services": ["test2"]}`))
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
+	c.Assert(rsp.Status, Equals, 202)
+
+	serviceMgr := d.overlord.ServiceManager()
+	for i := 0; ; i++ {
+		if i > 50 {
+			c.Fatalf("timed out waiting for service to start")
+		}
+		services, err := serviceMgr.Services([]string{"test2"})
+		c.Assert(err, IsNil)
+		if len(services) == 1 && services[0].Current == servstate.StatusActive {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	// Add layer modifying test2 via POST /v1/layers
+	layerPayload := `{
+  "action": "add",
+  "label": "update",
+  "format": "yaml",
+  "layer": "services:\n  test2:\n    override: merge\n    command: /bin/sh -c \"echo updated; sleep 300\"\n"
+}`
+	req, err = http.NewRequest("POST", "/v1/layers", strings.NewReader(layerPayload))
+	c.Assert(err, IsNil)
+	rsp = v1PostLayers(apiCmd("/v1/layers"), req, nil).(*resp)
+	c.Assert(rsp.Status, Equals, 200)
+
+	// Request GET /v1/services?names=test2
+	req, err = http.NewRequest("GET", "/v1/services?names=test2", nil)
+	c.Assert(err, IsNil)
+	rsp = v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	c.Assert(rec.Code, Equals, 200)
+	var body map[string]any
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Assert(err, IsNil)
+	result, ok := body["result"].([]any)
+	c.Assert(ok, Equals, true)
+	c.Assert(result, HasLen, 1)
+	svc := result[0].(map[string]any)
+	c.Assert(svc["name"], Equals, "test2")
+	c.Assert(svc["current"], Equals, "active")
+	c.Assert(svc["outdated"], Equals, true)
+}
+
 func (s *apiSuite) TestServicesRestart(c *C) {
 	// Setup
 	writeTestLayer(s.pebbleDir, servicesLayer)
@@ -381,6 +438,8 @@ services:
 	c.Assert(err, IsNil)
 	err = daemon.Start()
 	c.Assert(err, IsNil)
+	s.d = daemon
+	defer daemon.Stop(nil)
 
 	// To try to reproduce the deadlock, call these endpoints in a loop:
 	// - GET /v1/services

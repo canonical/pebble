@@ -102,9 +102,10 @@ feat(daemon): foo the bar correctly in the baz
 test(daemon): ensure the foo bars correctly in the baz
 ci(snap): upload the snap artefacts to Github
 chore(deps): update go.mod dependencies
+revert: feat: checks inherit context from services #11
 ```
 
-Recommended prefixes are: `fix:`, `feat:`, `build:`, `chore:`, `ci:`, `docs:`, `style:`, `refactor:`,`perf:` and `test:`
+Recommended prefixes are: `fix:`, `feat:`, `build:`, `chore:`, `ci:`, `docs:`, `style:`, `refactor:`, `revert:`, `perf:` and `test:`
 
 ### Imports
 
