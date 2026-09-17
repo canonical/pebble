@@ -285,9 +285,9 @@ func (s *apiSuite) TestServicesGetNotes(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(result, HasLen, 1)
 	svc := result[0].(map[string]any)
-	c.Check(svc["name"], Equals, "test2")
-	c.Check(svc["current"], Equals, "active")
-	c.Check(svc["outdated"], Equals, true)
+	c.Assert(svc["name"], Equals, "test2")
+	c.Assert(svc["current"], Equals, "active")
+	c.Assert(svc["outdated"], Equals, true)
 }
 
 func (s *apiSuite) TestServicesRestart(c *C) {
