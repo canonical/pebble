@@ -42,7 +42,7 @@ type apiSuite struct {
 
 	vars map[string]string
 
-	restoreMuxVars  func()
+	restorePathVars func()
 	overlordStarted bool
 }
 
@@ -53,7 +53,7 @@ func (s *apiSuite) SetUpTest(c *check.C) {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
 
-	s.restoreMuxVars = FakeMuxVars(s.muxVars)
+	s.restorePathVars = FakePathVars(s.pathVars)
 	s.pebbleDir = c.MkDir()
 }
 
@@ -64,7 +64,7 @@ func (s *apiSuite) TearDownTest(c *check.C) {
 	}
 	s.overlordStarted = false
 	s.pebbleDir = ""
-	s.restoreMuxVars()
+	s.restorePathVars()
 
 	err := reaper.Stop()
 	if err != nil {
@@ -73,7 +73,7 @@ func (s *apiSuite) TearDownTest(c *check.C) {
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
 }
 
-func (s *apiSuite) muxVars(*http.Request) map[string]string {
+func (s *apiSuite) pathVars(*http.Request) map[string]string {
 	return s.vars
 }
 

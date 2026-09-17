@@ -166,7 +166,7 @@ func v1GetChanges(c *Command, r *http.Request, _ *UserState) Response {
 }
 
 func v1GetChange(c *Command, r *http.Request, _ *UserState) Response {
-	changeID := muxVars(r)["id"]
+	changeID := pathVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
@@ -179,7 +179,7 @@ func v1GetChange(c *Command, r *http.Request, _ *UserState) Response {
 }
 
 func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
-	changeID := muxVars(r)["id"]
+	changeID := pathVars(r)["id"]
 	st := c.d.overlord.State()
 	st.Lock()
 	change := st.Change(changeID)
@@ -219,7 +219,7 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 }
 
 func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
-	chID := muxVars(r)["id"]
+	chID := pathVars(r)["id"]
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()

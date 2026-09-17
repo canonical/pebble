@@ -24,9 +24,9 @@ import (
 )
 
 func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
-	vars := muxVars(req)
-	taskID := vars["task-id"]
-	websocketID := vars["websocket-id"]
+	vars := pathVars(req)
+	taskID := vars["taskID"]
+	websocketID := vars["websocketID"]
 
 	st := c.d.overlord.State()
 	st.Lock()

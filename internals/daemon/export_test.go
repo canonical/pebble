@@ -23,11 +23,11 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-func FakeMuxVars(f func(*http.Request) map[string]string) (restore func()) {
-	old := muxVars
-	muxVars = f
+func FakePathVars(f func(*http.Request) map[string]string) (restore func()) {
+	old := pathVars
+	pathVars = f
 	return func() {
-		muxVars = old
+		pathVars = old
 	}
 }
 
