@@ -277,10 +277,10 @@ func (s *apiSuite) TestServicesGetNotes(c *C) {
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)
 
-	c.Check(rec.Code, Equals, 200)
+	c.Assert(rec.Code, Equals, 200)
 	var body map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &body)
-	c.Check(err, IsNil)
+	c.Assert(err, IsNil)
 	result, ok := body["result"].([]any)
 	c.Assert(ok, Equals, true)
 	c.Assert(result, HasLen, 1)
