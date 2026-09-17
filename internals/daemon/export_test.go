@@ -15,21 +15,12 @@
 package daemon
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
-
-func FakePathVars(f func(*http.Request) map[string]string) (restore func()) {
-	old := pathVars
-	pathVars = f
-	return func() {
-		pathVars = old
-	}
-}
 
 func FakeStateEnsureBefore(f func(st *state.State, d time.Duration)) (restore func()) {
 	old := stateEnsureBefore

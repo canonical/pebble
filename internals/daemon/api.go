@@ -129,15 +129,6 @@ var (
 	overlordServiceManager = (*overlord.Overlord).ServiceManager
 	overlordPlanManager    = (*overlord.Overlord).PlanManager
 	overlordCheckManager   = (*overlord.Overlord).CheckManager
-
-	pathVars = func(r *http.Request) map[string]string {
-		return map[string]string{
-			"id":          r.PathValue("id"),
-			"name":        r.PathValue("name"),
-			"taskID":      r.PathValue("taskID"),
-			"websocketID": r.PathValue("websocketID"),
-		}
-	}
 )
 
 func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {
