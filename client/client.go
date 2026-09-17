@@ -753,7 +753,7 @@ func (rq *defaultRequester) Transport() *http.Transport {
 
 func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error) {
 	dialer := websocket.Dialer{
-		NetDial:          rq.transport.Dial, //lint:ignore SA1019 Deprecated
+		NetDialContext:   rq.transport.DialContext,
 		Proxy:            rq.transport.Proxy,
 		TLSClientConfig:  rq.transport.TLSClientConfig,
 		HandshakeTimeout: 5 * time.Second,
