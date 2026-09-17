@@ -64,7 +64,6 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
 	response, err := httpsClient.Do(request)
 	c.Assert(err, IsNil)
 	defer response.Body.Close()
-	defer response.Body.Close()
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	var m map[string]any
 	err = json.NewDecoder(response.Body).Decode(&m)
@@ -121,7 +120,6 @@ func (s *daemonSuite) TestHTTPSUserAccessFail(c *C) {
 	c.Assert(err, IsNil)
 	response, err := httpsClient.Do(request)
 	c.Assert(err, IsNil)
-	defer response.Body.Close()
 	defer response.Body.Close()
 
 	// Access fails because the TLS client identity is not known.
@@ -193,7 +191,6 @@ pairing:
 	c.Assert(err, IsNil)
 	response, err := httpsClient.Do(request)
 	c.Assert(err, IsNil)
-	defer response.Body.Close()
 	defer response.Body.Close()
 
 	// Access succeeds because the TLS client identity is now paired
