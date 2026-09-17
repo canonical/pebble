@@ -115,6 +115,14 @@ const (
 	StatusInactive ServiceStatus = "inactive"
 )
 
+// serviceOutdated reports whether a running service differs from its current plan.
+func serviceOutdated(config *plan.Service, workload *workloads.Workload, s *serviceData) bool {
+	if !config.Equal(s.config) {
+		return true
+	}
+	return workload != nil && !workload.Equal(s.workload)
+}
+
 // Services returns the list of configured services and their status, sorted
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
