@@ -60,7 +60,7 @@ func (s *PebbleSuite) TestServicesWithNotes(c *check.C) {
     "type": "sync",
     "status-code": 200,
     "result": [
-		{"name": "svc1", "current": "active", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00", "obsolete": true},
+		{"name": "svc1", "current": "active", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00", "outdated": true},
 		{"name": "svc2", "current": "inactive", "startup": "enabled"}
 	]
 }`)
@@ -70,7 +70,7 @@ func (s *PebbleSuite) TestServicesWithNotes(c *check.C) {
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
 Service  Startup  Current   Since       Notes
-svc1     enabled  active    2022-04-28  obsolete
+svc1     enabled  active    2022-04-28  outdated
 svc2     enabled  inactive  -           -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")

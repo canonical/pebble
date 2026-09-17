@@ -1134,7 +1134,7 @@ The "Current" column shows the current status of the service, and can be one of 
 * `backoff`: in a [backoff-restart loop](service-auto-restart.md)
 * `error`: in an error state
 
-The "Notes" column displays flags or notes about the service status (or `-` if none). For example, `obsolete` indicates that the service was started with an older plan and its configuration has changed since it was started.
+The "Notes" column displays flags or notes about the service status (or `-` if none). For example, `outdated` indicates that the service was started with an older plan and its configuration has changed since it was started.
 
 
 (reference_pebble_signal_command)=

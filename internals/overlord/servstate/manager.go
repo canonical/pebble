@@ -96,7 +96,7 @@ type ServiceInfo struct {
 	Startup      ServiceStartup
 	Current      ServiceStatus
 	CurrentSince time.Time
-	Obsolete     bool
+	Outdated     bool
 }
 
 type ServiceStartup string
@@ -150,8 +150,8 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			if ws != nil {
 				workload = ws.Entries[s.config.Workload]
 			}
-			if !config.Equal(s.config) || (workload != nil && !workload.Equal(s.workload)) {
-				info.Obsolete = true
+			if !(config.Equal(s.config) && (workload == nil || workload.Equal(s.workload))) {
+				info.Outdated = true
 			}
 		}
 		services = append(services, info)

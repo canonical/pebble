@@ -88,7 +88,7 @@ func (cs *clientSuite) TestServicesGet(c *check.C) {
 	cs.rsp = `{
 		"result": [
 			{"name": "svc1", "startup": "enabled", "current": "inactive"},
-			{"name": "svc2", "startup": "disabled", "current": "active", "current-since": "2022-04-28T17:05:23Z", "obsolete": true}
+			{"name": "svc2", "startup": "disabled", "current": "active", "current-since": "2022-04-28T17:05:23Z", "outdated": true}
 		],
 		"status": "OK",
 		"status-code": 200,
@@ -102,7 +102,7 @@ func (cs *clientSuite) TestServicesGet(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(services, check.DeepEquals, []*client.ServiceInfo{
 		{Name: "svc1", Startup: client.StartupEnabled, Current: client.StatusInactive},
-		{Name: "svc2", Startup: client.StartupDisabled, Current: client.StatusActive, CurrentSince: time.Date(2022, 4, 28, 17, 5, 23, 0, time.UTC), Obsolete: true},
+		{Name: "svc2", Startup: client.StartupDisabled, Current: client.StatusActive, CurrentSince: time.Date(2022, 4, 28, 17, 5, 23, 0, time.UTC), Outdated: true},
 	})
 	c.Assert(cs.req.Method, check.Equals, "GET")
 	c.Assert(cs.req.URL.Path, check.Equals, "/v1/services")

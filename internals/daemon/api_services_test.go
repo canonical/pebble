@@ -259,7 +259,12 @@ func (s *apiSuite) TestServicesGetNotes(c *C) {
 	}
 
 	// Add layer modifying test2 via POST /v1/layers
-	layerPayload := `{"action": "add", "label": "update", "format": "yaml", "layer": "services:\n  test2:\n    override: merge\n    command: /bin/sh -c \"echo updated; sleep 300\"\n"}`
+	layerPayload := `{
+  "action": "add",
+  "label": "update",
+  "format": "yaml",
+  "layer": "services:\n  test2:\n    override: merge\n    command: /bin/sh -c \"echo updated; sleep 300\"\n"
+}`
 	req, err = http.NewRequest("POST", "/v1/layers", strings.NewReader(layerPayload))
 	c.Assert(err, IsNil)
 	rsp = v1PostLayers(apiCmd("/v1/layers"), req, nil).(*resp)
@@ -282,7 +287,7 @@ func (s *apiSuite) TestServicesGetNotes(c *C) {
 	svc := result[0].(map[string]any)
 	c.Check(svc["name"], Equals, "test2")
 	c.Check(svc["current"], Equals, "active")
-	c.Check(svc["obsolete"], Equals, true)
+	c.Check(svc["outdated"], Equals, true)
 }
 
 func (s *apiSuite) TestServicesRestart(c *C) {

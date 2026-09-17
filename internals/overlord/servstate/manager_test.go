@@ -807,7 +807,7 @@ func (s *S) TestServices(c *C) {
 		{Name: "test5", Current: servstate.StatusInactive, Startup: servstate.StartupDisabled},
 	})
 
-	// Add a layer modifying test2's configuration and verify it's reported as obsolete
+	// Add a layer modifying test2's configuration and verify it's reported as outdated
 	s.planAddLayer(c, `
 services:
     test2:
@@ -820,7 +820,7 @@ services:
 	c.Assert(err, IsNil)
 	services[0].CurrentSince = time.Time{}
 	c.Assert(services, DeepEquals, []*servstate.ServiceInfo{
-		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled, Obsolete: true},
+		{Name: "test2", Current: servstate.StatusActive, Startup: servstate.StartupDisabled, Outdated: true},
 	})
 }
 

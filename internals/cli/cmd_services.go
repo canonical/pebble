@@ -103,8 +103,8 @@ func (cmd *cmdServices) writeText(services []*client.ServiceInfo) error {
 // of the given service, or "-" if there are none.
 func serviceNotes(svc *client.ServiceInfo) string {
 	var notes []string
-	if svc.Obsolete {
-		notes = append(notes, "obsolete")
+	if svc.Outdated {
+		notes = append(notes, "outdated")
 	}
 	if len(notes) == 0 {
 		return "-"
