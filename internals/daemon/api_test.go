@@ -58,11 +58,11 @@ func (s *apiSuite) SetUpTest(c *check.C) {
 }
 
 func (s *apiSuite) TearDownTest(c *check.C) {
-	if s.overlordStarted {
+	if s.d != nil {
 		s.d.Overlord().Stop()
-		s.overlordStarted = false
+		s.d = nil
 	}
-	s.d = nil
+	s.overlordStarted = false
 	s.pebbleDir = ""
 	s.restoreMuxVars()
 

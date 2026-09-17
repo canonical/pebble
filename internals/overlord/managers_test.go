@@ -46,3 +46,9 @@ func (s *mgrsSuite) SetUpTest(c *C) {
 	c.Assert(err, IsNil)
 	s.o = o
 }
+
+func (s *mgrsSuite) TearDownTest(c *C) {
+	if s.o != nil {
+		c.Assert(s.o.Stop(), IsNil)
+	}
+}
