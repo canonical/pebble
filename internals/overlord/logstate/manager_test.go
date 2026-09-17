@@ -132,6 +132,8 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 
 	gathererOptions := logGathererOptions{
 		timeoutCurrentFlush: 5 * time.Millisecond,
+		timeoutPullers:      5 * time.Millisecond,
+		timeoutMainLoop:     5 * time.Millisecond,
 		timeoutFinalFlush:   5 * time.Millisecond,
 		newClient: func(_ *plan.LogTarget) (logClient, error) {
 			return client, nil

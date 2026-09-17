@@ -88,6 +88,8 @@ type logGathererOptions struct {
 	bufferTimeout       time.Duration
 	maxBufferedEntries  int
 	timeoutCurrentFlush time.Duration
+	timeoutPullers      time.Duration
+	timeoutMainLoop     time.Duration
 	timeoutFinalFlush   time.Duration
 	// method to get a new client
 	newClient func(*plan.LogTarget) (logClient, error)
@@ -132,6 +134,12 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 	}
 	if options.timeoutCurrentFlush == 0 {
 		options.timeoutCurrentFlush = timeoutCurrentFlush
+	}
+	if options.timeoutPullers == 0 {
+		options.timeoutPullers = timeoutPullers
+	}
+	if options.timeoutMainLoop == 0 {
+		options.timeoutMainLoop = timeoutMainLoop
 	}
 	if options.timeoutFinalFlush == 0 {
 		options.timeoutFinalFlush = timeoutFinalFlush
@@ -284,7 +292,7 @@ func (g *logGatherer) Stop() {
 
 	// Wait up to timeoutPullers for the pullers to pull the final logs from the
 	// iterator and send to the main loop.
-	time.AfterFunc(timeoutPullers, func() {
+	time.AfterFunc(g.timeoutPullers, func() {
 		logger.Debugf("gatherer %q: force killing log pullers", g.targetName)
 		g.pullers.KillAll()
 	})
@@ -296,7 +304,7 @@ func (g *logGatherer) Stop() {
 	select {
 	case <-g.pullers.Done():
 		logger.Debugf("gatherer %q: pullers have finished", g.targetName)
-	case <-time.After(timeoutMainLoop):
+	case <-time.After(g.timeoutMainLoop):
 		logger.Debugf("gatherer %q: force killing main loop", g.targetName)
 	}
 
