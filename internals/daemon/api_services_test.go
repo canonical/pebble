@@ -381,6 +381,8 @@ services:
 	c.Assert(err, IsNil)
 	err = daemon.Start()
 	c.Assert(err, IsNil)
+	s.d = daemon
+	defer daemon.Stop(nil)
 
 	// To try to reproduce the deadlock, call these endpoints in a loop:
 	// - GET /v1/services

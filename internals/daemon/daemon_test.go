@@ -77,6 +77,7 @@ type daemonSuite struct {
 	authorized   bool
 	err          error
 	notified     []string
+	daemons      []*Daemon
 }
 
 var _ = Suite(&daemonSuite{})
@@ -98,6 +99,13 @@ func (s *daemonSuite) SetUpTest(c *C) {
 }
 
 func (s *daemonSuite) TearDownTest(c *C) {
+	for _, d := range s.daemons {
+		func() {
+			defer func() { _ = recover() }()
+			_ = d.Overlord().Stop()
+		}()
+	}
+	s.daemons = nil
 	systemdSdNotify = systemd.SdNotify
 	stopOverlord = func(o *overlord.Overlord) { _ = o.Stop() }
 	s.notified = nil
@@ -121,6 +129,7 @@ func (s *daemonSuite) newDaemon(c *C) *Daemon {
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
+	s.daemons = append(s.daemons, d)
 	return d
 }
 
@@ -188,6 +197,7 @@ func (s *daemonSuite) TestExternalManager(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 	err = d.overlord.StartUp()
 	c.Assert(err, IsNil)
 	err = d.overlord.StateEngine().Ensure()
@@ -206,6 +216,7 @@ func (s *daemonSuite) TestNoExtension(c *C) {
 		HTTPAddress: s.httpAddress,
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	extension := d.overlord.Extension()
 	c.Assert(extension, IsNil)
@@ -219,6 +230,7 @@ func (s *daemonSuite) TestWrongExtension(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	_, ok := d.overlord.Extension().(*otherFakeExtension)
 	c.Assert(ok, Equals, false)

@@ -21,10 +21,10 @@ jobs:
 
     - name: Run staticcheck
       run: |
-        go install honnef.co/go/tools/cmd/staticcheck@v0.7.0
+        go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
         staticcheck ./...
 
     - name: Run govulncheck
       run: |
-        go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+        go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
         govulncheck ./...
