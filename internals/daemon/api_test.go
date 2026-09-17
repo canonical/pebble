@@ -20,7 +20,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"math/big"
-	"net/http"
 	"net/http/httptest"
 	"os"
 	"time"
@@ -40,9 +39,6 @@ type apiSuite struct {
 
 	pebbleDir string
 
-	vars map[string]string
-
-	restorePathVars func()
 	overlordStarted bool
 }
 
@@ -53,7 +49,6 @@ func (s *apiSuite) SetUpTest(c *check.C) {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
 
-	s.restorePathVars = FakePathVars(s.pathVars)
 	s.pebbleDir = c.MkDir()
 }
 
@@ -64,17 +59,12 @@ func (s *apiSuite) TearDownTest(c *check.C) {
 	}
 	s.overlordStarted = false
 	s.pebbleDir = ""
-	s.restorePathVars()
 
 	err := reaper.Stop()
 	if err != nil {
 		c.Fatalf("cannot stop reaper: %v", err)
 	}
 	plan.UnregisterSectionExtension(pairingstate.PairingField)
-}
-
-func (s *apiSuite) pathVars(*http.Request) map[string]string {
-	return s.vars
 }
 
 func (s *apiSuite) daemon(c *check.C) *Daemon {
