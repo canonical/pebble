@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -246,9 +247,14 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 	if !ok {
 		// First occurrence of this notice userID+type+key
 		s.lastNoticeId++
+		var noticeUserID *uint32
+		if userID != nil {
+			copiedUserID := *userID
+			noticeUserID = &copiedUserID
+		}
 		notice = &Notice{
 			id:            strconv.Itoa(s.lastNoticeId),
-			userID:        userID,
+			userID:        noticeUserID,
 			noticeType:    noticeType,
 			key:           key,
 			firstOccurred: now,
@@ -268,7 +274,7 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 		}
 	}
 	notice.lastOccurred = now
-	notice.lastData = options.Data
+	notice.lastData = maps.Clone(options.Data)
 	notice.repeatAfter = options.RepeatAfter
 
 	// Update the latest warning time cache if needed. There's no need to
