@@ -946,10 +946,15 @@ func (layer *Layer) Validate() error {
 		}
 
 		if check.Exec != nil {
-			_, err := shlex.Split(check.Exec.Command)
+			args, err := shlex.Split(check.Exec.Command)
 			if err != nil {
 				return &FormatError{
 					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			if len(args) == 0 && check.Exec.Command != "" {
+				return &FormatError{
+					Message: fmt.Sprintf("cannot parse check %q exec command: command cannot be empty", name),
 				}
 			}
 			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
