@@ -98,9 +98,6 @@ func (resp *RequestResponse) DecodeResult(result any) error {
 	if err := dec.Decode(&result); err != nil {
 		return fmt.Errorf("cannot unmarshal: %w", err)
 	}
-	if dec.More() {
-		return fmt.Errorf("cannot unmarshal: cannot parse json value")
-	}
 	return nil
 }
 
