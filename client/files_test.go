@@ -243,9 +243,9 @@ func (cs *clientSuite) TestCalculateFileMode(c *C) {
 }
 
 func (cs *clientSuite) TestCalculateFileModeFails(c *C) {
-	for _, p := range []string{"-1", "x", "778"} {
+	for _, p := range []string{"-1", "-001", "x", "778", "1000", "1777", "7777"} {
 		_, err := client.CalculateFileMode("file", p)
-		c.Check(err, ErrorMatches, `invalid permission bits: ".*"`)
+		c.Check(err, ErrorMatches, `cannot parse permissions ".*": .*`)
 	}
 }
 
