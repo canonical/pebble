@@ -73,6 +73,12 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	var err error
+	switch payload.Action {
+	case "start", "stop", "restart", "replan", "autostart":
+	default:
+		return BadRequest("cannot perform service action %q: invalid action", payload.Action)
+	}
+
 	servmgr := overlordServiceManager(c.d.overlord)
 	switch payload.Action {
 	case "replan":
