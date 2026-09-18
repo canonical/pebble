@@ -116,6 +116,9 @@ func (fi *FileInfo) Group() string {
 
 // ListFiles obtains the contents of a directory or glob, or information about a file.
 func (client *Client) ListFiles(opts *ListFilesOptions) ([]*FileInfo, error) {
+	if opts == nil {
+		opts = &ListFilesOptions{}
+	}
 	q := make(url.Values)
 	q.Set("action", "list")
 	q.Set("path", opts.Path)

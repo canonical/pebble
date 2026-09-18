@@ -48,6 +48,13 @@ func (cs *clientSuite) TestLogsNoOptions(c *check.C) {
 `[1:])
 }
 
+func (cs *clientSuite) TestLogsNilOptions(c *check.C) {
+	cs.rsp = ""
+
+	err := cs.cli.Logs(nil)
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.URL.Query(), check.HasLen, 0)
+}
 func (cs *clientSuite) TestLogsServices(c *check.C) {
 	cs.rsp = `
 {"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}
@@ -135,6 +142,16 @@ func (cs *clientSuite) TestLogsLong(c *check.C) {
 	shortExpected2 := "2021-05-03T03:55:49.654Z [snappass] log two\n"
 	expected := shortExpected1 + longExpected + shortExpected2
 	c.Check(out.String(), check.Equals, expected)
+}
+
+func (cs *clientSuite) TestFollowLogsNilOptions(c *check.C) {
+	cs.rsp = ""
+
+	err := cs.cli.FollowLogs(context.Background(), nil)
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{
+		"follow": {"true"},
+	})
 }
 
 func (cs *clientSuite) TestFollowLogs(c *check.C) {

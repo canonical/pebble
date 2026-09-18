@@ -47,6 +47,19 @@ func (cs *clientSuite) TestHealthGet(c *check.C) {
 	})
 }
 
+func (cs *clientSuite) TestHealthNilOptions(c *check.C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": {"healthy": true}
+	}`
+
+	health, err := cs.cli.Health(nil)
+	c.Assert(err, check.IsNil)
+	c.Assert(health, check.Equals, true)
+	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{})
+}
 func (cs *clientSuite) TestHealthDefaultOptions(c *check.C) {
 	cs.rsp = `{
 		"type": "sync",
