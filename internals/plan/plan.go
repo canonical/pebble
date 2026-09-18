@@ -974,6 +974,11 @@ func (layer *Layer) Validate() error {
 					Message: fmt.Sprintf(`log target %q: label %q uses reserved prefix "pebble_"`, name, labelName),
 				}
 			}
+			if target.Type == OpenTelemetryTarget && labelName == "service.name" {
+				return &FormatError{
+					Message: fmt.Sprintf(`cannot specify "service.name" label for opentelemetry log target %q`, name),
+				}
+			}
 		}
 		switch target.Type {
 		case LokiTarget, OpenTelemetryTarget, SyslogTarget:
