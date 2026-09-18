@@ -17,6 +17,14 @@ package metrics
 import (
 	"fmt"
 	"io"
+	"regexp"
+	"strings"
+	"unicode/utf8"
+)
+
+var (
+	metricNameRegex = regexp.MustCompile(`^[a-zA-Z_:][a-zA-Z0-9_:]*$`)
+	labelNameRegex  = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 )
 
 type MetricType int
@@ -73,8 +81,6 @@ type OpenTelemetryWriter struct {
 	families map[string]*metricFamily
 }
 
-// metricFamily holds every sample sharing one metric name, in the order the
-// samples were written.
 type metricFamily struct {
 	metricType MetricType
 	comment    string
@@ -83,16 +89,14 @@ type metricFamily struct {
 
 // NewOpenTelemetryWriter creates a new OpenTelemetryWriter.
 func NewOpenTelemetryWriter(w io.Writer) *OpenTelemetryWriter {
-	return &OpenTelemetryWriter{
-		w:        w,
-		families: make(map[string]*metricFamily),
-	}
+	return &OpenTelemetryWriter{w: w, families: make(map[string]*metricFamily)}
 }
 
-// Write buffers a metric under its family. Type and Comment are taken from the
-// family's first sample, because they describe the family rather than the
-// sample.
+// Write buffers a metric under its family.
 func (otw *OpenTelemetryWriter) Write(m Metric) error {
+	if err := validateMetric(m); err != nil {
+		return err
+	}
 	family, ok := otw.families[m.Name]
 	if !ok {
 		family = &metricFamily{metricType: m.Type, comment: m.Comment}
@@ -103,9 +107,7 @@ func (otw *OpenTelemetryWriter) Write(m Metric) error {
 	return nil
 }
 
-// Flush writes every buffered metric to the underlying writer, one family at a
-// time in the order the families were first written, then empties the buffer
-// so the writer can be reused.
+// Flush writes every buffered metric to the underlying writer.
 func (otw *OpenTelemetryWriter) Flush() error {
 	order := otw.order
 	families := otw.families
@@ -120,60 +122,87 @@ func (otw *OpenTelemetryWriter) Flush() error {
 	return nil
 }
 
+func validateMetric(m Metric) error {
+	if !metricNameRegex.MatchString(m.Name) {
+		return fmt.Errorf("cannot write metric with invalid name %q", m.Name)
+	}
+	if err := validateText(m.Comment); err != nil {
+		return fmt.Errorf("cannot write metric with invalid help comment: %w", err)
+	}
+	for _, label := range m.Labels {
+		if !labelNameRegex.MatchString(label.key) {
+			return fmt.Errorf("cannot write metric with invalid label name %q", label.key)
+		}
+		if err := validateText(label.value); err != nil {
+			return fmt.Errorf("cannot write metric with invalid value for label %q: %w", label.key, err)
+		}
+	}
+	return nil
+}
+
+func validateText(value string) error {
+	if !utf8.ValidString(value) {
+		return fmt.Errorf("invalid UTF-8")
+	}
+	for _, r := range value {
+		if r < 0x20 && r != '\n' {
+			return fmt.Errorf("unsupported control character")
+		}
+	}
+	return nil
+}
+
 func (otw *OpenTelemetryWriter) writeFamily(name string, family *metricFamily) error {
 	if family.comment != "" {
-		_, err := fmt.Fprintf(otw.w, "# HELP %s %s\n", name, family.comment)
-		if err != nil {
+		if _, err := fmt.Fprintf(otw.w, "# HELP %s %s\n", name, escapeHelp(family.comment)); err != nil {
 			return err
 		}
 	}
-
-	_, err := fmt.Fprintf(otw.w, "# TYPE %s %s\n", name, family.metricType)
-	if err != nil {
+	if _, err := fmt.Fprintf(otw.w, "# TYPE %s %s\n", name, family.metricType); err != nil {
 		return err
 	}
-
 	for _, m := range family.samples {
 		if err := otw.writeSample(m); err != nil {
 			return err
 		}
 	}
-
-	_, err = io.WriteString(otw.w, "\n")
+	_, err := io.WriteString(otw.w, "\n")
 	return err
 }
 
 func (otw *OpenTelemetryWriter) writeSample(m Metric) error {
-	_, err := io.WriteString(otw.w, m.Name)
-	if err != nil {
+	if _, err := io.WriteString(otw.w, m.Name); err != nil {
 		return err
 	}
-
 	if len(m.Labels) > 0 {
-		_, err = io.WriteString(otw.w, "{")
-		if err != nil {
+		if _, err := io.WriteString(otw.w, "{"); err != nil {
 			return err
 		}
-
 		for i, label := range m.Labels {
 			if i > 0 {
-				_, err = io.WriteString(otw.w, ",")
-				if err != nil {
+				if _, err := io.WriteString(otw.w, ","); err != nil {
 					return err
 				}
 			}
-			_, err = fmt.Fprintf(otw.w, "%s=%q", label.key, label.value) // Use %q to quote values.
-			if err != nil {
+			if _, err := fmt.Fprintf(otw.w, "%s=\"%s\"", label.key, escapeLabelValue(label.value)); err != nil {
 				return err
 			}
 		}
-
-		_, err = io.WriteString(otw.w, "}")
-		if err != nil {
+		if _, err := io.WriteString(otw.w, "}"); err != nil {
 			return err
 		}
 	}
-
-	_, err = fmt.Fprintf(otw.w, " %d\n", m.ValueInt64)
+	_, err := fmt.Fprintf(otw.w, " %d\n", m.ValueInt64)
 	return err
+}
+
+func escapeHelp(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	return strings.ReplaceAll(value, "\n", `\n`)
+}
+
+func escapeLabelValue(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `"`, `\"`)
+	return strings.ReplaceAll(value, "\n", `\n`)
 }
