@@ -962,6 +962,11 @@ func (layer *Layer) Validate() error {
 	}
 
 	for name, target := range layer.LogTargets {
+		if name == "" {
+			return &FormatError{
+				Message: "cannot use empty string as log target name",
+			}
+		}
 		if target == nil {
 			return &FormatError{
 				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
