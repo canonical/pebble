@@ -32,9 +32,10 @@ func OpenPtyInDevpts(devpts_fd int, uid, gid int64) (*os.File, *os.File, error) 
 	// Create a PTS pair.
 	if devpts_fd >= 0 {
 		fd, err := unix.Openat(devpts_fd, "ptmx", os.O_RDWR|unix.O_CLOEXEC, 0)
-		if err == nil {
-			ptx = os.NewFile(uintptr(fd), "/dev/pts/ptmx")
+		if err != nil {
+			return nil, nil, err
 		}
+		ptx = os.NewFile(uintptr(fd), "/dev/pts/ptmx")
 	} else {
 		ptx, err = os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_CLOEXEC, 0)
 		if err != nil {
@@ -62,6 +63,7 @@ func OpenPtyInDevpts(devpts_fd int, uid, gid int64) (*os.File, *os.File, error) 
 		id := 0
 		_, _, errno = unix.Syscall(unix.SYS_IOCTL, uintptr(ptx.Fd()), unix.TIOCGPTN, uintptr(unsafe.Pointer(&id)))
 		if errno != 0 {
+			unix.Close(int(ptyFd))
 			return nil, nil, unix.Errno(errno)
 		}
 
