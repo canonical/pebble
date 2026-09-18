@@ -36,6 +36,13 @@ type identitiesSuite struct{}
 
 var _ = Suite(&identitiesSuite{})
 
+func (s *identitiesSuite) TestValidateInvalidNameUsesSuppliedName(c *C) {
+	identity := &identities.Identity{Name: "stale-name"}
+
+	err := identity.Validate("bad name")
+	c.Assert(err, ErrorMatches, `identity name "bad name" invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen`)
+}
+
 // Generated using `openssl req -new -x509 -out cert.pem -days 3650 -subj "/CN=canonical.com"`
 const validPEMX509Cert = `-----BEGIN CERTIFICATE-----
 MIIBRDCB96ADAgECAhROTkdEcgeil5/5NUNTq1ZRPDLiPTAFBgMrZXAwGDEWMBQG
