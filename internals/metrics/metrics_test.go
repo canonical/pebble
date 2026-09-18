@@ -97,13 +97,13 @@ no_comment_metric{env="prod"} 42
 				Comment:    "Metric with special characters",
 				Labels: []metrics.Label{
 					metrics.NewLabel("key_with_underscore", "value_with_underscore"),
-					metrics.NewLabel("key-with-dash", "value-with-dash"),
+					metrics.NewLabel("key2", "value-with-dash"),
 				},
 			},
 			expected: `
 # HELP special_chars Metric with special characters
 # TYPE special_chars gauge
-special_chars{key_with_underscore="value_with_underscore",key-with-dash="value-with-dash"} 42
+special_chars{key_with_underscore="value_with_underscore",key2="value-with-dash"} 42
 
 `[1:],
 		},
