@@ -2469,3 +2469,22 @@ func (s *S) TestReadDirBasePlanValidation(c *C) {
 	_, err = plan.ReadDir(tempDir, basePlan)
 	c.Assert(err, ErrorMatches, `plan must define "command" for service "broken-svc"`)
 }
+
+func (s *S) TestHTTPCheckHostHeader(c *C) {
+	for _, header := range []string{"Host", "host", "HOST"} {
+		layer, err := plan.ParseLayer(1, "layer-1", reindent(fmt.Sprintf(`
+		checks:
+			chk1:
+				override: replace
+				http:
+					url: https://example.com
+					headers:
+						%s: example.com
+	`, header)))
+		c.Assert(err, IsNil)
+		combined, err := plan.CombineLayers(layer)
+		c.Assert(err, IsNil)
+		err = (&plan.Plan{Checks: combined.Checks}).Validate()
+		c.Assert(err, ErrorMatches, `cannot specify "Host" header for http check "chk1"`)
+	}
+}
