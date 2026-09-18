@@ -1185,6 +1185,15 @@ var planTests = []planTest{{
 		Sections: map[string]plan.Section{},
 	},
 }, {
+	summary: "Log target name must not be empty",
+	error:   `cannot use empty string as log target name`,
+	input: []string{`
+		log-targets:
+			"":
+				type: loki
+				location: http://10.1.77.196:3100/loki/api/v1/push
+	`},
+}, {
 	summary: "Log target requires type field",
 	error:   `plan must define "type" \("loki", "opentelemetry" or "syslog"\) for log target "tgt1"`,
 	input: []string{`
