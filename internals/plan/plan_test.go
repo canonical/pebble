@@ -1233,6 +1233,18 @@ var planTests = []planTest{{
 				override: merge
 `},
 }, {
+	summary: "OpenTelemetry log target cannot specify service.name label",
+	error:   `cannot specify "service.name" label for opentelemetry log target "tgt1"`,
+	input: []string{`
+			log-targets:
+				tgt1:
+					type: opentelemetry
+					location: http://10.1.77.196:4318
+					labels:
+						service.name: my-service
+					override: merge
+	`},
+}, {
 	summary: "Log forwarding labels override",
 	input: []string{`
 		log-targets:
