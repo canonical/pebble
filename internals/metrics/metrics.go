@@ -61,31 +61,90 @@ type Writer interface {
 	Write(Metric) error
 }
 
-// OpenTelemetryWriter implements the Writer interface and formats metrics
-// in OpenTelemetryWriter exposition format.
+// OpenTelemetryWriter implements the Writer interface and formats metrics in
+// OpenMetrics exposition format.
+//
+// Metrics are buffered by name and written out by Flush, because the format
+// requires every sample of a metric under a single HELP and TYPE line, while
+// callers hand metrics over one service or check at a time.
 type OpenTelemetryWriter struct {
-	w io.Writer
+	w        io.Writer
+	order    []string
+	families map[string]*metricFamily
+}
+
+// metricFamily holds every sample sharing one metric name, in the order the
+// samples were written.
+type metricFamily struct {
+	metricType MetricType
+	comment    string
+	samples    []Metric
 }
 
 // NewOpenTelemetryWriter creates a new OpenTelemetryWriter.
 func NewOpenTelemetryWriter(w io.Writer) *OpenTelemetryWriter {
-	return &OpenTelemetryWriter{w: w}
+	return &OpenTelemetryWriter{
+		w:        w,
+		families: make(map[string]*metricFamily),
+	}
 }
 
+// Write buffers a metric under its family. Type and Comment are taken from the
+// family's first sample, because they describe the family rather than the
+// sample.
 func (otw *OpenTelemetryWriter) Write(m Metric) error {
-	if m.Comment != "" {
-		_, err := fmt.Fprintf(otw.w, "# HELP %s %s\n", m.Name, m.Comment)
+	family, ok := otw.families[m.Name]
+	if !ok {
+		family = &metricFamily{metricType: m.Type, comment: m.Comment}
+		otw.families[m.Name] = family
+		otw.order = append(otw.order, m.Name)
+	}
+	family.samples = append(family.samples, m)
+	return nil
+}
+
+// Flush writes every buffered metric to the underlying writer, one family at a
+// time in the order the families were first written, then empties the buffer
+// so the writer can be reused.
+func (otw *OpenTelemetryWriter) Flush() error {
+	order := otw.order
+	families := otw.families
+	otw.order = nil
+	otw.families = make(map[string]*metricFamily)
+
+	for _, name := range order {
+		if err := otw.writeFamily(name, families[name]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (otw *OpenTelemetryWriter) writeFamily(name string, family *metricFamily) error {
+	if family.comment != "" {
+		_, err := fmt.Fprintf(otw.w, "# HELP %s %s\n", name, family.comment)
 		if err != nil {
 			return err
 		}
 	}
 
-	_, err := fmt.Fprintf(otw.w, "# TYPE %s %s\n", m.Name, m.Type)
+	_, err := fmt.Fprintf(otw.w, "# TYPE %s %s\n", name, family.metricType)
 	if err != nil {
 		return err
 	}
 
-	_, err = io.WriteString(otw.w, m.Name)
+	for _, m := range family.samples {
+		if err := otw.writeSample(m); err != nil {
+			return err
+		}
+	}
+
+	_, err = io.WriteString(otw.w, "\n")
+	return err
+}
+
+func (otw *OpenTelemetryWriter) writeSample(m Metric) error {
+	_, err := io.WriteString(otw.w, m.Name)
 	if err != nil {
 		return err
 	}
@@ -115,10 +174,6 @@ func (otw *OpenTelemetryWriter) Write(m Metric) error {
 		}
 	}
 
-	_, err = fmt.Fprintf(otw.w, " %d\n\n", m.ValueInt64)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	_, err = fmt.Fprintf(otw.w, " %d\n", m.ValueInt64)
+	return err
 }
