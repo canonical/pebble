@@ -524,6 +524,36 @@ var planTests = []planTest{{
 				backoff-factor: foo
 	`},
 }, {
+	summary: `Non-finite backoff-factor NaN`,
+	error:   `plan service "svc1" backoff-factor must be a finite number`,
+	input: []string{`
+			services:
+				"svc1":
+					override: replace
+					command: cmd
+					backoff-factor: NaN
+		`},
+}, {
+	summary: `Non-finite backoff-factor positive infinity`,
+	error:   `plan service "svc1" backoff-factor must be a finite number`,
+	input: []string{`
+			services:
+				"svc1":
+					override: replace
+					command: cmd
+					backoff-factor: +Inf
+		`},
+}, {
+	summary: `Non-finite backoff-factor negative infinity`,
+	error:   `plan service "svc1" backoff-factor must be a finite number`,
+	input: []string{`
+			services:
+				"svc1":
+					override: replace
+					command: cmd
+					backoff-factor: -Inf
+		`},
+}, {
 	summary: `Invalid service command`,
 	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: EOF found when expecting closing quote`,
 	input: []string{`
