@@ -48,6 +48,19 @@ type makeDirsItem struct {
 	Group       string `json:"group"`
 }
 
+func (cs *clientSuite) TestListFilesNilOptions(c *C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": []
+	}`
+
+	result, err := cs.cli.ListFiles(nil)
+	c.Assert(err, IsNil)
+	c.Assert(result, HasLen, 0)
+	c.Assert(cs.req.URL.Query().Get("path"), Equals, "")
+}
 func (cs *clientSuite) TestListFiles(c *C) {
 	cs.rsp = `{
 		"type": "sync",

@@ -65,6 +65,9 @@ func (client *Client) FollowLogs(ctx context.Context, opts *LogsOptions) error {
 }
 
 func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) error {
+	if opts == nil {
+		opts = &LogsOptions{}
+	}
 	query := url.Values{}
 	for _, service := range opts.Services {
 		query.Add("services", service)

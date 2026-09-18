@@ -121,6 +121,9 @@ type CheckInfo struct {
 // Checks fetches information about specific health checks (or all of them),
 // ordered by check name.
 func (client *Client) Checks(opts *ChecksOptions) ([]*CheckInfo, error) {
+	if opts == nil {
+		opts = &ChecksOptions{}
+	}
 	query := make(url.Values)
 	if opts.Level != UnsetLevel {
 		query.Set("level", string(opts.Level))
