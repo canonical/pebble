@@ -116,7 +116,8 @@ func (m *PlanManager) Plan() *plan.Plan {
 // layer.Order field to the new order. If a layer with layer.Label already
 // exists, return an error of type *LabelExists. Inner must be set to true
 // if the append operation may be demoted to an insert due to the layer
-// configuration being located in a sub-directory.
+// configuration being located in a sub-directory. On any error the plan is
+// left exactly as it was, including its layer list.
 func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
 	var newPlan *plan.Plan
 	defer func() { m.callChangeListeners(newPlan) }()
@@ -240,7 +241,9 @@ func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan,
 		return nil, fmt.Errorf("cannot insert sub-directory layer without 'inner' attribute set")
 	}
 
-	newLayers := slices.Insert(m.plan.Layers, newIndex, newLayer)
+	// Insert into a copy: slices.Insert shifts in place when the slice has
+	// spare capacity, which would change the live plan before validation.
+	newLayers := slices.Insert(slices.Clone(m.plan.Layers), newIndex, newLayer)
 	newPlan, err := m.updatePlanLayers(newLayers)
 	if err != nil {
 		return nil, err
