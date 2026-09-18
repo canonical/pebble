@@ -431,6 +431,32 @@ func (s *noticesSuite) TestCheckpoint(c *C) {
 	c.Check(n["key"], Equals, "foo.com/bar")
 }
 
+func (s *noticesSuite) TestPruneNoticesCheckpoint(c *C) {
+	backend := &fakeStateBackend{}
+	st := state.New(backend)
+	st.Lock()
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/old", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/new", nil)
+	st.Unlock()
+	c.Assert(backend.checkpoints, HasLen, 1)
+
+	st, err := state.ReadState(backend, bytes.NewReader(backend.checkpoints[0]))
+	c.Assert(err, IsNil)
+	st.Lock()
+	st.Prune(time.Now(), 0, 0, 0, 1)
+	st.Unlock()
+	c.Assert(backend.checkpoints, HasLen, 2)
+
+	st, err = state.ReadState(nil, bytes.NewReader(backend.checkpoints[1]))
+	c.Assert(err, IsNil)
+	st.Lock()
+	defer st.Unlock()
+	c.Assert(st.Notices(nil), HasLen, 1)
+	n := noticeToMap(c, st.Notices(nil)[0])
+	c.Assert(n["key"], Equals, "foo.com/new")
+}
+
 func (s *noticesSuite) TestDeleteExpired(c *C) {
 	st := state.New(nil)
 	st.Lock()
