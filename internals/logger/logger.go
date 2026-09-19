@@ -135,6 +135,8 @@ const (
 
 // SetAppID sets the "appid" field used for security logging. The default is "pebble".
 func SetAppID(s string) {
+	loggerLock.Lock()
+	defer loggerLock.Unlock()
 	appID = s
 }
 

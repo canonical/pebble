@@ -98,6 +98,36 @@ func (s *LogSuite) TestSecurityCritical(c *C) {
 	)
 }
 
+func (s *LogSuite) TestSetAppID(c *C) {
+	defer logger.SetAppID("pebble")
+
+	logger.SetAppID("test-app")
+	logger.SecurityWarn(logger.SecuritySysShutdown, "", "")
+	c.Check(s.logbuf.String(), Matches,
+		`20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d.\d\d\dZ PREFIX: `+
+			`\{"type":"security","datetime":"2\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ","level":"WARN","event":"sys_shutdown","appid":"test-app"\}\n`,
+	)
+}
+
+func (s *LogSuite) TestSetAppIDConcurrentWithSecurityLogging(c *C) {
+	defer logger.SetAppID("pebble")
+
+	var t tomb.Tomb
+	t.Go(func() error {
+		for range 1000 {
+			logger.SetAppID("test-app")
+		}
+		return nil
+	})
+	t.Go(func() error {
+		for range 1000 {
+			logger.SecurityWarn(logger.SecuritySysShutdown, "", "")
+		}
+		return nil
+	})
+	c.Check(t.Wait(), IsNil)
+}
+
 func (s *LogSuite) TestMockLoggerReadWriteThreadsafe(c *C) {
 	var t tomb.Tomb
 	t.Go(func() error {
