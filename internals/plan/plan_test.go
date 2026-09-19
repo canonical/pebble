@@ -924,6 +924,16 @@ var planTests = []planTest{{
 				exec: {}
 `},
 }, {
+	summary: `Empty exec check command`,
+	error:   `cannot parse check "chk1" exec command: command cannot be empty`,
+	input: []string{`
+			checks:
+				chk1:
+					override: replace
+					exec:
+						command: "   "
+	`},
+}, {
 	summary: `Invalid exec check command`,
 	error:   `plan check "chk1" command invalid: EOF found when expecting closing quote`,
 	input: []string{`
