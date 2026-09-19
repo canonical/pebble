@@ -14,11 +14,16 @@
 
 package cmd
 
+import _ "embed"
+
 //go:generate ./mkversion.sh
 
-// Version will be overwritten at build-time via mkversion.sh
-var Version = "v1.32.2"
+// Version is the Pebble version.
+//
+//go:embed version
+var Version string
 
+// MockVersion temporarily changes Version and returns a function to restore it.
 func MockVersion(version string) (restore func()) {
 	old := Version
 	Version = version

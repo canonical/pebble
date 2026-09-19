@@ -238,7 +238,7 @@ jobs:
           BASE_BRANCH: ${{ steps.vars.outputs.base-branch }}
         run: |
           set -eu
-          CURRENT=$(sed -n 's/^var Version = "\(.*\)"$/\1/p' cmd/version.go)
+          CURRENT=$(cat cmd/version)
           if [[ "$CURRENT" == "$EXPECTED_VERSION" ]]; then
             echo "${BASE_BRANCH} is already at ${EXPECTED_VERSION}."
             echo "done=true" >> "$GITHUB_OUTPUT"
@@ -404,8 +404,8 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          sed -i "s/^var Version = \".*\"\$/var Version = \"${VERSION}\"/" cmd/version.go
-          grep -qF "var Version = \"${VERSION}\"" cmd/version.go
+          printf '%s' "$VERSION" > cmd/version
+          grep -qF "$VERSION" cmd/version
 
       - name: Update cmd/version.go (FIPS)
         if: inputs.fips && steps.current.outputs.done != 'true' && steps.existing.outputs.found != 'true' && steps.merge.outputs.conflicts != 'true'
@@ -413,9 +413,9 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          sed -i "s/^var Version = \".*\"\$/var Version = \"${VERSION}-fips\"/" cmd/version.go
-          grep -qF "var Version = \"${VERSION}-fips\"" cmd/version.go
-          git add cmd/version.go
+          printf '%s' "$VERSION-fips" > cmd/version
+          grep -qF "$VERSION-fips" cmd/version
+          git add cmd/version
 
       # If there were fips merge conflicts, they're resolved by the
       # resolve-fips-conflicts + prepare-finish jobs instead, since that
@@ -645,9 +645,9 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          sed -i "s/^var Version = \".*\"\$/var Version = \"${VERSION}-fips\"/" cmd/version.go
-          grep -qF "var Version = \"${VERSION}-fips\"" cmd/version.go
-          git add cmd/version.go
+          printf '%s' "$VERSION-fips" > cmd/version
+          grep -qF "$VERSION-fips" cmd/version
+          git add cmd/version
 
       - name: Commit
         env:
@@ -776,9 +776,9 @@ jobs:
         id: version
         run: |
           set -eu
-          VERSION=$(sed -n 's/^var Version = "\(.*\)"$/\1/p' cmd/version.go)
+          VERSION=$(cat cmd/version)
           if [[ -z "$VERSION" ]]; then
-            echo "::error::Could not determine version from cmd/version.go"
+            echo "::error::Could not determine version from cmd/version"
             exit 1
           fi
           echo "Version is ${VERSION}"
