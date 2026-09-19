@@ -419,7 +419,25 @@ services:
 	c.Check(tasks, HasLen, 0)
 }
 
-// Regression test for 3-lock deadlock issue described in
+func (s *apiSuite) TestServicesInvalidAction(c *C) {
+	// Setup.
+	d := s.daemon(c)
+	c.Assert(d, NotNil)
+
+	// Execute.
+	req, err := http.NewRequest("POST", "/v1/services", strings.NewReader(`{"action": "bogus"}`))
+	c.Assert(err, IsNil)
+	rsp := v1PostServices(apiCmd("/v1/services"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	// Verify.
+	c.Check(rec.Code, Equals, http.StatusBadRequest)
+	c.Check(rsp.Type, Equals, ResponseTypeError)
+	result := rsp.Result.(*errorResult)
+	c.Check(result.Message, Equals, `cannot perform service action "bogus": invalid action`)
+}
+
 // https://github.com/canonical/pebble/issues/314
 func (s *apiSuite) TestDeadlock(c *C) {
 	// Set up
