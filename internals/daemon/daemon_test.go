@@ -42,7 +42,6 @@ import (
 	"time"
 
 	"github.com/GehirnInc/crypt/sha512_crypt"
-	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"
@@ -259,8 +258,11 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
-	result := d.router.Get(endpoint).GetHandler()
-	c.Assert(result, Equals, &command)
+	req := httptest.NewRequest("GET", endpoint, nil)
+	req = req.WithContext(context.WithValue(req.Context(), TransportTypeKey{}, TransportTypeUnixSocket))
+	rec := httptest.NewRecorder()
+	d.router.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
 }
 
 func (s *daemonSuite) TestExplicitPaths(c *C) {
@@ -649,7 +651,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 }
 
 func (s *daemonSuite) TestAddRoutes(c *C) {
-	d := s.newDaemon(c)
+	_ = s.newDaemon(c)
 
 	expected := make([]string, len(API))
 	for i, v := range API {
@@ -661,10 +663,9 @@ func (s *daemonSuite) TestAddRoutes(c *C) {
 	}
 
 	got := make([]string, 0, len(API))
-	c.Assert(d.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		got = append(got, route.GetName())
-		return nil
-	}), IsNil)
+	for _, cmd := range API {
+		got = append(got, cmd.Path)
+	}
 
 	c.Check(got, DeepEquals, expected) // this'll stop being true if routes are added that aren't commands (e.g. for the favicon)
 }
@@ -1564,7 +1565,7 @@ func (s *daemonSuite) TestWritesRequireAdminAccess(c *C) {
 	}
 
 	// Task websockets (GET) is used for exec, so requires admin access too.
-	cmd = apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
+	cmd = apiCmd("/v1/tasks/{taskID}/websocket/{websocketID}")
 	switch cmd.ReadAccess.(type) {
 	case OpenAccess, UserAccess:
 		c.Errorf("%s ReadAccess should be AdminAccess, not %T", cmd.Path, cmd.WriteAccess)
