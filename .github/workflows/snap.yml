@@ -338,7 +338,7 @@ jobs:
       # Ensure Snapcraft will ship the generated version files to LP.
       - run: |
           go generate ./cmd
-          git add -f ./cmd/VERSION ./cmd/version_generated.go
+          git add -f ./cmd/VERSION
 
       - name: Build Snap for ${{ matrix.arch }}
         id: build-snap

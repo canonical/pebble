@@ -42,10 +42,10 @@ parts:
     source: .
     build-snaps:
       - go/1.27/stable
-    # The snap build relies on the cmd/version*.go files within the source path.
+    # The snap build relies on the cmd/VERSION file within the source path.
     # For proper versioning, run "go generate ./cmd/" before building the snap.
     # If doing a "snapcraft remote-build", ensure you've also run
-    # "git add -f ./cmd/VERSION ./cmd/version_generated.go".
+    # "git add -f ./cmd/VERSION".
     override-build: |
       which go
       go version
