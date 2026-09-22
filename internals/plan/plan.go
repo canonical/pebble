@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -1036,6 +1037,13 @@ func (p *Plan) Validate() error {
 			if check.HTTP.URL == "" {
 				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "url" for http check %q`, name),
+				}
+			}
+			for header := range check.HTTP.Headers {
+				if http.CanonicalHeaderKey(header) == "Host" {
+					return &FormatError{
+						Message: fmt.Sprintf(`cannot specify "Host" header for http check %q`, name),
+					}
 				}
 			}
 			numTypes++
