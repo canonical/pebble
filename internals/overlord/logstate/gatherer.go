@@ -182,7 +182,7 @@ func (g *logGatherer) PlanChanged(pl *plan.Plan, buffers map[string]*servicelog.
 		// we need to wait until the buffer is created, and then we can update the
 		// pullers inside ServiceStarted.
 		buffer, svcStarted := buffers[service.Name]
-		if svcStarted {
+		if svcStarted && !g.pullers.contains(service.Name) {
 			g.pullers.Add(service.Name, buffer, g.entryCh)
 		}
 	}
