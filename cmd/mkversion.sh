@@ -13,7 +13,7 @@ set -e
 
 # we have two directories we need to care about:
 # - our toplevel pkg builddir which is where "mkversion.sh" is located
-#   and where "snap-confine" expects its cmd/version file
+#   and where "snap-confine" expects its cmd/VERSION file
 # - the GO_GENERATE_BUILDDIR which may be the toplevel pkg dir. but
 #   during "dpkg-buildpackage" it will become a different _build/ dir
 #   that dh-golang creates and that only contains a subset of the
@@ -71,7 +71,7 @@ fi
 
 echo "*** Setting version to '$v' from $o." >&2
 
-printf '%s' "$v" > "$GO_GENERATE_BUILDDIR/version"
+printf '%s' "$v" > "$GO_GENERATE_BUILDDIR/VERSION"
 
 #cat <<EOF > "$PKG_BUILDDIR/data/info"
 #VERSION=$v

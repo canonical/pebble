@@ -20,7 +20,7 @@ import _ "embed"
 
 // Version is the Pebble version.
 //
-//go:embed version
+//go:embed VERSION
 var Version string
 
 // MockVersion temporarily changes Version and returns a function to restore it.

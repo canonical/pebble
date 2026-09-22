@@ -3,7 +3,7 @@ name: Release
 # Prepares and drives an entire Pebble release (either a normal master release,
 # or a FIPS release):
 #
-#   1. Bump `Version` in cmd/version.go on `master` (or, for FIPS, merge an
+#   1. Bump version in cmd/VERSION on `master` (or, for FIPS, merge an
 #      already-published release tag into `fips` and append the `-fips` suffix),
 #      open a PR for it, and wait for it to be approved and merged.
 #   2. Tag the tip of the target branch, draft a GitHub release with title/notes
@@ -238,7 +238,7 @@ jobs:
           BASE_BRANCH: ${{ steps.vars.outputs.base-branch }}
         run: |
           set -eu
-          CURRENT=$(cat cmd/version)
+          CURRENT=$(cat cmd/VERSION)
           if [[ "$CURRENT" == "$EXPECTED_VERSION" ]]; then
             echo "${BASE_BRANCH} is already at ${EXPECTED_VERSION}."
             echo "done=true" >> "$GITHUB_OUTPUT"
@@ -398,24 +398,24 @@ jobs:
           path: /tmp/merge-state/fips-merge-state.tar.gz
           retention-days: 1
 
-      - name: Update cmd/version.go (non-FIPS)
+      - name: Update cmd/VERSION (non-FIPS)
         if: "!inputs.fips && steps.current.outputs.done != 'true' && steps.existing.outputs.found != 'true'"
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          printf '%s' "$VERSION" > cmd/version
-          grep -qF "$VERSION" cmd/version
+          printf '%s' "$VERSION" > cmd/VERSION
+          grep -qF "$VERSION" cmd/VERSION
 
-      - name: Update cmd/version.go (FIPS)
+      - name: Update cmd/VERSION (FIPS)
         if: inputs.fips && steps.current.outputs.done != 'true' && steps.existing.outputs.found != 'true' && steps.merge.outputs.conflicts != 'true'
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          printf '%s' "$VERSION-fips" > cmd/version
-          grep -qF "$VERSION-fips" cmd/version
-          git add cmd/version
+          printf '%s' "$VERSION-fips" > cmd/VERSION
+          grep -qF "$VERSION-fips" cmd/VERSION
+          git add cmd/VERSION
 
       # If there were fips merge conflicts, they're resolved by the
       # resolve-fips-conflicts + prepare-finish jobs instead, since that
@@ -640,14 +640,14 @@ jobs:
 
           echo "reverted=true" >> "$GITHUB_OUTPUT"
 
-      - name: Update cmd/version.go (FIPS)
+      - name: Update cmd/VERSION (FIPS)
         env:
           VERSION: ${{ inputs.version }}
         run: |
           set -eu
-          printf '%s' "$VERSION-fips" > cmd/version
-          grep -qF "$VERSION-fips" cmd/version
-          git add cmd/version
+          printf '%s' "$VERSION-fips" > cmd/VERSION
+          grep -qF "$VERSION-fips" cmd/VERSION
+          git add cmd/VERSION
 
       - name: Commit
         env:
@@ -776,9 +776,9 @@ jobs:
         id: version
         run: |
           set -eu
-          VERSION=$(cat cmd/version)
+          VERSION=$(cat cmd/VERSION)
           if [[ -z "$VERSION" ]]; then
-            echo "::error::Could not determine version from cmd/version"
+            echo "::error::Could not determine version from cmd/VERSION"
             exit 1
           fi
           echo "Version is ${VERSION}"
