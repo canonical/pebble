@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -899,6 +900,11 @@ func (layer *Layer) Validate() error {
 				return &FormatError{
 					Message: fmt.Sprintf("plan service %q on-check-failure action %q invalid", name, action),
 				}
+			}
+		}
+		if service.BackoffFactor.IsSet && (math.IsNaN(service.BackoffFactor.Value) || math.IsInf(service.BackoffFactor.Value, 0)) {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-factor must be a finite number", name),
 			}
 		}
 		if service.BackoffFactor.IsSet && service.BackoffFactor.Value < 1 {
