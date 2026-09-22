@@ -438,6 +438,7 @@ func (s *apiSuite) TestServicesInvalidAction(c *C) {
 	c.Check(result.Message, Equals, `cannot perform service action "bogus": invalid action`)
 }
 
+// Regression test for 3-lock deadlock issue described in
 // https://github.com/canonical/pebble/issues/314
 func (s *apiSuite) TestDeadlock(c *C) {
 	// Set up
