@@ -247,14 +247,12 @@ func (s *State) AddNotice(userID *uint32, noticeType NoticeType, key string, opt
 	if !ok {
 		// First occurrence of this notice userID+type+key
 		s.lastNoticeId++
-		var noticeUserID *uint32
 		if userID != nil {
-			copiedUserID := *userID
-			noticeUserID = &copiedUserID
+			userID = new(*userID)
 		}
 		notice = &Notice{
 			id:            strconv.Itoa(s.lastNoticeId),
-			userID:        noticeUserID,
+			userID:        userID,
 			noticeType:    noticeType,
 			key:           key,
 			firstOccurred: now,
