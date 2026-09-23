@@ -18,6 +18,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // Used to strip the Pebble log prefix, for example: "2006-01-02T15:04:05.000Z [service] "
@@ -36,7 +37,8 @@ func LastLines(logBuffer *RingBuffer, n int, indent string, stripPrefix bool) (s
 	}
 
 	// Indent lines
-	trimmed := strings.TrimSpace(string(logBytes))
+	trimmed := strings.TrimLeftFunc(string(logBytes), unicode.IsSpace)
+	trimmed = strings.TrimSuffix(trimmed, "\n")
 	lines := strings.Split(trimmed, "\n")
 	if len(lines) > n {
 		// Prefix with truncation marker if too many lines
