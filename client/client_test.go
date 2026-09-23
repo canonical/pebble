@@ -34,6 +34,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
@@ -484,6 +485,38 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *C) {
 	si, err := cli.SysInfo()
 	c.Check(err, IsNil)
 	c.Check(si.Version, Equals, "1")
+}
+
+func (cs *clientSuite) TestGetWebsocketBasicAuth(c *C) {
+	testUsername := "foo"
+	testPassword := "bar"
+	upgrader := websocket.Upgrader{}
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.URL.Path, Equals, "/v1/tasks/T1/websocket/stdio")
+		// Basic Auth
+		u, p, ok := r.BasicAuth()
+		c.Check(ok, Equals, true)
+		c.Check(u, Equals, testUsername)
+		c.Check(p, Equals, testPassword)
+
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn.Close()
+	}
+	srv := httptest.NewServer(http.HandlerFunc(handler))
+	defer srv.Close()
+
+	cli, err := client.New(&client.Config{
+		BaseURL:       srv.URL,
+		BasicUsername: testUsername,
+		BasicPassword: testPassword,
+	})
+	c.Assert(err, IsNil)
+	ws, err := cli.GetWebsocket("/v1/tasks/T1/websocket/stdio")
+	c.Assert(err, IsNil)
+	c.Assert(ws.Close(), IsNil)
 }
 
 func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
