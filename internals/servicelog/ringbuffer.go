@@ -305,14 +305,21 @@ out:
 }
 
 // Discard disposes of n bytes from the tail of the buffer making
-// them available to be used for subsequent writes.
+// them available to be used for subsequent writes. If n is negative,
+// ErrRange is returned.
 func (rb *RingBuffer) Discard(n int) error {
+	if n < 0 {
+		return ErrRange
+	}
 	rb.rwlock.Lock()
 	defer rb.rwlock.Unlock()
 	return rb.discard(n)
 }
 
 func (rb *RingBuffer) discard(n int) error {
+	if n < 0 {
+		return ErrRange
+	}
 	buffered := rb.buffered()
 	if n > buffered {
 		n = buffered
