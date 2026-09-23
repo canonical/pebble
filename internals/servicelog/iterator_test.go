@@ -311,6 +311,17 @@ func (s *iteratorSuite) TestCloseWhileNextBlocked(c *C) {
 	}
 }
 
+func (s *iteratorSuite) TestBufferedAfterClose(c *C) {
+	rb := servicelog.NewRingBuffer(100)
+	fmt.Fprint(rb, "0123456789")
+	iter := rb.TailIterator()
+
+	c.Assert(iter.Buffered(), Equals, 10)
+	err := iter.Close()
+	c.Assert(err, IsNil)
+	c.Assert(iter.Buffered(), Equals, 0)
+}
+
 func (s *iteratorSuite) TestClosedIteration(c *C) {
 	rb := servicelog.NewRingBuffer(10)
 	fmt.Fprint(rb, "0123456789")
