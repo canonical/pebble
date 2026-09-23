@@ -76,6 +76,29 @@ func (s *noticesSuite) TestMarshal(c *C) {
 	})
 }
 
+func (s *noticesSuite) TestAddNoticeCopiesInput(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	uid := uint32(1000)
+	data := map[string]string{"key": "value"}
+	_, err := st.AddNotice(&uid, state.CustomNotice, "foo.com/copy", &state.AddNoticeOptions{Data: data})
+	c.Assert(err, IsNil)
+
+	uid = 2000
+	data["key"] = "changed"
+	data["new-key"] = "new-value"
+
+	notices := st.Notices(nil)
+	c.Assert(notices, HasLen, 1)
+	userID, isSet := notices[0].UserID()
+	c.Assert(isSet, Equals, true)
+	c.Assert(userID, Equals, uint32(1000))
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["last-data"], DeepEquals, map[string]any{"key": "value"})
+}
+
 func (s *noticesSuite) TestUnmarshal(c *C) {
 	noticeJSON := []byte(`{
 		"id": "1",
