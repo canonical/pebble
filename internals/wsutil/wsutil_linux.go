@@ -62,12 +62,12 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 	}
 
 	ch := make(chan ([]byte))
-
-	// Takes care that the closeChannel() function is exactly executed once.
-	// This allows us to avoid using a mutex.
-	var once sync.Once
-	closeChannel := func() {
-		close(ch)
+	stopReader := make(chan struct{})
+	var stopOnce sync.Once
+	stop := func() {
+		stopOnce.Do(func() {
+			close(stopReader)
+		})
 	}
 
 	// [1]: This function has just one job: Dealing with the case where we
@@ -92,34 +92,47 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 		ret, revents, err := GetPollRevents(fd, 0, (unix.POLLIN | unix.POLLPRI | unix.POLLERR | unix.POLLHUP | unix.POLLRDHUP | unix.POLLNVAL))
 		if ret < 0 {
 			logger.Noticef("Failed to poll(POLLIN | POLLPRI | POLLHUP | POLLRDHUP) on file descriptor: %s.", err)
-			// Something went wrong so let's exited otherwise we
+			// Something went wrong so let's exit otherwise we
 			// end up in an endless loop.
-			once.Do(closeChannel)
+			stop()
 		} else if ret > 0 {
 			if (revents & unix.POLLERR) > 0 {
 				logger.Noticef("Detected poll(POLLERR) event.")
 				// Read end has likely been closed so again,
 				// avoid an endless loop.
-				once.Do(closeChannel)
+				stop()
 			} else if (revents & unix.POLLNVAL) > 0 {
 				logger.Debugf("Detected poll(POLLNVAL) event.")
 				// Well, someone closed the fd havent they? So
 				// let's go home.
-				once.Do(closeChannel)
+				stop()
 			}
 		} else if ret == 0 {
 			logger.Debugf("No data in stdout: exiting.")
-			once.Do(closeChannel)
+			stop()
 		}
 	}()
 
 	go func() {
+		defer close(ch)
+
 		readSize := (128 * 1024)
 		offset := 0
 		buf := make([]byte, bufferSize)
 		avoidAtomicLoad := false
 
-		defer once.Do(closeChannel)
+		flushPending := func() {
+			if offset > 0 {
+				select {
+				case <-stopReader:
+					return
+				case ch <- buf[0:offset]:
+				}
+				offset = 0
+				buf = make([]byte, bufferSize)
+			}
+		}
+
 		for {
 			nr := 0
 			var err error
@@ -129,6 +142,7 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 				// This condition is only reached in cases where we are massively f*cked since we even handle
 				// EINTR in the underlying C wrapper around poll(). So let's exit here.
 				logger.Noticef("Failed to poll(POLLIN | POLLPRI | POLLERR | POLLHUP | POLLRDHUP) on file descriptor: %s. Exiting.", err)
+				flushPending()
 				return
 			}
 
@@ -144,9 +158,11 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 
 			if (revents & unix.POLLERR) > 0 {
 				logger.Noticef("Detected poll(POLLERR) event: exiting.")
+				flushPending()
 				return
 			} else if (revents & unix.POLLNVAL) > 0 {
 				logger.Noticef("Detected poll(POLLNVAL) event: exiting.")
+				flushPending()
 				return
 			}
 
@@ -206,9 +222,11 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 					ret, revents, err := GetPollRevents(fd, 0, (unix.POLLIN | unix.POLLPRI | unix.POLLERR | unix.POLLHUP | unix.POLLRDHUP | unix.POLLNVAL))
 					if ret < 0 {
 						logger.Noticef("Failed to poll(POLLIN | POLLPRI | POLLERR | POLLHUP | POLLRDHUP) on file descriptor: %s. Exiting.", err)
+						flushPending()
 						return
 					} else if (revents & (unix.POLLHUP | unix.POLLRDHUP | unix.POLLERR | unix.POLLNVAL)) == 0 {
 						logger.Debugf("Exiting but background processes are still running.")
+						flushPending()
 						return
 					}
 				}
@@ -220,12 +238,17 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 			// been buffered.
 			if ((revents & (unix.POLLHUP | unix.POLLRDHUP)) > 0) && !both {
 				logger.Debugf("Detected poll(POLLHUP) event: exiting.")
+				flushPending()
 				return
 			}
 
 			offset += nr
 			if offset > 0 && (offset+readSize >= bufferSize || err != nil) {
-				ch <- buf[0:offset]
+				select {
+				case <-stopReader:
+					return
+				case ch <- buf[0:offset]:
+				}
 				offset = 0
 				buf = make([]byte, bufferSize)
 			}
