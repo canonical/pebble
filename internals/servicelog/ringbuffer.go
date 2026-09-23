@@ -228,6 +228,10 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (next RingPos, n 
 			nextReadPos := readPos + RingPos(written)
 			return nextReadPos, written, err
 		}
+		if n < len(buffer) {
+			nextReadPos := readPos + RingPos(written)
+			return nextReadPos, written, io.ErrShortWrite
+		}
 	}
 	nextReadPos := readPos + RingPos(written)
 	return nextReadPos, written, nil

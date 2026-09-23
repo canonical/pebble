@@ -235,6 +235,28 @@ func (s *ringBufferSuite) TestFullWriteCrossBoundary(c *C) {
 	c.Assert(buffer.String(), Equals, "0123456789")
 }
 
+func (s *ringBufferSuite) TestWriteToShortWrite(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	n, err := fmt.Fprint(rb, "0123456789")
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 10)
+
+	w := &fakeShortWriter{limit: 5}
+	next, written, err := rb.WriteTo(w, 0)
+	c.Assert(err, Equals, io.ErrShortWrite)
+	c.Assert(written, Equals, int64(5))
+	c.Assert(next, Equals, servicelog.RingPos(5))
+	c.Assert(w.buf.String(), Equals, "01234")
+
+	// Ensure another WriteTo from the returned position can continue writing.
+	w.limit = -1
+	next, written, err = rb.WriteTo(w, next)
+	c.Assert(err, IsNil)
+	c.Assert(written, Equals, int64(5))
+	c.Assert(next, Equals, servicelog.RingPos(10))
+	c.Assert(w.buf.String(), Equals, "0123456789")
+}
+
 func (s *ringBufferSuite) TestAllocs(c *C) {
 	rb := servicelog.NewRingBuffer(10)
 	payload := []byte("0123456789")
@@ -284,4 +306,21 @@ func (s *ringBufferSuite) TestDiscardNegative(c *C) {
 	c.Assert(readBytes, Equals, 10)
 	c.Assert(next, Equals, servicelog.RingPos(10))
 	c.Assert(string(buf), Equals, "0123456789")
+}
+
+type fakeShortWriter struct {
+	buf   bytes.Buffer
+	limit int
+}
+
+func (w *fakeShortWriter) Write(p []byte) (int, error) {
+	toWrite := len(p)
+	if w.limit >= 0 && toWrite > w.limit {
+		toWrite = w.limit
+	}
+	n, _ := w.buf.Write(p[:toWrite])
+	if w.limit >= 0 {
+		w.limit -= n
+	}
+	return n, nil
 }
