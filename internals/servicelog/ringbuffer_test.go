@@ -254,3 +254,34 @@ func (s *ringBufferSuite) TestAllocs(c *C) {
 	})
 	c.Assert(int(numAllocs), Equals, 0)
 }
+
+func (s *ringBufferSuite) TestDiscardNegative(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	n, err := fmt.Fprint(rb, "0123456789")
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, 10)
+
+	startPos, endPos := rb.Positions()
+	c.Assert(startPos, Equals, servicelog.RingPos(0))
+	c.Assert(endPos, Equals, servicelog.RingPos(10))
+	c.Assert(rb.Buffered(), Equals, 10)
+	c.Assert(rb.Available(), Equals, 0)
+
+	err = rb.Discard(-1)
+	c.Assert(err, Equals, servicelog.ErrRange)
+
+	// Verify buffer state and readIndex were not modified or corrupted.
+	startPos, endPos = rb.Positions()
+	c.Assert(startPos, Equals, servicelog.RingPos(0))
+	c.Assert(endPos, Equals, servicelog.RingPos(10))
+	c.Assert(rb.Buffered(), Equals, 10)
+	c.Assert(rb.Available(), Equals, 0)
+
+	// Verify reading data still yields the expected contents.
+	buf := make([]byte, 10)
+	next, readBytes, err := rb.Copy(buf, 0)
+	c.Assert(err, Equals, io.EOF)
+	c.Assert(readBytes, Equals, 10)
+	c.Assert(next, Equals, servicelog.RingPos(10))
+	c.Assert(string(buf), Equals, "0123456789")
+}
