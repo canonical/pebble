@@ -16,6 +16,7 @@ package ptyutil
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"unsafe"
 
@@ -148,6 +149,10 @@ func OpenPty(uid, gid int64) (*os.File, *os.File, error) {
 
 // SetSize sets the dimensions of the terminal associated with fd.
 func SetSize(fd int, width int, height int) (err error) {
+	if width < 0 || width > math.MaxUint16 || height < 0 || height > math.MaxUint16 {
+		return fmt.Errorf("cannot set terminal size: dimension out of range")
+	}
+
 	var dimensions [4]uint16
 	dimensions[0] = uint16(height)
 	dimensions[1] = uint16(width)
