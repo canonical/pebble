@@ -520,12 +520,12 @@ func (d *Daemon) addRoutes() {
 		c.d = d
 		path := c.Path
 		if c.PathPrefix != "" {
-			path = c.PathPrefix
+			path = strings.TrimSuffix(c.PathPrefix, "/") + "/"
 		}
 		d.router.Handle(path, c)
 	}
 
-	d.router.HandleFunc("/", NotFound("invalid API endpoint requested").ServeHTTP)
+	d.router.Handle("/", NotFound("invalid API endpoint requested"))
 }
 
 type connTracker struct {

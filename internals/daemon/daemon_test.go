@@ -265,6 +265,33 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 	c.Check(rec.Code, Equals, http.StatusOK)
 }
 
+func (s *daemonSuite) TestPathPrefix(c *C) {
+	const endpoint = "/v1/prefix"
+	var handler fakeHandler
+	command := Command{
+		PathPrefix: endpoint,
+		ReadAccess: OpenAccess{},
+		GET: func(cmd *Command, req *http.Request, user *UserState) Response {
+			handler.cmd = cmd
+			return &handler
+		},
+	}
+	API = append(API, &command)
+	defer func() { API = API[:len(API)-1] }()
+
+	d := s.newDaemon(c)
+	d.Init()
+	c.Assert(d.Start(), IsNil)
+	defer d.Stop(nil)
+
+	req := httptest.NewRequest("GET", endpoint+"/child", nil)
+	req = req.WithContext(context.WithValue(req.Context(), TransportTypeKey{}, TransportTypeUnixSocket))
+	rec := httptest.NewRecorder()
+	d.router.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+	c.Check(handler.cmd, Equals, &command)
+}
+
 func (s *daemonSuite) TestExplicitPaths(c *C) {
 	s.socketPath = filepath.Join(c.MkDir(), "custom.socket")
 
