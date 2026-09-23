@@ -51,7 +51,10 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 	}
 
 	go func(conn MessageWriter, r io.Reader) {
-		in := ReaderToChannel(r, bufferSize)
+		stop := make(chan struct{})
+		defer close(stop)
+
+		in := ReaderToChannel(r, bufferSize, stop)
 		for {
 			buf, ok := <-in
 			if !ok {
@@ -136,7 +139,7 @@ func recvLoop(w io.Writer, conn MessageReader) {
 	}
 }
 
-func ReaderToChannel(r io.Reader, bufferSize int) <-chan []byte {
+func ReaderToChannel(r io.Reader, bufferSize int, stop <-chan struct{}) <-chan []byte {
 	if bufferSize <= 128*1024 {
 		bufferSize = 128 * 1024
 	}
@@ -144,6 +147,8 @@ func ReaderToChannel(r io.Reader, bufferSize int) <-chan []byte {
 	ch := make(chan ([]byte))
 
 	go func() {
+		defer close(ch)
+
 		readSize := 128 * 1024
 		offset := 0
 		buf := make([]byte, bufferSize)
@@ -153,13 +158,16 @@ func ReaderToChannel(r io.Reader, bufferSize int) <-chan []byte {
 			nr, err := r.Read(read)
 			offset += nr
 			if offset > 0 && (offset+readSize >= bufferSize || err != nil) {
-				ch <- buf[0:offset]
+				select {
+				case ch <- buf[0:offset]:
+				case <-stop:
+					return
+				}
 				offset = 0
 				buf = make([]byte, bufferSize)
 			}
 
 			if err != nil {
-				close(ch)
 				break
 			}
 		}
