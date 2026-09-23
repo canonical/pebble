@@ -14,6 +14,10 @@
 
 package cmdstate
 
+import (
+	"github.com/gorilla/websocket"
+)
+
 // AddTestExecution inserts a fake execution into the manager's map and
 // broadcasts the condition variable.
 func (m *CommandManager) AddTestExecution(taskID string) {
@@ -21,4 +25,33 @@ func (m *CommandManager) AddTestExecution(taskID string) {
 	m.executions[taskID] = &execution{}
 	m.executionsCond.Broadcast()
 	m.executionsCond.L.Unlock()
+}
+
+// AddFakeExecution inserts an execution configured for testing into the
+// manager's map and broadcasts the condition variable.
+func (m *CommandManager) AddFakeExecution(taskID string, websocketIDs ...string) {
+	websockets := make(map[string]*websocket.Conn, len(websocketIDs))
+	for _, id := range websocketIDs {
+		websockets[id] = nil
+	}
+	m.executionsCond.L.Lock()
+	m.executions[taskID] = &execution{
+		websockets:       websockets,
+		controlConnected: make(chan struct{}),
+		ioConnected:      make(chan struct{}),
+	}
+	m.executionsCond.Broadcast()
+	m.executionsCond.L.Unlock()
+}
+
+// ExecutionWebsocket returns the connected websocket for the given task and
+// websocket ID.
+func (m *CommandManager) ExecutionWebsocket(taskID, websocketID string) *websocket.Conn {
+	m.executionsCond.L.Lock()
+	e := m.executions[taskID]
+	m.executionsCond.L.Unlock()
+	if e == nil {
+		return nil
+	}
+	return e.getWebsocket(websocketID)
 }
