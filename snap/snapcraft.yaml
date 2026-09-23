@@ -54,7 +54,7 @@ parts:
         export GOARCH=arm
         export GOARM=6
       fi
-      CGO_ENABLED=0 go build -trimpath -ldflags=-w -ldflags=-s -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
+      CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
 
   pebble-release-data:
     plugin: nil
