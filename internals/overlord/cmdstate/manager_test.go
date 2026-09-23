@@ -60,6 +60,26 @@ func (s *managerSuite) TestConnectContextCancelledGoroutineLeak(c *C) {
 	_ = mgr.Connect(r, httptest.NewRecorder(), task, "stdio")
 }
 
+func (s *managerSuite) TestConnectChangeReadyWins(c *C) {
+	st := state.New(nil)
+	runner := state.NewTaskRunner(st)
+	mgr := cmdstate.NewManager(runner)
+
+	st.Lock()
+	task := st.NewTask("exec", "test cmd")
+	change := st.NewChange("exec", "test change")
+	change.AddTask(task)
+	change.SetStatus(state.ErrorStatus)
+	task.Errorf("something went wrong")
+	task.SetStatus(state.ErrorStatus)
+	st.Unlock()
+
+	mgr.AddTestExecution(task.ID())
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	err := mgr.Connect(req, httptest.NewRecorder(), task, "control")
+	c.Assert(err, ErrorMatches, "(?s).*something went wrong.*")
+}
+
 func (s *managerSuite) TestConnectRejectsDuplicateAfterUpgrade(c *C) {
 	st := state.New(nil)
 	runner := state.NewTaskRunner(st)
