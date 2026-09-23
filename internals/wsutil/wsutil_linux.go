@@ -139,8 +139,8 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 
 			ret, revents, err := GetPollRevents(fd, -1, (unix.POLLIN | unix.POLLPRI | unix.POLLERR | unix.POLLHUP | unix.POLLRDHUP | unix.POLLNVAL))
 			if ret < 0 {
-				// This condition is only reached in cases where we are massively f*cked since we even handle
-				// EINTR in the underlying C wrapper around poll(). So let's exit here.
+				// This condition is only reached in exceptional circumstances where poll fails unexpectedly,
+				// since EINTR is handled in the underlying C wrapper around poll(). So let's exit here.
 				logger.Noticef("Failed to poll(POLLIN | POLLPRI | POLLERR | POLLHUP | POLLRDHUP) on file descriptor: %s. Exiting.", err)
 				flushPending()
 				return
