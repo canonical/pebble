@@ -28,8 +28,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.opentelemetry.io/otel/codes"
-
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/tracing"
 )
@@ -288,7 +286,7 @@ func (s *State) Unlock() {
 
 		time.Sleep(unlockCheckpointRetryInterval)
 	}
-	span.SetStatus(codes.Error, err.Error())
+	span.SetStatus(tracing.StatusError, err.Error())
 	span.End()
 	logger.Panicf("cannot checkpoint even after %v of retries every %v: %v", unlockCheckpointRetryMaxTime, unlockCheckpointRetryInterval, err)
 }

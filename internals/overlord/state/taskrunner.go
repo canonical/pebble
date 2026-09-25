@@ -18,10 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // HandlerFunc is the type of function for the handlers
@@ -256,7 +256,7 @@ func (r *TaskRunner) run(t *Task) {
 			}
 		}
 		// End the span once the task status has been updated below.
-		defer endTaskSpan(span, t, err, trace.WithTimestamp(t1))
+		defer endTaskSpan(span, t, err, tracing.WithTimestamp(t1))
 
 		switch x := err.(type) {
 		case *Retry:
@@ -343,7 +343,7 @@ func (r *TaskRunner) clean(t *Task) (markedClean bool) {
 		defer r.state.Unlock()
 
 		delete(r.tombs, t.ID())
-		defer endTaskSpan(span, t, tomb.Err(), trace.WithTimestamp(t1))
+		defer endTaskSpan(span, t, tomb.Err(), tracing.WithTimestamp(t1))
 
 		if tomb.Err() != nil {
 			logger.Debugf("Cleaning task %s: %s", t.ID(), tomb.Err())

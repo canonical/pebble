@@ -28,9 +28,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
@@ -39,6 +36,8 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
+	"github.com/canonical/pebble/internals/tracing"
+	"github.com/canonical/pebble/internals/tracing/tracingtest"
 )
 
 var _ = Suite(&execSuite{})
@@ -158,9 +157,8 @@ func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
 }
 
 func (s *execSuite) TestEnvironmentTraceContext(c *C) {
-	restoreTP := otel.GetTracerProvider()
-	otel.SetTracerProvider(sdktrace.NewTracerProvider())
-	defer otel.SetTracerProvider(restoreTP)
+	recorder := tracingtest.NewRecorder()
+	defer recorder.Restore()
 
 	// The daemon's own trace context isn't inherited.
 	restore := fakeEnv("TRACEPARENT", "00-11111111111111111111111111111111-2222222222222222-01")
@@ -168,10 +166,10 @@ func (s *execSuite) TestEnvironmentTraceContext(c *C) {
 
 	// The command continues the caller's trace, as a descendant of the exec
 	// task's span.
-	caller := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    trace.TraceID{0xab},
-		SpanID:     trace.SpanID{0xcd},
-		TraceFlags: trace.FlagsSampled,
+	caller := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{0xab},
+		SpanID:     tracing.SpanID{0xcd},
+		TraceFlags: tracing.FlagsSampled,
 		Remote:     true,
 	})
 	var err error

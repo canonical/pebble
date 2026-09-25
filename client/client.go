@@ -34,9 +34,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 
+	"github.com/canonical/pebble/internals/tracing"
 	"github.com/canonical/pebble/internals/wsutil"
 )
 
@@ -210,7 +209,7 @@ type Config struct {
 	// behalf of. It is sent to the daemon using the W3C Trace Context
 	// headers (traceparent and tracestate), unless the context passed to
 	// Requester.Do carries a span of its own, which takes precedence.
-	SpanContext trace.SpanContext
+	SpanContext tracing.SpanContext
 }
 
 // A Client knows how to talk to the Pebble daemon.
@@ -337,10 +336,10 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 
 	// Propagate the trace span, preferring one carried by ctx.
 	traceCtx := ctx
-	if !trace.SpanContextFromContext(ctx).IsValid() {
-		traceCtx = trace.ContextWithSpanContext(ctx, rq.spanContext)
+	if !tracing.SpanContextFromContext(ctx).IsValid() {
+		traceCtx = tracing.ContextWithSpanContext(ctx, rq.spanContext)
 	}
-	propagation.TraceContext{}.Inject(traceCtx, propagation.HeaderCarrier(req.Header))
+	tracing.InjectHTTPHeaders(traceCtx, req.Header)
 
 	for key, value := range headers {
 		req.Header.Set(key, value)
@@ -647,7 +646,7 @@ type defaultRequester struct {
 	userAgent     string
 	basicUsername string
 	basicPassword string
-	spanContext   trace.SpanContext
+	spanContext   tracing.SpanContext
 	transport     *http.Transport
 	client        *Client
 }

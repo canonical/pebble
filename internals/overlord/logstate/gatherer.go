@@ -20,7 +20,6 @@ import (
 	"os"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/cmd"
@@ -225,7 +224,7 @@ func (g *logGatherer) loop() error {
 	flushClient := func(ctx context.Context) {
 		// Mark timer as unset
 		flushTimer.Stop()
-		ctx, span := tracing.Tracer().Start(ctx, "flush logs "+g.targetName, trace.WithAttributes(
+		ctx, span := tracing.Tracer().Start(ctx, "flush logs "+g.targetName, tracing.WithAttributes(
 			tracing.AttrKey("log-target.name").String(g.targetName),
 			tracing.AttrKey("log-target.type").String(string(g.targetType)),
 			tracing.AttrKey("log-target.entries").Int(numWritten),

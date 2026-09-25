@@ -12,15 +12,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// Package tracing configures OpenTelemetry tracing for Pebble.
-//
-// Tracing is disabled unless an OTLP endpoint is configured using the
-// standard OpenTelemetry environment variables (OTEL_EXPORTER_OTLP_ENDPOINT
-// or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT). Traces are exported using OTLP over
-// HTTP with the protobuf encoding, and the exporter honours the standard
-// OTEL_EXPORTER_OTLP_{,TRACES_}{HEADERS,TIMEOUT,COMPRESSION,CERTIFICATE,
-// CLIENT_CERTIFICATE,CLIENT_KEY} variables. Resource attributes may be set
-// with OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES.
 package tracing
 
 import (
@@ -108,13 +99,8 @@ func Setup(ctx context.Context, version string) (shutdown func(context.Context) 
 // and TRACESTATE environment variables, which use the W3C Trace Context
 // header formats. The returned span context is invalid if TRACEPARENT is
 // unset or malformed.
-func SpanContextFromEnv() trace.SpanContext {
-	carrier := propagation.MapCarrier{
-		"traceparent": os.Getenv("TRACEPARENT"),
-		"tracestate":  os.Getenv("TRACESTATE"),
-	}
-	ctx := propagation.TraceContext{}.Extract(context.Background(), carrier)
-	return trace.SpanContextFromContext(ctx)
+func SpanContextFromEnv() SpanContext {
+	return ParseTraceParent(os.Getenv(envTraceParent), os.Getenv(envTraceState))
 }
 
 // AttrKey returns the attribute key for a Pebble-specific attribute, prefixed

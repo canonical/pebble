@@ -18,11 +18,6 @@ import (
 	"context"
 	"slices"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/canonical/pebble/internals/tracing"
 )
 
@@ -48,8 +43,8 @@ const (
 // carried by ctx, if any.
 func (c *Change) startSpan(ctx context.Context) {
 	_, c.span = tracing.Tracer().Start(ctx, "change "+c.kind,
-		trace.WithTimestamp(c.spawnTime),
-		trace.WithAttributes(
+		tracing.WithTimestamp(c.spawnTime),
+		tracing.WithAttributes(
 			tracing.AttrKey(attrChangeID).String(c.id),
 			tracing.AttrKey(attrChangeKind).String(c.kind),
 			tracing.AttrKey(attrChangeSummary).String(c.summary),
@@ -61,14 +56,14 @@ func (c *Change) startSpan(ctx context.Context) {
 // resumeSpan starts a new span for a change that was loaded from the
 // persisted state before it became ready (for example, after a restart). The
 // new span is parented to the change's original span, so that the tasks run
-// after resuming remain part of the same trace.
+// after resuming remain part of the same tracing.
 func (c *Change) resumeSpan() {
 	ctx := context.Background()
 	if c.spanContext.IsValid() {
-		ctx = trace.ContextWithRemoteSpanContext(ctx, c.spanContext)
+		ctx = tracing.ContextWithRemoteSpanContext(ctx, c.spanContext)
 	}
 	_, c.span = tracing.Tracer().Start(ctx, "change "+c.kind,
-		trace.WithAttributes(
+		tracing.WithAttributes(
 			tracing.AttrKey(attrChangeID).String(c.id),
 			tracing.AttrKey(attrChangeKind).String(c.kind),
 			tracing.AttrKey(attrChangeSummary).String(c.summary),
@@ -94,14 +89,14 @@ func (c *Change) endSpan() {
 	if status == ErrorStatus {
 		if err := c.Err(); err != nil {
 			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			span.SetStatus(tracing.StatusError, err.Error())
 		} else {
-			span.SetStatus(codes.Error, "")
+			span.SetStatus(tracing.StatusError, "")
 		}
 	}
-	var opts []trace.SpanEndOption
+	var opts []tracing.SpanEndOption
 	if !c.readyTime.IsZero() {
-		opts = append(opts, trace.WithTimestamp(c.readyTime))
+		opts = append(opts, tracing.WithTimestamp(c.readyTime))
 	}
 	span.End(opts...)
 }
@@ -111,10 +106,10 @@ func (c *Change) endSpan() {
 func (c *Change) traceContext() context.Context {
 	ctx := context.Background()
 	if c.span != nil {
-		return trace.ContextWithSpan(ctx, c.span)
+		return tracing.ContextWithSpan(ctx, c.span)
 	}
 	if c.spanContext.IsValid() {
-		return trace.ContextWithRemoteSpanContext(ctx, c.spanContext)
+		return tracing.ContextWithRemoteSpanContext(ctx, c.spanContext)
 	}
 	return ctx
 }
@@ -126,27 +121,27 @@ func (c *Change) traceContext() context.Context {
 // Do and undo spans are children of the change's span. Cleanups run after
 // the change is ready, possibly much later (on the next ensure pass), so a
 // cleanup span is instead a new root, linked to the change's span, to avoid
-// extending the change's trace.
-func (t *Task) startSpan(handler string) (context.Context, trace.Span) {
+// extending the change's tracing.
+func (t *Task) startSpan(handler string) (context.Context, tracing.Span) {
 	ctx := context.Background()
-	attrs := []attribute.KeyValue{
+	attrs := []tracing.Attribute{
 		tracing.AttrKey(attrTaskID).String(t.id),
 		tracing.AttrKey(attrTaskKind).String(t.kind),
 		tracing.AttrKey(attrTaskSummary).String(t.summary),
 		tracing.AttrKey(attrTaskHandler).String(handler),
 	}
-	var opts []trace.SpanStartOption
+	var opts []tracing.SpanStartOption
 	if chg := t.Change(); chg != nil {
 		attrs = append(attrs, tracing.AttrKey(attrChangeID).String(chg.id), tracing.AttrKey(attrChangeKind).String(chg.kind))
 		if handler == "cleanup" {
 			if chg.spanContext.IsValid() {
-				opts = append(opts, trace.WithLinks(trace.Link{SpanContext: chg.spanContext}))
+				opts = append(opts, tracing.WithLinks(tracing.Link{SpanContext: chg.spanContext}))
 			}
 		} else {
 			ctx = chg.traceContext()
 		}
 	}
-	opts = append(opts, trace.WithAttributes(attrs...))
+	opts = append(opts, tracing.WithAttributes(attrs...))
 	ctx, span := tracing.Tracer().Start(ctx, handler+" "+t.kind, opts...)
 	t.runSpan = span.SpanContext()
 	return ctx, span
@@ -154,56 +149,33 @@ func (t *Task) startSpan(handler string) (context.Context, trace.Span) {
 
 // endTaskSpan records the outcome of a task handler run on its span and ends
 // the span. It must be called with the state lock held.
-func endTaskSpan(span trace.Span, t *Task, err error, opts ...trace.SpanEndOption) {
+func endTaskSpan(span tracing.Span, t *Task, err error, opts ...tracing.SpanEndOption) {
 	switch x := err.(type) {
 	case nil:
 	case *Retry:
-		span.AddEvent("retry", trace.WithAttributes(
+		span.AddEvent("retry", tracing.WithAttributes(
 			tracing.AttrKey(attrRetryAfter).String(x.After.String()),
 			tracing.AttrKey(attrReason).String(x.Reason),
 		))
 	case *Wait:
-		span.AddEvent("wait", trace.WithAttributes(
+		span.AddEvent("wait", tracing.WithAttributes(
 			tracing.AttrKey(attrReason).String(x.Reason),
 		))
 	default:
 		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		span.SetStatus(tracing.StatusError, err.Error())
 	}
 	span.SetAttributes(tracing.AttrKey(attrTaskStatus).String(t.Status().String()))
 	span.End(opts...)
-	t.runSpan = trace.SpanContext{}
-}
-
-// marshalSpanContext encodes sc as a W3C traceparent header value, or returns
-// "" if sc is not valid.
-func marshalSpanContext(sc trace.SpanContext) string {
-	if !sc.IsValid() {
-		return ""
-	}
-	carrier := propagation.MapCarrier{}
-	ctx := trace.ContextWithSpanContext(context.Background(), sc)
-	propagation.TraceContext{}.Inject(ctx, carrier)
-	return carrier.Get("traceparent")
-}
-
-// unmarshalSpanContext decodes a W3C traceparent header value, returning an
-// invalid span context if it cannot be decoded.
-func unmarshalSpanContext(traceParent string) trace.SpanContext {
-	if traceParent == "" {
-		return trace.SpanContext{}
-	}
-	carrier := propagation.MapCarrier{"traceparent": traceParent}
-	ctx := propagation.TraceContext{}.Extract(context.Background(), carrier)
-	return trace.SpanContextFromContext(ctx)
+	t.runSpan = tracing.SpanContext{}
 }
 
 // traceCauses holds the spans on whose behalf the state has been modified.
 type traceCauses struct {
 	// explicit causes were added with State.AddTraceContext.
-	explicit []trace.SpanContext
+	explicit []tracing.SpanContext
 	// implicit causes were added by modifying tasks and changes.
-	implicit []trace.SpanContext
+	implicit []tracing.SpanContext
 }
 
 // maxRetainedTraceCauses is the capacity above which the traceCauses slices
@@ -218,7 +190,7 @@ func (tc *traceCauses) reset() {
 	tc.implicit = truncateTraceCauses(tc.implicit)
 }
 
-func truncateTraceCauses(causes []trace.SpanContext) []trace.SpanContext {
+func truncateTraceCauses(causes []tracing.SpanContext) []tracing.SpanContext {
 	if cap(causes) > maxRetainedTraceCauses {
 		return nil
 	}
@@ -228,7 +200,7 @@ func truncateTraceCauses(causes []trace.SpanContext) []trace.SpanContext {
 	return causes[:0]
 }
 
-func (tc *traceCauses) add(sc trace.SpanContext, explicit bool) {
+func (tc *traceCauses) add(sc tracing.SpanContext, explicit bool) {
 	if !sc.IsValid() {
 		return
 	}
@@ -256,28 +228,28 @@ func (tc *traceCauses) add(sc trace.SpanContext, explicit bool) {
 
 // AddTraceContext records that the state is being modified on behalf of the
 // span carried by ctx, so that the resulting checkpoint is traced as part of
-// that span's trace. Spans added this way take precedence over those of the
+// that span's tracing. Spans added this way take precedence over those of the
 // tasks and changes modified. It must be called with the state lock held.
 func (s *State) AddTraceContext(ctx context.Context) {
 	s.reading()
-	s.traceCauses.add(trace.SpanContextFromContext(ctx), true)
+	s.traceCauses.add(tracing.SpanContextFromContext(ctx), true)
 }
 
 // startCheckpointSpan starts the span for checkpointing the state. The span
 // is a child of the first span that caused the checkpoint, preferring those
 // added with AddTraceContext, and is linked to the others.
-func (s *State) startCheckpointSpan() trace.Span {
+func (s *State) startCheckpointSpan() tracing.Span {
 	causes := append(slices.Clone(s.traceCauses.explicit), s.traceCauses.implicit...)
 	ctx := context.Background()
-	var links []trace.Link
+	var links []tracing.Link
 	for i, sc := range causes {
 		if i == 0 {
-			ctx = trace.ContextWithSpanContext(ctx, sc)
+			ctx = tracing.ContextWithSpanContext(ctx, sc)
 		} else {
-			links = append(links, trace.Link{SpanContext: sc})
+			links = append(links, tracing.Link{SpanContext: sc})
 		}
 	}
-	_, span := tracing.Tracer().Start(ctx, "state checkpoint", trace.WithLinks(links...))
+	_, span := tracing.Tracer().Start(ctx, "state checkpoint", tracing.WithLinks(links...))
 	return span
 }
 
@@ -290,14 +262,14 @@ func (t *Task) writing() {
 
 // traceSpanContext returns the span that modifications to the task are made
 // on behalf of: its running handler's span, or otherwise its change's span.
-func (t *Task) traceSpanContext() trace.SpanContext {
+func (t *Task) traceSpanContext() tracing.SpanContext {
 	if t.runSpan.IsValid() {
 		return t.runSpan
 	}
 	if chg := t.state.changes[t.change]; chg != nil {
 		return chg.spanContext
 	}
-	return trace.SpanContext{}
+	return tracing.SpanContext{}
 }
 
 // writing marks the state as modified on behalf of the change's span.
@@ -312,7 +284,7 @@ func (c *Change) writing() {
 // checkpoint is part of that trace rather than the changes' traces. It must
 // be called with the state lock held.
 func traceCleaned(st *State, tasks []*Task) {
-	var links []trace.Link
+	var links []tracing.Link
 	seen := make(map[string]bool)
 	for _, t := range tasks {
 		chg := st.changes[t.change]
@@ -320,11 +292,11 @@ func traceCleaned(st *State, tasks []*Task) {
 			continue
 		}
 		seen[chg.id] = true
-		links = append(links, trace.Link{SpanContext: chg.spanContext})
+		links = append(links, tracing.Link{SpanContext: chg.spanContext})
 	}
 	ctx, span := tracing.Tracer().Start(context.Background(), "clean tasks",
-		trace.WithLinks(links...),
-		trace.WithAttributes(tracing.AttrKey("task.cleaned").Int(len(tasks))),
+		tracing.WithLinks(links...),
+		tracing.WithAttributes(tracing.AttrKey("task.cleaned").Int(len(tasks))),
 	)
 	st.AddTraceContext(ctx)
 	span.End()

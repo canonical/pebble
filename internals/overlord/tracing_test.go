@@ -15,31 +15,27 @@
 package overlord_test
 
 import (
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord"
+	"github.com/canonical/pebble/internals/tracing"
+	"github.com/canonical/pebble/internals/tracing/tracingtest"
 )
 
 // checkStartupCheckpoints checks that every state checkpoint made while
 // creating and starting up an overlord is part of the "state load" or
 // "overlord startup" trace, and returns the number of checkpoints.
 func (ovs *overlordSuite) checkStartupCheckpoints(c *C, opts *overlord.Options) int {
-	recorder := tracetest.NewSpanRecorder()
-	restore := otel.GetTracerProvider()
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)))
-	defer otel.SetTracerProvider(restore)
+	recorder := tracingtest.NewRecorder()
+	defer recorder.Restore()
 
 	o, err := overlord.New(opts)
 	c.Assert(err, IsNil)
 	c.Assert(o.StartUp(), IsNil)
 	o.Stop()
 
-	startupSpans := make(map[trace.SpanID]sdktrace.ReadOnlySpan)
-	var checkpoints []sdktrace.ReadOnlySpan
+	startupSpans := make(map[tracing.SpanID]tracingtest.ReadOnlySpan)
+	var checkpoints []tracingtest.ReadOnlySpan
 	for _, span := range recorder.Ended() {
 		switch span.Name() {
 		case "state load", "overlord startup":

@@ -18,9 +18,6 @@ import (
 	"context"
 	"strings"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/tracing"
 )
@@ -32,28 +29,28 @@ import (
 // is instead a new root span, so that each run is its own short trace rather
 // than the check task's trace growing indefinitely. In both cases, the span
 // is linked to the check task's span carried by ctx, if any.
-func startCheckSpan(ctx, parent context.Context, config *plan.Check) (context.Context, trace.Span) {
-	attrs := []attribute.KeyValue{
+func startCheckSpan(ctx, parent context.Context, config *plan.Check) (context.Context, tracing.Span) {
+	attrs := []tracing.Attribute{
 		tracing.AttrKey("check.name").String(config.Name),
 		tracing.AttrKey("check.type").String(strings.ToLower(checkType(config))),
 	}
 	if config.Level != plan.UnsetLevel {
 		attrs = append(attrs, tracing.AttrKey("check.level").String(string(config.Level)))
 	}
-	opts := []trace.SpanStartOption{trace.WithAttributes(attrs...)}
+	opts := []tracing.SpanStartOption{tracing.WithAttributes(attrs...)}
 
-	taskSpan := trace.SpanContextFromContext(ctx)
-	var parentSpan trace.SpanContext
+	taskSpan := tracing.SpanContextFromContext(ctx)
+	var parentSpan tracing.SpanContext
 	if parent != nil {
-		parentSpan = trace.SpanContextFromContext(parent)
+		parentSpan = tracing.SpanContextFromContext(parent)
 	}
 	if taskSpan.IsValid() && !taskSpan.Equal(parentSpan) {
-		opts = append(opts, trace.WithLinks(trace.Link{SpanContext: taskSpan}))
+		opts = append(opts, tracing.WithLinks(tracing.Link{SpanContext: taskSpan}))
 	}
 	if parentSpan.IsValid() {
-		ctx = trace.ContextWithSpanContext(ctx, parentSpan)
+		ctx = tracing.ContextWithSpanContext(ctx, parentSpan)
 	} else {
-		opts = append(opts, trace.WithNewRoot())
+		opts = append(opts, tracing.WithNewRoot())
 	}
 	return tracing.Tracer().Start(ctx, "check "+config.Name, opts...)
 }

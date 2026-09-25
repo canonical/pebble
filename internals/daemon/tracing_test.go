@@ -15,39 +15,33 @@
 package daemon
 
 import (
+	"github.com/canonical/pebble/internals/tracing"
+	"github.com/canonical/pebble/internals/tracing/tracingtest"
+
 	"context"
 	"net/http"
 	"net/http/httptest"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 )
 
 type tracingSuite struct {
-	recorder *tracetest.SpanRecorder
-	restore  trace.TracerProvider
+	recorder *tracingtest.Recorder
 
 	// handlerSpan is the span context seen by the routed handler.
-	handlerSpan trace.SpanContext
+	handlerSpan tracing.SpanContext
 	router      *http.ServeMux
 }
 
 var _ = Suite(&tracingSuite{})
 
 func (s *tracingSuite) SetUpTest(c *C) {
-	s.recorder = tracetest.NewSpanRecorder()
-	s.restore = otel.GetTracerProvider()
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(s.recorder)))
+	s.recorder = tracingtest.NewRecorder()
 
-	s.handlerSpan = trace.SpanContext{}
+	s.handlerSpan = tracing.SpanContext{}
 	s.router = http.NewServeMux()
 	s.router.HandleFunc("/v1/changes/{id}", func(w http.ResponseWriter, r *http.Request) {
-		s.handlerSpan = trace.SpanContextFromContext(r.Context())
+		s.handlerSpan = tracing.SpanContextFromContext(r.Context())
 		w.WriteHeader(http.StatusAccepted)
 	})
 	s.router.HandleFunc("/v1/broken", func(w http.ResponseWriter, r *http.Request) {
@@ -57,18 +51,18 @@ func (s *tracingSuite) SetUpTest(c *C) {
 }
 
 func (s *tracingSuite) TearDownTest(c *C) {
-	otel.SetTracerProvider(s.restore)
+	s.recorder.Restore()
 }
 
-func (s *tracingSuite) serve(c *C, req *http.Request) sdktrace.ReadOnlySpan {
+func (s *tracingSuite) serve(c *C, req *http.Request) tracingtest.ReadOnlySpan {
 	traceRequest(s.router).ServeHTTP(httptest.NewRecorder(), req)
 	spans := s.recorder.Ended()
 	c.Assert(spans, HasLen, 1)
 	return spans[0]
 }
 
-func spanAttrs(span sdktrace.ReadOnlySpan) map[string]attribute.Value {
-	attrs := make(map[string]attribute.Value)
+func spanAttrs(span tracingtest.ReadOnlySpan) map[string]tracing.AttributeValue {
+	attrs := make(map[string]tracing.AttributeValue)
 	for _, kv := range span.Attributes() {
 		attrs[string(kv.Key)] = kv.Value
 	}
@@ -82,9 +76,9 @@ func (s *tracingSuite) TestServerSpan(c *C) {
 	span := s.serve(c, req)
 
 	c.Check(span.Name(), Equals, "GET /v1/changes/{id}")
-	c.Check(span.SpanKind(), Equals, trace.SpanKindServer)
+	c.Check(span.SpanKind(), Equals, tracing.SpanKindServer)
 	c.Check(span.Parent().IsValid(), Equals, false)
-	c.Check(span.Status().Code, Equals, codes.Unset)
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
 	attrs := spanAttrs(span)
 	c.Check(attrs["http.request.method"].AsString(), Equals, "GET")
 	c.Check(attrs["http.route"].AsString(), Equals, "/v1/changes/{id}")
@@ -126,7 +120,7 @@ func (s *tracingSuite) TestServerSpanTCP(c *C) {
 func (s *tracingSuite) TestServerSpanServerError(c *C) {
 	span := s.serve(c, httptest.NewRequest("GET", "/v1/broken", nil))
 	c.Check(span.Name(), Equals, "GET /v1/broken")
-	c.Check(span.Status().Code, Equals, codes.Error)
+	c.Check(span.Status().Code, Equals, tracing.StatusError)
 	c.Check(spanAttrs(span)["http.response.status_code"].AsInt64(), Equals, int64(500))
 }
 
@@ -137,7 +131,7 @@ func (s *tracingSuite) TestServerSpanUnknownEndpoint(c *C) {
 	c.Check(hasRoute, Equals, false)
 	c.Check(spanAttrs(span)["http.response.status_code"].AsInt64(), Equals, int64(404))
 	// 4xx responses aren't server errors.
-	c.Check(span.Status().Code, Equals, codes.Unset)
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
 }
 
 func (s *tracingSuite) TestServerSpanUnknownMethod(c *C) {

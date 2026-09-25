@@ -25,9 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // Status is used for status values for changes and tasks.
@@ -154,10 +153,10 @@ type Change struct {
 
 	// span covers the change until it becomes ready. It is nil once ended,
 	// or for changes that were already ready when loaded from disk.
-	span trace.Span
+	span tracing.Span
 	// spanContext identifies the change's original span, and is persisted
-	// so that tasks run after a restart remain part of the same trace.
-	spanContext trace.SpanContext
+	// so that tasks run after a restart remain part of the same tracing.
+	spanContext tracing.SpanContext
 }
 
 type byReadyTime []*Change
@@ -219,7 +218,7 @@ func (c *Change) MarshalJSON() ([]byte, error) {
 
 		LastRecordedNoticeStatus: c.lastRecordedNoticeStatus,
 
-		TraceParent: marshalSpanContext(c.spanContext),
+		TraceParent: tracing.FormatTraceParent(c.spanContext),
 	})
 }
 
@@ -250,7 +249,7 @@ func (c *Change) UnmarshalJSON(data []byte) error {
 		c.readyTime = *unmarshalled.ReadyTime
 	}
 	c.lastRecordedNoticeStatus = unmarshalled.LastRecordedNoticeStatus
-	c.spanContext = unmarshalSpanContext(unmarshalled.TraceParent)
+	c.spanContext = tracing.ParseTraceParent(unmarshalled.TraceParent, "")
 	return nil
 }
 

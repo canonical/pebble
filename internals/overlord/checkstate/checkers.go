@@ -30,8 +30,6 @@ import (
 	"time"
 
 	"github.com/canonical/x-go/strutil/shlex"
-	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
@@ -114,10 +112,10 @@ func (c *tcpChecker) check(ctx context.Context) error {
 		host = "localhost"
 	}
 
-	trace.SpanFromContext(ctx).SetAttributes(
-		semconv.NetworkTransportTCP,
-		semconv.ServerAddress(host),
-		semconv.ServerPort(c.port),
+	tracing.SpanFromContext(ctx).SetAttributes(
+		tracing.NetworkTransportTCP,
+		tracing.ServerAddress(host),
+		tracing.ServerPort(c.port),
 	)
 
 	var dialer net.Dialer
@@ -156,11 +154,11 @@ func (c *execChecker) check(ctx context.Context) error {
 	tracing.DeleteEnv(environment)
 	// Requested environment takes precedence.
 	maps.Copy(environment, c.environment)
-	// Let the command continue the check's trace.
+	// Let the command continue the check's tracing.
 	tracing.InjectEnv(ctx, environment)
 
-	span := trace.SpanFromContext(ctx)
-	span.SetAttributes(semconv.ProcessExecutableName(filepath.Base(args[0])))
+	span := tracing.SpanFromContext(ctx)
+	span.SetAttributes(tracing.ProcessExecutableName(filepath.Base(args[0])))
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = make([]string, 0, len(environment)) // avoid additional allocations
@@ -200,10 +198,10 @@ func (c *execChecker) check(ctx context.Context) error {
 		return err
 	}
 	logger.Debugf("Check %q (exec): running %q (PID %d)", c.name, c.command, cmd.Process.Pid)
-	span.SetAttributes(semconv.ProcessPID(cmd.Process.Pid))
+	span.SetAttributes(tracing.ProcessPID(cmd.Process.Pid))
 
 	exitCode, err := reaper.WaitCommand(cmd)
-	span.SetAttributes(semconv.ProcessExitCode(exitCode))
+	span.SetAttributes(tracing.ProcessExitCode(exitCode))
 	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		// If context is cancelled or times out, exitCode will be 137
 		// and err will be nil, so return the ctx.Err() directly.

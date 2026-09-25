@@ -20,9 +20,8 @@ import (
 	"slices"
 	"time"
 
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 type progress struct {
@@ -66,7 +65,7 @@ type Task struct {
 
 	// runSpan is the span of the task's handler while it's running. It
 	// isn't persisted.
-	runSpan trace.SpanContext
+	runSpan tracing.SpanContext
 }
 
 func newTask(state *State, id, kind, summary string) *Task {

@@ -15,6 +15,8 @@
 package tracing
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -25,6 +27,103 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.40.0"
 	"go.opentelemetry.io/otel/trace"
 )
+
+// InjectHTTPHeaders sets the W3C Trace Context headers (traceparent and
+// tracestate) in header to describe the span carried by ctx, if any.
+func InjectHTTPHeaders(ctx context.Context, header http.Header) {
+	propagation.TraceContext{}.Inject(ctx, propagation.HeaderCarrier(header))
+}
+
+// knownMethods are the HTTP methods that may appear in span names and the
+// http.request.method attribute. Others are recorded as "_OTHER" to bound
+// cardinality, as the HTTP semantic conventions require.
+var knownMethods = map[string]bool{
+	http.MethodConnect: true,
+	http.MethodDelete:  true,
+	http.MethodGet:     true,
+	http.MethodHead:    true,
+	http.MethodOptions: true,
+	http.MethodPatch:   true,
+	http.MethodPost:    true,
+	http.MethodPut:     true,
+	http.MethodTrace:   true,
+}
+
+// ServerTransport describes how an inbound HTTP request was received.
+type ServerTransport int
+
+const (
+	ServerTransportUnknown ServerTransport = iota
+	ServerTransportUnixSocket
+	ServerTransportHTTP
+	ServerTransportHTTPS
+)
+
+// StartHTTPServerSpan starts a server span for an inbound HTTP request. The
+// span is a child of the span described by the request's W3C Trace Context
+// headers (traceparent and tracestate), if any. It returns a copy of r
+// carrying the span's context, which should be passed to the handler.
+func StartHTTPServerSpan(r *http.Request, transport ServerTransport) (*http.Request, Span) {
+	ctx := propagation.TraceContext{}.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+
+	spanName := r.Method
+	var attrs []attribute.KeyValue
+	if knownMethods[r.Method] {
+		attrs = append(attrs, semconv.HTTPRequestMethodKey.String(r.Method))
+	} else {
+		spanName = "HTTP"
+		attrs = append(attrs, semconv.HTTPRequestMethodOther, semconv.HTTPRequestMethodOriginal(r.Method))
+	}
+	attrs = append(attrs, semconv.URLPath(r.URL.Path))
+	switch transport {
+	case ServerTransportUnixSocket:
+		attrs = append(attrs, semconv.NetworkTransportUnix, semconv.URLScheme("http"))
+	case ServerTransportHTTP, ServerTransportHTTPS:
+		scheme := "http"
+		if transport == ServerTransportHTTPS {
+			scheme = "https"
+		}
+		attrs = append(attrs, semconv.NetworkTransportTCP, semconv.URLScheme(scheme))
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			attrs = append(attrs, semconv.ClientAddress(host))
+		}
+	}
+	if ua := r.UserAgent(); ua != "" {
+		attrs = append(attrs, semconv.UserAgentOriginal(ua))
+	}
+
+	ctx, span := Tracer().Start(ctx, spanName,
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(attrs...),
+	)
+	return r.WithContext(ctx), span
+}
+
+// EndHTTPServerSpan records the outcome of an inbound HTTP request on a span
+// started with StartHTTPServerSpan, and ends it. The request r is the one
+// returned by StartHTTPServerSpan, after it has been handled, and status is
+// the response status code.
+func EndHTTPServerSpan(span Span, r *http.Request, status int) {
+	// The router records the matched pattern on the request. The "/"
+	// pattern is the catch-all for unknown endpoints, which isn't a
+	// meaningful route.
+	if r.Pattern != "" && r.Pattern != "/" {
+		method := r.Method
+		if !knownMethods[method] {
+			method = "HTTP"
+		}
+		span.SetName(method + " " + r.Pattern)
+		span.SetAttributes(semconv.HTTPRoute(r.Pattern))
+	}
+
+	span.SetAttributes(semconv.HTTPResponseStatusCode(status))
+	// For server spans, only 5xx responses are errors; 4xx responses
+	// are the client's fault.
+	if status >= 500 {
+		span.SetStatus(codes.Error, http.StatusText(status))
+	}
+	span.End()
+}
 
 // StartHTTPClientSpan starts a client span for an outbound HTTP request, as a
 // child of the span carried by the request's context, and propagates the

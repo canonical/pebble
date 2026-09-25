@@ -34,12 +34,11 @@ import (
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -319,11 +318,10 @@ func (cs *clientSuite) TestUserAgent(c *C) {
 }
 
 func (cs *clientSuite) TestTraceContextFromConfig(c *C) {
-	sc := trace.SpanContextFromContext(propagation.TraceContext{}.Extract(
-		context.Background(), propagation.MapCarrier{
-			"traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
-			"tracestate":  "foo=bar",
-		}))
+	sc := tracing.ParseTraceParent(
+		"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+		"foo=bar",
+	)
 	c.Assert(sc.IsValid(), Equals, true)
 
 	cli, err := client.New(&client.Config{SpanContext: sc})
@@ -340,12 +338,12 @@ func (cs *clientSuite) TestTraceContextFromConfig(c *C) {
 	c.Check(cs.req.Header.Get("tracestate"), Equals, "foo=bar")
 
 	// A span carried by the request context takes precedence.
-	ctxSC := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    trace.TraceID{1},
-		SpanID:     trace.SpanID{2},
-		TraceFlags: trace.FlagsSampled,
+	ctxSC := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{1},
+		SpanID:     tracing.SpanID{2},
+		TraceFlags: tracing.FlagsSampled,
 	})
-	_, err = cli.Requester().Do(trace.ContextWithSpanContext(context.Background(), ctxSC), &client.RequestOptions{
+	_, err = cli.Requester().Do(tracing.ContextWithSpanContext(context.Background(), ctxSC), &client.RequestOptions{
 		Type:   client.RawRequest,
 		Method: "GET",
 		Path:   "/",

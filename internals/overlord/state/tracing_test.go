@@ -21,51 +21,44 @@ import (
 	"errors"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/tracing"
+	"github.com/canonical/pebble/internals/tracing/tracingtest"
 )
 
 type tracingSuite struct {
-	recorder *tracetest.SpanRecorder
-	restore  trace.TracerProvider
+	recorder *tracingtest.Recorder
 }
 
 var _ = Suite(&tracingSuite{})
 
 func (s *tracingSuite) SetUpTest(c *C) {
-	s.recorder = tracetest.NewSpanRecorder()
-	s.restore = otel.GetTracerProvider()
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(s.recorder)))
+	s.recorder = tracingtest.NewRecorder()
 }
 
 func (s *tracingSuite) TearDownTest(c *C) {
-	otel.SetTracerProvider(s.restore)
+	s.recorder.Restore()
 }
 
-func (s *tracingSuite) spans() map[string]sdktrace.ReadOnlySpan {
-	spans := make(map[string]sdktrace.ReadOnlySpan)
+func (s *tracingSuite) spans() map[string]tracingtest.ReadOnlySpan {
+	spans := make(map[string]tracingtest.ReadOnlySpan)
 	for _, span := range s.recorder.Ended() {
 		spans[span.Name()] = span
 	}
 	return spans
 }
 
-func spanAttr(span sdktrace.ReadOnlySpan, key string) attribute.Value {
+func spanAttr(span tracingtest.ReadOnlySpan, key string) tracing.AttributeValue {
 	for _, kv := range span.Attributes() {
 		if string(kv.Key) == cmd.ProgramName+"."+key {
 			return kv.Value
 		}
 	}
-	return attribute.Value{}
+	return tracing.AttributeValue{}
 }
 
 func (s *tracingSuite) TestChangeAndTaskSpans(c *C) {
@@ -74,10 +67,10 @@ func (s *tracingSuite) TestChangeAndTaskSpans(c *C) {
 	r := state.NewTaskRunner(st)
 	defer r.Stop()
 
-	var handlerSpan trace.SpanContext
+	var handlerSpan tracing.SpanContext
 	r.AddHandler("foo", func(t *state.Task, tb *tomb.Tomb) error {
 		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
-		handlerSpan = trace.SpanContextFromContext(tb.Context(nil))
+		handlerSpan = tracing.SpanContextFromContext(tb.Context(nil))
 		return nil
 	}, nil)
 	r.AddHandler("bar", func(t *state.Task, tb *tomb.Tomb) error {
@@ -102,7 +95,7 @@ func (s *tracingSuite) TestChangeAndTaskSpans(c *C) {
 	spans := s.spans()
 	chgSpan, ok := spans["change install"]
 	c.Assert(ok, Equals, true)
-	c.Check(chgSpan.Status().Code, Equals, codes.Error)
+	c.Check(chgSpan.Status().Code, Equals, tracing.StatusError)
 	c.Check(spanAttr(chgSpan, "change.id").AsString(), Equals, chg.ID())
 	c.Check(spanAttr(chgSpan, "change.status").AsString(), Equals, "Error")
 
@@ -110,14 +103,14 @@ func (s *tracingSuite) TestChangeAndTaskSpans(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Check(fooSpan.Parent().SpanID(), Equals, chgSpan.SpanContext().SpanID())
 	c.Check(fooSpan.SpanContext().TraceID(), Equals, chgSpan.SpanContext().TraceID())
-	c.Check(fooSpan.Status().Code, Equals, codes.Unset)
+	c.Check(fooSpan.Status().Code, Equals, tracing.StatusUnset)
 	c.Check(spanAttr(fooSpan, "task.status").AsString(), Equals, "Done")
 	c.Check(handlerSpan.SpanID(), Equals, fooSpan.SpanContext().SpanID())
 
 	barSpan, ok := spans["do bar"]
 	c.Assert(ok, Equals, true)
 	c.Check(barSpan.Parent().SpanID(), Equals, chgSpan.SpanContext().SpanID())
-	c.Check(barSpan.Status().Code, Equals, codes.Error)
+	c.Check(barSpan.Status().Code, Equals, tracing.StatusError)
 	c.Check(barSpan.Status().Description, Equals, "boom")
 	c.Check(spanAttr(barSpan, "task.status").AsString(), Equals, "Error")
 }
@@ -144,7 +137,7 @@ func (s *tracingSuite) TestChangeSpanResumedAfterRestart(c *C) {
 	}
 	st2.Unlock()
 
-	var resumed sdktrace.ReadOnlySpan
+	var resumed tracingtest.ReadOnlySpan
 	for _, span := range s.recorder.Ended() {
 		if spanAttr(span, "change.resumed").AsBool() {
 			resumed = span
@@ -156,13 +149,13 @@ func (s *tracingSuite) TestChangeSpanResumedAfterRestart(c *C) {
 }
 
 func (s *tracingSuite) TestNewChangeContext(c *C) {
-	parent := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    trace.TraceID{1},
-		SpanID:     trace.SpanID{2},
-		TraceFlags: trace.FlagsSampled,
+	parent := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{1},
+		SpanID:     tracing.SpanID{2},
+		TraceFlags: tracing.FlagsSampled,
 		Remote:     true,
 	})
-	ctx := trace.ContextWithRemoteSpanContext(context.Background(), parent)
+	ctx := tracing.ContextWithRemoteSpanContext(context.Background(), parent)
 
 	st := state.New(nil)
 	st.Lock()
@@ -202,7 +195,7 @@ func (s *tracingSuite) TestCheckpointSpan(c *C) {
 	// The failed attempt is recorded, but the checkpoint succeeded.
 	c.Assert(span.Events(), HasLen, 1)
 	c.Check(span.Events()[0].Name, Equals, "exception")
-	c.Check(span.Status().Code, Equals, codes.Unset)
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
 
 	// Unlocking without changes doesn't checkpoint.
 	s.recorder.Reset()
@@ -212,8 +205,8 @@ func (s *tracingSuite) TestCheckpointSpan(c *C) {
 }
 
 // checkpoints returns the ended "state checkpoint" spans.
-func (s *tracingSuite) checkpoints() []sdktrace.ReadOnlySpan {
-	var spans []sdktrace.ReadOnlySpan
+func (s *tracingSuite) checkpoints() []tracingtest.ReadOnlySpan {
+	var spans []tracingtest.ReadOnlySpan
 	for _, span := range s.recorder.Ended() {
 		if span.Name() == "state checkpoint" {
 			spans = append(spans, span)
@@ -250,8 +243,8 @@ func (s *tracingSuite) TestCheckpointCausedByTaskHandler(c *C) {
 	<-handlerDone
 	r.Wait()
 
-	// The checkpoint made by the handler is part of the task's trace.
-	var taskSpan sdktrace.ReadOnlySpan
+	// The checkpoint made by the handler is part of the task's tracing.
+	var taskSpan tracingtest.ReadOnlySpan
 	for _, span := range s.recorder.Ended() {
 		if span.Name() == "do foo" {
 			taskSpan = span
@@ -292,13 +285,13 @@ func (s *tracingSuite) TestCheckpointExplicitCauseTakesPrecedence(c *C) {
 	st.Unlock()
 	s.recorder.Reset()
 
-	requestSC := trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    trace.TraceID{1},
-		SpanID:     trace.SpanID{2},
-		TraceFlags: trace.FlagsSampled,
+	requestSC := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{1},
+		SpanID:     tracing.SpanID{2},
+		TraceFlags: tracing.FlagsSampled,
 		Remote:     true,
 	})
-	requestCtx := trace.ContextWithRemoteSpanContext(context.Background(), requestSC)
+	requestCtx := tracing.ContextWithRemoteSpanContext(context.Background(), requestSC)
 
 	st.Lock()
 	chg1.Set("a", 1)
@@ -429,11 +422,11 @@ func (s *tracingSuite) TestCleanupNotInChangeTrace(c *C) {
 	// Each resulting checkpoint is part of the trace that caused it.
 	checkpoints := s.checkpoints()
 	c.Assert(checkpoints, HasLen, 2)
-	parents := map[trace.SpanID]bool{}
+	parents := map[tracing.SpanID]bool{}
 	for _, checkpoint := range checkpoints {
 		parents[checkpoint.Parent().SpanID()] = true
 	}
-	c.Check(parents, DeepEquals, map[trace.SpanID]bool{
+	c.Check(parents, DeepEquals, map[tracing.SpanID]bool{
 		cleanSpan.SpanContext().SpanID():   true,
 		cleanupSpan.SpanContext().SpanID(): true,
 	})
@@ -441,10 +434,10 @@ func (s *tracingSuite) TestCleanupNotInChangeTrace(c *C) {
 
 func (s *tracingSuite) TestTraceCausesReset(c *C) {
 	st := state.New(&fakeStateBackend{})
-	requestCtx := trace.ContextWithRemoteSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
-		TraceID:    trace.TraceID{1},
-		SpanID:     trace.SpanID{2},
-		TraceFlags: trace.FlagsSampled,
+	requestCtx := tracing.ContextWithRemoteSpanContext(context.Background(), tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{1},
+		SpanID:     tracing.SpanID{2},
+		TraceFlags: tracing.FlagsSampled,
 	}))
 
 	// Small slices are emptied, keeping their backing arrays.

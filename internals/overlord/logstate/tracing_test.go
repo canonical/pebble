@@ -19,44 +19,38 @@ import (
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/tracing"
+	"github.com/canonical/pebble/internals/tracing/tracingtest"
 )
 
 type tracingSuite struct {
-	recorder *tracetest.SpanRecorder
-	restore  trace.TracerProvider
+	recorder *tracingtest.Recorder
 }
 
 var _ = Suite(&tracingSuite{})
 
 func (s *tracingSuite) SetUpTest(c *C) {
-	s.recorder = tracetest.NewSpanRecorder()
-	s.restore = otel.GetTracerProvider()
-	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(s.recorder)))
+	s.recorder = tracingtest.NewRecorder()
 }
 
 func (s *tracingSuite) TearDownTest(c *C) {
-	otel.SetTracerProvider(s.restore)
+	s.recorder.Restore()
 }
 
 // spanClient is a testClient that records the span it's flushed within.
 type spanClient struct {
 	*testClient
 	mu    sync.Mutex
-	spans []trace.SpanContext
+	spans []tracing.SpanContext
 }
 
 func (c *spanClient) Flush(ctx context.Context) error {
 	c.mu.Lock()
-	c.spans = append(c.spans, trace.SpanContextFromContext(ctx))
+	c.spans = append(c.spans, tracing.SpanContextFromContext(ctx))
 	c.mu.Unlock()
 	return c.testClient.Flush(ctx)
 }
@@ -85,7 +79,7 @@ func (s *tracingSuite) TestFlushSpan(c *C) {
 	c.Assert(testSvc.stop(), IsNil)
 	g.Stop()
 
-	var flushSpan sdktrace.ReadOnlySpan
+	var flushSpan tracingtest.ReadOnlySpan
 	for _, span := range s.recorder.Ended() {
 		if span.Name() == "flush logs tgt1" && spanAttrs(span)["pebble.log-target.entries"] == int64(2) {
 			flushSpan = span
@@ -93,7 +87,7 @@ func (s *tracingSuite) TestFlushSpan(c *C) {
 	}
 	c.Assert(flushSpan, NotNil)
 	c.Check(flushSpan.Parent().IsValid(), Equals, false)
-	c.Check(flushSpan.Status().Code, Equals, codes.Unset)
+	c.Check(flushSpan.Status().Code, Equals, tracing.StatusUnset)
 	attrs := spanAttrs(flushSpan)
 	c.Check(attrs["pebble.log-target.name"], Equals, "tgt1")
 	c.Check(attrs["pebble.log-target.type"], Equals, "loki")
@@ -105,7 +99,7 @@ func (s *tracingSuite) TestFlushSpan(c *C) {
 	c.Check(client.spans[0].SpanID(), Equals, flushSpan.SpanContext().SpanID())
 }
 
-func spanAttrs(span sdktrace.ReadOnlySpan) map[string]any {
+func spanAttrs(span tracingtest.ReadOnlySpan) map[string]any {
 	attrs := make(map[string]any)
 	for _, kv := range span.Attributes() {
 		attrs[string(kv.Key)] = kv.Value.AsInterface()

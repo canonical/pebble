@@ -21,22 +21,17 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/tracing"
+	"github.com/canonical/pebble/internals/tracing/tracingtest"
 )
 
 func (*suite) TestFlushPropagatesTrace(c *C) {
-	recorder := tracetest.NewSpanRecorder()
-	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder))
-	restore := otel.GetTracerProvider()
-	otel.SetTracerProvider(tp)
-	defer otel.SetTracerProvider(restore)
+	recorder := tracingtest.NewRecorder()
+	defer recorder.Restore()
 
 	var headers http.Header
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,19 +50,19 @@ func (*suite) TestFlushPropagatesTrace(c *C) {
 	})
 	c.Assert(err, IsNil)
 
-	ctx, flushSpan := tp.Tracer("test").Start(context.Background(), "flush")
+	ctx, flushSpan := tracing.Tracer().Start(context.Background(), "flush")
 	err = client.Flush(ctx)
 	flushSpan.End()
 	c.Assert(err, IsNil)
 
-	var requestSpan sdktrace.ReadOnlySpan
+	var requestSpan tracingtest.ReadOnlySpan
 	for _, span := range recorder.Ended() {
 		if span.Name() == "POST" {
 			requestSpan = span
 		}
 	}
 	c.Assert(requestSpan, NotNil)
-	c.Check(requestSpan.SpanKind(), Equals, trace.SpanKindClient)
+	c.Check(requestSpan.SpanKind(), Equals, tracing.SpanKindClient)
 	c.Check(requestSpan.Parent().SpanID(), Equals, flushSpan.SpanContext().SpanID())
 	attrs := make(map[string]any)
 	for _, kv := range requestSpan.Attributes() {

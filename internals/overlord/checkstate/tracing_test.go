@@ -21,12 +21,6 @@ import (
 	"strings"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/planstate"
@@ -34,31 +28,29 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/tracing"
+	"github.com/canonical/pebble/internals/tracing/tracingtest"
 )
 
 type tracingSuite struct {
 	testutil.BaseTest
-	recorder *tracetest.SpanRecorder
-	tp       *sdktrace.TracerProvider
+	recorder *tracingtest.Recorder
 }
 
 var _ = Suite(&tracingSuite{})
 
 func (s *tracingSuite) SetUpTest(c *C) {
 	s.BaseTest.SetUpTest(c)
-	s.recorder = tracetest.NewSpanRecorder()
-	s.tp = sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(s.recorder))
-	restore := otel.GetTracerProvider()
-	otel.SetTracerProvider(s.tp)
-	s.AddCleanup(func() { otel.SetTracerProvider(restore) })
+	s.recorder = tracingtest.NewRecorder()
+	s.AddCleanup(s.recorder.Restore)
 }
 
 // startSpan starts a span to act as a check task's or request's span.
-func (s *tracingSuite) startSpan(name string) (context.Context, trace.Span) {
-	return s.tp.Tracer("test").Start(context.Background(), name)
+func (s *tracingSuite) startSpan(name string) (context.Context, tracing.Span) {
+	return tracing.Tracer().Start(context.Background(), name)
 }
 
-func (s *tracingSuite) endedSpan(c *C, name string) sdktrace.ReadOnlySpan {
+func (s *tracingSuite) endedSpan(c *C, name string) tracingtest.ReadOnlySpan {
 	for _, span := range s.recorder.Ended() {
 		if span.Name() == name {
 			return span
@@ -68,8 +60,8 @@ func (s *tracingSuite) endedSpan(c *C, name string) sdktrace.ReadOnlySpan {
 	return nil
 }
 
-func spanAttrs(span sdktrace.ReadOnlySpan) map[string]attribute.Value {
-	attrs := make(map[string]attribute.Value)
+func spanAttrs(span tracingtest.ReadOnlySpan) map[string]tracing.AttributeValue {
+	attrs := make(map[string]tracing.AttributeValue)
 	for _, kv := range span.Attributes() {
 		attrs[string(kv.Key)] = kv.Value
 	}
@@ -97,7 +89,7 @@ func (s *tracingSuite) TestPeriodicRunIsNewRootLinkedToTask(c *C) {
 	c.Check(span.SpanContext().TraceID(), Not(Equals), taskSpan.SpanContext().TraceID())
 	c.Assert(span.Links(), HasLen, 1)
 	c.Check(span.Links()[0].SpanContext.SpanID(), Equals, taskSpan.SpanContext().SpanID())
-	c.Check(span.Status().Code, Equals, codes.Unset)
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
 	attrs := spanAttrs(span)
 	c.Check(attrs["pebble.check.name"].AsString(), Equals, "chk")
 	c.Check(attrs["pebble.check.type"].AsString(), Equals, "tcp")
@@ -105,7 +97,7 @@ func (s *tracingSuite) TestPeriodicRunIsNewRootLinkedToTask(c *C) {
 
 	// The returned context carries the check's span, and still the task's
 	// cancellation.
-	c.Check(trace.SpanContextFromContext(ctx).SpanID(), Equals, span.SpanContext().SpanID())
+	c.Check(tracing.SpanContextFromContext(ctx).SpanID(), Equals, span.SpanContext().SpanID())
 }
 
 func (s *tracingSuite) TestRefreshRunIsChildOfRequest(c *C) {
@@ -157,7 +149,7 @@ func (s *tracingSuite) TestHTTPCheckerSpan(c *C) {
 	c.Assert(err, IsNil)
 
 	span := s.endedSpan(c, "GET")
-	c.Check(span.SpanKind(), Equals, trace.SpanKindClient)
+	c.Check(span.SpanKind(), Equals, tracing.SpanKindClient)
 	c.Check(span.Parent().SpanID(), Equals, parent.SpanContext().SpanID())
 	attrs := spanAttrs(span)
 	c.Check(attrs["http.request.method"].AsString(), Equals, "GET")
@@ -165,7 +157,7 @@ func (s *tracingSuite) TestHTTPCheckerSpan(c *C) {
 	c.Check(attrs["server.address"].AsString(), Equals, "127.0.0.1")
 	c.Check(attrs["server.port"].AsInt64(), Not(Equals), int64(0))
 	c.Check(attrs["http.response.status_code"].AsInt64(), Equals, int64(200))
-	c.Check(span.Status().Code, Equals, codes.Unset)
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
 
 	// The trace is propagated to the checked service, from the client span.
 	c.Check(headers.Get("traceparent"), Equals,
@@ -177,7 +169,7 @@ func (s *tracingSuite) TestHTTPCheckerSpan(c *C) {
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, "non-2xx status code 503")
 	span = s.endedSpan(c, "GET")
-	c.Check(span.Status().Code, Equals, codes.Error)
+	c.Check(span.Status().Code, Equals, tracing.StatusError)
 	c.Check(spanAttrs(span)["http.response.status_code"].AsInt64(), Equals, int64(503))
 }
 
@@ -273,8 +265,8 @@ func (s *tracingSuite) TestCheckpointInCheckTrace(c *C) {
 	// Recording a check's result checkpoints the state, which should be
 	// traced as part of the check run.
 	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(10 * time.Millisecond) {
-		checkSpans := make(map[trace.SpanID]sdktrace.ReadOnlySpan)
-		var checkpoints []sdktrace.ReadOnlySpan
+		checkSpans := make(map[tracing.SpanID]tracingtest.ReadOnlySpan)
+		var checkpoints []tracingtest.ReadOnlySpan
 		for _, span := range s.recorder.Ended() {
 			switch span.Name() {
 			case "check chk":

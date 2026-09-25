@@ -15,9 +15,9 @@
 package state
 
 import (
-	"time"
+	"github.com/canonical/pebble/internals/tracing"
 
-	"go.opentelemetry.io/otel/trace"
+	"time"
 )
 
 // FakeCheckpointRetryDelay changes unlockCheckpointRetryInterval and unlockCheckpointRetryMaxTime.
@@ -56,7 +56,7 @@ func (s *State) NumNotices() int {
 	return len(s.notices)
 }
 
-func (c *Change) SpanContext() trace.SpanContext {
+func (c *Change) SpanContext() tracing.SpanContext {
 	return c.spanContext
 }
 
