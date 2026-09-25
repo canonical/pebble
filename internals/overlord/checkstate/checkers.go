@@ -23,6 +23,7 @@ import (
 	"net"
 	"net/http"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,6 +35,7 @@ import (
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 const (
@@ -49,18 +51,25 @@ type httpChecker struct {
 	headers map[string]string
 }
 
-func (c *httpChecker) check(ctx context.Context) error {
+func (c *httpChecker) check(ctx context.Context) (err error) {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
 	client := &http.Client{}
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)
 	}
+
 	for k, v := range c.headers {
 		request.Header.Set(k, v)
 	}
 
-	response, err := client.Do(request)
+	// Trace the request, and propagate the trace to the checked service
+	// (unless the configured headers set a trace context).
+	request, span := tracing.StartHTTPClientSpan(request)
+	var response *http.Response
+	defer func() { tracing.EndHTTPClientSpan(span, response, err) }()
+
+	response, err = client.Do(request)
 	if err != nil {
 		return err
 	}
@@ -103,6 +112,12 @@ func (c *tcpChecker) check(ctx context.Context) error {
 		host = "localhost"
 	}
 
+	tracing.SpanFromContext(ctx).SetAttributes(
+		tracing.NetworkTransportTCP,
+		tracing.ServerAddress(host),
+		tracing.ServerPort(c.port),
+	)
+
 	var dialer net.Dialer
 	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(c.port)))
 	if err != nil {
@@ -133,10 +148,17 @@ func (c *execChecker) check(ctx context.Context) error {
 		return fmt.Errorf("cannot parse command: %v", err)
 	}
 
-	// Similar to services and exec, inherit the daemon's environment.
+	// Similar to services and exec, inherit the daemon's environment, except
+	// for its trace context, which doesn't apply to the check.
 	environment := osutil.Environ()
+	tracing.DeleteEnv(environment)
 	// Requested environment takes precedence.
 	maps.Copy(environment, c.environment)
+	// Let the command continue the check's tracing.
+	tracing.InjectEnv(ctx, environment)
+
+	span := tracing.SpanFromContext(ctx)
+	span.SetAttributes(tracing.ProcessExecutableName(filepath.Base(args[0])))
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = make([]string, 0, len(environment)) // avoid additional allocations
@@ -176,8 +198,10 @@ func (c *execChecker) check(ctx context.Context) error {
 		return err
 	}
 	logger.Debugf("Check %q (exec): running %q (PID %d)", c.name, c.command, cmd.Process.Pid)
+	span.SetAttributes(tracing.ProcessPID(cmd.Process.Pid))
 
 	exitCode, err := reaper.WaitCommand(cmd)
+	span.SetAttributes(tracing.ProcessExitCode(exitCode))
 	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		// If context is cancelled or times out, exitCode will be 137
 		// and err will be nil, so return the ctx.Err() directly.

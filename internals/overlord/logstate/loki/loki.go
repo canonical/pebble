@@ -29,6 +29,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 const (
@@ -155,7 +156,10 @@ func (c *Client) Flush(ctx context.Context) error {
 	httpReq.Header.Set("Content-Type", "application/json; charset=utf-8")
 	httpReq.Header.Set("User-Agent", c.options.UserAgent)
 
+	// Trace the request, and propagate the trace to Loki.
+	httpReq, span := tracing.StartHTTPClientSpan(httpReq)
 	resp, err := c.httpClient.Do(httpReq)
+	tracing.EndHTTPClientSpan(span, resp, err)
 	if err != nil {
 		return err
 	}

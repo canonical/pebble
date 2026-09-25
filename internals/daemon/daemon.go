@@ -599,7 +599,7 @@ func (d *Daemon) Start() error {
 			}
 			return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnknown)
 		},
-		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
+		Handler: exitOnPanic(logit(traceRequest(d.router)), os.Stderr, func() {
 			os.Exit(1)
 		}),
 		ConnState: d.connTracker.trackConn,

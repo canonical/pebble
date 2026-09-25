@@ -27,6 +27,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // ExecArgs holds the arguments for a command execution.
@@ -83,6 +84,9 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 		delete(environment, "HOME")
 		delete(environment, "USER")
 	}
+	// The daemon's own trace context doesn't apply to the command. The
+	// command's trace context is set when it's run (see execution.do).
+	tracing.DeleteEnv(environment)
 
 	// Requested environment takes precedence.
 	maps.Copy(environment, args.Environment)

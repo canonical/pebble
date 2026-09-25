@@ -15,6 +15,8 @@
 package testutil
 
 import (
+	"os"
+
 	"gopkg.in/check.v1"
 )
 
@@ -43,4 +45,18 @@ func (s *BaseTest) TearDownTest(c *check.C) {
 // AddCleanup adds a new cleanup function to the test
 func (s *BaseTest) AddCleanup(f func()) {
 	s.cleanupHandlers = append(s.cleanupHandlers, f)
+}
+
+// Setenv sets the environment variable key to value for the duration of the
+// test, restoring its previous value (or unsetting it) during TearDownTest.
+func (s *BaseTest) Setenv(key, value string) {
+	old, ok := os.LookupEnv(key)
+	s.AddCleanup(func() {
+		if ok {
+			os.Setenv(key, old)
+		} else {
+			os.Unsetenv(key)
+		}
+	})
+	os.Setenv(key, value)
 }

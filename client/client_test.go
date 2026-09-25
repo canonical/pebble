@@ -38,6 +38,7 @@ import (
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -314,6 +315,53 @@ func (cs *clientSuite) TestUserAgent(c *C) {
 	err = resp.DecodeResult(&v)
 	c.Assert(err, NotNil)
 	c.Check(cs.req.Header.Get("User-Agent"), Equals, "some-agent/9.87")
+}
+
+func (cs *clientSuite) TestTraceContextFromConfig(c *C) {
+	sc := tracing.ParseTraceParent(
+		"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+		"foo=bar",
+	)
+	c.Assert(sc.IsValid(), Equals, true)
+
+	cli, err := client.New(&client.Config{SpanContext: sc})
+	c.Assert(err, IsNil)
+	cli.SetDoer(cs)
+
+	_, err = cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+	c.Check(cs.req.Header.Get("tracestate"), Equals, "foo=bar")
+
+	// A span carried by the request context takes precedence.
+	ctxSC := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{1},
+		SpanID:     tracing.SpanID{2},
+		TraceFlags: tracing.FlagsSampled,
+	})
+	_, err = cli.Requester().Do(tracing.ContextWithSpanContext(context.Background(), ctxSC), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-01000000000000000000000000000000-0200000000000000-01")
+	c.Check(cs.req.Header.Get("tracestate"), Equals, "")
+}
+
+func (cs *clientSuite) TestNoTraceContext(c *C) {
+	_, err := cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Values("traceparent"), HasLen, 0)
+	c.Check(cs.req.Header.Values("tracestate"), HasLen, 0)
 }
 
 func (cs *clientSuite) TestContentType(c *C) {

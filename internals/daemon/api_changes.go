@@ -223,6 +223,7 @@ func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()
+	state.AddTraceContext(r.Context())
 	chg := state.Change(chID)
 	if chg == nil {
 		return NotFound("cannot find change with id %q", chID)
