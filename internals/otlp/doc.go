@@ -32,8 +32,9 @@
 // service definitions, and so depend on gRPC, as do the upstream OTLP
 // exporters that use them. Pebble only speaks OTLP over HTTP, so rather than
 // take on gRPC, the few message definitions it needs are copied here and
-// compiled with protoc-gen-go, which depends only on the protobuf runtime
-// (google.golang.org/protobuf).
+// compiled with cotorp (https://github.com/canonical/cotorp), which generates
+// self-contained binary and JSON marshaling code that depends only on the Go
+// standard library.
 //
 // Only the data model is included, not the collector service
 // (opentelemetry/proto/collector/trace/v1), whose request message,
@@ -57,10 +58,13 @@
 //   - The go_package options name the subpackages of this package.
 //
 // The protobuf package names (opentelemetry.proto.*) are unchanged, so the
-// messages are the standard OTLP messages on the wire and in the protobuf
-// registry. Don't import go.opentelemetry.io/proto/otlp in the same binary:
-// registering the same fully qualified message names twice is a conflict,
-// which the protobuf runtime reports by panicking at startup.
+// messages are the standard OTLP messages on the wire.
+//
+// The generated JSON methods follow the OTLP/HTTP JSON encoding rather than
+// the plain protobuf JSON mapping (see
+// https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding), using
+// cotorp options set in generate.go: enums are integers, trace and span IDs
+// are hex rather than base64, and unknown fields are ignored when decoding.
 //
 // # Regenerating
 //
@@ -69,7 +73,7 @@
 //
 //	go generate ./internals/otlp
 //
-// This requires protoc and protoc-gen-go on the PATH. Use the version of
-// protoc-gen-go that matches the google.golang.org/protobuf version in
-// go.mod, as recorded in the header of each generated file.
+// This requires cotorp on the PATH, which can be installed with:
+//
+//	go install github.com/canonical/cotorp/cmd/cotorp@latest
 package otlp

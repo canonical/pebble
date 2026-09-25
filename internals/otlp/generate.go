@@ -14,4 +14,4 @@
 
 package otlp
 
-//go:generate protoc --proto_path=proto --go_out=. --go_opt=paths=source_relative common/v1/common.proto resource/v1/resource.proto trace/v1/trace.proto
+//go:generate cotorp -I proto -go_out . -paths source_relative -json_enum_numbers -json_discard_unknown -json_hex opentelemetry.proto.trace.v1.Span.trace_id -json_hex opentelemetry.proto.trace.v1.Span.span_id -json_hex opentelemetry.proto.trace.v1.Span.parent_span_id -json_hex opentelemetry.proto.trace.v1.Span.Link.trace_id -json_hex opentelemetry.proto.trace.v1.Span.Link.span_id common/v1/common.proto resource/v1/resource.proto trace/v1/trace.proto

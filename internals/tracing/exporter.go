@@ -32,7 +32,6 @@ import (
 	"time"
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/canonical/pebble/cmd"
 )
@@ -214,12 +213,13 @@ func (e *exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 	// message that the endpoint expects: both have the resource spans as
 	// field 1, named resourceSpans in JSON. This avoids importing the
 	// collector protos.
+	data := tracesData(spans)
 	var body []byte
 	var err error
 	if e.config.json {
-		body, err = marshalJSON(tracesData(spans))
+		body, err = data.MarshalJSON()
 	} else {
-		body, err = proto.Marshal(tracesData(spans))
+		body, err = data.MarshalBinary()
 	}
 	if err != nil {
 		return fmt.Errorf("cannot marshal spans: %w", err)

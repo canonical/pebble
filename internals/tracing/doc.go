@@ -71,14 +71,15 @@
 // and proxies that only accept JSON. The exporter is implemented in this
 // package rather than using the upstream otlptrace exporters, which depend
 // on gRPC even when only HTTP is used, and so would add significantly to
-// Pebble's size and dependencies. This exporter needs only the protobuf
-// runtime and the OTLP message types generated into internals/otlp.
+// Pebble's size and dependencies. This exporter needs only the OTLP message
+// types generated into internals/otlp, which depend only on the standard
+// library.
 //
 // It relies on the OTLP TracesData message being wire-compatible with
 // ExportTraceServiceRequest, so the service definitions aren't needed. The
-// JSON encoding is produced by the protobuf runtime's JSON encoder, adjusted
-// to follow the OTLP rules: trace and span IDs are hex rather than base64,
-// and enums are integers. Failed exports are retried with backoff when the
+// JSON encoding follows the OTLP rules, in which trace and span IDs are hex
+// rather than base64 and enums are integers; the message types are generated
+// to encode JSON this way. Failed exports are retried with backoff when the
 // collector responds with 429, 502, 503 or 504, honouring Retry-After.
 //
 // # Trace context propagation

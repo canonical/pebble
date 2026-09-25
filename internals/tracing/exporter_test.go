@@ -17,8 +17,6 @@ package tracing
 import (
 	"compress/gzip"
 	"context"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -33,8 +31,6 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 	. "gopkg.in/check.v1"
 
 	commonpb "github.com/canonical/pebble/internals/otlp/common/v1"
@@ -165,9 +161,9 @@ func (c *fakeCollector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var data tracepb.TracesData
 	switch r.Header.Get("Content-Type") {
 	case "application/x-protobuf":
-		err = proto.Unmarshal(b, &data)
+		err = data.UnmarshalBinary(b)
 	case "application/json":
-		err = unmarshalJSON(b, &data)
+		err = data.UnmarshalJSON(b)
 	default:
 		err = fmt.Errorf("unexpected content type %q", r.Header.Get("Content-Type"))
 	}
@@ -186,49 +182,6 @@ func (c *fakeCollector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	c.data = append(c.data, &data)
 	w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
-}
-
-// unmarshalJSON decodes the OTLP/HTTP JSON encoding, which differs from the
-// protobuf JSON mapping in using hex rather than base64 for trace and span
-// IDs. It fails if any ID isn't valid hex.
-func unmarshalJSON(b []byte, data *tracepb.TracesData) error {
-	var doc map[string]any
-	if err := json.Unmarshal(b, &doc); err != nil {
-		return err
-	}
-	unhex := func(obj map[string]any, fields ...string) error {
-		for _, field := range fields {
-			v, ok := obj[field].(string)
-			if !ok {
-				continue
-			}
-			id, err := hex.DecodeString(v)
-			if err != nil {
-				return fmt.Errorf("invalid %s %q: %w", field, v, err)
-			}
-			obj[field] = base64.StdEncoding.EncodeToString(id)
-		}
-		return nil
-	}
-	for _, rs := range objects(doc["resourceSpans"]) {
-		for _, ss := range objects(rs["scopeSpans"]) {
-			for _, span := range objects(ss["spans"]) {
-				if err := unhex(span, "traceId", "spanId", "parentSpanId"); err != nil {
-					return err
-				}
-				for _, link := range objects(span["links"]) {
-					if err := unhex(link, "traceId", "spanId"); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-	b, err := json.Marshal(doc)
-	if err != nil {
-		return err
-	}
-	return protojson.Unmarshal(b, data)
 }
 
 // recordSpans creates spans using a real tracer provider and returns them
@@ -358,7 +311,7 @@ func (s *exporterSuite) testExportSpans(c *C, useJSON bool) {
 }
 
 func (s *exporterSuite) TestMarshalJSON(c *C) {
-	b, err := marshalJSON(tracesData(recordSpans()))
+	b, err := tracesData(recordSpans()).MarshalJSON()
 	c.Assert(err, IsNil)
 
 	var doc struct {
