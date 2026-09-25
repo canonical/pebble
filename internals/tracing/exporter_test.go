@@ -17,7 +17,11 @@ package tracing
 import (
 	"compress/gzip"
 	"context"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -29,6 +33,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	. "gopkg.in/check.v1"
 
@@ -71,6 +76,24 @@ func (s *exporterSuite) TestExporterConfigFromEnv(c *C) {
 	config, err = exporterConfigFromEnv()
 	c.Assert(err, IsNil)
 	c.Check(config.endpoint, Equals, "https://collector/custom")
+	c.Check(config.json, Equals, false)
+}
+
+func (s *exporterSuite) TestExporterConfigFromEnvProtocol(c *C) {
+	s.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://collector:4318")
+	for _, test := range []struct {
+		protocol string
+		json     bool
+	}{
+		{"", false},
+		{"http/protobuf", false},
+		{"http/json", true},
+	} {
+		s.Setenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", test.protocol)
+		config, err := exporterConfigFromEnv()
+		c.Assert(err, IsNil)
+		c.Check(config.json, Equals, test.json, Commentf("protocol %q", test.protocol))
+	}
 }
 
 func (s *exporterSuite) TestExporterConfigFromEnvErrors(c *C) {
@@ -85,7 +108,7 @@ func (s *exporterSuite) TestExporterConfigFromEnvErrors(c *C) {
 		err: `invalid OTLP endpoint "collector:4318/v1/traces": scheme must be http or https`,
 	}, {
 		env: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://c", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"},
-		err: `unsupported OTLP protocol "grpc" \(only http/protobuf is supported\)`,
+		err: `unsupported OTLP protocol "grpc" \(only http/protobuf and http/json are supported\)`,
 	}, {
 		env: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://c", "OTEL_EXPORTER_OTLP_HEADERS": "novalue"},
 		err: `invalid OTLP header "novalue": must be key=value`,
@@ -140,7 +163,15 @@ func (c *fakeCollector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var data tracepb.TracesData
-	if err := proto.Unmarshal(b, &data); err != nil {
+	switch r.Header.Get("Content-Type") {
+	case "application/x-protobuf":
+		err = proto.Unmarshal(b, &data)
+	case "application/json":
+		err = unmarshalJSON(b, &data)
+	default:
+		err = fmt.Errorf("unexpected content type %q", r.Header.Get("Content-Type"))
+	}
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -154,7 +185,50 @@ func (c *fakeCollector) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	c.data = append(c.data, &data)
-	w.Header().Set("Content-Type", "application/x-protobuf")
+	w.Header().Set("Content-Type", r.Header.Get("Content-Type"))
+}
+
+// unmarshalJSON decodes the OTLP/HTTP JSON encoding, which differs from the
+// protobuf JSON mapping in using hex rather than base64 for trace and span
+// IDs. It fails if any ID isn't valid hex.
+func unmarshalJSON(b []byte, data *tracepb.TracesData) error {
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return err
+	}
+	unhex := func(obj map[string]any, fields ...string) error {
+		for _, field := range fields {
+			v, ok := obj[field].(string)
+			if !ok {
+				continue
+			}
+			id, err := hex.DecodeString(v)
+			if err != nil {
+				return fmt.Errorf("invalid %s %q: %w", field, v, err)
+			}
+			obj[field] = base64.StdEncoding.EncodeToString(id)
+		}
+		return nil
+	}
+	for _, rs := range objects(doc["resourceSpans"]) {
+		for _, ss := range objects(rs["scopeSpans"]) {
+			for _, span := range objects(ss["spans"]) {
+				if err := unhex(span, "traceId", "spanId", "parentSpanId"); err != nil {
+					return err
+				}
+				for _, link := range objects(span["links"]) {
+					if err := unhex(link, "traceId", "spanId"); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	b, err := json.Marshal(doc)
+	if err != nil {
+		return err
+	}
+	return protojson.Unmarshal(b, data)
 }
 
 // recordSpans creates spans using a real tracer provider and returns them
@@ -201,7 +275,15 @@ func (r *spanRecorder) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnl
 
 func (r *spanRecorder) Shutdown(ctx context.Context) error { return nil }
 
-func (s *exporterSuite) TestExportSpans(c *C) {
+func (s *exporterSuite) TestExportSpansProtobuf(c *C) {
+	s.testExportSpans(c, false)
+}
+
+func (s *exporterSuite) TestExportSpansJSON(c *C) {
+	s.testExportSpans(c, true)
+}
+
+func (s *exporterSuite) testExportSpans(c *C, useJSON bool) {
 	collector := &fakeCollector{}
 	server := httptest.NewServer(collector)
 	defer server.Close()
@@ -211,6 +293,7 @@ func (s *exporterSuite) TestExportSpans(c *C) {
 		headers:  map[string]string{"Authorization": "Bearer token"},
 		timeout:  5 * time.Second,
 		gzip:     true,
+		json:     useJSON,
 	}, "1.2.3")
 	err := e.ExportSpans(context.Background(), recordSpans())
 	c.Assert(err, IsNil)
@@ -219,7 +302,11 @@ func (s *exporterSuite) TestExportSpans(c *C) {
 	req := collector.requests[0]
 	c.Check(req.Method, Equals, "POST")
 	c.Check(req.URL.Path, Equals, "/v1/traces")
-	c.Check(req.Header.Get("Content-Type"), Equals, "application/x-protobuf")
+	if useJSON {
+		c.Check(req.Header.Get("Content-Type"), Equals, "application/json")
+	} else {
+		c.Check(req.Header.Get("Content-Type"), Equals, "application/x-protobuf")
+	}
 	c.Check(req.Header.Get("Content-Encoding"), Equals, "gzip")
 	c.Check(req.Header.Get("Authorization"), Equals, "Bearer token")
 	c.Check(req.Header.Get("User-Agent"), Equals, "pebble/1.2.3")
@@ -268,6 +355,49 @@ func (s *exporterSuite) TestExportSpans(c *C) {
 	c.Check(child.Events[0].Name, Equals, "retry")
 	c.Check(attrMap(child.Events[0].Attributes)["reason"].GetStringValue(), Equals, "busy")
 	c.Check(child.Events[1].Name, Equals, "exception")
+}
+
+func (s *exporterSuite) TestMarshalJSON(c *C) {
+	b, err := marshalJSON(tracesData(recordSpans()))
+	c.Assert(err, IsNil)
+
+	var doc struct {
+		ResourceSpans []struct {
+			ScopeSpans []struct {
+				Scope struct {
+					Name string `json:"name"`
+				} `json:"scope"`
+				Spans []map[string]any `json:"spans"`
+			} `json:"scopeSpans"`
+		} `json:"resourceSpans"`
+	}
+	c.Assert(json.Unmarshal(b, &doc), IsNil)
+	c.Assert(doc.ResourceSpans, HasLen, 1)
+	spans := make(map[string]map[string]any)
+	for _, ss := range doc.ResourceSpans[0].ScopeSpans {
+		c.Assert(ss.Spans, HasLen, 1)
+		spans[ss.Scope.Name] = ss.Spans[0]
+	}
+
+	// IDs are hex, not base64.
+	parent := spans["scope-a"]
+	c.Check(parent["traceId"], Equals, "01000000000000000000000000000000")
+	c.Check(parent["parentSpanId"], Equals, "0200000000000000")
+	c.Check(parent["spanId"], Matches, "[0-9a-f]{16}")
+	child := spans["scope-b"]
+	c.Check(child["parentSpanId"], Equals, parent["spanId"])
+
+	// Enums are integers, and 64-bit integers are strings.
+	c.Check(parent["kind"], Equals, float64(1))
+	c.Check(child["status"], DeepEquals, map[string]any{"code": float64(2), "message": "boom"})
+	c.Check(parent["startTimeUnixNano"], FitsTypeOf, "")
+	var intAttr any
+	for _, attr := range parent["attributes"].([]any) {
+		if attr := attr.(map[string]any); attr["key"] == "i" {
+			intAttr = attr["value"]
+		}
+	}
+	c.Check(intAttr, DeepEquals, map[string]any{"intValue": "42"})
 }
 
 func (s *exporterSuite) TestExportSpansRetries(c *C) {

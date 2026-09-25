@@ -27,7 +27,7 @@
 // # Why the definitions are vendored
 //
 // The tracing package exports spans with its own OTLP/HTTP exporter, which
-// sends protobuf-encoded requests. The upstream Go bindings for these
+// sends protobuf- or JSON-encoded requests. The upstream Go bindings for these
 // messages (go.opentelemetry.io/proto/otlp) also contain the OTLP collector
 // service definitions, and so depend on gRPC, as do the upstream OTLP
 // exporters that use them. Pebble only speaks OTLP over HTTP, so rather than

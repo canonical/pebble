@@ -50,6 +50,9 @@ type exporterConfig struct {
 	timeout  time.Duration
 	gzip     bool
 	tls      *tls.Config
+	// json selects the JSON encoding (the http/json protocol) rather than
+	// the default protobuf encoding (http/protobuf).
+	json bool
 }
 
 // otlpEnv returns the value of the trace-specific OTEL_EXPORTER_OTLP_TRACES_*
@@ -69,8 +72,10 @@ func exporterConfigFromEnv() (*exporterConfig, error) {
 
 	switch protocol := otlpEnv("PROTOCOL"); protocol {
 	case "", "http/protobuf":
+	case "http/json":
+		config.json = true
 	default:
-		return nil, fmt.Errorf("unsupported OTLP protocol %q (only http/protobuf is supported)", protocol)
+		return nil, fmt.Errorf("unsupported OTLP protocol %q (only http/protobuf and http/json are supported)", protocol)
 	}
 
 	// The signal-specific endpoint is used as-is, whereas the general one
@@ -171,7 +176,7 @@ func tlsConfigFromEnv() (*tls.Config, error) {
 }
 
 // exporter is an sdktrace.SpanExporter that sends spans to an OTLP/HTTP
-// endpoint using the protobuf encoding.
+// endpoint using the protobuf or JSON encoding.
 //
 // This is used instead of the upstream otlptracehttp exporter, which pulls
 // gRPC into the binary.
@@ -207,8 +212,15 @@ func (e *exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 
 	// TracesData is wire-compatible with the ExportTraceServiceRequest
 	// message that the endpoint expects: both have the resource spans as
-	// field 1. This avoids importing the collector protos.
-	body, err := proto.Marshal(tracesData(spans))
+	// field 1, named resourceSpans in JSON. This avoids importing the
+	// collector protos.
+	var body []byte
+	var err error
+	if e.config.json {
+		body, err = marshalJSON(tracesData(spans))
+	} else {
+		body, err = proto.Marshal(tracesData(spans))
+	}
 	if err != nil {
 		return fmt.Errorf("cannot marshal spans: %w", err)
 	}
@@ -254,7 +266,11 @@ func (e *exporter) send(ctx context.Context, body []byte) (retryAfter time.Durat
 	for k, v := range e.config.headers {
 		req.Header.Set(k, v)
 	}
-	req.Header.Set("Content-Type", "application/x-protobuf")
+	if e.config.json {
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req.Header.Set("Content-Type", "application/x-protobuf")
+	}
 	req.Header.Set("User-Agent", e.userAgent)
 	if e.config.gzip {
 		req.Header.Set("Content-Encoding", "gzip")

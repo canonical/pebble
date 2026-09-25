@@ -49,7 +49,8 @@
 //   - OTEL_EXPORTER_OTLP_ENDPOINT: the collector's base URL, to which
 //     "/v1/traces" is appended; or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, the
 //     full URL, used as-is. Either enables tracing.
-//   - OTEL_EXPORTER_OTLP_PROTOCOL: must be unset or "http/protobuf".
+//   - OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf" (the default) or
+//     "http/json". The grpc protocol isn't supported.
 //   - OTEL_EXPORTER_OTLP_HEADERS: extra request headers, such as
 //     authentication, as comma-separated key=value pairs.
 //   - OTEL_EXPORTER_OTLP_TIMEOUT: the export timeout in milliseconds,
@@ -65,15 +66,20 @@
 //
 // # The OTLP exporter
 //
-// Spans are exported using OTLP over HTTP with the protobuf encoding, by an
-// exporter implemented in this package rather than the upstream otlptrace
-// exporters. The upstream exporters depend on gRPC, even when only HTTP is
-// used, which would add significantly to Pebble's size and dependencies.
-// This exporter needs only the protobuf runtime and the OTLP message types
-// generated into internals/otlp. It relies on the OTLP TracesData message
-// being wire-compatible with ExportTraceServiceRequest, so the service
-// definitions aren't needed. Failed exports are retried with backoff when
-// the collector responds with 429, 502, 503 or 504, honouring Retry-After.
+// Spans are exported using OTLP over HTTP, with either the protobuf encoding
+// (the default, and the most compact) or the JSON encoding, for collectors
+// and proxies that only accept JSON. The exporter is implemented in this
+// package rather than using the upstream otlptrace exporters, which depend
+// on gRPC even when only HTTP is used, and so would add significantly to
+// Pebble's size and dependencies. This exporter needs only the protobuf
+// runtime and the OTLP message types generated into internals/otlp.
+//
+// It relies on the OTLP TracesData message being wire-compatible with
+// ExportTraceServiceRequest, so the service definitions aren't needed. The
+// JSON encoding is produced by the protobuf runtime's JSON encoder, adjusted
+// to follow the OTLP rules: trace and span IDs are hex rather than base64,
+// and enums are integers. Failed exports are retried with backoff when the
+// collector responds with 429, 502, 503 or 504, honouring Retry-After.
 //
 // # Trace context propagation
 //
