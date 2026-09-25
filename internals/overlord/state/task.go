@@ -20,6 +20,8 @@ import (
 	"slices"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/canonical/pebble/internals/logger"
 )
 
@@ -61,6 +63,10 @@ type Task struct {
 	undoingTime time.Duration
 
 	atTime time.Time
+
+	// runSpan is the span of the task's handler while it's running. It
+	// isn't persisted.
+	runSpan trace.SpanContext
 }
 
 func newTask(state *State, id, kind, summary string) *Task {
@@ -259,7 +265,7 @@ func (t *Task) SetStatus(new Status) {
 		panic("Task.SetStatus() called with WaitStatus, which is not allowed. Use SetToWait() instead")
 	}
 
-	t.state.writing()
+	t.writing()
 	old := t.status
 	if new == DoneStatus && old == AbortStatus {
 		// if the task is in AbortStatus (because some other task ran
@@ -280,7 +286,7 @@ func (t *Task) SetToWait(resultStatus Status) {
 		panic("Task.SetToWait() cannot be invoked with either of DefaultStatus or WaitStatus")
 	}
 
-	t.state.writing()
+	t.writing()
 	old := t.status
 	if old == AbortStatus {
 		// if the task is in AbortStatus (because some other task ran
@@ -311,7 +317,7 @@ func (t *Task) IsClean() bool {
 //
 // Cleaning a task must only be done after the change is ready.
 func (t *Task) SetClean() {
-	t.state.writing()
+	t.writing()
 	if t.clean {
 		return
 	}
@@ -351,7 +357,7 @@ func (t *Task) Progress() (label string, done, total int) {
 func (t *Task) SetProgress(label string, done, total int) {
 	// Only mark state for checkpointing if progress is final.
 	if total > 0 && done == total {
-		t.state.writing()
+		t.writing()
 	} else {
 		t.state.reading()
 	}
@@ -382,12 +388,12 @@ func (t *Task) AtTime() time.Time {
 }
 
 func (t *Task) accumulateDoingTime(duration time.Duration) {
-	t.state.writing()
+	t.writing()
 	t.doingTime += duration
 }
 
 func (t *Task) accumulateUndoingTime(duration time.Duration) {
-	t.state.writing()
+	t.writing()
 	t.undoingTime += duration
 }
 
@@ -446,20 +452,20 @@ func (t *Task) Log() []string {
 
 // Logf logs information about the progress of the task.
 func (t *Task) Logf(format string, args ...any) {
-	t.state.writing()
+	t.writing()
 	t.addLog(LogInfo, format, args)
 }
 
 // Errorf logs error information about the progress of the task.
 func (t *Task) Errorf(format string, args ...any) {
-	t.state.writing()
+	t.writing()
 	t.addLog(LogError, format, args)
 }
 
 // Set associates value with key for future consulting by managers.
 // The provided value must properly marshal and unmarshal with encoding/json.
 func (t *Task) Set(key string, value any) {
-	t.state.writing()
+	t.writing()
 	t.data.set(key, value)
 }
 
@@ -478,7 +484,7 @@ func (t *Task) Has(key string) bool {
 
 // Clear disassociates the value from key.
 func (t *Task) Clear(key string) {
-	t.state.writing()
+	t.writing()
 	delete(t.data, key)
 }
 
@@ -491,7 +497,7 @@ func addOnce(set []string, s string) []string {
 
 // WaitFor registers another task as a requirement for t to make progress.
 func (t *Task) WaitFor(another *Task) {
-	t.state.writing()
+	t.writing()
 	t.waitTasks = addOnce(t.waitTasks, another.id)
 	another.haltTasks = addOnce(another.haltTasks, t.id)
 }
@@ -533,13 +539,13 @@ func (t *Task) Lanes() []int {
 // JoinLane registers the task in the provided lane. Tasks in different lanes
 // abort independently on errors. See Change.AbortLane for details.
 func (t *Task) JoinLane(lane int) {
-	t.state.writing()
+	t.writing()
 	t.lanes = append(t.lanes, lane)
 }
 
 // At schedules the task, if it's not ready, to happen no earlier than when, if when is the zero time any previous special scheduling is suppressed.
 func (t *Task) At(when time.Time) {
-	t.state.writing()
+	t.writing()
 	iszero := when.IsZero()
 	if t.Status().Ready() && !iszero {
 		return

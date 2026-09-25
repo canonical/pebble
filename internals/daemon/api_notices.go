@@ -228,6 +228,7 @@ func v1PostNotices(c *Command, r *http.Request, user *UserState) Response {
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
+	st.AddTraceContext(r.Context())
 
 	noticeId, err := st.AddNotice(user.UID, state.CustomNotice, payload.Key, &state.AddNoticeOptions{
 		Data:        data,

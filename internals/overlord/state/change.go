@@ -16,6 +16,7 @@ package state
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/canonical/pebble/internals/logger"
 )
@@ -148,6 +151,13 @@ type Change struct {
 
 	spawnTime time.Time
 	readyTime time.Time
+
+	// span covers the change until it becomes ready. It is nil once ended,
+	// or for changes that were already ready when loaded from disk.
+	span trace.Span
+	// spanContext identifies the change's original span, and is persisted
+	// so that tasks run after a restart remain part of the same trace.
+	spanContext trace.SpanContext
 }
 
 type byReadyTime []*Change
@@ -156,8 +166,8 @@ func (a byReadyTime) Len() int           { return len(a) }
 func (a byReadyTime) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byReadyTime) Less(i, j int) bool { return a[i].readyTime.Before(a[j].readyTime) }
 
-func newChange(state *State, id, kind, summary string) *Change {
-	return &Change{
+func newChange(ctx context.Context, state *State, id, kind, summary string) *Change {
+	chg := &Change{
 		state:   state,
 		id:      id,
 		kind:    kind,
@@ -167,6 +177,8 @@ func newChange(state *State, id, kind, summary string) *Change {
 
 		spawnTime: timeNow(),
 	}
+	chg.startSpan(ctx)
+	return chg
 }
 
 type marshalledChange struct {
@@ -182,6 +194,8 @@ type marshalledChange struct {
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
 
 	LastRecordedNoticeStatus Status `json:"last-recorded-notice-status,omitempty"`
+
+	TraceParent string `json:"traceparent,omitempty"`
 }
 
 // MarshalJSON makes Change a json.Marshaller
@@ -204,6 +218,8 @@ func (c *Change) MarshalJSON() ([]byte, error) {
 		ReadyTime: readyTime,
 
 		LastRecordedNoticeStatus: c.lastRecordedNoticeStatus,
+
+		TraceParent: marshalSpanContext(c.spanContext),
 	})
 }
 
@@ -234,6 +250,7 @@ func (c *Change) UnmarshalJSON(data []byte) error {
 		c.readyTime = *unmarshalled.ReadyTime
 	}
 	c.lastRecordedNoticeStatus = unmarshalled.LastRecordedNoticeStatus
+	c.spanContext = unmarshalSpanContext(unmarshalled.TraceParent)
 	return nil
 }
 
@@ -241,6 +258,8 @@ func (c *Change) UnmarshalJSON(data []byte) error {
 func (c *Change) finishUnmarshal() {
 	if c.Status().Ready() {
 		close(c.ready)
+	} else {
+		c.resumeSpan()
 	}
 }
 
@@ -262,7 +281,7 @@ func (c *Change) Summary() string {
 // Set associates value with key for future consulting by managers.
 // The provided value must properly marshal and unmarshal with encoding/json.
 func (c *Change) Set(key string, value any) {
-	c.state.writing()
+	c.writing()
 	c.data.set(key, value)
 }
 
@@ -462,7 +481,7 @@ func (c *Change) notifyStatusChange(new Status) {
 
 // SetStatus sets the change status, overriding the default behavior (see Status method).
 func (c *Change) SetStatus(s Status) {
-	c.state.writing()
+	c.writing()
 	c.status = s
 	if s.Ready() {
 		c.markReady()
@@ -479,6 +498,7 @@ func (c *Change) markReady() {
 	if c.readyTime.IsZero() {
 		c.readyTime = timeNow()
 	}
+	c.endSpan()
 }
 
 // Ready returns a channel that is closed the first time the change becomes ready.
@@ -627,7 +647,7 @@ func (c *Change) State() *State {
 // AddTask registers a task as required for the state change to
 // be accomplished.
 func (c *Change) AddTask(t *Task) {
-	c.state.writing()
+	c.writing()
 	if t.change != "" {
 		panic(fmt.Sprintf("internal error: cannot add one %q task to multiple changes", t.Kind()))
 	}
@@ -638,7 +658,7 @@ func (c *Change) AddTask(t *Task) {
 // AddAll registers all tasks in the set as required for the state
 // change to be accomplished.
 func (c *Change) AddAll(ts *TaskSet) {
-	c.state.writing()
+	c.writing()
 	for _, t := range ts.tasks {
 		c.AddTask(t)
 	}
@@ -677,7 +697,7 @@ func (c *Change) LaneTasks(lanes ...int) []*Task {
 // Abort flags the change for cancellation, whether in progress or not.
 // Cancellation will proceed at the next ensure pass.
 func (c *Change) Abort() {
-	c.state.writing()
+	c.writing()
 	tasks := make([]*Task, len(c.taskIDs))
 	for i, tid := range c.taskIDs {
 		tasks[i] = c.state.tasks[tid]
@@ -689,14 +709,14 @@ func (c *Change) Abort() {
 // except for tasks that are also in a healthy lane (not aborted, and not waiting
 // on aborted).
 func (c *Change) AbortLanes(lanes []int) {
-	c.state.writing()
+	c.writing()
 	c.abortLanes(lanes, make(map[int]bool), make(map[string]bool))
 }
 
 // AbortUnreadyLanes aborts the tasks from lanes that aren't fully ready, where
 // a ready lane is one in which all tasks are ready.
 func (c *Change) AbortUnreadyLanes() {
-	c.state.writing()
+	c.writing()
 	c.abortUnreadyLanes()
 }
 

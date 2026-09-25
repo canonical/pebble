@@ -35,6 +35,7 @@ import (
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/cmd"
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 var (
@@ -316,6 +317,9 @@ func withDefaultRunOptions(opts *RunOptions) *RunOptions {
 	}
 	if localOpts.ClientConfig.BaseURL == "" {
 		localOpts.ClientConfig.BaseURL = os.Getenv("PEBBLE_BASEURL")
+	}
+	if !localOpts.ClientConfig.SpanContext.IsValid() {
+		localOpts.ClientConfig.SpanContext = tracing.SpanContextFromEnv()
 	}
 	return &localOpts
 }

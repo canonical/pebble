@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +43,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/timing"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 var (
@@ -312,8 +314,13 @@ func getCurrentBootID() (string, error) {
 	return curBootID, nil
 }
 
-func loadState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+func loadState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (_ *state.State, _ *restart.RestartManager, err error) {
 	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
+
+	// Loading the state is its own trace, which the checkpoints made while
+	// initialising and patching the state are part of.
+	ctx, traceSpan := tracing.Tracer().Start(context.Background(), "state load")
+	defer func() { tracing.EndSpan(traceSpan, err) }()
 
 	if !osutil.FileExists(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
@@ -322,11 +329,11 @@ func loadState(curBootID, statePath string, restartHandler restart.Handler, back
 			return nil, nil, fmt.Errorf("fatal: directory %q must be present", stateDir)
 		}
 		s := state.New(backend)
-		restartMgr, err := initRestart(s, curBootID, restartHandler)
+		restartMgr, err := initRestart(ctx, s, curBootID, restartHandler)
 		if err != nil {
 			return nil, nil, err
 		}
-		patch.Init(s)
+		patch.Init(ctx, s)
 		return s, restartMgr, nil
 	}
 	r, err := os.Open(statePath)
@@ -349,52 +356,61 @@ func loadState(curBootID, statePath string, restartHandler restart.Handler, back
 	//perfTimings.Save(s)
 	//s.Unlock()
 
-	restartMgr, err := initRestart(s, curBootID, restartHandler)
+	restartMgr, err := initRestart(ctx, s, curBootID, restartHandler)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// one-shot migrations
-	err = patch.Apply(s)
+	err = patch.Apply(ctx, s)
 	if err != nil {
 		return nil, nil, err
 	}
 	return s, restartMgr, nil
 }
 
-func setupState(curBootID string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+func setupState(curBootID string, restartHandler restart.Handler, backend state.Backend) (_ *state.State, _ *restart.RestartManager, err error) {
+	ctx, traceSpan := tracing.Tracer().Start(context.Background(), "state load")
+	defer func() { tracing.EndSpan(traceSpan, err) }()
+
 	// Create a new state for in-memory backend.
 	s := state.New(backend)
-	patch.Init(s)
+	patch.Init(ctx, s)
 
-	restartMgr, err := initRestart(s, curBootID, restartHandler)
+	restartMgr, err := initRestart(ctx, s, curBootID, restartHandler)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// one-shot migrations
-	err = patch.Apply(s)
+	err = patch.Apply(ctx, s)
 	if err != nil {
 		return nil, nil, err
 	}
 	return s, restartMgr, nil
 }
 
-func initRestart(s *state.State, curBootID string, restartHandler restart.Handler) (*restart.RestartManager, error) {
+func initRestart(ctx context.Context, s *state.State, curBootID string, restartHandler restart.Handler) (*restart.RestartManager, error) {
 	s.Lock()
 	defer s.Unlock()
+	s.AddTraceContext(ctx)
 	return restart.Manager(s, curBootID, restartHandler)
 }
 
-func (o *Overlord) StartUp() error {
+func (o *Overlord) StartUp() (err error) {
 	if o.startedUp {
 		return nil
 	}
 	o.startedUp = true
 
-	var err error
+	// Starting up is its own trace, which the resulting checkpoint (when
+	// recording the start of operation time) is part of.
+	ctx, span := tracing.Tracer().Start(context.Background(), "overlord startup")
+	defer func() { tracing.EndSpan(span, err) }()
+
 	st := o.State()
 	st.Lock()
+	st.AddTraceContext(ctx)
 	o.startOfOperationTime, err = o.StartOfOperationTime()
 	st.Unlock()
 	if err != nil {

@@ -16,6 +16,7 @@
 package state
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,7 +28,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.opentelemetry.io/otel/codes"
+
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // A Backend is used by State to checkpoint on every unlock operation
@@ -101,6 +105,9 @@ type State struct {
 	latestWarningTime atomic.Pointer[time.Time]
 
 	modified bool
+	// traceCauses holds the spans on whose behalf the state has been
+	// modified while locked, to trace the resulting checkpoint.
+	traceCauses traceCauses
 
 	cache map[any]any
 
@@ -154,6 +161,7 @@ func (s *State) writing() {
 }
 
 func (s *State) unlock() {
+	s.traceCauses.reset()
 	atomic.AddInt32(&s.muC, -1)
 	s.mu.Unlock()
 }
@@ -263,19 +271,25 @@ func (s *State) Unlock() {
 		return
 	}
 
+	span := s.startCheckpointSpan()
 	data := s.checkpointData()
+	span.SetAttributes(tracing.AttrKey("state.size").Int(len(data)))
 	var err error
 	start := time.Now()
 	for time.Since(start) <= unlockCheckpointRetryMaxTime {
 		if err = s.backend.Checkpoint(data); err == nil {
 			s.modified = false
+			span.End()
 			return
 		}
 
 		logger.Noticef("Cannot write state file, retrying: %v", err)
+		span.RecordError(err)
 
 		time.Sleep(unlockCheckpointRetryInterval)
 	}
+	span.SetStatus(codes.Error, err.Error())
+	span.End()
 	logger.Panicf("cannot checkpoint even after %v of retries every %v: %v", unlockCheckpointRetryMaxTime, unlockCheckpointRetryInterval, err)
 }
 
@@ -352,15 +366,26 @@ func (s *State) Cache(key, value any) {
 
 // NewChange adds a new change to the state.
 func (s *State) NewChange(kind, summary string) *Change {
-	return s.NewChangeWithNoticeData(kind, summary, nil)
+	return s.newChange(context.Background(), kind, summary, nil)
+}
+
+// NewChangeContext adds a new change to the state. The change's trace span
+// is created as a child of the span carried by ctx, if any.
+func (s *State) NewChangeContext(ctx context.Context, kind, summary string) *Change {
+	return s.newChange(ctx, kind, summary, nil)
 }
 
 // NewChangeWithNoticeData adds a new change to the state, adding in any provided notice data.
 func (s *State) NewChangeWithNoticeData(kind, summary string, noticeData map[string]string) *Change {
+	return s.newChange(context.Background(), kind, summary, noticeData)
+}
+
+func (s *State) newChange(ctx context.Context, kind, summary string, noticeData map[string]string) *Change {
 	s.writing()
 	s.lastChangeId++
 	id := strconv.Itoa(s.lastChangeId)
-	chg := newChange(s, id, kind, summary)
+	chg := newChange(ctx, s, id, kind, summary)
+	s.traceCauses.add(chg.spanContext, false)
 	s.changes[id] = chg
 
 	// Set this before calling addNotice as that needs to use it.
@@ -478,6 +503,19 @@ func (s *State) Prune(startOfOperation time.Time, pruneWait, abortWait time.Dura
 
 	stats := &pruneStats{}
 
+	// Pruning is its own trace, which the resulting checkpoint is part of.
+	ctx, span := tracing.Tracer().Start(context.Background(), "state prune")
+	defer func() {
+		span.SetAttributes(
+			tracing.AttrKey("state.prune.changes").Int(stats.numChanges),
+			tracing.AttrKey("state.prune.tasks").Int(stats.numTasks),
+			tracing.AttrKey("state.prune.notices").Int(stats.numNotices),
+			tracing.AttrKey("state.prune.aborted-changes").Int(stats.numAborted),
+		)
+		span.End()
+	}()
+	s.AddTraceContext(ctx)
+
 	// sort from oldest to newest
 	changes := s.Changes()
 	sort.Sort(byReadyTime(changes))
@@ -504,6 +542,7 @@ NextChange:
 		if readyTime.IsZero() {
 			if spawnTime.Before(pruneLimit) && len(chg.Tasks()) == 0 {
 				chg.Abort()
+				chg.endSpan()
 				stats.IncludeChange(chg)
 				delete(s.changes, chg.ID())
 			} else if spawnTime.Before(abortLimit) {
@@ -513,6 +552,7 @@ NextChange:
 					}
 				}
 				chg.AbortUnreadyLanes()
+				stats.numAborted++
 			}
 			continue
 		}
@@ -521,6 +561,7 @@ NextChange:
 			s.writing()
 			for _, t := range chg.Tasks() {
 				delete(s.tasks, t.ID())
+				stats.numTasks++
 			}
 			stats.IncludeChange(chg)
 			delete(s.changes, chg.ID())
@@ -533,6 +574,7 @@ NextChange:
 		if t.Change() == nil && t.SpawnTime().Before(pruneLimit) {
 			s.writing()
 			delete(s.tasks, tid)
+			stats.numTasks++
 		}
 	}
 	// Prune expired notices, and update the latest warning time cache.
@@ -565,7 +607,9 @@ NextChange:
 // time range has been affected.
 type pruneStats struct {
 	numChanges   int
+	numTasks     int
 	numNotices   int
+	numAborted   int
 	oldestChange time.Time
 	newestChange time.Time
 	oldestNotice time.Time

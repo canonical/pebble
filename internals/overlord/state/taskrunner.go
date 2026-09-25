@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/trace"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -186,6 +187,7 @@ func (r *TaskRunner) AddBlocked(pred func(t *Task, running []*Task) bool) {
 // run must be called with the state lock in place
 func (r *TaskRunner) run(t *Task) {
 	var handler HandlerFunc
+	var handlerName string
 	var accuRuntime func(dur time.Duration)
 	switch t.Status() {
 	case DoStatus:
@@ -193,6 +195,7 @@ func (r *TaskRunner) run(t *Task) {
 		fallthrough
 	case DoingStatus:
 		handler = r.handlerPair(t).do
+		handlerName = "do"
 		accuRuntime = t.accumulateDoingTime
 
 	case UndoStatus:
@@ -200,6 +203,7 @@ func (r *TaskRunner) run(t *Task) {
 		fallthrough
 	case UndoingStatus:
 		handler = r.handlerPair(t).undo
+		handlerName = "undo"
 		accuRuntime = t.accumulateUndoingTime
 
 	default:
@@ -209,8 +213,11 @@ func (r *TaskRunner) run(t *Task) {
 		panic("internal error: attempted to run task with nil handler for status " + t.Status().String())
 	}
 
+	// The span is carried by the tomb's context, so handlers can obtain it
+	// with tomb.Context(nil).
+	ctx, span := t.startSpan(handlerName)
 	t.At(time.Time{}) // clear schedule
-	tomb := &tomb.Tomb{}
+	tomb, _ := tomb.WithContext(ctx)
 	r.tombs[t.ID()] = tomb
 	tomb.Go(func() error {
 		// Capture the error result with tomb.Kill so we can
@@ -248,6 +255,8 @@ func (r *TaskRunner) run(t *Task) {
 				err = &Retry{}
 			}
 		}
+		// End the span once the task status has been updated below.
+		defer endTaskSpan(span, t, err, trace.WithTimestamp(t1))
 
 		switch x := err.(type) {
 		case *Retry:
@@ -306,22 +315,26 @@ func (r *TaskRunner) run(t *Task) {
 	})
 }
 
-func (r *TaskRunner) clean(t *Task) {
+// clean runs the cleanup for the task, if its change is ready. It returns
+// true if the task had no cleanup handler, and was marked clean directly.
+func (r *TaskRunner) clean(t *Task) (markedClean bool) {
 	if !t.Change().IsReady() {
 		// Whole Change is not ready so don't run cleanups yet.
-		return
+		return false
 	}
 
 	cleanup, ok := r.cleanups[t.Kind()]
 	if !ok {
 		t.SetClean()
-		return
+		return true
 	}
 
-	tomb := &tomb.Tomb{}
+	ctx, span := t.startSpan("cleanup")
+	tomb, _ := tomb.WithContext(ctx)
 	r.tombs[t.ID()] = tomb
 	tomb.Go(func() error {
 		tomb.Kill(cleanup(t, tomb))
+		t1 := time.Now()
 
 		// Locks must be acquired in the same order everywhere.
 		r.mu.Lock()
@@ -330,6 +343,7 @@ func (r *TaskRunner) clean(t *Task) {
 		defer r.state.Unlock()
 
 		delete(r.tombs, t.ID())
+		defer endTaskSpan(span, t, tomb.Err(), trace.WithTimestamp(t1))
 
 		if tomb.Err() != nil {
 			logger.Debugf("Cleaning task %s: %s", t.ID(), tomb.Err())
@@ -338,6 +352,7 @@ func (r *TaskRunner) clean(t *Task) {
 		}
 		return nil
 	})
+	return false
 }
 
 func (r *TaskRunner) abortLanes(chg *Change, lanes []int) {
@@ -399,6 +414,8 @@ func (r *TaskRunner) Ensure() error {
 
 	ensureTime := timeNow()
 	nextTaskTime := time.Time{}
+	// Tasks marked clean directly, without a cleanup handler.
+	var cleaned []*Task
 ConsiderTasks:
 	for _, t := range r.state.Tasks() {
 		handlers := r.handlerPair(t)
@@ -424,8 +441,8 @@ ConsiderTasks:
 
 		status := t.Status()
 		if status.Ready() {
-			if !t.IsClean() {
-				r.clean(t)
+			if !t.IsClean() && r.clean(t) {
+				cleaned = append(cleaned, t)
 			}
 			continue
 		}
@@ -472,6 +489,10 @@ ConsiderTasks:
 		r.run(t)
 
 		running = append(running, t)
+	}
+
+	if len(cleaned) > 0 {
+		traceCleaned(r.state, cleaned)
 	}
 
 	// schedule next Ensure no later than the next task time

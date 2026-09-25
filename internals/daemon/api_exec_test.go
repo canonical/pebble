@@ -28,6 +28,9 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
@@ -41,8 +44,9 @@ import (
 var _ = Suite(&execSuite{})
 
 type execSuite struct {
-	daemon *Daemon
-	client *client.Client
+	daemon     *Daemon
+	client     *client.Client
+	socketPath string
 }
 
 func (s *execSuite) SetUpSuite(c *C) {
@@ -67,6 +71,7 @@ func (s *execSuite) SetUpTest(c *C) {
 	daemon.Start()
 	s.daemon = daemon
 
+	s.socketPath = socketPath
 	s.client, err = client.New(&client.Config{Socket: socketPath})
 	c.Assert(err, IsNil)
 }
@@ -150,6 +155,45 @@ func (s *execSuite) TestEnvironmentInheritedFromDaemon(c *C) {
 	c.Check(waitErr, IsNil)
 	c.Check(stdout, Equals, "FOO=foo\n")
 	c.Check(stderr, Equals, "")
+}
+
+func (s *execSuite) TestEnvironmentTraceContext(c *C) {
+	restoreTP := otel.GetTracerProvider()
+	otel.SetTracerProvider(sdktrace.NewTracerProvider())
+	defer otel.SetTracerProvider(restoreTP)
+
+	// The daemon's own trace context isn't inherited.
+	restore := fakeEnv("TRACEPARENT", "00-11111111111111111111111111111111-2222222222222222-01")
+	defer restore()
+
+	// The command continues the caller's trace, as a descendant of the exec
+	// task's span.
+	caller := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{0xab},
+		SpanID:     trace.SpanID{0xcd},
+		TraceFlags: trace.FlagsSampled,
+		Remote:     true,
+	})
+	var err error
+	s.client.CloseIdleConnections()
+	s.client, err = client.New(&client.Config{Socket: s.socketPath, SpanContext: caller})
+	c.Assert(err, IsNil)
+
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo $TRACEPARENT"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Matches, "00-"+caller.TraceID().String()+"-[0-9a-f]{16}-01\n")
+	c.Check(strings.Contains(stdout, caller.SpanID().String()), Equals, false)
+	c.Check(stderr, Equals, "")
+
+	// Requested environment takes precedence.
+	stdout, _, waitErr = s.exec(c, "", &client.ExecOptions{
+		Command:     []string{"/bin/sh", "-c", "echo $TRACEPARENT"},
+		Environment: map[string]string{"TRACEPARENT": "explicit"},
+	})
+	c.Check(waitErr, IsNil)
+	c.Check(stdout, Equals, "explicit\n")
 }
 
 func (s *execSuite) TestWorkingDir(c *C) {

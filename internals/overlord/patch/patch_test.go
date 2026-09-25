@@ -20,6 +20,7 @@
 package patch_test
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"testing"
@@ -44,7 +45,7 @@ func (s *patchSuite) TestInit(c *C) {
 	defer restore()
 
 	st := state.New(nil)
-	patch.Init(st)
+	patch.Init(context.Background(), st)
 
 	st.Lock()
 	defer st.Unlock()
@@ -66,7 +67,7 @@ func (s *patchSuite) TestNothingToDo(c *C) {
 	st.Lock()
 	st.Set("patch-level", 2)
 	st.Unlock()
-	err := patch.Apply(st)
+	err := patch.Apply(context.Background(), st)
 	c.Assert(err, IsNil)
 }
 
@@ -78,7 +79,7 @@ func (s *patchSuite) TestNoDowngrade(c *C) {
 	st.Lock()
 	st.Set("patch-level", 3)
 	st.Unlock()
-	err := patch.Apply(st)
+	err := patch.Apply(context.Background(), st)
 	c.Assert(err, ErrorMatches, `cannot downgrade: software version is too old for the current system state \(patch level 3\)`)
 }
 
@@ -113,7 +114,7 @@ func (s *patchSuite) TestApply(c *C) {
 	st.Lock()
 	st.Set("patch-level", 1)
 	st.Unlock()
-	err := patch.Apply(st)
+	err := patch.Apply(context.Background(), st)
 	c.Assert(err, IsNil)
 
 	st.Lock()
@@ -155,7 +156,7 @@ func (s *patchSuite) TestApplyLevel6(c *C) {
 	st.Lock()
 	st.Set("patch-level", 6)
 	st.Unlock()
-	c.Assert(patch.Apply(st), IsNil)
+	c.Assert(patch.Apply(context.Background(), st), IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -188,7 +189,7 @@ func (s *patchSuite) TestApplyFromSublevel(c *C) {
 	st.Set("patch-level", 6)
 	st.Set("patch-sublevel", 0)
 	st.Unlock()
-	c.Assert(patch.Apply(st), IsNil)
+	c.Assert(patch.Apply(context.Background(), st), IsNil)
 
 	st.Lock()
 
@@ -208,7 +209,7 @@ func (s *patchSuite) TestApplyFromSublevel(c *C) {
 	})
 
 	st.Unlock()
-	c.Assert(patch.Apply(st), IsNil)
+	c.Assert(patch.Apply(context.Background(), st), IsNil)
 	c.Assert(sequence, DeepEquals, []int{72})
 
 	st.Lock()
@@ -230,7 +231,7 @@ func (s *patchSuite) TestMissing(c *C) {
 	st.Lock()
 	st.Set("patch-level", 1)
 	st.Unlock()
-	err := patch.Apply(st)
+	err := patch.Apply(context.Background(), st)
 	c.Assert(err, ErrorMatches, `cannot upgrade: software version is too new for the current system state \(patch level 1\)`)
 }
 
@@ -247,7 +248,7 @@ func (s *patchSuite) TestDowngradeSublevel(c *C) {
 	st.Unlock()
 
 	// we're at patch level 3, sublevel 6 according to state, but the implemented level is 3,1
-	c.Assert(patch.Apply(st), IsNil)
+	c.Assert(patch.Apply(context.Background(), st), IsNil)
 
 	st.Lock()
 	defer st.Unlock()
@@ -288,7 +289,7 @@ func (s *patchSuite) TestError(c *C) {
 	st.Lock()
 	st.Set("patch-level", 1)
 	st.Unlock()
-	err := patch.Apply(st)
+	err := patch.Apply(context.Background(), st)
 	c.Assert(err, ErrorMatches, `cannot patch system state to level 3, sublevel 0: boom`)
 
 	st.Lock()
