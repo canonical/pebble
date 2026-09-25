@@ -200,7 +200,7 @@ func (s *tracingSuite) TestCheckpointSpan(c *C) {
 	// Unlocking without changes doesn't checkpoint.
 	s.recorder.Reset()
 	st.Lock()
-	st.Unlock()
+	st.Unlock() //lint:ignore SA2001 unlocking without changes is what's being tested
 	c.Check(s.recorder.Ended(), HasLen, 0)
 }
 
@@ -225,7 +225,7 @@ func (s *tracingSuite) TestCheckpointCausedByTaskHandler(c *C) {
 		defer close(handlerDone)
 		// Wait for the runner to checkpoint starting the task.
 		st.Lock()
-		st.Unlock()
+		st.Unlock() //lint:ignore SA2001 acquiring the lock waits for the runner
 		s.recorder.Reset()
 
 		st.Lock()
