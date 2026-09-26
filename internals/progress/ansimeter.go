@@ -17,6 +17,7 @@ package progress
 import (
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"time"
 	"unicode"
@@ -90,26 +91,31 @@ func (p *ANSIMeter) SetTotal(total float64) {
 }
 
 func (p *ANSIMeter) percent() string {
-	if p.total == 0. {
+	if !(p.total > 0.) {
 		return "---%"
 	}
 	q := p.written * 100 / p.total
-	if q > 999.4 || q < 0. {
+	if math.IsNaN(q) || q > 999.4 || q < 0. {
 		return "???%"
 	}
 	return fmt.Sprintf("%3.0f%%", q)
 }
 
 func (p *ANSIMeter) Set(current float64) {
-	if current < 0 {
+	if math.IsNaN(current) || current < 0 {
 		current = 0
 	}
-	if current > p.total {
+	if !(p.total > 0) {
+		// No positive total (zero, negative, or NaN) to proportion
+		// against; avoid dividing by zero. Render the label with
+		// no bar progress instead.
+		current = 0
+	} else if current > p.total {
 		current = p.total
 	}
 
 	p.written = current
-	col := termWidth()
+	col := max(termWidth(), 0)
 	// time left: 5
 	//    gutter: 1
 	//     speed: 8
@@ -125,14 +131,22 @@ func (p *ANSIMeter) Set(current float64) {
 	//  * if 29 < width      , also show speed (speed+gutter = 9)
 	var percent, speed, timeleft string
 	if col > 15 {
-		since := time.Now().UTC().Sub(p.t0).Seconds()
-		per := since / p.written
-		left := (p.total - p.written) * per
-		timeleft = " " + quantity.FormatDuration(left)
-		if col > 20 {
-			percent = " " + p.percent()
-			if col > 29 {
-				speed = " " + quantity.FormatBPS(p.written, since, -1)
+		if !(p.total > 0) {
+			// No time/speed estimate without a total.
+			// Keep the percent placeholder for consistency.
+			if col > 20 {
+				percent = " " + p.percent()
+			}
+		} else {
+			since := time.Now().UTC().Sub(p.t0).Seconds()
+			per := since / p.written
+			left := (p.total - p.written) * per
+			timeleft = " " + quantity.FormatDuration(left)
+			if col > 20 {
+				percent = " " + p.percent()
+				if col > 29 {
+					speed = " " + quantity.FormatBPS(p.written, since, -1)
+				}
 			}
 		}
 	}
@@ -142,7 +156,10 @@ func (p *ANSIMeter) Set(current float64) {
 	msg = append(msg, []rune(percent)...)
 	msg = append(msg, []rune(speed)...)
 	msg = append(msg, []rune(timeleft)...)
-	i := int(current * float64(col) / p.total)
+	i := 0
+	if p.total > 0 {
+		i = min(max(int(current*float64(col)/p.total), 0), len(msg))
+	}
 	fmt.Fprint(stdout, "\r", enterReverseMode, string(msg[:i]), exitAttributeMode, string(msg[i:]))
 }
 
