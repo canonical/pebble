@@ -254,3 +254,93 @@ func (ansiSuite) TestWrite(c *check.C) {
 		"\r<MR>123456789x<ME>",
 	}, ""))
 }
+
+func (ansiSuite) TestSetNonPositiveTotal(c *check.C) {
+	var buf bytes.Buffer
+	var width int
+	defer progress.MockStdout(&buf)()
+	defer progress.MockSimpleEscapes()()
+	defer progress.MockTermWidth(func() int { return width })()
+
+	// Zero and negative totals have nothing to proportion against:
+	// Set must not divide by the total, and must render the label
+	// with no bar progress, consistent with percent().
+	// The Write() path goes through Set() and must not panic either.
+	for _, w := range []int{10, 15, 16, 20, 25, 29, 30, 40, 80} {
+		width = w
+		desc := check.Commentf("width %d", width)
+
+		p := &progress.ANSIMeter{}
+		buf.Reset()
+		p.Start("work", 0)
+		p.Set(0)
+		p.Set(5)
+		c.Check(p.GetTotal(), check.Equals, 0., desc)
+		c.Check(p.GetWritten(), check.Equals, 0., desc)
+		c.Check(p.Percent(), check.Equals, "---%", desc)
+		if width > 20 {
+			c.Check(buf.String(), check.Matches, ".*---%.*", desc)
+		}
+		c.Check(strings.Contains(buf.String(), "9.2Ey"), check.Equals, false, desc)
+		c.Check(strings.Contains(buf.String(), "NaN"), check.Equals, false, desc)
+
+		p2 := &progress.ANSIMeter{}
+		buf.Reset()
+		p2.Start("work", 10)
+		p2.SetTotal(0)
+		p2.Set(0)
+		c.Check(p2.GetTotal(), check.Equals, 0., desc)
+		c.Check(p2.GetWritten(), check.Equals, 0., desc)
+		c.Check(p2.Percent(), check.Equals, "---%", desc)
+
+		p2.SetTotal(-5)
+		p2.Set(3)
+		c.Check(p2.GetWritten(), check.Equals, 0., desc)
+		c.Check(p2.Percent(), check.Equals, "---%", desc)
+
+		p3 := &progress.ANSIMeter{}
+		buf.Reset()
+		p3.Start("work", -5)
+		p3.Set(0)
+		p3.Set(-3)
+		c.Check(p3.GetWritten(), check.Equals, 0., desc)
+		c.Check(p3.Percent(), check.Equals, "---%", desc)
+		if width > 20 {
+			c.Check(buf.String(), check.Matches, ".*---%.*", desc)
+		}
+
+		p4 := &progress.ANSIMeter{}
+		buf.Reset()
+		p4.Start("work", 0)
+		n, err := fmt.Fprintf(p4, "hello")
+		c.Check(err, check.IsNil, desc)
+		c.Check(n, check.Equals, 5, desc)
+		c.Check(p4.GetWritten(), check.Equals, 0., desc)
+
+		// The clamps that must keep working: a negative current
+		// floors at zero and a current past a positive total caps
+		// at the total.
+		p5 := &progress.ANSIMeter{}
+		buf.Reset()
+		p5.Start("work", 10)
+		p5.Set(-5)
+		c.Check(p5.GetWritten(), check.Equals, 0., desc)
+		p5.Set(100)
+		c.Check(p5.GetWritten(), check.Equals, 10., desc)
+	}
+
+	// Exact rendering is timing-independent when there is no total
+	// (no time/speed estimates), so pin it: no bar highlight (i == 0).
+	width = 10
+	buf.Reset()
+	p := &progress.ANSIMeter{}
+	p.Start("work", 0)
+	buf.Reset()
+	p.Set(5)
+	c.Check(buf.String(), check.Equals, "\r<MR><ME>work      ")
+
+	width = 40
+	buf.Reset()
+	p.Set(5)
+	c.Check(buf.String(), check.Equals, "\r<MR><ME>work                                ---%")
+}
