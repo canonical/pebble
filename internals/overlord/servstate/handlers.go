@@ -110,6 +110,7 @@ type serviceData struct {
 	restarting   bool
 	currentSince time.Time
 	startCount   atomic.Int64
+	startAttempt uint64 // increments on each start() to distinguish stale okayDelay callbacks
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -347,7 +348,9 @@ func (s *serviceData) start() error {
 			return err
 		}
 		s.transition(stateStarting)
-		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+		s.startAttempt++
+		attempt := s.startAttempt
+		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed(attempt)) })
 
 	default:
 		return fmt.Errorf("cannot start service while %s", s.state)
@@ -519,15 +522,20 @@ func (s *serviceData) startInternal() error {
 }
 
 // okayWaitElapsed is called when the okay-wait timer has elapsed (and the
-// service is considered running successfully).
-func (s *serviceData) okayWaitElapsed() error {
+// service is considered running successfully). The attempt parameter is the
+// startAttempt value at the time the timer was scheduled, ensuring stale
+// callbacks from previous start attempts are ignored.
+func (s *serviceData) okayWaitElapsed(attempt uint64) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateStarting:
-		s.started <- nil // still running fine after short duration, no error
-		s.transition(stateRunning)
+		// Only complete the start if this callback belongs to the current attempt.
+		if s.startAttempt == attempt {
+			s.started <- nil // still running fine after short duration, no error
+			s.transition(stateRunning)
+		}
 
 	default:
 		// Ignore if timer elapsed in any other state.

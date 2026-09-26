@@ -2593,3 +2593,120 @@ func (s *S) TestStopClosesLogBuffers(c *C) {
 	c.Check(buf1.Closed(), Equals, true)
 	c.Check(buf2.Closed(), Equals, true)
 }
+
+// TestStaleOkayDelayCallbackRegression verifies that a stale okayDelay timer
+// callback from a previous start attempt cannot incorrectly transition a new
+// start attempt to stateRunning.
+//
+// The test uses DIFFERENT fake okay delays for the two attempts (A and B) to
+// deterministically distinguish the stale callback from the legitimate one:
+// - Attempt A: short okayDelay (timer A fires quickly)
+// - Attempt B: long okayDelay (timer B fires much later)
+//
+// If the bug exists, timer A will fire while attempt B is still in stateStarting
+// and incorrectly transition B to stateRunning before B's legitimate timer fires.
+func (s *S) TestStaleOkayDelayCallbackRegression(c *C) {
+	s.newServiceManager(c)
+	serviceName := "test-stale-okaydelay"
+
+	// Use a relatively short fake okay delay for attempt A.
+	okayDelayA := 50 * time.Millisecond
+	servstate.FakeOkayWait(okayDelayA)
+
+	// The service runs long enough that it won't exit on its own during the test.
+	layer := `
+services:
+    %s:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+`
+	s.planAddLayer(c, fmt.Sprintf(layer, serviceName))
+	s.planChanged(c)
+
+	// Start attempt A WITHOUT waiting for the change to complete.
+	s.st.Lock()
+	tsA, err := servstate.Start(s.st, [][]string{{serviceName}})
+	c.Check(err, IsNil)
+	chgStartA := s.st.NewChange("test", "Start test A")
+	chgStartA.AddAll(tsA)
+	s.st.Unlock()
+	s.runner.Ensure()
+
+	// Wait until attempt A is in stateStarting (reported as StatusActive).
+	s.waitUntilService(c, serviceName, func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// Stop attempt A while it's still within its okayDelay window.
+	chgStopA := s.stopServices(c, [][]string{{serviceName}})
+	s.st.Lock()
+	c.Assert(chgStopA.Err(), IsNil)
+	s.st.Unlock()
+
+	// Wait for the start change A to complete (should error due to stop within okayDelay).
+	waitChangeReady(c, s.runner, chgStartA, "Start test A")
+	s.st.Lock()
+	c.Check(chgStartA.Status(), Equals, state.ErrorStatus)
+	s.st.Unlock()
+
+	// Now change okayDelay to a SUBSTANTIALLY LONGER value for attempt B.
+	// This is critical: different delays distinguish the stale callback from the legitimate one.
+	okayDelayB := 500 * time.Millisecond // 10x longer than attempt A
+	servstate.FakeOkayWait(okayDelayB)
+
+	// Start attempt B (reuses the same serviceData object) WITHOUT waiting.
+	s.st.Lock()
+	tsB, err := servstate.Start(s.st, [][]string{{serviceName}})
+	c.Check(err, IsNil)
+	chgStartB := s.st.NewChange("test", "Start test B")
+	chgStartB.AddAll(tsB)
+	s.st.Unlock()
+	s.runner.Ensure()
+
+	// Wait until attempt B is in stateStarting.
+	s.waitUntilService(c, serviceName, func(svc *servstate.ServiceInfo) bool {
+		return svc.Current == servstate.StatusActive
+	})
+
+	// CRITICAL: Wait for timer A to fire (if bug exists).
+	// Timer A was scheduled with okayDelayA = 50ms when attempt A started.
+	// Attempt B started shortly after attempt A, so timer A should fire
+	// within okayDelayA after attempt B starts.
+	// Wait longer than okayDelayA to ensure timer A has fired.
+	time.Sleep(okayDelayA + 50*time.Millisecond)
+
+	// At this point:
+	// - Attempt B is in stateStarting with okayDelayB = 500ms
+	// - Timer A was scheduled with okayDelayA = 50ms and must have fired by now
+	// - Timer B is scheduled with okayDelayB = 500ms and has NOT fired yet
+
+	// Verify that the service is NOT internally stateRunning.
+	// Use RunningCmds() which only returns services whose internal state is stateRunning.
+	cmds := s.manager.RunningCmds()
+	c.Assert(cmds[serviceName], IsNil, Commentf("service must not be stateRunning yet (stale callback bug)"))
+
+	// Also verify the start change B has NOT completed (timer A must not have completed it).
+	s.st.Lock()
+	c.Check(chgStartB.Status(), Equals, state.DoingStatus, Commentf("start change B must still be pending"))
+	s.st.Unlock()
+
+	// Now wait long enough for timer B to fire (okayDelayB = 500ms).
+	// Use generous margin to be deterministic.
+	time.Sleep(okayDelayB + 100*time.Millisecond)
+
+	// After timer B fires, attempt B should successfully transition to stateRunning.
+	cmds = s.manager.RunningCmds()
+	c.Assert(cmds[serviceName], NotNil, Commentf("service must now be stateRunning after legitimate okayDelayB"))
+
+	// Wait for start change B to complete.
+	waitChangeReady(c, s.runner, chgStartB, "Start test B")
+	s.st.Lock()
+	c.Check(chgStartB.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chgStartB.Err()))
+	s.st.Unlock()
+
+	// Clean up: stop the service.
+	chgStopB := s.stopServices(c, [][]string{{serviceName}})
+	s.st.Lock()
+	c.Assert(chgStopB.Err(), IsNil)
+	s.st.Unlock()
+}
