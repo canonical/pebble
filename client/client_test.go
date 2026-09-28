@@ -493,7 +493,7 @@ func (cs *clientSuite) TestGetWebsocketBasicAuth(c *C) {
 	upgrader := websocket.Upgrader{}
 	handler := func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.URL.Path, Equals, "/v1/tasks/T1/websocket/stdio")
-		// Basic Auth
+		// Verify Basic Authentication.
 		u, p, ok := r.BasicAuth()
 		c.Check(ok, Equals, true)
 		c.Check(u, Equals, testUsername)
