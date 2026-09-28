@@ -45,6 +45,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 		},
 	}
 	m := NewLogManager()
+	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
 		return newLogGathererInternal(t, &gathererOptions)
 	}
@@ -138,6 +139,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	}
 
 	m := NewLogManager()
+	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
 		return newLogGathererInternal(t, &gathererOptions)
 	}
@@ -220,6 +222,7 @@ func (s *managerSuite) TestLabels(c *C) {
 	}
 
 	m := NewLogManager()
+	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
 		return newLogGathererInternal(t, &logGathererOptions{
 			newClient: func(_ *plan.LogTarget) (logClient, error) { return fakeClient, nil },
@@ -298,6 +301,9 @@ func (s *managerSuite) TestLabels(c *C) {
 			"foo":     "bar",
 		},
 	})
+
+	// Shut down the manager to release all gatherer goroutines.
+	m.Stop()
 }
 
 // Fake logClient implementation which just stores the passed-in labels

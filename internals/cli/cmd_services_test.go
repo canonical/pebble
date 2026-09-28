@@ -43,10 +43,35 @@ func (s *PebbleSuite) TestServices(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup  Current   Since
-svc1     enabled  inactive  2022-04-28
-svc2     enabled  inactive  -
-svc3     enabled  backoff   -
+Service  Startup  Current   Since       Notes
+svc1     enabled  inactive  2022-04-28  -
+svc2     enabled  inactive  -           -
+svc3     enabled  backoff   -           -
+`[1:])
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
+func (s *PebbleSuite) TestServicesWithNotes(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Assert(r.Method, check.Equals, "GET")
+		c.Assert(r.URL.Path, check.Equals, "/v1/services")
+		c.Assert(r.URL.Query(), check.DeepEquals, url.Values{"names": {""}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": [
+		{"name": "svc1", "current": "active", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00", "outdated": true},
+		{"name": "svc2", "current": "inactive", "startup": "enabled"}
+	]
+}`)
+	})
+	rest, err := cli.ParserForTest().ParseArgs([]string{"services"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Equals, `
+Service  Startup  Current   Since       Notes
+svc1     enabled  active    2022-04-28  outdated
+svc2     enabled  inactive  -           -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -141,9 +166,9 @@ func (s *PebbleSuite) TestServicesNames(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup   Current   Since
-bar      disabled  active    2022-04-28T17:05:23+12:00
-foo      enabled   inactive  -
+Service  Startup   Current   Since                      Notes
+bar      disabled  active    2022-04-28T17:05:23+12:00  -
+foo      enabled   inactive  -                          -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

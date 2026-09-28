@@ -34,7 +34,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorilla/mux"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/cmd"
@@ -65,6 +64,7 @@ type daemonSuite struct {
 	authorized  bool
 	err         error
 	notified    []string
+	daemons     []*Daemon
 }
 
 var _ = Suite(&daemonSuite{})
@@ -85,7 +85,15 @@ func (s *daemonSuite) SetUpTest(c *C) {
 }
 
 func (s *daemonSuite) TearDownTest(c *C) {
+	for _, d := range s.daemons {
+		func() {
+			defer func() { _ = recover() }()
+			_ = d.Overlord().Stop()
+		}()
+	}
+	s.daemons = nil
 	systemdSdNotify = systemd.SdNotify
+	stopOverlord = func(o *overlord.Overlord) { _ = o.Stop() }
 	s.notified = nil
 	s.authorized = false
 	s.err = nil
@@ -104,6 +112,7 @@ func (s *daemonSuite) newDaemon(c *C) *Daemon {
 	})
 	c.Assert(err, IsNil)
 	d.addRoutes()
+	s.daemons = append(s.daemons, d)
 	return d
 }
 
@@ -151,6 +160,7 @@ func (s *daemonSuite) TestExternalManager(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 	err = d.overlord.StartUp()
 	c.Assert(err, IsNil)
 	err = d.overlord.StateEngine().Ensure()
@@ -169,6 +179,7 @@ func (s *daemonSuite) TestNoExtension(c *C) {
 		HTTPAddress: s.httpAddress,
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	extension := d.overlord.Extension()
 	c.Assert(extension, IsNil)
@@ -182,6 +193,7 @@ func (s *daemonSuite) TestWrongExtension(c *C) {
 		OverlordExtension: &fakeExtension{},
 	})
 	c.Assert(err, IsNil)
+	defer d.overlord.Stop()
 
 	_, ok := d.overlord.Extension().(*otherFakeExtension)
 	c.Assert(ok, Equals, false)
@@ -210,8 +222,38 @@ func (s *daemonSuite) TestAddCommand(c *C) {
 	c.Assert(d.Start(), IsNil)
 	defer d.Stop(nil)
 
-	result := d.router.Get(endpoint).GetHandler()
-	c.Assert(result, Equals, &command)
+	req := httptest.NewRequest("GET", endpoint, nil)
+	req = req.WithContext(context.WithValue(req.Context(), TransportTypeKey{}, TransportTypeUnixSocket))
+	rec := httptest.NewRecorder()
+	d.router.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+}
+
+func (s *daemonSuite) TestPathPrefix(c *C) {
+	const endpoint = "/v1/prefix"
+	var handler fakeHandler
+	command := Command{
+		PathPrefix: endpoint,
+		ReadAccess: OpenAccess{},
+		GET: func(cmd *Command, req *http.Request, user *UserState) Response {
+			handler.cmd = cmd
+			return &handler
+		},
+	}
+	API = append(API, &command)
+	defer func() { API = API[:len(API)-1] }()
+
+	d := s.newDaemon(c)
+	d.Init()
+	c.Assert(d.Start(), IsNil)
+	defer d.Stop(nil)
+
+	req := httptest.NewRequest("GET", endpoint+"/child", nil)
+	req = req.WithContext(context.WithValue(req.Context(), TransportTypeKey{}, TransportTypeUnixSocket))
+	rec := httptest.NewRecorder()
+	d.router.ServeHTTP(rec, req)
+	c.Check(rec.Code, Equals, http.StatusOK)
+	c.Check(handler.cmd, Equals, &command)
 }
 
 func (s *daemonSuite) TestExplicitPaths(c *C) {
@@ -600,7 +642,7 @@ func (s *daemonSuite) TestDefaultUcredUsers(c *C) {
 }
 
 func (s *daemonSuite) TestAddRoutes(c *C) {
-	d := s.newDaemon(c)
+	_ = s.newDaemon(c)
 
 	expected := make([]string, len(API))
 	for i, v := range API {
@@ -612,10 +654,9 @@ func (s *daemonSuite) TestAddRoutes(c *C) {
 	}
 
 	got := make([]string, 0, len(API))
-	c.Assert(d.router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		got = append(got, route.GetName())
-		return nil
-	}), IsNil)
+	for _, cmd := range API {
+		got = append(got, cmd.Path)
+	}
 
 	c.Check(got, DeepEquals, expected) // this'll stop being true if routes are added that aren't commands (e.g. for the favicon)
 }
@@ -776,6 +817,36 @@ func (s *daemonSuite) TestGracefulStop(c *C) {
 	case <-time.After(2 * time.Second):
 		c.Fatal("never got proper response")
 	}
+}
+
+func (s *daemonSuite) TestShutdownClosesListenersBeforeOverlord(c *C) {
+	d := s.newDaemon(c)
+
+	generalL, err := net.Listen("tcp", "127.0.0.1:0")
+	c.Assert(err, IsNil)
+	generalAccept := make(chan struct{})
+	generalClosed := make(chan struct{})
+	d.generalListener = &witnessAcceptListener{Listener: generalL, accept: generalAccept, closed: generalClosed}
+
+	listenerClosedBeforeOverlord := false
+	stopOverlord = func(o *overlord.Overlord) {
+		select {
+		case <-generalClosed:
+			listenerClosedBeforeOverlord = true
+		default:
+		}
+		_ = o.Stop()
+	}
+
+	c.Assert(d.Start(), IsNil)
+	select {
+	case <-generalAccept:
+	case <-time.After(2 * time.Second):
+		c.Fatal("general accept was not called")
+	}
+
+	c.Assert(d.Stop(nil), IsNil)
+	c.Check(listenerClosedBeforeOverlord, Equals, true)
 }
 
 func (s *daemonSuite) TestRestartSystemWiring(c *C) {
@@ -1485,7 +1556,7 @@ func (s *daemonSuite) TestWritesRequireAdminAccess(c *C) {
 	}
 
 	// Task websockets (GET) is used for exec, so requires admin access too.
-	cmd = apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
+	cmd = apiCmd("/v1/tasks/{taskID}/websocket/{websocketID}")
 	switch cmd.ReadAccess.(type) {
 	case OpenAccess, UserAccess:
 		c.Errorf("%s ReadAccess should be AdminAccess, not %T", cmd.Path, cmd.WriteAccess)

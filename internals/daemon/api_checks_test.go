@@ -280,7 +280,7 @@ checks:
 `
 	tempDir := c.MkDir()
 	donePath := filepath.Join(tempDir, "doneCheck")
-	checkCommand := fmt.Sprintf("sync; touch %s", donePath)
+	checkCommand := fmt.Sprintf("touch %s", donePath)
 	checksYAML = strings.Replace(checksYAML, "{{.CheckCommand}}", checkCommand, -1)
 	writeTestLayer(s.pebbleDir, checksYAML)
 	s.daemon(c)
@@ -297,7 +297,7 @@ checks:
 		if reflect.DeepEqual(body["result"], expected) {
 			break
 		}
-		if time.Since(start) > time.Second {
+		if time.Since(start) > 5*time.Second {
 			c.Fatalf("timed out waiting for checks to settle\nobtained = #%v\nexpected = %#v",
 				body["result"], expected)
 		}

@@ -18,8 +18,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/gorilla/mux"
-
 	"github.com/canonical/pebble/internals/overlord"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -82,7 +80,7 @@ var API = []*Command{{
 	WriteAccess: AdminAccess{},
 	POST:        v1PostExec,
 }, {
-	Path:       "/v1/tasks/{task-id}/websocket/{websocket-id}",
+	Path:       "/v1/tasks/{taskID}/websocket/{websocketID}",
 	ReadAccess: AdminAccess{}, // used by exec, so require admin
 	GET:        v1GetTaskWebsocket,
 }, {
@@ -127,8 +125,6 @@ var (
 	overlordServiceManager = (*overlord.Overlord).ServiceManager
 	overlordPlanManager    = (*overlord.Overlord).PlanManager
 	overlordCheckManager   = (*overlord.Overlord).CheckManager
-
-	muxVars = mux.Vars
 )
 
 func v1SystemInfo(c *Command, r *http.Request, _ *UserState) Response {

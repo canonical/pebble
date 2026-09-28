@@ -284,6 +284,44 @@ func (s *iteratorSuite) TestClosed(c *C) {
 	c.Assert(iter1.Close(), IsNil)
 }
 
+func (s *iteratorSuite) TestCloseWhileNextBlocked(c *C) {
+	rb := servicelog.NewRingBuffer(100)
+	iter := rb.TailIterator()
+
+	done := make(chan bool, 1)
+	started := make(chan struct{})
+	cancel := make(chan struct{})
+	go func() {
+		close(started)
+		done <- iter.Next(cancel)
+	}()
+
+	<-started
+	// Give Next a moment to enter its wait loop.
+	time.Sleep(20 * time.Millisecond)
+
+	err := iter.Close()
+	c.Assert(err, IsNil)
+
+	select {
+	case nextResult := <-done:
+		c.Assert(nextResult, Equals, false)
+	case <-time.After(2 * time.Second):
+		c.Fatal("timed out waiting for Next to return after Close")
+	}
+}
+
+func (s *iteratorSuite) TestBufferedAfterClose(c *C) {
+	rb := servicelog.NewRingBuffer(100)
+	fmt.Fprint(rb, "0123456789")
+	iter := rb.TailIterator()
+
+	c.Assert(iter.Buffered(), Equals, 10)
+	err := iter.Close()
+	c.Assert(err, IsNil)
+	c.Assert(iter.Buffered(), Equals, 0)
+}
+
 func (s *iteratorSuite) TestClosedIteration(c *C) {
 	rb := servicelog.NewRingBuffer(10)
 	fmt.Fprint(rb, "0123456789")

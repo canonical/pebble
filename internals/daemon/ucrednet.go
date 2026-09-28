@@ -113,6 +113,7 @@ func (wl *ucrednetListener) Accept() (net.Conn, error) {
 	if ucon, ok := con.(*net.UnixConn); ok {
 		rawConn, err := ucon.SyscallConn()
 		if err != nil {
+			_ = con.Close()
 			return nil, err
 		}
 		var ucred *syscall.Ucred
@@ -123,9 +124,11 @@ func (wl *ucrednetListener) Accept() (net.Conn, error) {
 			ucred, ucredErr = getUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
 		})
 		if err != nil {
+			_ = con.Close()
 			return nil, err
 		}
 		if ucredErr != nil {
+			_ = con.Close()
 			return nil, ucredErr
 		}
 		unet = &Ucrednet{

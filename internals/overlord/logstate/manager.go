@@ -116,16 +116,11 @@ func (m *LogManager) Ensure() error {
 
 // Stop implements overlord.StateStopper and stops all log forwarding.
 func (m *LogManager) Stop() {
+	var wg sync.WaitGroup
 	m.mu.Lock()
+	defer wg.Wait()
 	defer m.mu.Unlock()
-
-	wg := sync.WaitGroup{}
 	for _, gatherer := range m.gatherers {
-		wg.Add(1)
-		go func(gatherer *logGatherer) {
-			gatherer.Stop()
-			wg.Done()
-		}(gatherer)
+		wg.Go(gatherer.Stop)
 	}
-	wg.Wait()
 }

@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"errors"
+	"io"
 	"net"
 	"path/filepath"
 	sys "syscall"
@@ -127,14 +128,23 @@ func (s *ucrednetSuite) TestUcredErrors(c *check.C) {
 	wl := &ucrednetListener{Listener: l}
 	defer wl.Close()
 
+	clientErr := make(chan error, 1)
 	go func() {
 		cli, err := net.Dial("unix", sock)
-		c.Assert(err, check.IsNil)
-		cli.Close()
+		if err != nil {
+			clientErr <- err
+			return
+		}
+		defer cli.Close()
+
+		var buf [1]byte
+		_, err = cli.Read(buf[:])
+		clientErr <- err
 	}()
 
 	_, err = wl.Accept()
 	c.Assert(err, check.Equals, s.err)
+	c.Check(<-clientErr, check.Equals, io.EOF)
 }
 
 func (s *ucrednetSuite) TestIdempotentClose(c *check.C) {

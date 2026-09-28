@@ -1,7 +1,5 @@
 _build/
 cmd/pebble/pebble
-cmd/version_generated.go
-cmd/VERSION
 *.swp
 *.swo
 .idea

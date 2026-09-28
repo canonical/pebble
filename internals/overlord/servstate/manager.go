@@ -91,11 +91,25 @@ func (m *ServiceManager) Ensure() error {
 	return nil
 }
 
+// Stop implements overlord.StateStopper and closes all service ring buffers
+// during daemon shutdown.
+func (m *ServiceManager) Stop() {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	for _, s := range m.services {
+		if s.logs != nil {
+			_ = s.logs.Close()
+		}
+	}
+}
+
 type ServiceInfo struct {
 	Name         string
 	Startup      ServiceStartup
 	Current      ServiceStatus
 	CurrentSince time.Time
+	Outdated     bool
 }
 
 type ServiceStartup string
@@ -114,6 +128,14 @@ const (
 	StatusInactive ServiceStatus = "inactive"
 )
 
+// serviceOutdated reports whether a running service differs from its current plan.
+func serviceOutdated(config *plan.Service, workload *workloads.Workload, s *serviceData) bool {
+	if !config.Equal(s.config) {
+		return true
+	}
+	return workload != nil && !workload.Equal(s.workload)
+}
+
 // Services returns the list of configured services and their status, sorted
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
@@ -127,6 +149,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	}
 
 	var services []*ServiceInfo
+	ws, _ := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 	matchNames := len(names) > 0
 	for name, config := range currentPlan.Services {
 		if matchNames && !requested[name] {
@@ -143,6 +166,12 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		if s, ok := m.services[name]; ok {
 			info.Current = stateToStatus(s.state)
 			info.CurrentSince = s.currentSince
+
+			var workload *workloads.Workload
+			if ws != nil {
+				workload = ws.Entries[s.config.Workload]
+			}
+			info.Outdated = serviceOutdated(config, workload, s)
 		}
 		services = append(services, info)
 	}

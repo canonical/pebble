@@ -1,3 +1,4 @@
+(check-health-based-on-logs)=
 # How to check health based on logs
 
 Pebble stores the most recent `stdout` and `stderr` from each service. This guide demonstrates how to set up a check that fails if the logs contain a particular line, such as a warning message.

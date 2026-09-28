@@ -233,3 +233,4 @@ http-server-2  enabled  active   today at 11:40 UTC
 - To learn more about updating and restarting services, see [`pebble replan`](reference_pebble_replan_command) command.
 - To learn more about configuring layers, see [How to use layers](../how-to/use-layers.md).
 - To learn more about layer configuration options, read the [Layer specification](../reference/layer-specification.md).
+- To learn how to keep services running and monitor health, see {ref}`run-services-reliably`.

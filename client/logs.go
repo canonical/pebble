@@ -65,6 +65,9 @@ func (client *Client) FollowLogs(ctx context.Context, opts *LogsOptions) error {
 }
 
 func (client *Client) logs(ctx context.Context, opts *LogsOptions, follow bool) error {
+	if opts == nil {
+		opts = &LogsOptions{}
+	}
 	query := url.Values{}
 	for _, service := range opts.Services {
 		query.Add("services", service)
@@ -105,6 +108,9 @@ func decodeLog(reader *bufio.Reader, writeLog func(entry LogEntry) error) error 
 	// Read log JSON and newline separator
 	b, err := reader.ReadSlice('\n')
 	if errors.Is(err, io.EOF) {
+		if len(b) > 0 {
+			return fmt.Errorf("cannot decode log: line not terminated by newline: %w", io.ErrUnexpectedEOF)
+		}
 		return io.EOF
 	}
 	if err != nil {
