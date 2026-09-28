@@ -114,7 +114,7 @@ func (p *ANSIMeter) Set(current float64) {
 	}
 
 	p.written = current
-	col := max(termWidth(), 0)
+	col := termWidth()
 	// time left: 5
 	//    gutter: 1
 	//     speed: 8
@@ -151,7 +151,13 @@ func (p *ANSIMeter) Set(current float64) {
 	msg = append(msg, []rune(timeleft)...)
 	i := 0
 	if total > 0 {
-		i = min(max(int(current*float64(col)/total), 0), len(msg))
+		i = int(current * float64(len(msg)) / total)
+		if i < 0 {
+			i = 0
+		}
+		if i > len(msg) {
+			i = len(msg)
+		}
 	}
 	fmt.Fprint(stdout, "\r", enterReverseMode, string(msg[:i]), exitAttributeMode, string(msg[i:]))
 }

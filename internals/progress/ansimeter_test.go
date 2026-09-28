@@ -256,23 +256,33 @@ func (ansiSuite) TestWrite(c *check.C) {
 	}, ""))
 }
 
-func (ansiSuite) TestSetNonPositiveTotal(c *check.C) {
+func (ansiSuite) TestSetZeroTotal(c *check.C) {
+	testSetNonPositiveTotal(c, 0)
+}
+
+func (ansiSuite) TestSetNegativeTotal(c *check.C) {
+	testSetNonPositiveTotal(c, -5)
+}
+
+func (ansiSuite) TestSetNaNTotal(c *check.C) {
+	testSetNonPositiveTotal(c, math.NaN())
+}
+
+func testSetNonPositiveTotal(c *check.C, total float64) {
 	var buf bytes.Buffer
 	defer progress.MockStdout(&buf)()
 	defer progress.MockSimpleEscapes()()
 	defer progress.MockTermWidth(func() int { return 40 })()
 
-	for _, total := range []float64{0, -5, math.NaN()} {
-		p := &progress.ANSIMeter{}
-		p.Start("work", total)
-		for _, current := range []float64{0, 5} {
-			buf.Reset()
-			p.Set(current)
-			desc := check.Commentf("total %g, current %g", total, current)
-			c.Check(p.GetWritten(), check.Equals, 0., desc)
-			c.Check(p.Percent(), check.Equals, "---%", desc)
-			c.Check(buf.String(), check.Equals, "\r<MR><ME>work                                ---%", desc)
-		}
+	p := &progress.ANSIMeter{}
+	p.Start("work", total)
+	for _, current := range []float64{0, 5} {
+		buf.Reset()
+		p.Set(current)
+		desc := check.Commentf("total %g, current %g", total, current)
+		c.Check(p.GetWritten(), check.Equals, 0., desc)
+		c.Check(p.Percent(), check.Equals, "---%", desc)
+		c.Check(buf.String(), check.Equals, "\r<MR><ME>work                                ---%", desc)
 	}
 }
 
