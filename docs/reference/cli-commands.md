@@ -515,6 +515,14 @@ pebble run --verbose
 
 The `ls` command is used to list path contents.
 
+```{note}
+Pebble is statically compiled with `CGO_ENABLED=0`, which means Go's user
+and group lookup uses a pure-Go implementation reading directly from
+`/etc/passwd` and `/etc/group`. On systems where users and groups are managed
+by NSS, SSSD, or LDAP, usernames and group names may not resolve and will
+display as empty fields in `pebble ls -l`.
+```
+
 <!-- START AUTOMATED OUTPUT FOR ls -->
 ```{terminal}
 pebble ls --help
@@ -1097,8 +1105,8 @@ To show status of a single service:
 ```{terminal}
 pebble services srv1       
 
-Service  Startup  Current
-srv1     enabled  active
+Service  Startup  Current  Since  Notes
+srv1     enabled  active   today  -
 ```
 
 To show status of all services:
@@ -1106,9 +1114,9 @@ To show status of all services:
 ```{terminal}
 pebble services
 
-Service  Startup   Current
-srv1     enabled   active
-srv2     disabled  inactive
+Service  Startup   Current   Since  Notes
+srv1     enabled   active    today  -
+srv2     disabled  inactive  -      -
 ```
 
 The "Startup" column shows whether this service is automatically started when Pebble starts ("enabled" means auto-start, "disabled" means don't auto-start).
@@ -1119,6 +1127,8 @@ The "Current" column shows the current status of the service, and can be one of 
 * `inactive`: not yet started, being stopped, or stopped
 * `backoff`: in a [backoff-restart loop](service-auto-restart.md)
 * `error`: in an error state
+
+The "Notes" column displays comma-separated flags or notes about the service status (or `-` if none). For example, `outdated` indicates that the service was started with an older plan and its configuration has changed since it was started.
 
 
 (reference_pebble_signal_command)=

@@ -70,6 +70,7 @@ func (s *execSuite) SetUpTest(c *C) {
 }
 
 func (s *execSuite) TearDownTest(c *C) {
+	s.client.CloseIdleConnections()
 	err := s.daemon.Stop(nil)
 	c.Check(err, IsNil)
 
@@ -319,6 +320,45 @@ func (s *execSuite) TestUserIDGroupID(c *C) {
 	c.Check(stderr, Equals, "")
 }
 
+// TestStopWhileExecRunning is a regression test for
+// https://github.com/canonical/pebble/issues/682: stopping the daemon while
+// an exec command is running used to take about a second (the HTTP server's
+// shutdown timeout), because the long-poll GET /v1/changes/{id}/wait request
+// used by "pebble exec" only becomes idle once the running command is
+// killed, which happens in Overlord.Stop -- but that was called after
+// Server.Shutdown, so Shutdown always ran out its full timeout.
+func (s *execSuite) TestStopWhileExecRunning(c *C) {
+	process, err := s.client.Exec(&client.ExecOptions{
+		Command: []string{"sleep", "30"},
+		Stdin:   strings.NewReader(""),
+		Stdout:  io.Discard,
+		Stderr:  io.Discard,
+	})
+	c.Assert(err, IsNil)
+
+	// Wait for the change to be running before stopping the daemon, so the
+	// long-poll GET /v1/changes/{id}/wait request is definitely in flight.
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- process.Wait()
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	start := time.Now()
+	err = s.daemon.Stop(nil)
+	elapsed := time.Since(start)
+	c.Check(err, IsNil)
+	c.Check(elapsed < 500*time.Millisecond, Equals, true,
+		Commentf("Daemon.Stop took %s with an exec command running", elapsed))
+
+	select {
+	case err := <-waitDone:
+		c.Check(err, NotNil) // process was killed, so it's not a clean exit
+	case <-time.After(5 * time.Second):
+		c.Fatalf("timed out waiting for exec process to finish")
+	}
+}
+
 func (s *execSuite) exec(c *C, stdin string, opts *client.ExecOptions) (stdout, stderr string, waitErr error) {
 	outBuf := &bytes.Buffer{}
 	errBuf := &bytes.Buffer{}
@@ -468,15 +508,11 @@ func (s *execSuite) TestExecChangeReady(c *C) {
 	taskID, ok := execResp.Result["task-id"].(string)
 	c.Assert(ok, Equals, true)
 
-	vars := map[string]string{"task-id": taskID, "websocket-id": "control"}
-	restoreMuxVars := FakeMuxVars(func(*http.Request) map[string]string {
-		return vars
-	})
-	defer restoreMuxVars()
-
-	websocketCmd := apiCmd("/v1/tasks/{task-id}/websocket/{websocket-id}")
+	websocketCmd := apiCmd("/v1/tasks/{taskID}/websocket/{websocketID}")
 	req, err := http.NewRequest("GET", fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, "control"), nil)
 	c.Assert(err, IsNil)
+	req.SetPathValue("taskID", taskID)
+	req.SetPathValue("websocketID", "control")
 	rsp := v1GetTaskWebsocket(websocketCmd, req, nil).(websocketResponse)
 	rec := httptest.NewRecorder()
 	rsp.ServeHTTP(rec, req)

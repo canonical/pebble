@@ -34,6 +34,12 @@ type identitiesSuite struct{}
 
 var _ = Suite(&identitiesSuite{})
 
+func (s *identitiesSuite) TestValidateInvalidNameUsesSuppliedName(c *C) {
+	identity := &identities.Identity{Name: "stale-name"}
+
+	err := identity.Validate("bad name")
+	c.Assert(err, ErrorMatches, `identity name "bad name" invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen`)
+}
 func (s *identitiesSuite) TestMarshalState(c *C) {
 	st := state.New(nil)
 	mgr, err := identities.NewManager(st)

@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"math"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -901,6 +903,11 @@ func (layer *Layer) Validate() error {
 				}
 			}
 		}
+		if service.BackoffFactor.IsSet && (math.IsNaN(service.BackoffFactor.Value) || math.IsInf(service.BackoffFactor.Value, 0)) {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-factor must be a finite number", name),
+			}
+		}
 		if service.BackoffFactor.IsSet && service.BackoffFactor.Value < 1 {
 			return &FormatError{
 				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
@@ -946,10 +953,15 @@ func (layer *Layer) Validate() error {
 		}
 
 		if check.Exec != nil {
-			_, err := shlex.Split(check.Exec.Command)
+			args, err := shlex.Split(check.Exec.Command)
 			if err != nil {
 				return &FormatError{
 					Message: fmt.Sprintf("plan check %q command invalid: %v", name, err),
+				}
+			}
+			if len(args) == 0 && check.Exec.Command != "" {
+				return &FormatError{
+					Message: fmt.Sprintf("cannot parse check %q exec command: command cannot be empty", name),
 				}
 			}
 			_, _, err = osutil.NormalizeUidGid(check.Exec.UserID, check.Exec.GroupID, check.Exec.User, check.Exec.Group)
@@ -962,6 +974,11 @@ func (layer *Layer) Validate() error {
 	}
 
 	for name, target := range layer.LogTargets {
+		if name == "" {
+			return &FormatError{
+				Message: "cannot use empty string as log target name",
+			}
+		}
 		if target == nil {
 			return &FormatError{
 				Message: fmt.Sprintf("log target object cannot be null for log target %q", name),
@@ -972,6 +989,11 @@ func (layer *Layer) Validate() error {
 			if strings.HasPrefix(labelName, "pebble_") {
 				return &FormatError{
 					Message: fmt.Sprintf(`log target %q: label %q uses reserved prefix "pebble_"`, name, labelName),
+				}
+			}
+			if target.Type == OpenTelemetryTarget && labelName == "service.name" {
+				return &FormatError{
+					Message: fmt.Sprintf(`cannot specify "service.name" label for opentelemetry log target %q`, name),
 				}
 			}
 		}
@@ -1015,6 +1037,13 @@ func (p *Plan) Validate() error {
 			if check.HTTP.URL == "" {
 				return &FormatError{
 					Message: fmt.Sprintf(`plan must set "url" for http check %q`, name),
+				}
+			}
+			for header := range check.HTTP.Headers {
+				if http.CanonicalHeaderKey(header) == "Host" {
+					return &FormatError{
+						Message: fmt.Sprintf(`cannot specify "Host" header for http check %q`, name),
+					}
 				}
 			}
 			numTypes++

@@ -81,9 +81,6 @@ func (resp *RequestResponse) DecodeResult(result any) error {
 	if err := dec.Decode(&result); err != nil {
 		return fmt.Errorf("cannot unmarshal: %w", err)
 	}
-	if dec.More() {
-		return fmt.Errorf("cannot unmarshal: cannot parse json value")
-	}
 	return nil
 }
 
@@ -108,8 +105,8 @@ func (s SocketNotFoundError) Unwrap() error {
 	return s.Err
 }
 
-func unixDialer(socketPath string) func(string, string) (net.Conn, error) {
-	return func(_, _ string) (net.Conn, error) {
+func unixDialer(socketPath string) func(context.Context, string, string) (net.Conn, error) {
+	return func(_ context.Context, _, _ string) (net.Conn, error) {
 		_, err := os.Stat(socketPath)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, &SocketNotFoundError{Err: err, Path: socketPath}
@@ -574,7 +571,7 @@ func newDefaultRequester(client *Client, opts *Config) (*defaultRequester, error
 
 	if opts.BaseURL == "" {
 		// By default talk over a unix socket.
-		transport := &http.Transport{Dial: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
+		transport := &http.Transport{DialContext: unixDialer(opts.Socket), DisableKeepAlives: opts.DisableKeepAlive}
 		baseURL := &url.URL{Scheme: "http", Host: "localhost"}
 		requester = &defaultRequester{
 			baseURL:       baseURL,
@@ -627,7 +624,7 @@ func (rq *defaultRequester) Transport() *http.Transport {
 
 func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error) {
 	dialer := websocket.Dialer{
-		NetDial:          rq.transport.Dial, //lint:ignore SA1019 Deprecated
+		NetDialContext:   rq.transport.DialContext,
 		Proxy:            rq.transport.Proxy,
 		TLSClientConfig:  rq.transport.TLSClientConfig,
 		HandshakeTimeout: 5 * time.Second,

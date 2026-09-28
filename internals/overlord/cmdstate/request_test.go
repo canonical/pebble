@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2026 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,20 +12,24 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package cmd
+package cmdstate_test
 
-import _ "embed"
+import (
+	. "gopkg.in/check.v1"
 
-//go:generate ./mkversion.sh
+	"github.com/canonical/pebble/internals/overlord/cmdstate"
+	"github.com/canonical/pebble/internals/overlord/state"
+)
 
-// Version is the Pebble version.
-//
-//go:embed VERSION
-var Version string
+type requestSuite struct{}
 
-// MockVersion temporarily changes Version and returns a function to restore it.
-func MockVersion(version string) (restore func()) {
-	old := Version
-	Version = version
-	return func() { Version = old }
+var _ = Suite(&requestSuite{})
+
+func (s *requestSuite) TestExecEmptyCommand(c *C) {
+	st := state.New(nil)
+
+	task, _, err := cmdstate.Exec(st, &cmdstate.ExecArgs{})
+
+	c.Check(task, IsNil)
+	c.Check(err, ErrorMatches, "cannot execute command: command cannot be empty")
 }

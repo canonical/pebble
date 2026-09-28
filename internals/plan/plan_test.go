@@ -524,6 +524,36 @@ var planTests = []planTest{{
 				backoff-factor: foo
 	`},
 }, {
+	summary: `Non-finite backoff-factor NaN`,
+	error:   `plan service "svc1" backoff-factor must be a finite number`,
+	input: []string{`
+			services:
+				"svc1":
+					override: replace
+					command: cmd
+					backoff-factor: NaN
+		`},
+}, {
+	summary: `Non-finite backoff-factor positive infinity`,
+	error:   `plan service "svc1" backoff-factor must be a finite number`,
+	input: []string{`
+			services:
+				"svc1":
+					override: replace
+					command: cmd
+					backoff-factor: +Inf
+		`},
+}, {
+	summary: `Non-finite backoff-factor negative infinity`,
+	error:   `plan service "svc1" backoff-factor must be a finite number`,
+	input: []string{`
+			services:
+				"svc1":
+					override: replace
+					command: cmd
+					backoff-factor: -Inf
+		`},
+}, {
 	summary: `Invalid service command`,
 	error:   `plan service "svc1" command invalid: cannot parse service "svc1" command: EOF found when expecting closing quote`,
 	input: []string{`
@@ -924,6 +954,16 @@ var planTests = []planTest{{
 				exec: {}
 `},
 }, {
+	summary: `Empty exec check command`,
+	error:   `cannot parse check "chk1" exec command: command cannot be empty`,
+	input: []string{`
+			checks:
+				chk1:
+					override: replace
+					exec:
+						command: "   "
+	`},
+}, {
 	summary: `Invalid exec check command`,
 	error:   `plan check "chk1" command invalid: EOF found when expecting closing quote`,
 	input: []string{`
@@ -1185,6 +1225,15 @@ var planTests = []planTest{{
 		Sections: map[string]plan.Section{},
 	},
 }, {
+	summary: "Log target name must not be empty",
+	error:   `cannot use empty string as log target name`,
+	input: []string{`
+		log-targets:
+			"":
+				type: loki
+				location: http://10.1.77.196:3100/loki/api/v1/push
+	`},
+}, {
 	summary: "Log target requires type field",
 	error:   `plan must define "type" \("loki", "opentelemetry" or "syslog"\) for log target "tgt1"`,
 	input: []string{`
@@ -1232,6 +1281,18 @@ var planTests = []planTest{{
 				command: foo
 				override: merge
 `},
+}, {
+	summary: "OpenTelemetry log target cannot specify service.name label",
+	error:   `cannot specify "service.name" label for opentelemetry log target "tgt1"`,
+	input: []string{`
+			log-targets:
+				tgt1:
+					type: opentelemetry
+					location: http://10.1.77.196:4318
+					labels:
+						service.name: my-service
+					override: merge
+	`},
 }, {
 	summary: "Log forwarding labels override",
 	input: []string{`
@@ -2468,4 +2529,23 @@ func (s *S) TestReadDirBasePlanValidation(c *C) {
 
 	_, err = plan.ReadDir(tempDir, basePlan)
 	c.Assert(err, ErrorMatches, `plan must define "command" for service "broken-svc"`)
+}
+
+func (s *S) TestHTTPCheckHostHeader(c *C) {
+	for _, header := range []string{"Host", "host", "HOST"} {
+		layer, err := plan.ParseLayer(1, "layer-1", reindent(fmt.Sprintf(`
+		checks:
+			chk1:
+				override: replace
+				http:
+					url: https://example.com
+					headers:
+						%s: example.com
+	`, header)))
+		c.Assert(err, IsNil)
+		combined, err := plan.CombineLayers(layer)
+		c.Assert(err, IsNil)
+		err = (&plan.Plan{Checks: combined.Checks}).Validate()
+		c.Assert(err, ErrorMatches, `cannot specify "Host" header for http check "chk1"`)
+	}
 }

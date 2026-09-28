@@ -16,11 +16,12 @@ package ptyutil
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"unsafe"
 
-	"github.com/pkg/term/termios"
 	"golang.org/x/sys/unix"
+	"golang.org/x/term"
 )
 
 // OpenPtyInDevpts creates a new PTS pair, configures them and returns them.
@@ -32,9 +33,10 @@ func OpenPtyInDevpts(devpts_fd int, uid, gid int64) (*os.File, *os.File, error) 
 	// Create a PTS pair.
 	if devpts_fd >= 0 {
 		fd, err := unix.Openat(devpts_fd, "ptmx", os.O_RDWR|unix.O_CLOEXEC, 0)
-		if err == nil {
-			ptx = os.NewFile(uintptr(fd), "/dev/pts/ptmx")
+		if err != nil {
+			return nil, nil, err
 		}
+		ptx = os.NewFile(uintptr(fd), "/dev/pts/ptmx")
 	} else {
 		ptx, err = os.OpenFile("/dev/ptmx", os.O_RDWR|unix.O_CLOEXEC, 0)
 		if err != nil {
@@ -62,6 +64,7 @@ func OpenPtyInDevpts(devpts_fd int, uid, gid int64) (*os.File, *os.File, error) 
 		id := 0
 		_, _, errno = unix.Syscall(unix.SYS_IOCTL, uintptr(ptx.Fd()), unix.TIOCGPTN, uintptr(unsafe.Pointer(&id)))
 		if errno != 0 {
+			unix.Close(int(ptyFd))
 			return nil, nil, unix.Errno(errno)
 		}
 
@@ -146,6 +149,10 @@ func OpenPty(uid, gid int64) (*os.File, *os.File, error) {
 
 // SetSize sets the dimensions of the terminal associated with fd.
 func SetSize(fd int, width int, height int) (err error) {
+	if width < 0 || width > math.MaxUint16 || height < 0 || height > math.MaxUint16 {
+		return fmt.Errorf("cannot set terminal size: dimension out of range")
+	}
+
 	var dimensions [4]uint16
 	dimensions[0] = uint16(height)
 	dimensions[1] = uint16(width)
@@ -166,54 +173,25 @@ func GetSize(fd int) (int, int, error) {
 	return int(winsize.Col), int(winsize.Row), nil
 }
 
-// State contains the state of a terminal.
-type State struct {
-	Termios unix.Termios
-}
+// State is an alias for the terminal state returned by x/term.
+type State = term.State
 
 // IsTerminal returns true if the given file descriptor is a terminal.
 func IsTerminal(fd int) bool {
-	_, err := GetState(fd)
-	return err == nil
+	return term.IsTerminal(fd)
 }
 
-// GetState returns the current state of a terminal which may be useful to restore the terminal after a signal.
+// GetState returns the current state of a terminal, which may be useful to restore the terminal after a signal.
 func GetState(fd int) (*State, error) {
-	termios, err := unix.IoctlGetTermios(fd, unix.TCGETS)
-	if err != nil {
-		return nil, err
-	}
-
-	state := State{}
-	state.Termios = *termios
-
-	return &state, nil
+	return term.GetState(fd)
 }
 
-// MakeRaw put the terminal connected to the given file descriptor into raw mode and returns the previous state of the terminal so that it can be restored.
+// MakeRaw puts the terminal connected to the given file descriptor into raw mode and returns the previous state of the terminal so that it can be restored.
 func MakeRaw(fd int) (*State, error) {
-	var err error
-	var oldState, newState *State
-
-	oldState, err = GetState(fd)
-	if err != nil {
-		return nil, err
-	}
-
-	newState = &State{}
-	newState.Termios = oldState.Termios
-
-	termios.Cfmakeraw(&newState.Termios)
-
-	err = Restore(fd, newState)
-	if err != nil {
-		return nil, err
-	}
-
-	return oldState, nil
+	return term.MakeRaw(fd)
 }
 
 // Restore restores the terminal connected to the given file descriptor to a previous state.
 func Restore(fd int, state *State) error {
-	return termios.Tcsetattr(uintptr(fd), termios.TCSANOW, &state.Termios)
+	return term.Restore(fd, state)
 }

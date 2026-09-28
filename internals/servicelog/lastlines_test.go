@@ -61,3 +61,20 @@ func (s *lastLinesSuite) TestLastLinesStripPrefix(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(lines, Equals, "foo\nbar\nlog msg")
 }
+
+func (s *lastLinesSuite) TestLastLinesWhitespace(c *C) {
+	buffer := servicelog.NewRingBuffer(1024)
+	defer buffer.Close()
+
+	// Leading prefix whitespace (e.g. initial empty lines or spaces) is trimmed,
+	// but inner and trailing whitespace on lines (including indentation) is preserved.
+	// Only a single trailing newline is stripped.
+	fmt.Fprintf(buffer, "\n  line 1 with leading and trailing spaces  \n")
+	fmt.Fprintf(buffer, "\tline 2 indented\n")
+	fmt.Fprintf(buffer, "line 3 with trailing space \n\n")
+
+	lines, err := servicelog.LastLines(buffer, 10, "", false)
+	c.Assert(err, IsNil)
+	// Trailing \n\n has only one \n removed, so the last line is empty string.
+	c.Assert(lines, Equals, "line 1 with leading and trailing spaces  \n\tline 2 indented\nline 3 with trailing space \n")
+}

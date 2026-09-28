@@ -68,6 +68,9 @@ type execSetup struct {
 
 // Exec creates a task that will execute the command with the given arguments.
 func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
+	if len(args.Command) == 0 {
+		return nil, ExecMetadata{}, errors.New("cannot execute command: command cannot be empty")
+	}
 	if args.Interactive && !args.Terminal {
 		return nil, ExecMetadata{}, errors.New("cannot use interactive mode without a terminal")
 	}

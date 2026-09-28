@@ -61,6 +61,19 @@ func (cs *clientSuite) TestChecksGet(c *check.C) {
 	})
 }
 
+func (cs *clientSuite) TestChecksNilOptions(c *check.C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": []
+	}`
+
+	checks, err := cs.cli.Checks(nil)
+	c.Assert(err, check.IsNil)
+	c.Assert(checks, check.HasLen, 0)
+	c.Assert(cs.req.URL.Query(), check.DeepEquals, url.Values{})
+}
 func (cs *clientSuite) TestStartChecks(c *check.C) {
 	cs.rsp = `{
 		"result": {"changed": ["chk1", "chk2"]},

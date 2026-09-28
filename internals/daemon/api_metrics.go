@@ -44,6 +44,13 @@ func v1GetMetrics(c *Command, r *http.Request, _ *UserState) Response {
 			return
 		}
 
+		err = metricsWriter.Flush()
+		if err != nil {
+			logger.Noticef("Cannot write metrics: %v", err)
+			http.Error(w, "# internal server error", http.StatusInternalServerError)
+			return
+		}
+
 		_, err = buf.WriteTo(w)
 		if err != nil {
 			logger.Noticef("Cannot write to HTTP response: %v", err)

@@ -48,6 +48,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -71,6 +72,45 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	}
 }
 
+func (s *gathererSuite) TestPlanChangedPreservesPuller(c *C) {
+	received := make(chan []servicelog.Entry, 1)
+	g, err := newLogGathererInternal(
+		&plan.LogTarget{Name: "tgt1", Services: []string{"all"}},
+		&logGathererOptions{
+			bufferTimeout: 1 * time.Millisecond,
+			newClient: func(target *plan.LogTarget) (logClient, error) {
+				return &testClient{bufferSize: 5, sendCh: received}, nil
+			},
+		},
+	)
+	c.Assert(err, IsNil)
+	defer g.Stop()
+
+	testSvc := newTestService("svc1")
+	pl := &plan.Plan{
+		Services: map[string]*plan.Service{"svc1": testSvc.config},
+		LogTargets: map[string]*plan.LogTarget{
+			"tgt1": {Name: "tgt1", Services: []string{"all"}},
+		},
+	}
+	buffers := map[string]*servicelog.RingBuffer{"svc1": testSvc.ringBuffer}
+	g.PlanChanged(pl, buffers)
+	puller := g.pullers.pullers["svc1"]
+	c.Assert(puller, NotNil)
+
+	testSvc.writeLog("log line #1")
+	g.PlanChanged(pl, buffers)
+	c.Assert(g.pullers.pullers["svc1"], Equals, puller)
+	testSvc.writeLog("log line #2")
+
+	select {
+	case logs := <-received:
+		checkLogs(c, logs, []string{"log line #1", "log line #2"})
+	case <-time.After(time.Second):
+		c.Fatalf("timeout waiting for logs")
+	}
+}
+
 func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
@@ -85,6 +125,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -112,6 +153,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 
 	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	testSvc := newTestService("svc1")
 	g.ServiceStarted(testSvc.config, testSvc.ringBuffer)
@@ -170,6 +212,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 		},
 	)
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	testSvc := newTestService("svc1")
 	g.PlanChanged(&plan.Plan{
@@ -246,6 +289,7 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 		maxBufferedEntries: 2,
 	})
 	c.Assert(err, IsNil)
+	defer g.Stop()
 
 	svc1 := newTestService("svc1")
 	svc2 := newTestService("svc2")
