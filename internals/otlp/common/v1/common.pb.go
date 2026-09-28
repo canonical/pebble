@@ -7,7 +7,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"io"
 	"math"
@@ -17,6 +18,45 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+)
+
+const (
+	commonWireVarint                         = 0
+	commonWireFixed64                        = 1
+	commonWireBytes                          = 2
+	commonWireStartGroup                     = 3
+	commonWireEndGroup                       = 4
+	commonWireFixed32                        = 5
+	commonTagTypeBits                        = 3
+	commonTagTypeMask                        = 1<<3 - 1
+	commonMaxFieldNumber                     = 1<<29 - 1
+	commonFixed32Size                        = 4
+	commonFixed64Size                        = 8
+	commonVarintPayloadBits                  = 7
+	commonVarintContBit                      = 0x80
+	commonMaxDepth                           = 10000
+	commonSkipStackSize                      = 16
+	commonClassNone                          = 0
+	commonClassSigned                        = 1
+	commonClassUnsigned                      = 2
+	commonClassFloat                         = 3
+	commonClassBool                          = 4
+	commonClassString                        = 5
+	commonClassBytes                         = 6
+	commonMaxJSONExponent                    = 100
+	commonBase64Quantum                      = 4
+	commonAnyValueStringValueErrUTF8         = "proto: field opentelemetry.proto.common.v1.AnyValue.string_value contains invalid UTF-8"
+	commonErrDepth                           = "proto: exceeded maximum recursion depth"
+	commonErrParse                           = "proto: cannot parse invalid wire-format data"
+	commonKeyValueKeyErrUTF8                 = "proto: field opentelemetry.proto.common.v1.KeyValue.key contains invalid UTF-8"
+	commonInstrumentationScopeVersionErrUTF8 = "proto: field opentelemetry.proto.common.v1.InstrumentationScope.version contains invalid UTF-8"
+	commonInstrumentationScopeNameErrUTF8    = "proto: field opentelemetry.proto.common.v1.InstrumentationScope.name contains invalid UTF-8"
+	commonEntityRefDescriptionKeysErrUTF8    = "proto: field opentelemetry.proto.common.v1.EntityRef.description_keys contains invalid UTF-8"
+	commonEntityRefIdKeysErrUTF8             = "proto: field opentelemetry.proto.common.v1.EntityRef.id_keys contains invalid UTF-8"
+	commonEntityRefTypeErrUTF8               = "proto: field opentelemetry.proto.common.v1.EntityRef.type contains invalid UTF-8"
+	commonEntityRefSchemaUrlErrUTF8          = "proto: field opentelemetry.proto.common.v1.EntityRef.schema_url contains invalid UTF-8"
+	commonErrInvalidInteger                  = "invalid integer "
+	commonErrInvalidNumber                   = "invalid number "
 )
 
 // Represents any type of attribute value. AnyValue may contain a
@@ -45,61 +85,50 @@ type AnyValue struct {
 func (m *AnyValue) Reset() { *m = AnyValue{} }
 
 func (m *AnyValue) GetValue() isAnyValue_Value {
-	if m != nil {
-		return m.Value
-	}
-	return nil
+	return commonGet(m, func(m *AnyValue) isAnyValue_Value { return m.Value })
 }
-
 func (m *AnyValue) GetStringValue() string {
 	if x, ok := m.GetValue().(*AnyValue_StringValue); ok {
 		return x.StringValue
 	}
 	return ""
 }
-
 func (m *AnyValue) GetBoolValue() bool {
 	if x, ok := m.GetValue().(*AnyValue_BoolValue); ok {
 		return x.BoolValue
 	}
 	return false
 }
-
 func (m *AnyValue) GetIntValue() int64 {
 	if x, ok := m.GetValue().(*AnyValue_IntValue); ok {
 		return x.IntValue
 	}
 	return 0
 }
-
 func (m *AnyValue) GetDoubleValue() float64 {
 	if x, ok := m.GetValue().(*AnyValue_DoubleValue); ok {
 		return x.DoubleValue
 	}
 	return 0
 }
-
 func (m *AnyValue) GetArrayValue() *ArrayValue {
 	if x, ok := m.GetValue().(*AnyValue_ArrayValue); ok {
 		return x.ArrayValue
 	}
 	return nil
 }
-
 func (m *AnyValue) GetKvlistValue() *KeyValueList {
 	if x, ok := m.GetValue().(*AnyValue_KvlistValue); ok {
 		return x.KvlistValue
 	}
 	return nil
 }
-
 func (m *AnyValue) GetBytesValue() []byte {
 	if x, ok := m.GetValue().(*AnyValue_BytesValue); ok {
 		return x.BytesValue
 	}
 	return nil
 }
-
 func (m *AnyValue) GetStringValueStrindex() int32 {
 	if x, ok := m.GetValue().(*AnyValue_StringValueStrindex); ok {
 		return x.StringValueStrindex
@@ -110,57 +139,17 @@ func (m *AnyValue) GetStringValueStrindex() int32 {
 // ProtoUnknownFields returns the raw bytes of fields that were not
 // recognized when m was decoded.
 func (m *AnyValue) ProtoUnknownFields() []byte {
-	if m == nil {
-		return nil
-	}
-	return m.unknownFields
+	return commonGet(m, func(m *AnyValue) []byte { return m.unknownFields })
 }
 
-type isAnyValue_Value interface {
-	isAnyValue_Value()
-}
-
-type AnyValue_StringValue struct {
-	StringValue string
-}
-
-func (*AnyValue_StringValue) isAnyValue_Value() {}
-
-type AnyValue_BoolValue struct {
-	BoolValue bool
-}
-
-func (*AnyValue_BoolValue) isAnyValue_Value() {}
-
-type AnyValue_IntValue struct {
-	IntValue int64
-}
-
-func (*AnyValue_IntValue) isAnyValue_Value() {}
-
-type AnyValue_DoubleValue struct {
-	DoubleValue float64
-}
-
-func (*AnyValue_DoubleValue) isAnyValue_Value() {}
-
-type AnyValue_ArrayValue struct {
-	ArrayValue *ArrayValue
-}
-
-func (*AnyValue_ArrayValue) isAnyValue_Value() {}
-
-type AnyValue_KvlistValue struct {
-	KvlistValue *KeyValueList
-}
-
-func (*AnyValue_KvlistValue) isAnyValue_Value() {}
-
-type AnyValue_BytesValue struct {
-	BytesValue []byte
-}
-
-func (*AnyValue_BytesValue) isAnyValue_Value() {}
+type isAnyValue_Value interface{ isAnyValue_Value() }
+type AnyValue_StringValue struct{ StringValue string }
+type AnyValue_BoolValue struct{ BoolValue bool }
+type AnyValue_IntValue struct{ IntValue int64 }
+type AnyValue_DoubleValue struct{ DoubleValue float64 }
+type AnyValue_ArrayValue struct{ ArrayValue *ArrayValue }
+type AnyValue_KvlistValue struct{ KvlistValue *KeyValueList }
+type AnyValue_BytesValue struct{ BytesValue []byte }
 
 // Reference to the string value in ProfilesDictionary.string_table.
 //
@@ -172,10 +161,15 @@ func (*AnyValue_BytesValue) isAnyValue_Value() {}
 // empty, ignoring its semantic content for the non-Profiling signal.
 //
 // Status: [Alpha]
-type AnyValue_StringValueStrindex struct {
-	StringValueStrindex int32
-}
+type AnyValue_StringValueStrindex struct{ StringValueStrindex int32 }
 
+func (*AnyValue_StringValue) isAnyValue_Value()         {}
+func (*AnyValue_BoolValue) isAnyValue_Value()           {}
+func (*AnyValue_IntValue) isAnyValue_Value()            {}
+func (*AnyValue_DoubleValue) isAnyValue_Value()         {}
+func (*AnyValue_ArrayValue) isAnyValue_Value()          {}
+func (*AnyValue_KvlistValue) isAnyValue_Value()         {}
+func (*AnyValue_BytesValue) isAnyValue_Value()          {}
 func (*AnyValue_StringValueStrindex) isAnyValue_Value() {}
 
 // ProtoSize returns the size of the wire-format encoding of m.
@@ -185,50 +179,35 @@ func (m *AnyValue) ProtoSize() (n int) {
 	}
 	switch o := m.Value.(type) {
 	case *AnyValue_StringValue:
-		n += 1 + len(o.StringValue) + (bits.Len64((uint64(len(o.StringValue)))|1)+6)/7
+		n += 1 + commonSizeLen(len(o.StringValue))
 	case *AnyValue_BoolValue:
 		n += 1 + 1
 	case *AnyValue_IntValue:
-		n += 1 + (bits.Len64((uint64(o.IntValue))|1)+6)/7
+		n += 1 + (bits.Len64(uint64(o.IntValue)|1)+commonVarintPayloadBits-1)/commonVarintPayloadBits
 	case *AnyValue_DoubleValue:
-		n += 1 + 8
+		n += 1 + commonFixed64Size
 	case *AnyValue_ArrayValue:
-		{
-			l := o.ArrayValue.ProtoSize()
-			n += 1 + l + (bits.Len64((uint64(l))|1)+6)/7
-		}
+		n += 1 + commonSizeLen(o.ArrayValue.ProtoSize())
 	case *AnyValue_KvlistValue:
-		{
-			l := o.KvlistValue.ProtoSize()
-			n += 1 + l + (bits.Len64((uint64(l))|1)+6)/7
-		}
+		n += 1 + commonSizeLen(o.KvlistValue.ProtoSize())
 	case *AnyValue_BytesValue:
-		n += 1 + len(o.BytesValue) + (bits.Len64((uint64(len(o.BytesValue)))|1)+6)/7
+		n += 1 + commonSizeLen(len(o.BytesValue))
 	case *AnyValue_StringValueStrindex:
-		n += 1 + (bits.Len64((uint64(int64(o.StringValueStrindex)))|1)+6)/7
+		n += 1 + (bits.Len64(uint64(int64(o.StringValueStrindex))|1)+commonVarintPayloadBits-1)/commonVarintPayloadBits
 	}
 	n += len(m.unknownFields)
 	return n
 }
 
 // MarshalBinary returns the wire-format encoding of m.
-func (m *AnyValue) MarshalBinary() ([]byte, error) {
-	return m.AppendBinary(nil)
-}
+func (m *AnyValue) MarshalBinary() ([]byte, error) { return m.AppendBinary(nil) }
 
 // AppendBinary appends the wire-format encoding of m to b.
 func (m *AnyValue) AppendBinary(b []byte) ([]byte, error) {
 	size := m.ProtoSize()
-	l := len(b)
-	b = slices.Grow(b, size)[:l+size]
-	n, err := m.ProtoMarshalToSizedBuffer(b[l:])
-	if err != nil {
-		return b[:l], err
-	}
-	if n != size {
-		return b[:l], errors.New("proto: message size changed during marshal")
-	}
-	return b, nil
+	b = slices.Grow(b, size)
+	n, err := m.ProtoMarshalToSizedBuffer(b[len(b) : len(b)+size])
+	return commonAppended(b, size, n, err)
 }
 
 // ProtoMarshalToSizedBuffer encodes m into the end of b, which must be
@@ -239,119 +218,43 @@ func (m *AnyValue) ProtoMarshalToSizedBuffer(b []byte) (int, error) {
 		return 0, nil
 	}
 	i := len(b)
-	var u uint64
 	if len(m.unknownFields) > 0 {
-		i -= len(m.unknownFields)
-		copy(b[i:], m.unknownFields)
+		i -= copy(b[i-len(m.unknownFields):], m.unknownFields)
 	}
 	if o, ok := m.Value.(*AnyValue_StringValueStrindex); ok {
-		u = uint64(int64(o.StringValueStrindex))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x40
+		i = commonPutVarint(b, commonPutVarint(b, i, uint64(int64(o.StringValueStrindex))), 8<<commonTagTypeBits|commonWireVarint)
 	}
 	if o, ok := m.Value.(*AnyValue_BytesValue); ok {
-		i -= len(o.BytesValue)
-		copy(b[i:], o.BytesValue)
-		u = uint64(len(o.BytesValue))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x3a
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(o.BytesValue):], o.BytesValue), uint64(len(o.BytesValue))), 7<<commonTagTypeBits|commonWireBytes)
 	}
 	if o, ok := m.Value.(*AnyValue_KvlistValue); ok {
-		{
-			n, err := o.KvlistValue.ProtoMarshalToSizedBuffer(b[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= n
-			u = uint64(n)
-			if u < 0x80 {
-				i--
-				b[i] = byte(u)
-			} else {
-				i -= (bits.Len64((u)|1) + 6) / 7
-				binary.PutUvarint(b[i:], u)
-			}
-			i--
-			b[i] = 0x32
+		n, err := o.KvlistValue.ProtoMarshalToSizedBuffer(b[:i])
+		if err != nil {
+			return 0, err
 		}
+		i = commonPutVarint(b, commonPutVarint(b, i-n, uint64(n)), 6<<commonTagTypeBits|commonWireBytes)
 	}
 	if o, ok := m.Value.(*AnyValue_ArrayValue); ok {
-		{
-			n, err := o.ArrayValue.ProtoMarshalToSizedBuffer(b[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= n
-			u = uint64(n)
-			if u < 0x80 {
-				i--
-				b[i] = byte(u)
-			} else {
-				i -= (bits.Len64((u)|1) + 6) / 7
-				binary.PutUvarint(b[i:], u)
-			}
-			i--
-			b[i] = 0x2a
+		n, err := o.ArrayValue.ProtoMarshalToSizedBuffer(b[:i])
+		if err != nil {
+			return 0, err
 		}
+		i = commonPutVarint(b, commonPutVarint(b, i-n, uint64(n)), 5<<commonTagTypeBits|commonWireBytes)
 	}
 	if o, ok := m.Value.(*AnyValue_DoubleValue); ok {
-		i -= 8
-		binary.LittleEndian.PutUint64(b[i:], math.Float64bits(o.DoubleValue))
-		i--
-		b[i] = 0x21
+		i = commonPutVarint(b, commonPutFixed64(b, i, math.Float64bits(o.DoubleValue)), 4<<commonTagTypeBits|commonWireFixed64)
 	}
 	if o, ok := m.Value.(*AnyValue_IntValue); ok {
-		u = uint64(o.IntValue)
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x18
+		i = commonPutVarint(b, commonPutVarint(b, i, uint64(o.IntValue)), 3<<commonTagTypeBits|commonWireVarint)
 	}
 	if o, ok := m.Value.(*AnyValue_BoolValue); ok {
-		i--
-		if o.BoolValue {
-			b[i] = 1
-		} else {
-			b[i] = 0
-		}
-		i--
-		b[i] = 0x10
+		i = commonPutVarint(b, commonPutBool(b, i, o.BoolValue), 2<<commonTagTypeBits|commonWireVarint)
 	}
 	if o, ok := m.Value.(*AnyValue_StringValue); ok {
 		if !utf8.ValidString(o.StringValue) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.AnyValue.string_value contains invalid UTF-8")
+			return 0, errors.New(commonAnyValueStringValueErrUTF8)
 		}
-		i -= len(o.StringValue)
-		copy(b[i:], o.StringValue)
-		u = uint64(len(o.StringValue))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x0a
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(o.StringValue):], o.StringValue), uint64(len(o.StringValue))), 1<<commonTagTypeBits|commonWireBytes)
 	}
 	return len(b) - i, nil
 }
@@ -365,326 +268,158 @@ func (m *AnyValue) UnmarshalBinary(b []byte) error {
 
 // ProtoMerge decodes the wire-format message in b and merges it into m.
 // It does not check required fields.
-func (m *AnyValue) ProtoMerge(b []byte) error {
-	return m.ProtoMergeDepth(b, 0)
-}
+func (m *AnyValue) ProtoMerge(b []byte) error { return m.ProtoMergeDepth(b, 0) }
 
 // ProtoMergeDepth is ProtoMerge for a message nested depth levels deep.
 func (m *AnyValue) ProtoMergeDepth(b []byte, depth int) error {
-	if depth >= 10000 {
-		goto errDepth
+	if depth >= commonMaxDepth {
+		return errors.New(commonErrDepth)
 	}
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
-		if n <= 0 || t>>3 == 0 || t>>3 > 536870911 {
+		if n <= 0 || t>>commonTagTypeBits == 0 || t>>commonTagTypeBits > commonMaxFieldNumber {
 			goto errParse
 		}
-		num, typ := int32(t>>3), int(t&7)
 		start := b
 		b = b[n:]
-		switch num {
-		case 1:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.AnyValue.string_value contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.Value = &AnyValue_StringValue{StringValue: string(x)}
-				continue
+		switch t {
+		case 1<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
 			}
-		case 2:
-			if typ == 0 {
-				x, n := binary.Uvarint(b)
-				if n <= 0 {
-					goto errParse
-				}
-				b = b[n:]
-				m.Value = &AnyValue_BoolValue{BoolValue: x != 0}
-				continue
+			if !utf8.Valid(x) {
+				return errors.New(commonAnyValueStringValueErrUTF8)
 			}
-		case 3:
-			if typ == 0 {
-				x, n := binary.Uvarint(b)
-				if n <= 0 {
-					goto errParse
-				}
-				b = b[n:]
-				m.Value = &AnyValue_IntValue{IntValue: int64(x)}
-				continue
-			}
-		case 4:
-			if typ == 1 {
-				if len(b) < 8 {
-					goto errParse
-				}
-				x, n := binary.LittleEndian.Uint64(b), 8
-				b = b[n:]
-				m.Value = &AnyValue_DoubleValue{DoubleValue: math.Float64frombits(x)}
-				continue
-			}
-		case 5:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				v := b[n : n+int(ln)]
-				n += int(ln)
-				var mv *ArrayValue
-				if o, ok := m.Value.(*AnyValue_ArrayValue); ok && o.ArrayValue != nil {
-					mv = o.ArrayValue
-				} else {
-					mv = &ArrayValue{}
-					m.Value = &AnyValue_ArrayValue{ArrayValue: mv}
-				}
-				if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-					return err
-				}
-				b = b[n:]
-				continue
-			}
-		case 6:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				v := b[n : n+int(ln)]
-				n += int(ln)
-				var mv *KeyValueList
-				if o, ok := m.Value.(*AnyValue_KvlistValue); ok && o.KvlistValue != nil {
-					mv = o.KvlistValue
-				} else {
-					mv = &KeyValueList{}
-					m.Value = &AnyValue_KvlistValue{KvlistValue: mv}
-				}
-				if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-					return err
-				}
-				b = b[n:]
-				continue
-			}
-		case 7:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				b = b[n:]
-				m.Value = &AnyValue_BytesValue{BytesValue: append([]byte{}, x...)}
-				continue
-			}
-		case 8:
-			if typ == 0 {
-				x, n := binary.Uvarint(b)
-				if n <= 0 {
-					goto errParse
-				}
-				b = b[n:]
-				m.Value = &AnyValue_StringValueStrindex{StringValueStrindex: int32(x)}
-				continue
-			}
-		}
-		// Unknown field, or a known field with an unexpected wire type.
-		switch typ {
-		case 0:
-			_, n = binary.Uvarint(b)
+			b, m.Value = b[n:], &AnyValue_StringValue{StringValue: string(x)}
+		case 2<<commonTagTypeBits | commonWireVarint:
+			x, n := binary.Uvarint(b)
 			if n <= 0 {
 				goto errParse
 			}
-		case 1:
-			if len(b) < 8 {
+			b, m.Value = b[n:], &AnyValue_BoolValue{BoolValue: x != 0}
+		case 3<<commonTagTypeBits | commonWireVarint:
+			x, n := binary.Uvarint(b)
+			if n <= 0 {
 				goto errParse
 			}
-			n = 8
-		case 2:
-			ln, k := binary.Uvarint(b)
-			if k <= 0 || ln > uint64(len(b)-k) {
+			b, m.Value = b[n:], &AnyValue_IntValue{IntValue: int64(x)}
+		case 4<<commonTagTypeBits | commonWireFixed64:
+			if len(b) < commonFixed64Size {
 				goto errParse
 			}
-			n = k + int(ln)
-		case 3:
-			var stk [16]int32
-			open := append(stk[:0], num)
-			n = 0
-			for len(open) > 0 {
-				if depth+len(open) > 10000 {
-					goto errDepth
-				}
-				t, k := binary.Uvarint(b[n:])
-				if k <= 0 || t>>3 == 0 || t>>3 > 536870911 {
-					goto errParse
-				}
-				n += k
-				switch t & 7 {
-				case 0:
-					_, k = binary.Uvarint(b[n:])
-					if k <= 0 {
-						goto errParse
-					}
-				case 1:
-					k = 8
-				case 2:
-					ln, k2 := binary.Uvarint(b[n:])
-					if k2 <= 0 || ln > uint64(len(b)-n-k2) {
-						goto errParse
-					}
-					k = k2 + int(ln)
-				case 3:
-					open = append(open, int32(t>>3))
-					k = 0
-				case 4:
-					if open[len(open)-1] != int32(t>>3) {
-						goto errParse
-					}
-					open = open[:len(open)-1]
-					k = 0
-				case 5:
-					k = 4
-				default:
-					goto errParse
-				}
-				if k > len(b)-n {
-					goto errParse
-				}
-				n += k
-			}
-		case 5:
-			if len(b) < 4 {
+			b, m.Value = b[commonFixed64Size:], &AnyValue_DoubleValue{DoubleValue: math.Float64frombits(binary.LittleEndian.Uint64(b))}
+		case 5<<commonTagTypeBits | commonWireBytes:
+			v, n := commonReadBytes(b)
+			if n < 0 {
 				goto errParse
 			}
-			n = 4
+			var mv *ArrayValue
+			if o, ok := m.Value.(*AnyValue_ArrayValue); ok && o.ArrayValue != nil {
+				mv = o.ArrayValue
+			} else {
+				mv = &ArrayValue{}
+				m.Value = &AnyValue_ArrayValue{ArrayValue: mv}
+			}
+			if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
+				return err
+			}
+			b = b[n:]
+		case 6<<commonTagTypeBits | commonWireBytes:
+			v, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
+			}
+			var mv *KeyValueList
+			if o, ok := m.Value.(*AnyValue_KvlistValue); ok && o.KvlistValue != nil {
+				mv = o.KvlistValue
+			} else {
+				mv = &KeyValueList{}
+				m.Value = &AnyValue_KvlistValue{KvlistValue: mv}
+			}
+			if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
+				return err
+			}
+			b = b[n:]
+		case 7<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
+			}
+			b, m.Value = b[n:], &AnyValue_BytesValue{BytesValue: append([]byte{}, x...)}
+		case 8<<commonTagTypeBits | commonWireVarint:
+			x, n := binary.Uvarint(b)
+			if n <= 0 {
+				goto errParse
+			}
+			b, m.Value = b[n:], &AnyValue_StringValueStrindex{StringValueStrindex: int32(x)}
 		default:
-			goto errParse
+			n, err := commonSkipField(b, t, depth)
+			if err != nil {
+				return err
+			}
+			m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
+			b = b[n:]
 		}
-		m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
-		b = b[n:]
 	}
 	return nil
 errParse:
-	return errors.New("proto: cannot parse invalid wire-format data")
-errDepth:
-	return errors.New("proto: exceeded maximum recursion depth")
+	return errors.New(commonErrParse)
 }
 
 // ProtoCheckInitialized returns an error if any required field in m
 // or its sub-messages is not set.
-func (m *AnyValue) ProtoCheckInitialized() error {
-	return nil
-}
+func (m *AnyValue) ProtoCheckInitialized() error { return nil }
 
 // MarshalJSON returns the ProtoJSON encoding of m.
-func (m *AnyValue) MarshalJSON() ([]byte, error) {
-	return m.ProtoAppendJSON(nil)
+func (m *AnyValue) MarshalJSON() ([]byte, error) { return m.ProtoAppendJSON(nil) }
+
+// MarshalJSONTo writes the ProtoJSON encoding of m to e. It implements
+// json.MarshalerTo from encoding/json/v2.
+func (m *AnyValue) MarshalJSONTo(e *jsontext.Encoder) error {
+	b, err := m.ProtoAppendJSON(e.AvailableBuffer())
+	return commonWriteJSON(e, b, err)
 }
 
 // ProtoAppendJSON appends the ProtoJSON encoding of m to b. It does not
 // check required fields.
 func (m *AnyValue) ProtoAppendJSON(b []byte) ([]byte, error) {
+	var err error
 	if m == nil {
 		return append(b, "{}"...), nil
 	}
-	b = append(b, '{')
+	start := len(b)
 	if o, ok := m.Value.(*AnyValue_StringValue); ok {
-		b = append(b, "\"stringValue\":"...)
-		if !utf8.ValidString(o.StringValue) {
+		if b, err = jsontext.AppendQuote(append(b, ",\"stringValue\":"...), o.StringValue); err != nil {
 			return nil, errors.New("proto: opentelemetry.proto.common.v1.AnyValue.string_value contains invalid UTF-8")
 		}
-		b = append(b, '"')
-		for ci := 0; ci < len(o.StringValue); ci++ {
-			switch c := o.StringValue[ci]; {
-			case c == '"' || c == '\\':
-				b = append(b, '\\', c)
-			case c < 0x20:
-				b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-			default:
-				b = append(b, c)
-			}
-		}
-		b = append(b, '"')
-		b = append(b, ',')
 	}
 	if o, ok := m.Value.(*AnyValue_BoolValue); ok {
-		b = append(b, "\"boolValue\":"...)
-		if o.BoolValue {
-			b = append(b, "true"...)
-		} else {
-			b = append(b, "false"...)
-		}
-		b = append(b, ',')
+		b = strconv.AppendBool(append(b, ",\"boolValue\":"...), o.BoolValue)
 	}
 	if o, ok := m.Value.(*AnyValue_IntValue); ok {
-		b = append(b, "\"intValue\":"...)
-		b = append(b, '"')
-		b = strconv.AppendInt(b, o.IntValue, 10)
-		b = append(b, '"')
-		b = append(b, ',')
+		b = append(strconv.AppendInt(append(b, ",\"intValue\":\""...), o.IntValue, 10), '"')
 	}
 	if o, ok := m.Value.(*AnyValue_DoubleValue); ok {
-		b = append(b, "\"doubleValue\":"...)
-		switch fl := float64(o.DoubleValue); {
-		case math.IsNaN(fl):
-			b = append(b, `"NaN"`...)
-		case math.IsInf(fl, 1):
-			b = append(b, `"Infinity"`...)
-		case math.IsInf(fl, -1):
-			b = append(b, `"-Infinity"`...)
-		default:
-			b = strconv.AppendFloat(b, fl, 'g', -1, 64)
-		}
-		b = append(b, ',')
+		b = commonAppendFloat(append(b, ",\"doubleValue\":"...), o.DoubleValue, 64)
 	}
 	if o, ok := m.Value.(*AnyValue_ArrayValue); ok {
-		b = append(b, "\"arrayValue\":"...)
-		{
-			var err error
-			if b, err = o.ArrayValue.ProtoAppendJSON(b); err != nil {
-				return nil, err
-			}
+		if b, err = o.ArrayValue.ProtoAppendJSON(append(b, ",\"arrayValue\":"...)); err != nil {
+			return nil, err
 		}
-		b = append(b, ',')
 	}
 	if o, ok := m.Value.(*AnyValue_KvlistValue); ok {
-		b = append(b, "\"kvlistValue\":"...)
-		{
-			var err error
-			if b, err = o.KvlistValue.ProtoAppendJSON(b); err != nil {
-				return nil, err
-			}
+		if b, err = o.KvlistValue.ProtoAppendJSON(append(b, ",\"kvlistValue\":"...)); err != nil {
+			return nil, err
 		}
-		b = append(b, ',')
 	}
 	if o, ok := m.Value.(*AnyValue_BytesValue); ok {
-		b = append(b, "\"bytesValue\":"...)
-		{
-			n := base64.StdEncoding.EncodedLen(len(o.BytesValue))
-			b = append(b, '"')
-			l := len(b)
-			b = slices.Grow(b, n)[:l+n]
-			base64.StdEncoding.Encode(b[l:], o.BytesValue)
-			b = append(b, '"')
-		}
-		b = append(b, ',')
+		b = append(base64.StdEncoding.AppendEncode(append(b, ",\"bytesValue\":\""...), o.BytesValue), '"')
 	}
 	if o, ok := m.Value.(*AnyValue_StringValueStrindex); ok {
-		b = append(b, "\"stringValueStrindex\":"...)
-		b = strconv.AppendInt(b, int64(o.StringValueStrindex), 10)
-		b = append(b, ',')
+		b = strconv.AppendInt(append(b, ",\"stringValueStrindex\":"...), int64(o.StringValueStrindex), 10)
 	}
-	if b[len(b)-1] == ',' {
-		b[len(b)-1] = '}'
-	} else {
-		b = append(b, '}')
-	}
-	return b, nil
+	return commonCloseObject(b, start), nil
 }
 
 // UnmarshalJSON replaces the contents of m with the decoded ProtoJSON
@@ -697,41 +432,36 @@ func (m *AnyValue) UnmarshalJSON(b []byte) error {
 // ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m.
 // It does not check required fields.
 func (m *AnyValue) ProtoMergeJSON(b []byte) error {
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.UseNumber()
-	tok, err := d.Token()
+	d := jsontext.NewDecoder(bytes.NewBuffer(b))
+	return commonEndJSON(d, m.ProtoMergeJSONFrom(d), "opentelemetry.proto.common.v1.AnyValue")
+}
+
+// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value
+// read from d. It implements json.UnmarshalerFrom from encoding/json/v2.
+func (m *AnyValue) UnmarshalJSONFrom(d *jsontext.Decoder) error {
+	d, err := commonStrictDecoder(d)
 	if err != nil {
 		return err
 	}
-	if tok == nil {
-		// JSON null leaves the message unchanged.
-		if _, err := d.Token(); err != io.EOF {
-			return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: unexpected data after JSON value")
-		}
-		return nil
+	*m = AnyValue{}
+	return m.ProtoMergeJSONFrom(d)
+}
+
+// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it
+// into m. It does not check required fields. d should reject invalid
+// UTF-8, as jsontext decoders do by default.
+func (m *AnyValue) ProtoMergeJSONFrom(d *jsontext.Decoder) error {
+	ok, err := commonOpenJSON(d, jsontext.KindBeginObject, "opentelemetry.proto.common.v1.AnyValue", "object")
+	if !ok {
+		return err
 	}
-	if tok != json.Delim('{') {
-		return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: expected a JSON object")
-	}
-	type job struct {
-		f   int
-		key string
-		raw []byte
-	}
-	var jobs []job
-	var seen [8]bool
-	var oneofs [1]bool
-	for d.More() {
-		tok, err := d.Token()
-		if err != nil {
+	seen, oneofs, f := [8]bool{}, [1]bool{}, 0
+	for {
+		kt, more, err := commonNextKey(d)
+		if !more {
 			return err
 		}
-		key, _ := tok.(string)
-		var raw json.RawMessage
-		if err := d.Decode(&raw); err != nil {
-			return err
-		}
-		f := -1
+		key := kt.String()
 		switch key {
 		case "stringValue", "string_value":
 			f = 0
@@ -750,147 +480,50 @@ func (m *AnyValue) ProtoMergeJSON(b []byte) error {
 		case "stringValueStrindex", "string_value_strindex":
 			f = 7
 		default:
-			continue // unknown keys are ignored (-json_discard_unknown)
+			if err := d.SkipValue(); err != nil {
+				return err
+			}
+			continue
 		}
 		if seen[f] {
 			return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: duplicate field " + strconv.Quote(key))
 		}
 		seen[f] = true
-		null := string(raw) == "null"
+		if d.PeekKind() == jsontext.KindNull {
+			if err := d.SkipValue(); err != nil {
+				return err
+			}
+			continue
+		}
 		switch f {
 		case 0, 1, 2, 3, 4, 5, 6, 7:
-			if null {
-				continue
-			}
 			if oneofs[0] {
 				return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: multiple fields set for oneof value")
 			}
 			oneofs[0] = true
-			jobs = append(jobs, job{f: f, raw: raw})
 		}
-	}
-	if _, err := d.Token(); err != nil {
-		return err
-	}
-	if _, err := d.Token(); err != io.EOF {
-		return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: unexpected data after JSON value")
-	}
-	for _, jb := range jobs {
-		raw := jb.raw
-		class := 0
-		bits := 64
-		var iv int64
-		var fv float64
-		var bv bool
-		var sv string
-		var by []byte
-		switch jb.f {
-		case 7:
-			class, bits = 1, 32
-		case 2:
-			class, bits = 1, 64
-		case 3:
-			class, bits = 3, 64
-		case 1:
-			class = 4
-		case 0:
-			class = 5
-		case 6:
-			class = 6
+		class, bits, iv, fv, bv, sv, by, tok := commonAnyValueJSONClasses[f][0], commonAnyValueJSONClasses[f][1], int64(0), float64(0), false, "", []byte(nil), jsontext.Token{}
+		if class != commonClassNone {
+			if tok, err = d.ReadToken(); err != nil {
+				return err
+			}
 		}
 		switch class {
-		case 1:
-			s := string(raw)
-			if raw[0] == '"' {
-				if err := json.Unmarshal(raw, &s); err != nil {
-					return err
-				}
-			}
-			if s == "" || (s[0] != '-' && (s[0] < '0' || s[0] > '9')) || !json.Valid([]byte(s)) {
-				return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid number " + string(raw))
-			}
-			var err error
-			iv, err = strconv.ParseInt(s, 10, bits)
-			if err != nil {
-				// Accept exponent and fraction forms that denote an exact integer,
-				// bounding the exponent so that exact arithmetic stays cheap.
-				if i := strings.IndexAny(s, "eE"); i >= 0 {
-					if e, err := strconv.Atoi(s[i+1:]); err != nil || e > 100 || e < -100 {
-						return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid integer " + string(raw))
-					}
-				}
-				r, ok := new(big.Rat).SetString(s)
-				if !ok || !r.IsInt() {
-					return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid integer " + string(raw))
-				}
-				n := r.Num()
-				if !n.IsInt64() || (bits == 32 && (n.Int64() < -1<<31 || n.Int64() > 1<<31-1)) {
-					return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid integer " + string(raw))
-				}
-				iv = n.Int64()
-			}
-		case 3:
-			s := string(raw)
-			special := false
-			if raw[0] == '"' {
-				if err := json.Unmarshal(raw, &s); err != nil {
-					return err
-				}
-				switch s {
-				case "NaN":
-					fv, special = math.NaN(), true
-				case "Infinity":
-					fv, special = math.Inf(1), true
-				case "-Infinity":
-					fv, special = math.Inf(-1), true
-				}
-			}
-			if !special {
-				if s == "" || (s[0] != '-' && (s[0] < '0' || s[0] > '9')) || !json.Valid([]byte(s)) {
-					return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid number " + string(raw))
-				}
-				var err error
-				if fv, err = strconv.ParseFloat(s, bits); err != nil {
-					return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid number " + string(raw))
-				}
-			}
-		case 4:
-			switch string(raw) {
-			case "true":
-				bv = true
-			case "false":
-			default:
-				return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid boolean " + string(raw))
-			}
-		case 5:
-			if raw[0] != '"' || !utf8.Valid(raw) {
-				return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid string " + string(raw))
-			}
-			if err := json.Unmarshal(raw, &sv); err != nil {
-				return err
-			}
-		case 6:
-			var s string
-			if raw[0] != '"' {
-				return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid bytes " + string(raw))
-			}
-			if err := json.Unmarshal(raw, &s); err != nil {
-				return err
-			}
-			// Accept standard and URL-safe alphabets, with or without padding.
-			enc := base64.StdEncoding
-			if strings.ContainsAny(s, "-_") {
-				enc = base64.URLEncoding
-			}
-			if len(s)%4 != 0 {
-				enc = enc.WithPadding(base64.NoPadding)
-			}
-			var err error
-			if by, err = enc.DecodeString(s); err != nil {
-				return errors.New("proto: opentelemetry.proto.common.v1.AnyValue: invalid bytes " + string(raw))
-			}
+		case commonClassSigned:
+			iv, err = commonParseInt(tok, bits, "opentelemetry.proto.common.v1.AnyValue")
+		case commonClassFloat:
+			fv, err = commonParseFloat(tok, bits, "opentelemetry.proto.common.v1.AnyValue")
+		case commonClassBool:
+			bv, err = commonParseBool(tok, "opentelemetry.proto.common.v1.AnyValue")
+		case commonClassString:
+			sv, err = commonParseString(tok, "opentelemetry.proto.common.v1.AnyValue")
+		case commonClassBytes:
+			by, err = commonParseBytes(tok, "opentelemetry.proto.common.v1.AnyValue")
 		}
-		switch jb.f {
+		if err != nil {
+			return err
+		}
+		switch f {
 		case 0:
 			m.Value = &AnyValue_StringValue{StringValue: sv}
 		case 1:
@@ -901,13 +534,13 @@ func (m *AnyValue) ProtoMergeJSON(b []byte) error {
 			m.Value = &AnyValue_DoubleValue{DoubleValue: fv}
 		case 4:
 			mv := &ArrayValue{}
-			if err := mv.ProtoMergeJSON(raw); err != nil {
+			if err := mv.ProtoMergeJSONFrom(d); err != nil {
 				return err
 			}
 			m.Value = &AnyValue_ArrayValue{ArrayValue: mv}
 		case 5:
 			mv := &KeyValueList{}
-			if err := mv.ProtoMergeJSON(raw); err != nil {
+			if err := mv.ProtoMergeJSONFrom(d); err != nil {
 				return err
 			}
 			m.Value = &AnyValue_KvlistValue{KvlistValue: mv}
@@ -917,8 +550,9 @@ func (m *AnyValue) ProtoMergeJSON(b []byte) error {
 			m.Value = &AnyValue_StringValueStrindex{StringValueStrindex: int32(iv)}
 		}
 	}
-	return nil
 }
+
+var commonAnyValueJSONClasses = [8][2]int{{commonClassString, 64}, {commonClassBool, 64}, {commonClassSigned, 64}, {commonClassFloat, 64}, {commonClassNone, 64}, {commonClassNone, 64}, {commonClassBytes, 64}, {commonClassSigned, 32}}
 
 // ArrayValue is a list of AnyValue messages. We need ArrayValue as a message
 // since oneof in AnyValue does not allow repeated fields.
@@ -933,19 +567,13 @@ type ArrayValue struct {
 func (m *ArrayValue) Reset() { *m = ArrayValue{} }
 
 func (m *ArrayValue) GetValues() []*AnyValue {
-	if m != nil {
-		return m.Values
-	}
-	return nil
+	return commonGet(m, func(m *ArrayValue) []*AnyValue { return m.Values })
 }
 
 // ProtoUnknownFields returns the raw bytes of fields that were not
 // recognized when m was decoded.
 func (m *ArrayValue) ProtoUnknownFields() []byte {
-	if m == nil {
-		return nil
-	}
-	return m.unknownFields
+	return commonGet(m, func(m *ArrayValue) []byte { return m.unknownFields })
 }
 
 // ProtoSize returns the size of the wire-format encoding of m.
@@ -954,33 +582,21 @@ func (m *ArrayValue) ProtoSize() (n int) {
 		return 0
 	}
 	for _, v := range m.Values {
-		{
-			l := v.ProtoSize()
-			n += 1 + l + (bits.Len64((uint64(l))|1)+6)/7
-		}
+		n += 1 + commonSizeLen(v.ProtoSize())
 	}
 	n += len(m.unknownFields)
 	return n
 }
 
 // MarshalBinary returns the wire-format encoding of m.
-func (m *ArrayValue) MarshalBinary() ([]byte, error) {
-	return m.AppendBinary(nil)
-}
+func (m *ArrayValue) MarshalBinary() ([]byte, error) { return m.AppendBinary(nil) }
 
 // AppendBinary appends the wire-format encoding of m to b.
 func (m *ArrayValue) AppendBinary(b []byte) ([]byte, error) {
 	size := m.ProtoSize()
-	l := len(b)
-	b = slices.Grow(b, size)[:l+size]
-	n, err := m.ProtoMarshalToSizedBuffer(b[l:])
-	if err != nil {
-		return b[:l], err
-	}
-	if n != size {
-		return b[:l], errors.New("proto: message size changed during marshal")
-	}
-	return b, nil
+	b = slices.Grow(b, size)
+	n, err := m.ProtoMarshalToSizedBuffer(b[len(b) : len(b)+size])
+	return commonAppended(b, size, n, err)
 }
 
 // ProtoMarshalToSizedBuffer encodes m into the end of b, which must be
@@ -991,29 +607,15 @@ func (m *ArrayValue) ProtoMarshalToSizedBuffer(b []byte) (int, error) {
 		return 0, nil
 	}
 	i := len(b)
-	var u uint64
 	if len(m.unknownFields) > 0 {
-		i -= len(m.unknownFields)
-		copy(b[i:], m.unknownFields)
+		i -= copy(b[i-len(m.unknownFields):], m.unknownFields)
 	}
-	for j := len(m.Values) - 1; j >= 0; j-- {
-		{
-			n, err := m.Values[j].ProtoMarshalToSizedBuffer(b[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= n
-			u = uint64(n)
-			if u < 0x80 {
-				i--
-				b[i] = byte(u)
-			} else {
-				i -= (bits.Len64((u)|1) + 6) / 7
-				binary.PutUvarint(b[i:], u)
-			}
-			i--
-			b[i] = 0x0a
+	for _, v := range slices.Backward(m.Values) {
+		n, err := v.ProtoMarshalToSizedBuffer(b[:i])
+		if err != nil {
+			return 0, err
 		}
+		i = commonPutVarint(b, commonPutVarint(b, i-n, uint64(n)), 1<<commonTagTypeBits|commonWireBytes)
 	}
 	return len(b) - i, nil
 }
@@ -1027,161 +629,79 @@ func (m *ArrayValue) UnmarshalBinary(b []byte) error {
 
 // ProtoMerge decodes the wire-format message in b and merges it into m.
 // It does not check required fields.
-func (m *ArrayValue) ProtoMerge(b []byte) error {
-	return m.ProtoMergeDepth(b, 0)
-}
+func (m *ArrayValue) ProtoMerge(b []byte) error { return m.ProtoMergeDepth(b, 0) }
 
 // ProtoMergeDepth is ProtoMerge for a message nested depth levels deep.
 func (m *ArrayValue) ProtoMergeDepth(b []byte, depth int) error {
-	if depth >= 10000 {
-		goto errDepth
+	if depth >= commonMaxDepth {
+		return errors.New(commonErrDepth)
 	}
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
-		if n <= 0 || t>>3 == 0 || t>>3 > 536870911 {
+		if n <= 0 || t>>commonTagTypeBits == 0 || t>>commonTagTypeBits > commonMaxFieldNumber {
 			goto errParse
 		}
-		num, typ := int32(t>>3), int(t&7)
 		start := b
 		b = b[n:]
-		switch num {
-		case 1:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				v := b[n : n+int(ln)]
-				n += int(ln)
-				mv := &AnyValue{}
-				m.Values = append(m.Values, mv)
-				if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-					return err
-				}
-				b = b[n:]
-				continue
-			}
-		}
-		// Unknown field, or a known field with an unexpected wire type.
-		switch typ {
-		case 0:
-			_, n = binary.Uvarint(b)
-			if n <= 0 {
+		switch t {
+		case 1<<commonTagTypeBits | commonWireBytes:
+			v, n := commonReadBytes(b)
+			if n < 0 {
 				goto errParse
 			}
-		case 1:
-			if len(b) < 8 {
-				goto errParse
+			mv := &AnyValue{}
+			m.Values = append(m.Values, mv)
+			if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
+				return err
 			}
-			n = 8
-		case 2:
-			ln, k := binary.Uvarint(b)
-			if k <= 0 || ln > uint64(len(b)-k) {
-				goto errParse
-			}
-			n = k + int(ln)
-		case 3:
-			var stk [16]int32
-			open := append(stk[:0], num)
-			n = 0
-			for len(open) > 0 {
-				if depth+len(open) > 10000 {
-					goto errDepth
-				}
-				t, k := binary.Uvarint(b[n:])
-				if k <= 0 || t>>3 == 0 || t>>3 > 536870911 {
-					goto errParse
-				}
-				n += k
-				switch t & 7 {
-				case 0:
-					_, k = binary.Uvarint(b[n:])
-					if k <= 0 {
-						goto errParse
-					}
-				case 1:
-					k = 8
-				case 2:
-					ln, k2 := binary.Uvarint(b[n:])
-					if k2 <= 0 || ln > uint64(len(b)-n-k2) {
-						goto errParse
-					}
-					k = k2 + int(ln)
-				case 3:
-					open = append(open, int32(t>>3))
-					k = 0
-				case 4:
-					if open[len(open)-1] != int32(t>>3) {
-						goto errParse
-					}
-					open = open[:len(open)-1]
-					k = 0
-				case 5:
-					k = 4
-				default:
-					goto errParse
-				}
-				if k > len(b)-n {
-					goto errParse
-				}
-				n += k
-			}
-		case 5:
-			if len(b) < 4 {
-				goto errParse
-			}
-			n = 4
+			b = b[n:]
 		default:
-			goto errParse
+			n, err := commonSkipField(b, t, depth)
+			if err != nil {
+				return err
+			}
+			m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
+			b = b[n:]
 		}
-		m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
-		b = b[n:]
 	}
 	return nil
 errParse:
-	return errors.New("proto: cannot parse invalid wire-format data")
-errDepth:
-	return errors.New("proto: exceeded maximum recursion depth")
+	return errors.New(commonErrParse)
 }
 
 // ProtoCheckInitialized returns an error if any required field in m
 // or its sub-messages is not set.
-func (m *ArrayValue) ProtoCheckInitialized() error {
-	return nil
-}
+func (m *ArrayValue) ProtoCheckInitialized() error { return nil }
 
 // MarshalJSON returns the ProtoJSON encoding of m.
-func (m *ArrayValue) MarshalJSON() ([]byte, error) {
-	return m.ProtoAppendJSON(nil)
+func (m *ArrayValue) MarshalJSON() ([]byte, error) { return m.ProtoAppendJSON(nil) }
+
+// MarshalJSONTo writes the ProtoJSON encoding of m to e. It implements
+// json.MarshalerTo from encoding/json/v2.
+func (m *ArrayValue) MarshalJSONTo(e *jsontext.Encoder) error {
+	b, err := m.ProtoAppendJSON(e.AvailableBuffer())
+	return commonWriteJSON(e, b, err)
 }
 
 // ProtoAppendJSON appends the ProtoJSON encoding of m to b. It does not
 // check required fields.
 func (m *ArrayValue) ProtoAppendJSON(b []byte) ([]byte, error) {
+	var err error
 	if m == nil {
 		return append(b, "{}"...), nil
 	}
-	b = append(b, '{')
+	start := len(b)
 	if len(m.Values) > 0 {
-		b = append(b, "\"values\":["...)
+		b = append(b, ",\"values\":["...)
 		for j := range m.Values {
-			{
-				var err error
-				if b, err = m.Values[j].ProtoAppendJSON(b); err != nil {
-					return nil, err
-				}
+			if b, err = m.Values[j].ProtoAppendJSON(b); err != nil {
+				return nil, err
 			}
 			b = append(b, ',')
 		}
 		b[len(b)-1] = ']'
-		b = append(b, ',')
 	}
-	if b[len(b)-1] == ',' {
-		b[len(b)-1] = '}'
-	} else {
-		b = append(b, '}')
-	}
-	return b, nil
+	return commonCloseObject(b, start), nil
 }
 
 // UnmarshalJSON replaces the contents of m with the decoded ProtoJSON
@@ -1194,91 +714,82 @@ func (m *ArrayValue) UnmarshalJSON(b []byte) error {
 // ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m.
 // It does not check required fields.
 func (m *ArrayValue) ProtoMergeJSON(b []byte) error {
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.UseNumber()
-	tok, err := d.Token()
+	d := jsontext.NewDecoder(bytes.NewBuffer(b))
+	return commonEndJSON(d, m.ProtoMergeJSONFrom(d), "opentelemetry.proto.common.v1.ArrayValue")
+}
+
+// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value
+// read from d. It implements json.UnmarshalerFrom from encoding/json/v2.
+func (m *ArrayValue) UnmarshalJSONFrom(d *jsontext.Decoder) error {
+	d, err := commonStrictDecoder(d)
 	if err != nil {
 		return err
 	}
-	if tok == nil {
-		// JSON null leaves the message unchanged.
-		if _, err := d.Token(); err != io.EOF {
-			return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: unexpected data after JSON value")
-		}
-		return nil
-	}
-	if tok != json.Delim('{') {
-		return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: expected a JSON object")
-	}
-	type job struct {
-		f   int
-		key string
-		raw []byte
-	}
-	var jobs []job
-	var seen [1]bool
-	for d.More() {
-		tok, err := d.Token()
-		if err != nil {
-			return err
-		}
-		key, _ := tok.(string)
-		var raw json.RawMessage
-		if err := d.Decode(&raw); err != nil {
-			return err
-		}
-		f := -1
-		switch key {
-		case "values":
-			f = 0
-		default:
-			continue // unknown keys are ignored (-json_discard_unknown)
-		}
-		if seen[f] {
-			return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: duplicate field " + strconv.Quote(key))
-		}
-		seen[f] = true
-		null := string(raw) == "null"
-		switch f {
-		case 0:
-			if null {
-				continue
-			}
-			ad := json.NewDecoder(bytes.NewReader(raw))
-			ad.UseNumber()
-			if t, err := ad.Token(); err != nil || t != json.Delim('[') {
-				return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: expected a JSON array")
-			}
-			for ad.More() {
-				var e json.RawMessage
-				if err := ad.Decode(&e); err != nil {
-					return err
-				}
-				if string(e) == "null" {
-					return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: null is not allowed in repeated fields or map values")
-				}
-				jobs = append(jobs, job{f: f, raw: e})
-			}
-		}
-	}
-	if _, err := d.Token(); err != nil {
+	*m = ArrayValue{}
+	return m.ProtoMergeJSONFrom(d)
+}
+
+// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it
+// into m. It does not check required fields. d should reject invalid
+// UTF-8, as jsontext decoders do by default.
+func (m *ArrayValue) ProtoMergeJSONFrom(d *jsontext.Decoder) error {
+	ok, err := commonOpenJSON(d, jsontext.KindBeginObject, "opentelemetry.proto.common.v1.ArrayValue", "object")
+	if !ok {
 		return err
 	}
-	if _, err := d.Token(); err != io.EOF {
-		return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: unexpected data after JSON value")
-	}
-	for _, jb := range jobs {
-		raw := jb.raw
-		switch jb.f {
-		case 0:
-			mv := &AnyValue{}
-			if err := mv.ProtoMergeJSON(raw); err != nil {
+	seen, in, f := [1]bool{}, jsontext.KindInvalid, 0
+	for {
+		if in == jsontext.KindInvalid {
+			kt, more, err := commonNextKey(d)
+			if !more {
 				return err
 			}
-			m.Values = append(m.Values, mv)
+			key := kt.String()
+			switch key {
+			case "values":
+				f = 0
+			default:
+				if err := d.SkipValue(); err != nil {
+					return err
+				}
+				continue
+			}
+			if seen[f] {
+				return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: duplicate field " + strconv.Quote(key))
+			}
+			seen[f] = true
+			if d.PeekKind() == jsontext.KindNull {
+				if err := d.SkipValue(); err != nil {
+					return err
+				}
+				continue
+			}
+			switch f {
+			case 0:
+				if err := commonExpectJSON(d, jsontext.KindBeginArray, "opentelemetry.proto.common.v1.ArrayValue", "array"); err != nil {
+					return err
+				}
+				in = jsontext.KindBeginArray
+				continue
+			}
+		} else {
+			if k := d.PeekKind(); k == jsontext.KindEndArray || k == jsontext.KindEndObject {
+				if _, err := d.ReadToken(); err != nil {
+					return err
+				}
+				in = jsontext.KindInvalid
+				continue
+			}
+			if d.PeekKind() == jsontext.KindNull {
+				return errors.New("proto: opentelemetry.proto.common.v1.ArrayValue: null is not allowed in repeated fields or map values")
+			}
 		}
+		mv := &AnyValue{}
+		if err := mv.ProtoMergeJSONFrom(d); err != nil {
+			return err
+		}
+		m.Values = append(m.Values, mv)
 	}
-	return nil
 }
 
 // KeyValueList is a list of KeyValue messages. We need KeyValueList as a message
@@ -1302,19 +813,13 @@ type KeyValueList struct {
 func (m *KeyValueList) Reset() { *m = KeyValueList{} }
 
 func (m *KeyValueList) GetValues() []*KeyValue {
-	if m != nil {
-		return m.Values
-	}
-	return nil
+	return commonGet(m, func(m *KeyValueList) []*KeyValue { return m.Values })
 }
 
 // ProtoUnknownFields returns the raw bytes of fields that were not
 // recognized when m was decoded.
 func (m *KeyValueList) ProtoUnknownFields() []byte {
-	if m == nil {
-		return nil
-	}
-	return m.unknownFields
+	return commonGet(m, func(m *KeyValueList) []byte { return m.unknownFields })
 }
 
 // ProtoSize returns the size of the wire-format encoding of m.
@@ -1323,33 +828,21 @@ func (m *KeyValueList) ProtoSize() (n int) {
 		return 0
 	}
 	for _, v := range m.Values {
-		{
-			l := v.ProtoSize()
-			n += 1 + l + (bits.Len64((uint64(l))|1)+6)/7
-		}
+		n += 1 + commonSizeLen(v.ProtoSize())
 	}
 	n += len(m.unknownFields)
 	return n
 }
 
 // MarshalBinary returns the wire-format encoding of m.
-func (m *KeyValueList) MarshalBinary() ([]byte, error) {
-	return m.AppendBinary(nil)
-}
+func (m *KeyValueList) MarshalBinary() ([]byte, error) { return m.AppendBinary(nil) }
 
 // AppendBinary appends the wire-format encoding of m to b.
 func (m *KeyValueList) AppendBinary(b []byte) ([]byte, error) {
 	size := m.ProtoSize()
-	l := len(b)
-	b = slices.Grow(b, size)[:l+size]
-	n, err := m.ProtoMarshalToSizedBuffer(b[l:])
-	if err != nil {
-		return b[:l], err
-	}
-	if n != size {
-		return b[:l], errors.New("proto: message size changed during marshal")
-	}
-	return b, nil
+	b = slices.Grow(b, size)
+	n, err := m.ProtoMarshalToSizedBuffer(b[len(b) : len(b)+size])
+	return commonAppended(b, size, n, err)
 }
 
 // ProtoMarshalToSizedBuffer encodes m into the end of b, which must be
@@ -1360,29 +853,15 @@ func (m *KeyValueList) ProtoMarshalToSizedBuffer(b []byte) (int, error) {
 		return 0, nil
 	}
 	i := len(b)
-	var u uint64
 	if len(m.unknownFields) > 0 {
-		i -= len(m.unknownFields)
-		copy(b[i:], m.unknownFields)
+		i -= copy(b[i-len(m.unknownFields):], m.unknownFields)
 	}
-	for j := len(m.Values) - 1; j >= 0; j-- {
-		{
-			n, err := m.Values[j].ProtoMarshalToSizedBuffer(b[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= n
-			u = uint64(n)
-			if u < 0x80 {
-				i--
-				b[i] = byte(u)
-			} else {
-				i -= (bits.Len64((u)|1) + 6) / 7
-				binary.PutUvarint(b[i:], u)
-			}
-			i--
-			b[i] = 0x0a
+	for _, v := range slices.Backward(m.Values) {
+		n, err := v.ProtoMarshalToSizedBuffer(b[:i])
+		if err != nil {
+			return 0, err
 		}
+		i = commonPutVarint(b, commonPutVarint(b, i-n, uint64(n)), 1<<commonTagTypeBits|commonWireBytes)
 	}
 	return len(b) - i, nil
 }
@@ -1396,161 +875,79 @@ func (m *KeyValueList) UnmarshalBinary(b []byte) error {
 
 // ProtoMerge decodes the wire-format message in b and merges it into m.
 // It does not check required fields.
-func (m *KeyValueList) ProtoMerge(b []byte) error {
-	return m.ProtoMergeDepth(b, 0)
-}
+func (m *KeyValueList) ProtoMerge(b []byte) error { return m.ProtoMergeDepth(b, 0) }
 
 // ProtoMergeDepth is ProtoMerge for a message nested depth levels deep.
 func (m *KeyValueList) ProtoMergeDepth(b []byte, depth int) error {
-	if depth >= 10000 {
-		goto errDepth
+	if depth >= commonMaxDepth {
+		return errors.New(commonErrDepth)
 	}
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
-		if n <= 0 || t>>3 == 0 || t>>3 > 536870911 {
+		if n <= 0 || t>>commonTagTypeBits == 0 || t>>commonTagTypeBits > commonMaxFieldNumber {
 			goto errParse
 		}
-		num, typ := int32(t>>3), int(t&7)
 		start := b
 		b = b[n:]
-		switch num {
-		case 1:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				v := b[n : n+int(ln)]
-				n += int(ln)
-				mv := &KeyValue{}
-				m.Values = append(m.Values, mv)
-				if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-					return err
-				}
-				b = b[n:]
-				continue
-			}
-		}
-		// Unknown field, or a known field with an unexpected wire type.
-		switch typ {
-		case 0:
-			_, n = binary.Uvarint(b)
-			if n <= 0 {
+		switch t {
+		case 1<<commonTagTypeBits | commonWireBytes:
+			v, n := commonReadBytes(b)
+			if n < 0 {
 				goto errParse
 			}
-		case 1:
-			if len(b) < 8 {
-				goto errParse
+			mv := &KeyValue{}
+			m.Values = append(m.Values, mv)
+			if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
+				return err
 			}
-			n = 8
-		case 2:
-			ln, k := binary.Uvarint(b)
-			if k <= 0 || ln > uint64(len(b)-k) {
-				goto errParse
-			}
-			n = k + int(ln)
-		case 3:
-			var stk [16]int32
-			open := append(stk[:0], num)
-			n = 0
-			for len(open) > 0 {
-				if depth+len(open) > 10000 {
-					goto errDepth
-				}
-				t, k := binary.Uvarint(b[n:])
-				if k <= 0 || t>>3 == 0 || t>>3 > 536870911 {
-					goto errParse
-				}
-				n += k
-				switch t & 7 {
-				case 0:
-					_, k = binary.Uvarint(b[n:])
-					if k <= 0 {
-						goto errParse
-					}
-				case 1:
-					k = 8
-				case 2:
-					ln, k2 := binary.Uvarint(b[n:])
-					if k2 <= 0 || ln > uint64(len(b)-n-k2) {
-						goto errParse
-					}
-					k = k2 + int(ln)
-				case 3:
-					open = append(open, int32(t>>3))
-					k = 0
-				case 4:
-					if open[len(open)-1] != int32(t>>3) {
-						goto errParse
-					}
-					open = open[:len(open)-1]
-					k = 0
-				case 5:
-					k = 4
-				default:
-					goto errParse
-				}
-				if k > len(b)-n {
-					goto errParse
-				}
-				n += k
-			}
-		case 5:
-			if len(b) < 4 {
-				goto errParse
-			}
-			n = 4
+			b = b[n:]
 		default:
-			goto errParse
+			n, err := commonSkipField(b, t, depth)
+			if err != nil {
+				return err
+			}
+			m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
+			b = b[n:]
 		}
-		m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
-		b = b[n:]
 	}
 	return nil
 errParse:
-	return errors.New("proto: cannot parse invalid wire-format data")
-errDepth:
-	return errors.New("proto: exceeded maximum recursion depth")
+	return errors.New(commonErrParse)
 }
 
 // ProtoCheckInitialized returns an error if any required field in m
 // or its sub-messages is not set.
-func (m *KeyValueList) ProtoCheckInitialized() error {
-	return nil
-}
+func (m *KeyValueList) ProtoCheckInitialized() error { return nil }
 
 // MarshalJSON returns the ProtoJSON encoding of m.
-func (m *KeyValueList) MarshalJSON() ([]byte, error) {
-	return m.ProtoAppendJSON(nil)
+func (m *KeyValueList) MarshalJSON() ([]byte, error) { return m.ProtoAppendJSON(nil) }
+
+// MarshalJSONTo writes the ProtoJSON encoding of m to e. It implements
+// json.MarshalerTo from encoding/json/v2.
+func (m *KeyValueList) MarshalJSONTo(e *jsontext.Encoder) error {
+	b, err := m.ProtoAppendJSON(e.AvailableBuffer())
+	return commonWriteJSON(e, b, err)
 }
 
 // ProtoAppendJSON appends the ProtoJSON encoding of m to b. It does not
 // check required fields.
 func (m *KeyValueList) ProtoAppendJSON(b []byte) ([]byte, error) {
+	var err error
 	if m == nil {
 		return append(b, "{}"...), nil
 	}
-	b = append(b, '{')
+	start := len(b)
 	if len(m.Values) > 0 {
-		b = append(b, "\"values\":["...)
+		b = append(b, ",\"values\":["...)
 		for j := range m.Values {
-			{
-				var err error
-				if b, err = m.Values[j].ProtoAppendJSON(b); err != nil {
-					return nil, err
-				}
+			if b, err = m.Values[j].ProtoAppendJSON(b); err != nil {
+				return nil, err
 			}
 			b = append(b, ',')
 		}
 		b[len(b)-1] = ']'
-		b = append(b, ',')
 	}
-	if b[len(b)-1] == ',' {
-		b[len(b)-1] = '}'
-	} else {
-		b = append(b, '}')
-	}
-	return b, nil
+	return commonCloseObject(b, start), nil
 }
 
 // UnmarshalJSON replaces the contents of m with the decoded ProtoJSON
@@ -1563,91 +960,82 @@ func (m *KeyValueList) UnmarshalJSON(b []byte) error {
 // ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m.
 // It does not check required fields.
 func (m *KeyValueList) ProtoMergeJSON(b []byte) error {
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.UseNumber()
-	tok, err := d.Token()
+	d := jsontext.NewDecoder(bytes.NewBuffer(b))
+	return commonEndJSON(d, m.ProtoMergeJSONFrom(d), "opentelemetry.proto.common.v1.KeyValueList")
+}
+
+// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value
+// read from d. It implements json.UnmarshalerFrom from encoding/json/v2.
+func (m *KeyValueList) UnmarshalJSONFrom(d *jsontext.Decoder) error {
+	d, err := commonStrictDecoder(d)
 	if err != nil {
 		return err
 	}
-	if tok == nil {
-		// JSON null leaves the message unchanged.
-		if _, err := d.Token(); err != io.EOF {
-			return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: unexpected data after JSON value")
-		}
-		return nil
-	}
-	if tok != json.Delim('{') {
-		return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: expected a JSON object")
-	}
-	type job struct {
-		f   int
-		key string
-		raw []byte
-	}
-	var jobs []job
-	var seen [1]bool
-	for d.More() {
-		tok, err := d.Token()
-		if err != nil {
-			return err
-		}
-		key, _ := tok.(string)
-		var raw json.RawMessage
-		if err := d.Decode(&raw); err != nil {
-			return err
-		}
-		f := -1
-		switch key {
-		case "values":
-			f = 0
-		default:
-			continue // unknown keys are ignored (-json_discard_unknown)
-		}
-		if seen[f] {
-			return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: duplicate field " + strconv.Quote(key))
-		}
-		seen[f] = true
-		null := string(raw) == "null"
-		switch f {
-		case 0:
-			if null {
-				continue
-			}
-			ad := json.NewDecoder(bytes.NewReader(raw))
-			ad.UseNumber()
-			if t, err := ad.Token(); err != nil || t != json.Delim('[') {
-				return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: expected a JSON array")
-			}
-			for ad.More() {
-				var e json.RawMessage
-				if err := ad.Decode(&e); err != nil {
-					return err
-				}
-				if string(e) == "null" {
-					return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: null is not allowed in repeated fields or map values")
-				}
-				jobs = append(jobs, job{f: f, raw: e})
-			}
-		}
-	}
-	if _, err := d.Token(); err != nil {
+	*m = KeyValueList{}
+	return m.ProtoMergeJSONFrom(d)
+}
+
+// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it
+// into m. It does not check required fields. d should reject invalid
+// UTF-8, as jsontext decoders do by default.
+func (m *KeyValueList) ProtoMergeJSONFrom(d *jsontext.Decoder) error {
+	ok, err := commonOpenJSON(d, jsontext.KindBeginObject, "opentelemetry.proto.common.v1.KeyValueList", "object")
+	if !ok {
 		return err
 	}
-	if _, err := d.Token(); err != io.EOF {
-		return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: unexpected data after JSON value")
-	}
-	for _, jb := range jobs {
-		raw := jb.raw
-		switch jb.f {
-		case 0:
-			mv := &KeyValue{}
-			if err := mv.ProtoMergeJSON(raw); err != nil {
+	seen, in, f := [1]bool{}, jsontext.KindInvalid, 0
+	for {
+		if in == jsontext.KindInvalid {
+			kt, more, err := commonNextKey(d)
+			if !more {
 				return err
 			}
-			m.Values = append(m.Values, mv)
+			key := kt.String()
+			switch key {
+			case "values":
+				f = 0
+			default:
+				if err := d.SkipValue(); err != nil {
+					return err
+				}
+				continue
+			}
+			if seen[f] {
+				return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: duplicate field " + strconv.Quote(key))
+			}
+			seen[f] = true
+			if d.PeekKind() == jsontext.KindNull {
+				if err := d.SkipValue(); err != nil {
+					return err
+				}
+				continue
+			}
+			switch f {
+			case 0:
+				if err := commonExpectJSON(d, jsontext.KindBeginArray, "opentelemetry.proto.common.v1.KeyValueList", "array"); err != nil {
+					return err
+				}
+				in = jsontext.KindBeginArray
+				continue
+			}
+		} else {
+			if k := d.PeekKind(); k == jsontext.KindEndArray || k == jsontext.KindEndObject {
+				if _, err := d.ReadToken(); err != nil {
+					return err
+				}
+				in = jsontext.KindInvalid
+				continue
+			}
+			if d.PeekKind() == jsontext.KindNull {
+				return errors.New("proto: opentelemetry.proto.common.v1.KeyValueList: null is not allowed in repeated fields or map values")
+			}
 		}
+		mv := &KeyValue{}
+		if err := mv.ProtoMergeJSONFrom(d); err != nil {
+			return err
+		}
+		m.Values = append(m.Values, mv)
 	}
-	return nil
 }
 
 // Represents a key-value pair that is used to store Span attributes, Link
@@ -1677,34 +1065,18 @@ type KeyValue struct {
 // Reset clears all fields of m.
 func (m *KeyValue) Reset() { *m = KeyValue{} }
 
-func (m *KeyValue) GetKey() string {
-	if m != nil {
-		return m.Key
-	}
-	return ""
-}
-
+func (m *KeyValue) GetKey() string { return commonGet(m, func(m *KeyValue) string { return m.Key }) }
 func (m *KeyValue) GetValue() *AnyValue {
-	if m != nil {
-		return m.Value
-	}
-	return nil
+	return commonGet(m, func(m *KeyValue) *AnyValue { return m.Value })
 }
-
 func (m *KeyValue) GetKeyStrindex() int32 {
-	if m != nil {
-		return m.KeyStrindex
-	}
-	return 0
+	return commonGet(m, func(m *KeyValue) int32 { return m.KeyStrindex })
 }
 
 // ProtoUnknownFields returns the raw bytes of fields that were not
 // recognized when m was decoded.
 func (m *KeyValue) ProtoUnknownFields() []byte {
-	if m == nil {
-		return nil
-	}
-	return m.unknownFields
+	return commonGet(m, func(m *KeyValue) []byte { return m.unknownFields })
 }
 
 // ProtoSize returns the size of the wire-format encoding of m.
@@ -1713,39 +1085,27 @@ func (m *KeyValue) ProtoSize() (n int) {
 		return 0
 	}
 	if len(m.Key) > 0 {
-		n += 1 + len(m.Key) + (bits.Len64((uint64(len(m.Key)))|1)+6)/7
+		n += 1 + commonSizeLen(len(m.Key))
 	}
 	if m.Value != nil {
-		{
-			l := m.Value.ProtoSize()
-			n += 1 + l + (bits.Len64((uint64(l))|1)+6)/7
-		}
+		n += 1 + commonSizeLen(m.Value.ProtoSize())
 	}
 	if m.KeyStrindex != 0 {
-		n += 1 + (bits.Len64((uint64(int64(m.KeyStrindex)))|1)+6)/7
+		n += 1 + (bits.Len64(uint64(int64(m.KeyStrindex))|1)+commonVarintPayloadBits-1)/commonVarintPayloadBits
 	}
 	n += len(m.unknownFields)
 	return n
 }
 
 // MarshalBinary returns the wire-format encoding of m.
-func (m *KeyValue) MarshalBinary() ([]byte, error) {
-	return m.AppendBinary(nil)
-}
+func (m *KeyValue) MarshalBinary() ([]byte, error) { return m.AppendBinary(nil) }
 
 // AppendBinary appends the wire-format encoding of m to b.
 func (m *KeyValue) AppendBinary(b []byte) ([]byte, error) {
 	size := m.ProtoSize()
-	l := len(b)
-	b = slices.Grow(b, size)[:l+size]
-	n, err := m.ProtoMarshalToSizedBuffer(b[l:])
-	if err != nil {
-		return b[:l], err
-	}
-	if n != size {
-		return b[:l], errors.New("proto: message size changed during marshal")
-	}
-	return b, nil
+	b = slices.Grow(b, size)
+	n, err := m.ProtoMarshalToSizedBuffer(b[len(b) : len(b)+size])
+	return commonAppended(b, size, n, err)
 }
 
 // ProtoMarshalToSizedBuffer encodes m into the end of b, which must be
@@ -1756,58 +1116,24 @@ func (m *KeyValue) ProtoMarshalToSizedBuffer(b []byte) (int, error) {
 		return 0, nil
 	}
 	i := len(b)
-	var u uint64
 	if len(m.unknownFields) > 0 {
-		i -= len(m.unknownFields)
-		copy(b[i:], m.unknownFields)
+		i -= copy(b[i-len(m.unknownFields):], m.unknownFields)
 	}
 	if m.KeyStrindex != 0 {
-		u = uint64(int64(m.KeyStrindex))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x18
+		i = commonPutVarint(b, commonPutVarint(b, i, uint64(int64(m.KeyStrindex))), 3<<commonTagTypeBits|commonWireVarint)
 	}
 	if m.Value != nil {
-		{
-			n, err := m.Value.ProtoMarshalToSizedBuffer(b[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= n
-			u = uint64(n)
-			if u < 0x80 {
-				i--
-				b[i] = byte(u)
-			} else {
-				i -= (bits.Len64((u)|1) + 6) / 7
-				binary.PutUvarint(b[i:], u)
-			}
-			i--
-			b[i] = 0x12
+		n, err := m.Value.ProtoMarshalToSizedBuffer(b[:i])
+		if err != nil {
+			return 0, err
 		}
+		i = commonPutVarint(b, commonPutVarint(b, i-n, uint64(n)), 2<<commonTagTypeBits|commonWireBytes)
 	}
 	if len(m.Key) > 0 {
 		if !utf8.ValidString(m.Key) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.KeyValue.key contains invalid UTF-8")
+			return 0, errors.New(commonKeyValueKeyErrUTF8)
 		}
-		i -= len(m.Key)
-		copy(b[i:], m.Key)
-		u = uint64(len(m.Key))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x0a
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(m.Key):], m.Key), uint64(len(m.Key))), 1<<commonTagTypeBits|commonWireBytes)
 	}
 	return len(b) - i, nil
 }
@@ -1821,208 +1147,95 @@ func (m *KeyValue) UnmarshalBinary(b []byte) error {
 
 // ProtoMerge decodes the wire-format message in b and merges it into m.
 // It does not check required fields.
-func (m *KeyValue) ProtoMerge(b []byte) error {
-	return m.ProtoMergeDepth(b, 0)
-}
+func (m *KeyValue) ProtoMerge(b []byte) error { return m.ProtoMergeDepth(b, 0) }
 
 // ProtoMergeDepth is ProtoMerge for a message nested depth levels deep.
 func (m *KeyValue) ProtoMergeDepth(b []byte, depth int) error {
-	if depth >= 10000 {
-		goto errDepth
+	if depth >= commonMaxDepth {
+		return errors.New(commonErrDepth)
 	}
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
-		if n <= 0 || t>>3 == 0 || t>>3 > 536870911 {
+		if n <= 0 || t>>commonTagTypeBits == 0 || t>>commonTagTypeBits > commonMaxFieldNumber {
 			goto errParse
 		}
-		num, typ := int32(t>>3), int(t&7)
 		start := b
 		b = b[n:]
-		switch num {
-		case 1:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.KeyValue.key contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.Key = string(x)
-				continue
+		switch t {
+		case 1<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
 			}
-		case 2:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				v := b[n : n+int(ln)]
-				n += int(ln)
-				if m.Value == nil {
-					m.Value = &AnyValue{}
-				}
-				mv := m.Value
-				if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-					return err
-				}
-				b = b[n:]
-				continue
+			if !utf8.Valid(x) {
+				return errors.New(commonKeyValueKeyErrUTF8)
 			}
-		case 3:
-			if typ == 0 {
-				x, n := binary.Uvarint(b)
-				if n <= 0 {
-					goto errParse
-				}
-				b = b[n:]
-				m.KeyStrindex = int32(x)
-				continue
+			b, m.Key = b[n:], string(x)
+		case 2<<commonTagTypeBits | commonWireBytes:
+			v, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
 			}
-		}
-		// Unknown field, or a known field with an unexpected wire type.
-		switch typ {
-		case 0:
-			_, n = binary.Uvarint(b)
+			if err := commonAlloc(&m.Value).ProtoMergeDepth(v, depth+1); err != nil {
+				return err
+			}
+			b = b[n:]
+		case 3<<commonTagTypeBits | commonWireVarint:
+			x, n := binary.Uvarint(b)
 			if n <= 0 {
 				goto errParse
 			}
-		case 1:
-			if len(b) < 8 {
-				goto errParse
-			}
-			n = 8
-		case 2:
-			ln, k := binary.Uvarint(b)
-			if k <= 0 || ln > uint64(len(b)-k) {
-				goto errParse
-			}
-			n = k + int(ln)
-		case 3:
-			var stk [16]int32
-			open := append(stk[:0], num)
-			n = 0
-			for len(open) > 0 {
-				if depth+len(open) > 10000 {
-					goto errDepth
-				}
-				t, k := binary.Uvarint(b[n:])
-				if k <= 0 || t>>3 == 0 || t>>3 > 536870911 {
-					goto errParse
-				}
-				n += k
-				switch t & 7 {
-				case 0:
-					_, k = binary.Uvarint(b[n:])
-					if k <= 0 {
-						goto errParse
-					}
-				case 1:
-					k = 8
-				case 2:
-					ln, k2 := binary.Uvarint(b[n:])
-					if k2 <= 0 || ln > uint64(len(b)-n-k2) {
-						goto errParse
-					}
-					k = k2 + int(ln)
-				case 3:
-					open = append(open, int32(t>>3))
-					k = 0
-				case 4:
-					if open[len(open)-1] != int32(t>>3) {
-						goto errParse
-					}
-					open = open[:len(open)-1]
-					k = 0
-				case 5:
-					k = 4
-				default:
-					goto errParse
-				}
-				if k > len(b)-n {
-					goto errParse
-				}
-				n += k
-			}
-		case 5:
-			if len(b) < 4 {
-				goto errParse
-			}
-			n = 4
+			b, m.KeyStrindex = b[n:], int32(x)
 		default:
-			goto errParse
+			n, err := commonSkipField(b, t, depth)
+			if err != nil {
+				return err
+			}
+			m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
+			b = b[n:]
 		}
-		m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
-		b = b[n:]
 	}
 	return nil
 errParse:
-	return errors.New("proto: cannot parse invalid wire-format data")
-errDepth:
-	return errors.New("proto: exceeded maximum recursion depth")
+	return errors.New(commonErrParse)
 }
 
 // ProtoCheckInitialized returns an error if any required field in m
 // or its sub-messages is not set.
-func (m *KeyValue) ProtoCheckInitialized() error {
-	return nil
-}
+func (m *KeyValue) ProtoCheckInitialized() error { return nil }
 
 // MarshalJSON returns the ProtoJSON encoding of m.
-func (m *KeyValue) MarshalJSON() ([]byte, error) {
-	return m.ProtoAppendJSON(nil)
+func (m *KeyValue) MarshalJSON() ([]byte, error) { return m.ProtoAppendJSON(nil) }
+
+// MarshalJSONTo writes the ProtoJSON encoding of m to e. It implements
+// json.MarshalerTo from encoding/json/v2.
+func (m *KeyValue) MarshalJSONTo(e *jsontext.Encoder) error {
+	b, err := m.ProtoAppendJSON(e.AvailableBuffer())
+	return commonWriteJSON(e, b, err)
 }
 
 // ProtoAppendJSON appends the ProtoJSON encoding of m to b. It does not
 // check required fields.
 func (m *KeyValue) ProtoAppendJSON(b []byte) ([]byte, error) {
+	var err error
 	if m == nil {
 		return append(b, "{}"...), nil
 	}
-	b = append(b, '{')
+	start := len(b)
 	if len(m.Key) > 0 {
-		b = append(b, "\"key\":"...)
-		if !utf8.ValidString(m.Key) {
+		if b, err = jsontext.AppendQuote(append(b, ",\"key\":"...), m.Key); err != nil {
 			return nil, errors.New("proto: opentelemetry.proto.common.v1.KeyValue.key contains invalid UTF-8")
 		}
-		b = append(b, '"')
-		for ci := 0; ci < len(m.Key); ci++ {
-			switch c := m.Key[ci]; {
-			case c == '"' || c == '\\':
-				b = append(b, '\\', c)
-			case c < 0x20:
-				b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-			default:
-				b = append(b, c)
-			}
-		}
-		b = append(b, '"')
-		b = append(b, ',')
 	}
 	if m.Value != nil {
-		b = append(b, "\"value\":"...)
-		{
-			var err error
-			if b, err = m.Value.ProtoAppendJSON(b); err != nil {
-				return nil, err
-			}
+		if b, err = m.Value.ProtoAppendJSON(append(b, ",\"value\":"...)); err != nil {
+			return nil, err
 		}
-		b = append(b, ',')
 	}
 	if m.KeyStrindex != 0 {
-		b = append(b, "\"keyStrindex\":"...)
-		b = strconv.AppendInt(b, int64(m.KeyStrindex), 10)
-		b = append(b, ',')
+		b = strconv.AppendInt(append(b, ",\"keyStrindex\":"...), int64(m.KeyStrindex), 10)
 	}
-	if b[len(b)-1] == ',' {
-		b[len(b)-1] = '}'
-	} else {
-		b = append(b, '}')
-	}
-	return b, nil
+	return commonCloseObject(b, start), nil
 }
 
 // UnmarshalJSON replaces the contents of m with the decoded ProtoJSON
@@ -2035,40 +1248,36 @@ func (m *KeyValue) UnmarshalJSON(b []byte) error {
 // ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m.
 // It does not check required fields.
 func (m *KeyValue) ProtoMergeJSON(b []byte) error {
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.UseNumber()
-	tok, err := d.Token()
+	d := jsontext.NewDecoder(bytes.NewBuffer(b))
+	return commonEndJSON(d, m.ProtoMergeJSONFrom(d), "opentelemetry.proto.common.v1.KeyValue")
+}
+
+// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value
+// read from d. It implements json.UnmarshalerFrom from encoding/json/v2.
+func (m *KeyValue) UnmarshalJSONFrom(d *jsontext.Decoder) error {
+	d, err := commonStrictDecoder(d)
 	if err != nil {
 		return err
 	}
-	if tok == nil {
-		// JSON null leaves the message unchanged.
-		if _, err := d.Token(); err != io.EOF {
-			return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: unexpected data after JSON value")
-		}
-		return nil
+	*m = KeyValue{}
+	return m.ProtoMergeJSONFrom(d)
+}
+
+// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it
+// into m. It does not check required fields. d should reject invalid
+// UTF-8, as jsontext decoders do by default.
+func (m *KeyValue) ProtoMergeJSONFrom(d *jsontext.Decoder) error {
+	ok, err := commonOpenJSON(d, jsontext.KindBeginObject, "opentelemetry.proto.common.v1.KeyValue", "object")
+	if !ok {
+		return err
 	}
-	if tok != json.Delim('{') {
-		return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: expected a JSON object")
-	}
-	type job struct {
-		f   int
-		key string
-		raw []byte
-	}
-	var jobs []job
-	var seen [3]bool
-	for d.More() {
-		tok, err := d.Token()
-		if err != nil {
+	seen, f := [3]bool{}, 0
+	for {
+		kt, more, err := commonNextKey(d)
+		if !more {
 			return err
 		}
-		key, _ := tok.(string)
-		var raw json.RawMessage
-		if err := d.Decode(&raw); err != nil {
-			return err
-		}
-		f := -1
+		key := kt.String()
 		switch key {
 		case "key":
 			f = 0
@@ -2077,93 +1286,50 @@ func (m *KeyValue) ProtoMergeJSON(b []byte) error {
 		case "keyStrindex", "key_strindex":
 			f = 2
 		default:
-			continue // unknown keys are ignored (-json_discard_unknown)
+			if err := d.SkipValue(); err != nil {
+				return err
+			}
+			continue
 		}
 		if seen[f] {
 			return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: duplicate field " + strconv.Quote(key))
 		}
 		seen[f] = true
-		null := string(raw) == "null"
-		switch f {
-		case 0, 1, 2:
-			if !null {
-				jobs = append(jobs, job{f: f, raw: raw})
+		if d.PeekKind() == jsontext.KindNull {
+			if err := d.SkipValue(); err != nil {
+				return err
 			}
+			continue
 		}
-	}
-	if _, err := d.Token(); err != nil {
-		return err
-	}
-	if _, err := d.Token(); err != io.EOF {
-		return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: unexpected data after JSON value")
-	}
-	for _, jb := range jobs {
-		raw := jb.raw
-		class := 0
-		bits := 64
-		var iv int64
-		var sv string
-		switch jb.f {
-		case 2:
-			class, bits = 1, 32
-		case 0:
-			class = 5
-		}
-		switch class {
-		case 1:
-			s := string(raw)
-			if raw[0] == '"' {
-				if err := json.Unmarshal(raw, &s); err != nil {
-					return err
-				}
-			}
-			if s == "" || (s[0] != '-' && (s[0] < '0' || s[0] > '9')) || !json.Valid([]byte(s)) {
-				return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: invalid number " + string(raw))
-			}
-			var err error
-			iv, err = strconv.ParseInt(s, 10, bits)
-			if err != nil {
-				// Accept exponent and fraction forms that denote an exact integer,
-				// bounding the exponent so that exact arithmetic stays cheap.
-				if i := strings.IndexAny(s, "eE"); i >= 0 {
-					if e, err := strconv.Atoi(s[i+1:]); err != nil || e > 100 || e < -100 {
-						return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: invalid integer " + string(raw))
-					}
-				}
-				r, ok := new(big.Rat).SetString(s)
-				if !ok || !r.IsInt() {
-					return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: invalid integer " + string(raw))
-				}
-				n := r.Num()
-				if !n.IsInt64() || (bits == 32 && (n.Int64() < -1<<31 || n.Int64() > 1<<31-1)) {
-					return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: invalid integer " + string(raw))
-				}
-				iv = n.Int64()
-			}
-		case 5:
-			if raw[0] != '"' || !utf8.Valid(raw) {
-				return errors.New("proto: opentelemetry.proto.common.v1.KeyValue: invalid string " + string(raw))
-			}
-			if err := json.Unmarshal(raw, &sv); err != nil {
+		class, bits, iv, sv, tok := commonKeyValueJSONClasses[f][0], commonKeyValueJSONClasses[f][1], int64(0), "", jsontext.Token{}
+		if class != commonClassNone {
+			if tok, err = d.ReadToken(); err != nil {
 				return err
 			}
 		}
-		switch jb.f {
+		switch class {
+		case commonClassSigned:
+			iv, err = commonParseInt(tok, bits, "opentelemetry.proto.common.v1.KeyValue")
+		case commonClassString:
+			sv, err = commonParseString(tok, "opentelemetry.proto.common.v1.KeyValue")
+		}
+		if err != nil {
+			return err
+		}
+		switch f {
 		case 0:
 			m.Key = sv
 		case 1:
-			if m.Value == nil {
-				m.Value = &AnyValue{}
-			}
-			if err := m.Value.ProtoMergeJSON(raw); err != nil {
+			if err := commonAlloc(&m.Value).ProtoMergeJSONFrom(d); err != nil {
 				return err
 			}
 		case 2:
 			m.KeyStrindex = int32(iv)
 		}
 	}
-	return nil
 }
+
+var commonKeyValueJSONClasses = [3][2]int{{commonClassString, 64}, {commonClassNone, 64}, {commonClassSigned, 32}}
 
 // InstrumentationScope is a message representing the instrumentation scope information
 // such as the fully qualified name and version.
@@ -2191,40 +1357,22 @@ type InstrumentationScope struct {
 func (m *InstrumentationScope) Reset() { *m = InstrumentationScope{} }
 
 func (m *InstrumentationScope) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
+	return commonGet(m, func(m *InstrumentationScope) string { return m.Name })
 }
-
 func (m *InstrumentationScope) GetVersion() string {
-	if m != nil {
-		return m.Version
-	}
-	return ""
+	return commonGet(m, func(m *InstrumentationScope) string { return m.Version })
 }
-
 func (m *InstrumentationScope) GetAttributes() []*KeyValue {
-	if m != nil {
-		return m.Attributes
-	}
-	return nil
+	return commonGet(m, func(m *InstrumentationScope) []*KeyValue { return m.Attributes })
 }
-
 func (m *InstrumentationScope) GetDroppedAttributesCount() uint32 {
-	if m != nil {
-		return m.DroppedAttributesCount
-	}
-	return 0
+	return commonGet(m, func(m *InstrumentationScope) uint32 { return m.DroppedAttributesCount })
 }
 
 // ProtoUnknownFields returns the raw bytes of fields that were not
 // recognized when m was decoded.
 func (m *InstrumentationScope) ProtoUnknownFields() []byte {
-	if m == nil {
-		return nil
-	}
-	return m.unknownFields
+	return commonGet(m, func(m *InstrumentationScope) []byte { return m.unknownFields })
 }
 
 // ProtoSize returns the size of the wire-format encoding of m.
@@ -2233,42 +1381,30 @@ func (m *InstrumentationScope) ProtoSize() (n int) {
 		return 0
 	}
 	if len(m.Name) > 0 {
-		n += 1 + len(m.Name) + (bits.Len64((uint64(len(m.Name)))|1)+6)/7
+		n += 1 + commonSizeLen(len(m.Name))
 	}
 	if len(m.Version) > 0 {
-		n += 1 + len(m.Version) + (bits.Len64((uint64(len(m.Version)))|1)+6)/7
+		n += 1 + commonSizeLen(len(m.Version))
 	}
 	for _, v := range m.Attributes {
-		{
-			l := v.ProtoSize()
-			n += 1 + l + (bits.Len64((uint64(l))|1)+6)/7
-		}
+		n += 1 + commonSizeLen(v.ProtoSize())
 	}
 	if m.DroppedAttributesCount != 0 {
-		n += 1 + (bits.Len64((uint64(m.DroppedAttributesCount))|1)+6)/7
+		n += 1 + (bits.Len64(uint64(m.DroppedAttributesCount)|1)+commonVarintPayloadBits-1)/commonVarintPayloadBits
 	}
 	n += len(m.unknownFields)
 	return n
 }
 
 // MarshalBinary returns the wire-format encoding of m.
-func (m *InstrumentationScope) MarshalBinary() ([]byte, error) {
-	return m.AppendBinary(nil)
-}
+func (m *InstrumentationScope) MarshalBinary() ([]byte, error) { return m.AppendBinary(nil) }
 
 // AppendBinary appends the wire-format encoding of m to b.
 func (m *InstrumentationScope) AppendBinary(b []byte) ([]byte, error) {
 	size := m.ProtoSize()
-	l := len(b)
-	b = slices.Grow(b, size)[:l+size]
-	n, err := m.ProtoMarshalToSizedBuffer(b[l:])
-	if err != nil {
-		return b[:l], err
-	}
-	if n != size {
-		return b[:l], errors.New("proto: message size changed during marshal")
-	}
-	return b, nil
+	b = slices.Grow(b, size)
+	n, err := m.ProtoMarshalToSizedBuffer(b[len(b) : len(b)+size])
+	return commonAppended(b, size, n, err)
 }
 
 // ProtoMarshalToSizedBuffer encodes m into the end of b, which must be
@@ -2279,75 +1415,30 @@ func (m *InstrumentationScope) ProtoMarshalToSizedBuffer(b []byte) (int, error) 
 		return 0, nil
 	}
 	i := len(b)
-	var u uint64
 	if len(m.unknownFields) > 0 {
-		i -= len(m.unknownFields)
-		copy(b[i:], m.unknownFields)
+		i -= copy(b[i-len(m.unknownFields):], m.unknownFields)
 	}
 	if m.DroppedAttributesCount != 0 {
-		u = uint64(m.DroppedAttributesCount)
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x20
+		i = commonPutVarint(b, commonPutVarint(b, i, uint64(m.DroppedAttributesCount)), 4<<commonTagTypeBits|commonWireVarint)
 	}
-	for j := len(m.Attributes) - 1; j >= 0; j-- {
-		{
-			n, err := m.Attributes[j].ProtoMarshalToSizedBuffer(b[:i])
-			if err != nil {
-				return 0, err
-			}
-			i -= n
-			u = uint64(n)
-			if u < 0x80 {
-				i--
-				b[i] = byte(u)
-			} else {
-				i -= (bits.Len64((u)|1) + 6) / 7
-				binary.PutUvarint(b[i:], u)
-			}
-			i--
-			b[i] = 0x1a
+	for _, v := range slices.Backward(m.Attributes) {
+		n, err := v.ProtoMarshalToSizedBuffer(b[:i])
+		if err != nil {
+			return 0, err
 		}
+		i = commonPutVarint(b, commonPutVarint(b, i-n, uint64(n)), 3<<commonTagTypeBits|commonWireBytes)
 	}
 	if len(m.Version) > 0 {
 		if !utf8.ValidString(m.Version) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.InstrumentationScope.version contains invalid UTF-8")
+			return 0, errors.New(commonInstrumentationScopeVersionErrUTF8)
 		}
-		i -= len(m.Version)
-		copy(b[i:], m.Version)
-		u = uint64(len(m.Version))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x12
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(m.Version):], m.Version), uint64(len(m.Version))), 2<<commonTagTypeBits|commonWireBytes)
 	}
 	if len(m.Name) > 0 {
 		if !utf8.ValidString(m.Name) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.InstrumentationScope.name contains invalid UTF-8")
+			return 0, errors.New(commonInstrumentationScopeNameErrUTF8)
 		}
-		i -= len(m.Name)
-		copy(b[i:], m.Name)
-		u = uint64(len(m.Name))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x0a
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(m.Name):], m.Name), uint64(len(m.Name))), 1<<commonTagTypeBits|commonWireBytes)
 	}
 	return len(b) - i, nil
 }
@@ -2361,244 +1452,116 @@ func (m *InstrumentationScope) UnmarshalBinary(b []byte) error {
 
 // ProtoMerge decodes the wire-format message in b and merges it into m.
 // It does not check required fields.
-func (m *InstrumentationScope) ProtoMerge(b []byte) error {
-	return m.ProtoMergeDepth(b, 0)
-}
+func (m *InstrumentationScope) ProtoMerge(b []byte) error { return m.ProtoMergeDepth(b, 0) }
 
 // ProtoMergeDepth is ProtoMerge for a message nested depth levels deep.
 func (m *InstrumentationScope) ProtoMergeDepth(b []byte, depth int) error {
-	if depth >= 10000 {
-		goto errDepth
+	if depth >= commonMaxDepth {
+		return errors.New(commonErrDepth)
 	}
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
-		if n <= 0 || t>>3 == 0 || t>>3 > 536870911 {
+		if n <= 0 || t>>commonTagTypeBits == 0 || t>>commonTagTypeBits > commonMaxFieldNumber {
 			goto errParse
 		}
-		num, typ := int32(t>>3), int(t&7)
 		start := b
 		b = b[n:]
-		switch num {
-		case 1:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.InstrumentationScope.name contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.Name = string(x)
-				continue
+		switch t {
+		case 1<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
 			}
-		case 2:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.InstrumentationScope.version contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.Version = string(x)
-				continue
+			if !utf8.Valid(x) {
+				return errors.New(commonInstrumentationScopeNameErrUTF8)
 			}
-		case 3:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				v := b[n : n+int(ln)]
-				n += int(ln)
-				mv := &KeyValue{}
-				m.Attributes = append(m.Attributes, mv)
-				if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-					return err
-				}
-				b = b[n:]
-				continue
+			b, m.Name = b[n:], string(x)
+		case 2<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
 			}
-		case 4:
-			if typ == 0 {
-				x, n := binary.Uvarint(b)
-				if n <= 0 {
-					goto errParse
-				}
-				b = b[n:]
-				m.DroppedAttributesCount = uint32(x)
-				continue
+			if !utf8.Valid(x) {
+				return errors.New(commonInstrumentationScopeVersionErrUTF8)
 			}
-		}
-		// Unknown field, or a known field with an unexpected wire type.
-		switch typ {
-		case 0:
-			_, n = binary.Uvarint(b)
+			b, m.Version = b[n:], string(x)
+		case 3<<commonTagTypeBits | commonWireBytes:
+			v, n := commonReadBytes(b)
+			if n < 0 {
+				goto errParse
+			}
+			mv := &KeyValue{}
+			m.Attributes = append(m.Attributes, mv)
+			if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
+				return err
+			}
+			b = b[n:]
+		case 4<<commonTagTypeBits | commonWireVarint:
+			x, n := binary.Uvarint(b)
 			if n <= 0 {
 				goto errParse
 			}
-		case 1:
-			if len(b) < 8 {
-				goto errParse
-			}
-			n = 8
-		case 2:
-			ln, k := binary.Uvarint(b)
-			if k <= 0 || ln > uint64(len(b)-k) {
-				goto errParse
-			}
-			n = k + int(ln)
-		case 3:
-			var stk [16]int32
-			open := append(stk[:0], num)
-			n = 0
-			for len(open) > 0 {
-				if depth+len(open) > 10000 {
-					goto errDepth
-				}
-				t, k := binary.Uvarint(b[n:])
-				if k <= 0 || t>>3 == 0 || t>>3 > 536870911 {
-					goto errParse
-				}
-				n += k
-				switch t & 7 {
-				case 0:
-					_, k = binary.Uvarint(b[n:])
-					if k <= 0 {
-						goto errParse
-					}
-				case 1:
-					k = 8
-				case 2:
-					ln, k2 := binary.Uvarint(b[n:])
-					if k2 <= 0 || ln > uint64(len(b)-n-k2) {
-						goto errParse
-					}
-					k = k2 + int(ln)
-				case 3:
-					open = append(open, int32(t>>3))
-					k = 0
-				case 4:
-					if open[len(open)-1] != int32(t>>3) {
-						goto errParse
-					}
-					open = open[:len(open)-1]
-					k = 0
-				case 5:
-					k = 4
-				default:
-					goto errParse
-				}
-				if k > len(b)-n {
-					goto errParse
-				}
-				n += k
-			}
-		case 5:
-			if len(b) < 4 {
-				goto errParse
-			}
-			n = 4
+			b, m.DroppedAttributesCount = b[n:], uint32(x)
 		default:
-			goto errParse
+			n, err := commonSkipField(b, t, depth)
+			if err != nil {
+				return err
+			}
+			m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
+			b = b[n:]
 		}
-		m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
-		b = b[n:]
 	}
 	return nil
 errParse:
-	return errors.New("proto: cannot parse invalid wire-format data")
-errDepth:
-	return errors.New("proto: exceeded maximum recursion depth")
+	return errors.New(commonErrParse)
 }
 
 // ProtoCheckInitialized returns an error if any required field in m
 // or its sub-messages is not set.
-func (m *InstrumentationScope) ProtoCheckInitialized() error {
-	return nil
-}
+func (m *InstrumentationScope) ProtoCheckInitialized() error { return nil }
 
 // MarshalJSON returns the ProtoJSON encoding of m.
-func (m *InstrumentationScope) MarshalJSON() ([]byte, error) {
-	return m.ProtoAppendJSON(nil)
+func (m *InstrumentationScope) MarshalJSON() ([]byte, error) { return m.ProtoAppendJSON(nil) }
+
+// MarshalJSONTo writes the ProtoJSON encoding of m to e. It implements
+// json.MarshalerTo from encoding/json/v2.
+func (m *InstrumentationScope) MarshalJSONTo(e *jsontext.Encoder) error {
+	b, err := m.ProtoAppendJSON(e.AvailableBuffer())
+	return commonWriteJSON(e, b, err)
 }
 
 // ProtoAppendJSON appends the ProtoJSON encoding of m to b. It does not
 // check required fields.
 func (m *InstrumentationScope) ProtoAppendJSON(b []byte) ([]byte, error) {
+	var err error
 	if m == nil {
 		return append(b, "{}"...), nil
 	}
-	b = append(b, '{')
+	start := len(b)
 	if len(m.Name) > 0 {
-		b = append(b, "\"name\":"...)
-		if !utf8.ValidString(m.Name) {
+		if b, err = jsontext.AppendQuote(append(b, ",\"name\":"...), m.Name); err != nil {
 			return nil, errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope.name contains invalid UTF-8")
 		}
-		b = append(b, '"')
-		for ci := 0; ci < len(m.Name); ci++ {
-			switch c := m.Name[ci]; {
-			case c == '"' || c == '\\':
-				b = append(b, '\\', c)
-			case c < 0x20:
-				b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-			default:
-				b = append(b, c)
-			}
-		}
-		b = append(b, '"')
-		b = append(b, ',')
 	}
 	if len(m.Version) > 0 {
-		b = append(b, "\"version\":"...)
-		if !utf8.ValidString(m.Version) {
+		if b, err = jsontext.AppendQuote(append(b, ",\"version\":"...), m.Version); err != nil {
 			return nil, errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope.version contains invalid UTF-8")
 		}
-		b = append(b, '"')
-		for ci := 0; ci < len(m.Version); ci++ {
-			switch c := m.Version[ci]; {
-			case c == '"' || c == '\\':
-				b = append(b, '\\', c)
-			case c < 0x20:
-				b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-			default:
-				b = append(b, c)
-			}
-		}
-		b = append(b, '"')
-		b = append(b, ',')
 	}
 	if len(m.Attributes) > 0 {
-		b = append(b, "\"attributes\":["...)
+		b = append(b, ",\"attributes\":["...)
 		for j := range m.Attributes {
-			{
-				var err error
-				if b, err = m.Attributes[j].ProtoAppendJSON(b); err != nil {
-					return nil, err
-				}
+			if b, err = m.Attributes[j].ProtoAppendJSON(b); err != nil {
+				return nil, err
 			}
 			b = append(b, ',')
 		}
 		b[len(b)-1] = ']'
-		b = append(b, ',')
 	}
 	if m.DroppedAttributesCount != 0 {
-		b = append(b, "\"droppedAttributesCount\":"...)
-		b = strconv.AppendUint(b, uint64(m.DroppedAttributesCount), 10)
-		b = append(b, ',')
+		b = strconv.AppendUint(append(b, ",\"droppedAttributesCount\":"...), uint64(m.DroppedAttributesCount), 10)
 	}
-	if b[len(b)-1] == ',' {
-		b[len(b)-1] = '}'
-	} else {
-		b = append(b, '}')
-	}
-	return b, nil
+	return commonCloseObject(b, start), nil
 }
 
 // UnmarshalJSON replaces the contents of m with the decoded ProtoJSON
@@ -2611,148 +1574,105 @@ func (m *InstrumentationScope) UnmarshalJSON(b []byte) error {
 // ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m.
 // It does not check required fields.
 func (m *InstrumentationScope) ProtoMergeJSON(b []byte) error {
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.UseNumber()
-	tok, err := d.Token()
+	d := jsontext.NewDecoder(bytes.NewBuffer(b))
+	return commonEndJSON(d, m.ProtoMergeJSONFrom(d), "opentelemetry.proto.common.v1.InstrumentationScope")
+}
+
+// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value
+// read from d. It implements json.UnmarshalerFrom from encoding/json/v2.
+func (m *InstrumentationScope) UnmarshalJSONFrom(d *jsontext.Decoder) error {
+	d, err := commonStrictDecoder(d)
 	if err != nil {
 		return err
 	}
-	if tok == nil {
-		// JSON null leaves the message unchanged.
-		if _, err := d.Token(); err != io.EOF {
-			return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: unexpected data after JSON value")
-		}
-		return nil
-	}
-	if tok != json.Delim('{') {
-		return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: expected a JSON object")
-	}
-	type job struct {
-		f   int
-		key string
-		raw []byte
-	}
-	var jobs []job
-	var seen [4]bool
-	for d.More() {
-		tok, err := d.Token()
-		if err != nil {
-			return err
-		}
-		key, _ := tok.(string)
-		var raw json.RawMessage
-		if err := d.Decode(&raw); err != nil {
-			return err
-		}
-		f := -1
-		switch key {
-		case "name":
-			f = 0
-		case "version":
-			f = 1
-		case "attributes":
-			f = 2
-		case "droppedAttributesCount", "dropped_attributes_count":
-			f = 3
-		default:
-			continue // unknown keys are ignored (-json_discard_unknown)
-		}
-		if seen[f] {
-			return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: duplicate field " + strconv.Quote(key))
-		}
-		seen[f] = true
-		null := string(raw) == "null"
-		switch f {
-		case 0, 1, 3:
-			if !null {
-				jobs = append(jobs, job{f: f, raw: raw})
-			}
-		case 2:
-			if null {
-				continue
-			}
-			ad := json.NewDecoder(bytes.NewReader(raw))
-			ad.UseNumber()
-			if t, err := ad.Token(); err != nil || t != json.Delim('[') {
-				return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: expected a JSON array")
-			}
-			for ad.More() {
-				var e json.RawMessage
-				if err := ad.Decode(&e); err != nil {
-					return err
-				}
-				if string(e) == "null" {
-					return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: null is not allowed in repeated fields or map values")
-				}
-				jobs = append(jobs, job{f: f, raw: e})
-			}
-		}
-	}
-	if _, err := d.Token(); err != nil {
+	*m = InstrumentationScope{}
+	return m.ProtoMergeJSONFrom(d)
+}
+
+// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it
+// into m. It does not check required fields. d should reject invalid
+// UTF-8, as jsontext decoders do by default.
+func (m *InstrumentationScope) ProtoMergeJSONFrom(d *jsontext.Decoder) error {
+	ok, err := commonOpenJSON(d, jsontext.KindBeginObject, "opentelemetry.proto.common.v1.InstrumentationScope", "object")
+	if !ok {
 		return err
 	}
-	if _, err := d.Token(); err != io.EOF {
-		return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: unexpected data after JSON value")
-	}
-	for _, jb := range jobs {
-		raw := jb.raw
-		class := 0
-		bits := 64
-		var uv uint64
-		var sv string
-		switch jb.f {
-		case 3:
-			class, bits = 2, 32
-		case 0, 1:
-			class = 5
-		}
-		switch class {
-		case 2:
-			s := string(raw)
-			if raw[0] == '"' {
-				if err := json.Unmarshal(raw, &s); err != nil {
+	seen, in, f := [4]bool{}, jsontext.KindInvalid, 0
+	for {
+		if in == jsontext.KindInvalid {
+			kt, more, err := commonNextKey(d)
+			if !more {
+				return err
+			}
+			key := kt.String()
+			switch key {
+			case "name":
+				f = 0
+			case "version":
+				f = 1
+			case "attributes":
+				f = 2
+			case "droppedAttributesCount", "dropped_attributes_count":
+				f = 3
+			default:
+				if err := d.SkipValue(); err != nil {
 					return err
 				}
+				continue
 			}
-			if s == "" || (s[0] != '-' && (s[0] < '0' || s[0] > '9')) || !json.Valid([]byte(s)) {
-				return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: invalid number " + string(raw))
+			if seen[f] {
+				return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: duplicate field " + strconv.Quote(key))
 			}
-			var err error
-			uv, err = strconv.ParseUint(s, 10, bits)
-			if err != nil {
-				// Accept exponent and fraction forms that denote an exact integer,
-				// bounding the exponent so that exact arithmetic stays cheap.
-				if i := strings.IndexAny(s, "eE"); i >= 0 {
-					if e, err := strconv.Atoi(s[i+1:]); err != nil || e > 100 || e < -100 {
-						return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: invalid integer " + string(raw))
-					}
+			seen[f] = true
+			if d.PeekKind() == jsontext.KindNull {
+				if err := d.SkipValue(); err != nil {
+					return err
 				}
-				r, ok := new(big.Rat).SetString(s)
-				if !ok || !r.IsInt() {
-					return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: invalid integer " + string(raw))
-				}
-				n := r.Num()
-				if !n.IsUint64() || (bits == 32 && n.Uint64() > 1<<32-1) {
-					return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: invalid integer " + string(raw))
-				}
-				uv = n.Uint64()
+				continue
 			}
-		case 5:
-			if raw[0] != '"' || !utf8.Valid(raw) {
-				return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: invalid string " + string(raw))
+			switch f {
+			case 2:
+				if err := commonExpectJSON(d, jsontext.KindBeginArray, "opentelemetry.proto.common.v1.InstrumentationScope", "array"); err != nil {
+					return err
+				}
+				in = jsontext.KindBeginArray
+				continue
 			}
-			if err := json.Unmarshal(raw, &sv); err != nil {
+		} else {
+			if k := d.PeekKind(); k == jsontext.KindEndArray || k == jsontext.KindEndObject {
+				if _, err := d.ReadToken(); err != nil {
+					return err
+				}
+				in = jsontext.KindInvalid
+				continue
+			}
+			if d.PeekKind() == jsontext.KindNull {
+				return errors.New("proto: opentelemetry.proto.common.v1.InstrumentationScope: null is not allowed in repeated fields or map values")
+			}
+		}
+		class, bits, uv, sv, tok := commonInstrumentationScopeJSONClasses[f][0], commonInstrumentationScopeJSONClasses[f][1], uint64(0), "", jsontext.Token{}
+		if class != commonClassNone {
+			if tok, err = d.ReadToken(); err != nil {
 				return err
 			}
 		}
-		switch jb.f {
+		switch class {
+		case commonClassUnsigned:
+			uv, err = commonParseUint(tok, bits, "opentelemetry.proto.common.v1.InstrumentationScope")
+		case commonClassString:
+			sv, err = commonParseString(tok, "opentelemetry.proto.common.v1.InstrumentationScope")
+		}
+		if err != nil {
+			return err
+		}
+		switch f {
 		case 0:
 			m.Name = sv
 		case 1:
 			m.Version = sv
 		case 2:
 			mv := &KeyValue{}
-			if err := mv.ProtoMergeJSON(raw); err != nil {
+			if err := mv.ProtoMergeJSONFrom(d); err != nil {
 				return err
 			}
 			m.Attributes = append(m.Attributes, mv)
@@ -2760,8 +1680,9 @@ func (m *InstrumentationScope) ProtoMergeJSON(b []byte) error {
 			m.DroppedAttributesCount = uint32(uv)
 		}
 	}
-	return nil
 }
+
+var commonInstrumentationScopeJSONClasses = [4][2]int{{commonClassString, 64}, {commonClassString, 64}, {commonClassNone, 64}, {commonClassUnsigned, 32}}
 
 // A reference to an Entity.
 // Entity represents an object of interest associated with produced telemetry: e.g spans, metrics, profiles, or logs.
@@ -2800,40 +1721,22 @@ type EntityRef struct {
 func (m *EntityRef) Reset() { *m = EntityRef{} }
 
 func (m *EntityRef) GetSchemaUrl() string {
-	if m != nil {
-		return m.SchemaUrl
-	}
-	return ""
+	return commonGet(m, func(m *EntityRef) string { return m.SchemaUrl })
 }
-
 func (m *EntityRef) GetType() string {
-	if m != nil {
-		return m.Type
-	}
-	return ""
+	return commonGet(m, func(m *EntityRef) string { return m.Type })
 }
-
 func (m *EntityRef) GetIdKeys() []string {
-	if m != nil {
-		return m.IdKeys
-	}
-	return nil
+	return commonGet(m, func(m *EntityRef) []string { return m.IdKeys })
 }
-
 func (m *EntityRef) GetDescriptionKeys() []string {
-	if m != nil {
-		return m.DescriptionKeys
-	}
-	return nil
+	return commonGet(m, func(m *EntityRef) []string { return m.DescriptionKeys })
 }
 
 // ProtoUnknownFields returns the raw bytes of fields that were not
 // recognized when m was decoded.
 func (m *EntityRef) ProtoUnknownFields() []byte {
-	if m == nil {
-		return nil
-	}
-	return m.unknownFields
+	return commonGet(m, func(m *EntityRef) []byte { return m.unknownFields })
 }
 
 // ProtoSize returns the size of the wire-format encoding of m.
@@ -2842,39 +1745,30 @@ func (m *EntityRef) ProtoSize() (n int) {
 		return 0
 	}
 	if len(m.SchemaUrl) > 0 {
-		n += 1 + len(m.SchemaUrl) + (bits.Len64((uint64(len(m.SchemaUrl)))|1)+6)/7
+		n += 1 + commonSizeLen(len(m.SchemaUrl))
 	}
 	if len(m.Type) > 0 {
-		n += 1 + len(m.Type) + (bits.Len64((uint64(len(m.Type)))|1)+6)/7
+		n += 1 + commonSizeLen(len(m.Type))
 	}
 	for _, v := range m.IdKeys {
-		n += 1 + len(v) + (bits.Len64((uint64(len(v)))|1)+6)/7
+		n += 1 + commonSizeLen(len(v))
 	}
 	for _, v := range m.DescriptionKeys {
-		n += 1 + len(v) + (bits.Len64((uint64(len(v)))|1)+6)/7
+		n += 1 + commonSizeLen(len(v))
 	}
 	n += len(m.unknownFields)
 	return n
 }
 
 // MarshalBinary returns the wire-format encoding of m.
-func (m *EntityRef) MarshalBinary() ([]byte, error) {
-	return m.AppendBinary(nil)
-}
+func (m *EntityRef) MarshalBinary() ([]byte, error) { return m.AppendBinary(nil) }
 
 // AppendBinary appends the wire-format encoding of m to b.
 func (m *EntityRef) AppendBinary(b []byte) ([]byte, error) {
 	size := m.ProtoSize()
-	l := len(b)
-	b = slices.Grow(b, size)[:l+size]
-	n, err := m.ProtoMarshalToSizedBuffer(b[l:])
-	if err != nil {
-		return b[:l], err
-	}
-	if n != size {
-		return b[:l], errors.New("proto: message size changed during marshal")
-	}
-	return b, nil
+	b = slices.Grow(b, size)
+	n, err := m.ProtoMarshalToSizedBuffer(b[len(b) : len(b)+size])
+	return commonAppended(b, size, n, err)
 }
 
 // ProtoMarshalToSizedBuffer encodes m into the end of b, which must be
@@ -2885,78 +1779,32 @@ func (m *EntityRef) ProtoMarshalToSizedBuffer(b []byte) (int, error) {
 		return 0, nil
 	}
 	i := len(b)
-	var u uint64
 	if len(m.unknownFields) > 0 {
-		i -= len(m.unknownFields)
-		copy(b[i:], m.unknownFields)
+		i -= copy(b[i-len(m.unknownFields):], m.unknownFields)
 	}
-	for j := len(m.DescriptionKeys) - 1; j >= 0; j-- {
-		if !utf8.ValidString(m.DescriptionKeys[j]) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.description_keys contains invalid UTF-8")
+	for _, v := range slices.Backward(m.DescriptionKeys) {
+		if !utf8.ValidString(v) {
+			return 0, errors.New(commonEntityRefDescriptionKeysErrUTF8)
 		}
-		i -= len(m.DescriptionKeys[j])
-		copy(b[i:], m.DescriptionKeys[j])
-		u = uint64(len(m.DescriptionKeys[j]))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x22
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(v):], v), uint64(len(v))), 4<<commonTagTypeBits|commonWireBytes)
 	}
-	for j := len(m.IdKeys) - 1; j >= 0; j-- {
-		if !utf8.ValidString(m.IdKeys[j]) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.id_keys contains invalid UTF-8")
+	for _, v := range slices.Backward(m.IdKeys) {
+		if !utf8.ValidString(v) {
+			return 0, errors.New(commonEntityRefIdKeysErrUTF8)
 		}
-		i -= len(m.IdKeys[j])
-		copy(b[i:], m.IdKeys[j])
-		u = uint64(len(m.IdKeys[j]))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x1a
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(v):], v), uint64(len(v))), 3<<commonTagTypeBits|commonWireBytes)
 	}
 	if len(m.Type) > 0 {
 		if !utf8.ValidString(m.Type) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.type contains invalid UTF-8")
+			return 0, errors.New(commonEntityRefTypeErrUTF8)
 		}
-		i -= len(m.Type)
-		copy(b[i:], m.Type)
-		u = uint64(len(m.Type))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x12
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(m.Type):], m.Type), uint64(len(m.Type))), 2<<commonTagTypeBits|commonWireBytes)
 	}
 	if len(m.SchemaUrl) > 0 {
 		if !utf8.ValidString(m.SchemaUrl) {
-			return 0, errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.schema_url contains invalid UTF-8")
+			return 0, errors.New(commonEntityRefSchemaUrlErrUTF8)
 		}
-		i -= len(m.SchemaUrl)
-		copy(b[i:], m.SchemaUrl)
-		u = uint64(len(m.SchemaUrl))
-		if u < 0x80 {
-			i--
-			b[i] = byte(u)
-		} else {
-			i -= (bits.Len64((u)|1) + 6) / 7
-			binary.PutUvarint(b[i:], u)
-		}
-		i--
-		b[i] = 0x0a
+		i = commonPutVarint(b, commonPutVarint(b, i-copy(b[i-len(m.SchemaUrl):], m.SchemaUrl), uint64(len(m.SchemaUrl))), 1<<commonTagTypeBits|commonWireBytes)
 	}
 	return len(b) - i, nil
 }
@@ -2970,275 +1818,124 @@ func (m *EntityRef) UnmarshalBinary(b []byte) error {
 
 // ProtoMerge decodes the wire-format message in b and merges it into m.
 // It does not check required fields.
-func (m *EntityRef) ProtoMerge(b []byte) error {
-	return m.ProtoMergeDepth(b, 0)
-}
+func (m *EntityRef) ProtoMerge(b []byte) error { return m.ProtoMergeDepth(b, 0) }
 
 // ProtoMergeDepth is ProtoMerge for a message nested depth levels deep.
 func (m *EntityRef) ProtoMergeDepth(b []byte, depth int) error {
-	if depth >= 10000 {
-		goto errDepth
+	if depth >= commonMaxDepth {
+		return errors.New(commonErrDepth)
 	}
 	for len(b) > 0 {
 		t, n := binary.Uvarint(b)
-		if n <= 0 || t>>3 == 0 || t>>3 > 536870911 {
+		if n <= 0 || t>>commonTagTypeBits == 0 || t>>commonTagTypeBits > commonMaxFieldNumber {
 			goto errParse
 		}
-		num, typ := int32(t>>3), int(t&7)
 		start := b
 		b = b[n:]
-		switch num {
-		case 1:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.schema_url contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.SchemaUrl = string(x)
-				continue
-			}
-		case 2:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.type contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.Type = string(x)
-				continue
-			}
-		case 3:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.id_keys contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.IdKeys = append(m.IdKeys, string(x))
-				continue
-			}
-		case 4:
-			if typ == 2 {
-				ln, n := binary.Uvarint(b)
-				if n <= 0 || ln > uint64(len(b)-n) {
-					goto errParse
-				}
-				x := b[n : n+int(ln)]
-				n += int(ln)
-				if !utf8.Valid(x) {
-					return errors.New("proto: field opentelemetry.proto.common.v1.EntityRef.description_keys contains invalid UTF-8")
-				}
-				b = b[n:]
-				m.DescriptionKeys = append(m.DescriptionKeys, string(x))
-				continue
-			}
-		}
-		// Unknown field, or a known field with an unexpected wire type.
-		switch typ {
-		case 0:
-			_, n = binary.Uvarint(b)
-			if n <= 0 {
+		switch t {
+		case 1<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
 				goto errParse
 			}
-		case 1:
-			if len(b) < 8 {
+			if !utf8.Valid(x) {
+				return errors.New(commonEntityRefSchemaUrlErrUTF8)
+			}
+			b, m.SchemaUrl = b[n:], string(x)
+		case 2<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
 				goto errParse
 			}
-			n = 8
-		case 2:
-			ln, k := binary.Uvarint(b)
-			if k <= 0 || ln > uint64(len(b)-k) {
+			if !utf8.Valid(x) {
+				return errors.New(commonEntityRefTypeErrUTF8)
+			}
+			b, m.Type = b[n:], string(x)
+		case 3<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
 				goto errParse
 			}
-			n = k + int(ln)
-		case 3:
-			var stk [16]int32
-			open := append(stk[:0], num)
-			n = 0
-			for len(open) > 0 {
-				if depth+len(open) > 10000 {
-					goto errDepth
-				}
-				t, k := binary.Uvarint(b[n:])
-				if k <= 0 || t>>3 == 0 || t>>3 > 536870911 {
-					goto errParse
-				}
-				n += k
-				switch t & 7 {
-				case 0:
-					_, k = binary.Uvarint(b[n:])
-					if k <= 0 {
-						goto errParse
-					}
-				case 1:
-					k = 8
-				case 2:
-					ln, k2 := binary.Uvarint(b[n:])
-					if k2 <= 0 || ln > uint64(len(b)-n-k2) {
-						goto errParse
-					}
-					k = k2 + int(ln)
-				case 3:
-					open = append(open, int32(t>>3))
-					k = 0
-				case 4:
-					if open[len(open)-1] != int32(t>>3) {
-						goto errParse
-					}
-					open = open[:len(open)-1]
-					k = 0
-				case 5:
-					k = 4
-				default:
-					goto errParse
-				}
-				if k > len(b)-n {
-					goto errParse
-				}
-				n += k
+			if !utf8.Valid(x) {
+				return errors.New(commonEntityRefIdKeysErrUTF8)
 			}
-		case 5:
-			if len(b) < 4 {
+			b, m.IdKeys = b[n:], append(m.IdKeys, string(x))
+		case 4<<commonTagTypeBits | commonWireBytes:
+			x, n := commonReadBytes(b)
+			if n < 0 {
 				goto errParse
 			}
-			n = 4
+			if !utf8.Valid(x) {
+				return errors.New(commonEntityRefDescriptionKeysErrUTF8)
+			}
+			b, m.DescriptionKeys = b[n:], append(m.DescriptionKeys, string(x))
 		default:
-			goto errParse
+			n, err := commonSkipField(b, t, depth)
+			if err != nil {
+				return err
+			}
+			m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
+			b = b[n:]
 		}
-		m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
-		b = b[n:]
 	}
 	return nil
 errParse:
-	return errors.New("proto: cannot parse invalid wire-format data")
-errDepth:
-	return errors.New("proto: exceeded maximum recursion depth")
+	return errors.New(commonErrParse)
 }
 
 // ProtoCheckInitialized returns an error if any required field in m
 // or its sub-messages is not set.
-func (m *EntityRef) ProtoCheckInitialized() error {
-	return nil
-}
+func (m *EntityRef) ProtoCheckInitialized() error { return nil }
 
 // MarshalJSON returns the ProtoJSON encoding of m.
-func (m *EntityRef) MarshalJSON() ([]byte, error) {
-	return m.ProtoAppendJSON(nil)
+func (m *EntityRef) MarshalJSON() ([]byte, error) { return m.ProtoAppendJSON(nil) }
+
+// MarshalJSONTo writes the ProtoJSON encoding of m to e. It implements
+// json.MarshalerTo from encoding/json/v2.
+func (m *EntityRef) MarshalJSONTo(e *jsontext.Encoder) error {
+	b, err := m.ProtoAppendJSON(e.AvailableBuffer())
+	return commonWriteJSON(e, b, err)
 }
 
 // ProtoAppendJSON appends the ProtoJSON encoding of m to b. It does not
 // check required fields.
 func (m *EntityRef) ProtoAppendJSON(b []byte) ([]byte, error) {
+	var err error
 	if m == nil {
 		return append(b, "{}"...), nil
 	}
-	b = append(b, '{')
+	start := len(b)
 	if len(m.SchemaUrl) > 0 {
-		b = append(b, "\"schemaUrl\":"...)
-		if !utf8.ValidString(m.SchemaUrl) {
+		if b, err = jsontext.AppendQuote(append(b, ",\"schemaUrl\":"...), m.SchemaUrl); err != nil {
 			return nil, errors.New("proto: opentelemetry.proto.common.v1.EntityRef.schema_url contains invalid UTF-8")
 		}
-		b = append(b, '"')
-		for ci := 0; ci < len(m.SchemaUrl); ci++ {
-			switch c := m.SchemaUrl[ci]; {
-			case c == '"' || c == '\\':
-				b = append(b, '\\', c)
-			case c < 0x20:
-				b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-			default:
-				b = append(b, c)
-			}
-		}
-		b = append(b, '"')
-		b = append(b, ',')
 	}
 	if len(m.Type) > 0 {
-		b = append(b, "\"type\":"...)
-		if !utf8.ValidString(m.Type) {
+		if b, err = jsontext.AppendQuote(append(b, ",\"type\":"...), m.Type); err != nil {
 			return nil, errors.New("proto: opentelemetry.proto.common.v1.EntityRef.type contains invalid UTF-8")
 		}
-		b = append(b, '"')
-		for ci := 0; ci < len(m.Type); ci++ {
-			switch c := m.Type[ci]; {
-			case c == '"' || c == '\\':
-				b = append(b, '\\', c)
-			case c < 0x20:
-				b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-			default:
-				b = append(b, c)
-			}
-		}
-		b = append(b, '"')
-		b = append(b, ',')
 	}
 	if len(m.IdKeys) > 0 {
-		b = append(b, "\"idKeys\":["...)
+		b = append(b, ",\"idKeys\":["...)
 		for j := range m.IdKeys {
-			if !utf8.ValidString(m.IdKeys[j]) {
+			if b, err = jsontext.AppendQuote(b, m.IdKeys[j]); err != nil {
 				return nil, errors.New("proto: opentelemetry.proto.common.v1.EntityRef.id_keys contains invalid UTF-8")
 			}
-			b = append(b, '"')
-			for ci := 0; ci < len(m.IdKeys[j]); ci++ {
-				switch c := m.IdKeys[j][ci]; {
-				case c == '"' || c == '\\':
-					b = append(b, '\\', c)
-				case c < 0x20:
-					b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-				default:
-					b = append(b, c)
-				}
-			}
-			b = append(b, '"')
 			b = append(b, ',')
 		}
 		b[len(b)-1] = ']'
-		b = append(b, ',')
 	}
 	if len(m.DescriptionKeys) > 0 {
-		b = append(b, "\"descriptionKeys\":["...)
+		b = append(b, ",\"descriptionKeys\":["...)
 		for j := range m.DescriptionKeys {
-			if !utf8.ValidString(m.DescriptionKeys[j]) {
+			if b, err = jsontext.AppendQuote(b, m.DescriptionKeys[j]); err != nil {
 				return nil, errors.New("proto: opentelemetry.proto.common.v1.EntityRef.description_keys contains invalid UTF-8")
 			}
-			b = append(b, '"')
-			for ci := 0; ci < len(m.DescriptionKeys[j]); ci++ {
-				switch c := m.DescriptionKeys[j][ci]; {
-				case c == '"' || c == '\\':
-					b = append(b, '\\', c)
-				case c < 0x20:
-					b = append(b, '\\', 'u', '0', '0', "0123456789abcdef"[c>>4], "0123456789abcdef"[c&15])
-				default:
-					b = append(b, c)
-				}
-			}
-			b = append(b, '"')
 			b = append(b, ',')
 		}
 		b[len(b)-1] = ']'
-		b = append(b, ',')
 	}
-	if b[len(b)-1] == ',' {
-		b[len(b)-1] = '}'
-	} else {
-		b = append(b, '}')
-	}
-	return b, nil
+	return commonCloseObject(b, start), nil
 }
 
 // UnmarshalJSON replaces the contents of m with the decoded ProtoJSON
@@ -3251,107 +1948,96 @@ func (m *EntityRef) UnmarshalJSON(b []byte) error {
 // ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m.
 // It does not check required fields.
 func (m *EntityRef) ProtoMergeJSON(b []byte) error {
-	d := json.NewDecoder(bytes.NewReader(b))
-	d.UseNumber()
-	tok, err := d.Token()
+	d := jsontext.NewDecoder(bytes.NewBuffer(b))
+	return commonEndJSON(d, m.ProtoMergeJSONFrom(d), "opentelemetry.proto.common.v1.EntityRef")
+}
+
+// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value
+// read from d. It implements json.UnmarshalerFrom from encoding/json/v2.
+func (m *EntityRef) UnmarshalJSONFrom(d *jsontext.Decoder) error {
+	d, err := commonStrictDecoder(d)
 	if err != nil {
 		return err
 	}
-	if tok == nil {
-		// JSON null leaves the message unchanged.
-		if _, err := d.Token(); err != io.EOF {
-			return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: unexpected data after JSON value")
-		}
-		return nil
-	}
-	if tok != json.Delim('{') {
-		return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: expected a JSON object")
-	}
-	type job struct {
-		f   int
-		key string
-		raw []byte
-	}
-	var jobs []job
-	var seen [4]bool
-	for d.More() {
-		tok, err := d.Token()
-		if err != nil {
-			return err
-		}
-		key, _ := tok.(string)
-		var raw json.RawMessage
-		if err := d.Decode(&raw); err != nil {
-			return err
-		}
-		f := -1
-		switch key {
-		case "schemaUrl", "schema_url":
-			f = 0
-		case "type":
-			f = 1
-		case "idKeys", "id_keys":
-			f = 2
-		case "descriptionKeys", "description_keys":
-			f = 3
-		default:
-			continue // unknown keys are ignored (-json_discard_unknown)
-		}
-		if seen[f] {
-			return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: duplicate field " + strconv.Quote(key))
-		}
-		seen[f] = true
-		null := string(raw) == "null"
-		switch f {
-		case 0, 1:
-			if !null {
-				jobs = append(jobs, job{f: f, raw: raw})
-			}
-		case 2, 3:
-			if null {
-				continue
-			}
-			ad := json.NewDecoder(bytes.NewReader(raw))
-			ad.UseNumber()
-			if t, err := ad.Token(); err != nil || t != json.Delim('[') {
-				return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: expected a JSON array")
-			}
-			for ad.More() {
-				var e json.RawMessage
-				if err := ad.Decode(&e); err != nil {
-					return err
-				}
-				if string(e) == "null" {
-					return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: null is not allowed in repeated fields or map values")
-				}
-				jobs = append(jobs, job{f: f, raw: e})
-			}
-		}
-	}
-	if _, err := d.Token(); err != nil {
+	*m = EntityRef{}
+	return m.ProtoMergeJSONFrom(d)
+}
+
+// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it
+// into m. It does not check required fields. d should reject invalid
+// UTF-8, as jsontext decoders do by default.
+func (m *EntityRef) ProtoMergeJSONFrom(d *jsontext.Decoder) error {
+	ok, err := commonOpenJSON(d, jsontext.KindBeginObject, "opentelemetry.proto.common.v1.EntityRef", "object")
+	if !ok {
 		return err
 	}
-	if _, err := d.Token(); err != io.EOF {
-		return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: unexpected data after JSON value")
-	}
-	for _, jb := range jobs {
-		raw := jb.raw
-		class := 0
-		var sv string
-		switch jb.f {
-		case 0, 1, 2, 3:
-			class = 5
-		}
-		switch class {
-		case 5:
-			if raw[0] != '"' || !utf8.Valid(raw) {
-				return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: invalid string " + string(raw))
+	seen, in, f := [4]bool{}, jsontext.KindInvalid, 0
+	for {
+		if in == jsontext.KindInvalid {
+			kt, more, err := commonNextKey(d)
+			if !more {
+				return err
 			}
-			if err := json.Unmarshal(raw, &sv); err != nil {
+			key := kt.String()
+			switch key {
+			case "schemaUrl", "schema_url":
+				f = 0
+			case "type":
+				f = 1
+			case "idKeys", "id_keys":
+				f = 2
+			case "descriptionKeys", "description_keys":
+				f = 3
+			default:
+				if err := d.SkipValue(); err != nil {
+					return err
+				}
+				continue
+			}
+			if seen[f] {
+				return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: duplicate field " + strconv.Quote(key))
+			}
+			seen[f] = true
+			if d.PeekKind() == jsontext.KindNull {
+				if err := d.SkipValue(); err != nil {
+					return err
+				}
+				continue
+			}
+			switch f {
+			case 2, 3:
+				if err := commonExpectJSON(d, jsontext.KindBeginArray, "opentelemetry.proto.common.v1.EntityRef", "array"); err != nil {
+					return err
+				}
+				in = jsontext.KindBeginArray
+				continue
+			}
+		} else {
+			if k := d.PeekKind(); k == jsontext.KindEndArray || k == jsontext.KindEndObject {
+				if _, err := d.ReadToken(); err != nil {
+					return err
+				}
+				in = jsontext.KindInvalid
+				continue
+			}
+			if d.PeekKind() == jsontext.KindNull {
+				return errors.New("proto: opentelemetry.proto.common.v1.EntityRef: null is not allowed in repeated fields or map values")
+			}
+		}
+		class, sv, tok := commonEntityRefJSONClasses[f], "", jsontext.Token{}
+		if class != commonClassNone {
+			if tok, err = d.ReadToken(); err != nil {
 				return err
 			}
 		}
-		switch jb.f {
+		switch class {
+		case commonClassString:
+			sv, err = commonParseString(tok, "opentelemetry.proto.common.v1.EntityRef")
+		}
+		if err != nil {
+			return err
+		}
+		switch f {
 		case 0:
 			m.SchemaUrl = sv
 		case 1:
@@ -3362,5 +2048,308 @@ func (m *EntityRef) ProtoMergeJSON(b []byte) error {
 			m.DescriptionKeys = append(m.DescriptionKeys, sv)
 		}
 	}
+}
+
+var commonEntityRefJSONClasses = [4]int{commonClassString, commonClassString, commonClassString, commonClassString}
+
+func commonPutVarint(b []byte, i int, u uint64) int {
+	if u < commonVarintContBit {
+		b[i-1] = byte(u)
+		return i - 1
+	}
+	i -= (bits.Len64(u|1) + commonVarintPayloadBits - 1) / commonVarintPayloadBits
+	binary.PutUvarint(b[i:], u)
+	return i
+}
+
+func commonPutFixed64(b []byte, i int, u uint64) int {
+	binary.LittleEndian.PutUint64(b[i-commonFixed64Size:], u)
+	return i - commonFixed64Size
+}
+
+func commonPutBool(b []byte, i int, v bool) int {
+	b[i-1] = 0
+	if v {
+		b[i-1] = 1
+	}
+	return i - 1
+}
+
+func commonSizeLen(l int) int {
+	return l + (bits.Len64(uint64(l)|1)+commonVarintPayloadBits-1)/commonVarintPayloadBits
+}
+
+func commonReadBytes(b []byte) (v []byte, n int) {
+	ln, k := binary.Uvarint(b)
+	if k <= 0 || ln > uint64(len(b)-k) {
+		return nil, -1
+	}
+	return b[k : k+int(ln)], k + int(ln)
+}
+
+func commonSkipField(b []byte, t uint64, depth int) (int, error) {
+	switch t & commonTagTypeMask {
+	case commonWireVarint:
+		if _, n := binary.Uvarint(b); n > 0 {
+			return n, nil
+		}
+	case commonWireFixed64:
+		if len(b) >= commonFixed64Size {
+			return commonFixed64Size, nil
+		}
+	case commonWireBytes:
+		if _, n := commonReadBytes(b); n >= 0 {
+			return n, nil
+		}
+	case commonWireStartGroup:
+		return commonSkipGroup(b, int32(t>>commonTagTypeBits), depth)
+	case commonWireFixed32:
+		if len(b) >= commonFixed32Size {
+			return commonFixed32Size, nil
+		}
+	}
+	return 0, errors.New(commonErrParse)
+}
+
+func commonSkipGroup(b []byte, num int32, depth int) (int, error) {
+	var stk [commonSkipStackSize]int32
+	open := append(stk[:0], num)
+	n := 0
+	for len(open) > 0 {
+		if depth+len(open) > commonMaxDepth {
+			return 0, errors.New(commonErrDepth)
+		}
+		t, k := binary.Uvarint(b[n:])
+		if k <= 0 || t>>commonTagTypeBits == 0 || t>>commonTagTypeBits > commonMaxFieldNumber {
+			return 0, errors.New(commonErrParse)
+		}
+		n += k
+		switch t & commonTagTypeMask {
+		case commonWireStartGroup:
+			open = append(open, int32(t>>commonTagTypeBits))
+		case commonWireEndGroup:
+			if open[len(open)-1] != int32(t>>commonTagTypeBits) {
+				return 0, errors.New(commonErrParse)
+			}
+			open = open[:len(open)-1]
+		default:
+			k, err := commonSkipField(b[n:], t, depth)
+			if err != nil {
+				return 0, err
+			}
+			n += k
+		}
+	}
+	return n, nil
+}
+
+func commonAppended(b []byte, size, n int, err error) ([]byte, error) {
+	if err == nil && n != size {
+		err = errors.New("proto: message size changed during marshal")
+	}
+	if err != nil {
+		return b, err
+	}
+	return b[:len(b)+size], nil
+}
+
+func commonGet[M, T any](m *M, f func(*M) T) (t T) {
+	if m != nil {
+		t = f(m)
+	}
+	return t
+}
+
+func commonAlloc[T any](p **T) *T {
+	if *p == nil {
+		*p = new(T)
+	}
+	return *p
+}
+
+func commonWriteJSON(e *jsontext.Encoder, b []byte, err error) error {
+	if err != nil {
+		return err
+	}
+	return e.WriteValue(b)
+}
+
+func commonAppendFloat(b []byte, f float64, bits int) []byte {
+	switch {
+	case math.IsNaN(f):
+		return append(b, `"NaN"`...)
+	case math.IsInf(f, 1):
+		return append(b, `"Infinity"`...)
+	case math.IsInf(f, -1):
+		return append(b, `"-Infinity"`...)
+	}
+	return jsontext.AppendFloat(b, f, bits)
+}
+
+func commonCloseObject(b []byte, start int) []byte {
+	if len(b) == start {
+		return append(b, "{}"...)
+	}
+	b[start] = '{'
+	return append(b, '}')
+}
+
+func commonEndJSON(d *jsontext.Decoder, err error, name string) error {
+	if err != nil {
+		return err
+	}
+	if _, err := d.ReadToken(); err != io.EOF {
+		return commonJSONError(name, "unexpected data after JSON value")
+	}
 	return nil
+}
+
+func commonStrictDecoder(d *jsontext.Decoder) (*jsontext.Decoder, error) {
+	if lax, _ := json.GetOption(d.Options(), jsontext.AllowInvalidUTF8); !lax {
+		return d, nil
+	}
+	v, err := d.ReadValue()
+	if err != nil {
+		return nil, err
+	}
+	return jsontext.NewDecoder(bytes.NewBuffer(v)), nil
+}
+
+func commonOpenJSON(d *jsontext.Decoder, kind jsontext.Kind, name, what string) (bool, error) {
+	if d.PeekKind() == jsontext.KindNull {
+		return false, d.SkipValue()
+	}
+	err := commonExpectJSON(d, kind, name, what)
+	return err == nil, err
+}
+
+func commonExpectJSON(d *jsontext.Decoder, kind jsontext.Kind, name, what string) error {
+	tok, err := d.ReadToken()
+	if err != nil {
+		return err
+	}
+	if tok.Kind() != kind {
+		return commonJSONError(name, "expected a JSON "+what)
+	}
+	return nil
+}
+
+func commonNextKey(d *jsontext.Decoder) (jsontext.Token, bool, error) {
+	if d.PeekKind() == jsontext.KindEndObject {
+		_, err := d.ReadToken()
+		return jsontext.Token{}, false, err
+	}
+	tok, err := d.ReadToken()
+	return tok, err == nil, err
+}
+
+func commonParseInt(tok jsontext.Token, bits int, name string) (int64, error) {
+	s, err := commonJSONNumber(tok, name)
+	if err != nil {
+		return 0, err
+	}
+	if v, err := strconv.ParseInt(s, 10, bits); err == nil {
+		return v, nil
+	}
+	n := commonExactInt(s)
+	if n == nil || !n.IsInt64() || (bits == 32 && (n.Int64() < math.MinInt32 || n.Int64() > math.MaxInt32)) {
+		return 0, commonJSONError(name, commonErrInvalidInteger+s)
+	}
+	return n.Int64(), nil
+}
+
+func commonParseUint(tok jsontext.Token, bits int, name string) (uint64, error) {
+	s, err := commonJSONNumber(tok, name)
+	if err != nil {
+		return 0, err
+	}
+	if v, err := strconv.ParseUint(s, 10, bits); err == nil {
+		return v, nil
+	}
+	n := commonExactInt(s)
+	if n == nil || !n.IsUint64() || (bits == 32 && n.Uint64() > math.MaxUint32) {
+		return 0, commonJSONError(name, commonErrInvalidInteger+s)
+	}
+	return n.Uint64(), nil
+}
+
+func commonExactInt(s string) *big.Int {
+	if i := strings.IndexAny(s, "eE"); i >= 0 {
+		if e, err := strconv.Atoi(s[i+1:]); err != nil || e > commonMaxJSONExponent || e < -commonMaxJSONExponent {
+			return nil
+		}
+	}
+	r, ok := new(big.Rat).SetString(s)
+	if !ok || !r.IsInt() {
+		return nil
+	}
+	return r.Num()
+}
+
+func commonParseFloat(tok jsontext.Token, bits int, name string) (float64, error) {
+	if tok.Kind() == jsontext.KindString {
+		switch tok.String() {
+		case "NaN":
+			return math.NaN(), nil
+		case "Infinity":
+			return math.Inf(1), nil
+		case "-Infinity":
+			return math.Inf(-1), nil
+		}
+	}
+	s, err := commonJSONNumber(tok, name)
+	if err != nil {
+		return 0, err
+	}
+	v, err := strconv.ParseFloat(s, bits)
+	if err != nil {
+		return 0, commonJSONError(name, commonErrInvalidNumber+s)
+	}
+	return v, nil
+}
+
+func commonJSONNumber(tok jsontext.Token, name string) (string, error) {
+	s := tok.String()
+	if k := tok.Kind(); k != jsontext.KindNumber && (k != jsontext.KindString || s == "" || (s[0] != '-' && (s[0] < '0' || s[0] > '9')) || !jsontext.Value(s).IsValid()) {
+		return "", commonJSONError(name, commonErrInvalidNumber+s)
+	}
+	return s, nil
+}
+
+func commonParseBool(tok jsontext.Token, name string) (bool, error) {
+	switch tok.Kind() {
+	case jsontext.KindTrue:
+		return true, nil
+	case jsontext.KindFalse:
+		return false, nil
+	}
+	return false, commonJSONError(name, "invalid boolean "+tok.String())
+}
+
+func commonParseString(tok jsontext.Token, name string) (string, error) {
+	if tok.Kind() != jsontext.KindString {
+		return "", commonJSONError(name, "invalid string "+tok.String())
+	}
+	return tok.String(), nil
+}
+
+func commonParseBytes(tok jsontext.Token, name string) ([]byte, error) {
+	s := tok.String()
+	if tok.Kind() == jsontext.KindString {
+		enc := base64.StdEncoding
+		if strings.ContainsAny(s, "-_") {
+			enc = base64.URLEncoding
+		}
+		if len(s)%commonBase64Quantum != 0 {
+			enc = enc.WithPadding(base64.NoPadding)
+		}
+		if by, err := enc.DecodeString(s); err == nil {
+			return by, nil
+		}
+	}
+	return nil, commonJSONError(name, "invalid bytes "+s)
+}
+
+func commonJSONError(name, msg string) error {
+	return errors.New("proto: " + name + ": " + msg)
 }
