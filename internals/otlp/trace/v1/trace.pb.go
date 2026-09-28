@@ -5,7 +5,6 @@ package v1
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json/jsontext"
