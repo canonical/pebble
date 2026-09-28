@@ -2603,8 +2603,10 @@ func (s *S) TestStopClosesLogBuffers(c *C) {
 // - Attempt A: short okayDelay (timer A fires quickly)
 // - Attempt B: long okayDelay (timer B fires much later)
 //
-// If the bug exists, timer A will fire while attempt B is still in stateStarting
-// and incorrectly transition B to stateRunning before B's legitimate timer fires.
+// The timer-cancellation design ensures that when the service leaves
+// stateStarting (via stop, exit, or abort), the okay timer is cancelled.
+// A stale callback firing after cancellation must not transition the new
+// attempt to stateRunning.
 func (s *S) TestStaleOkayDelayCallbackRegression(c *C) {
 	s.newServiceManager(c)
 	serviceName := "test-stale-okaydelay"
@@ -2638,6 +2640,7 @@ services:
 	})
 
 	// Stop attempt A while it's still within its okayDelay window.
+	// This should cancel the okay timer for attempt A.
 	chgStopA := s.stopServices(c, [][]string{{serviceName}})
 	s.st.Lock()
 	c.Assert(chgStopA.Err(), IsNil)
@@ -2679,6 +2682,8 @@ services:
 	// - Attempt B is in stateStarting with okayDelayB = 500ms
 	// - Timer A was scheduled with okayDelayA = 50ms and must have fired by now
 	// - Timer B is scheduled with okayDelayB = 500ms and has NOT fired yet
+	// - The timer for attempt A was cancelled when attempt A was stopped,
+	//   so its callback must not transition attempt B to stateRunning.
 
 	// Verify that the service is NOT internally stateRunning.
 	// Use RunningCmds() which only returns services whose internal state is stateRunning.
