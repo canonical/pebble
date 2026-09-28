@@ -102,16 +102,15 @@ func (p *ANSIMeter) percent() string {
 }
 
 func (p *ANSIMeter) Set(current float64) {
+	total := p.total
+	if total < 0 || math.IsNaN(total) {
+		total = 0
+	}
 	if math.IsNaN(current) || current < 0 {
 		current = 0
 	}
-	if !(p.total > 0) {
-		// No positive total (zero, negative, or NaN) to proportion
-		// against; avoid dividing by zero. Render the label with
-		// no bar progress instead.
-		current = 0
-	} else if current > p.total {
-		current = p.total
+	if current > total {
+		current = total
 	}
 
 	p.written = current
@@ -131,22 +130,16 @@ func (p *ANSIMeter) Set(current float64) {
 	//  * if 29 < width      , also show speed (speed+gutter = 9)
 	var percent, speed, timeleft string
 	if col > 15 {
-		if !(p.total > 0) {
-			// No time/speed estimate without a total.
-			// Keep the percent placeholder for consistency.
-			if col > 20 {
-				percent = " " + p.percent()
-			}
-		} else {
+		if col > 20 {
+			percent = " " + p.percent()
+		}
+		if total > 0 {
 			since := time.Now().UTC().Sub(p.t0).Seconds()
 			per := since / p.written
-			left := (p.total - p.written) * per
+			left := (total - p.written) * per
 			timeleft = " " + quantity.FormatDuration(left)
-			if col > 20 {
-				percent = " " + p.percent()
-				if col > 29 {
-					speed = " " + quantity.FormatBPS(p.written, since, -1)
-				}
+			if col > 29 {
+				speed = " " + quantity.FormatBPS(p.written, since, -1)
 			}
 		}
 	}
@@ -157,8 +150,8 @@ func (p *ANSIMeter) Set(current float64) {
 	msg = append(msg, []rune(speed)...)
 	msg = append(msg, []rune(timeleft)...)
 	i := 0
-	if p.total > 0 {
-		i = min(max(int(current*float64(col)/p.total), 0), len(msg))
+	if total > 0 {
+		i = min(max(int(current*float64(col)/total), 0), len(msg))
 	}
 	fmt.Fprint(stdout, "\r", enterReverseMode, string(msg[:i]), exitAttributeMode, string(msg[i:]))
 }
