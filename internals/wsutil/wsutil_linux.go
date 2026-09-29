@@ -27,29 +27,32 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-// MirrorToWebsocket mirrors PTY output from r (file descriptor fd) to the websocket.
-func MirrorToWebsocket(conn MessageWriteCloser, r io.ReadCloser, exited chan struct{}, fd int) {
+// MirrorToWebsocket mirrors PTY output from r (file descriptor fd) to the
+// websocket. Cancelling ctx closes the websocket.
+func MirrorToWebsocket(ctx context.Context, conn MessageWriteCloser, r io.ReadCloser, exited chan struct{}, fd int) {
+	defer closeOnCancel(ctx, conn)()
+
 	in := ExecReaderToChannel(r, -1, exited, fd)
 	for {
 		buf, ok := <-in
 		if !ok {
 			_ = r.Close()
 			logger.Debugf("Sending write barrier")
-			err := conn.Write(context.Background(), websocket.MessageText, endCommandJSON)
+			err := conn.Write(ctx, websocket.MessageText, endCommandJSON)
 			if err != nil {
 				logger.Debugf("Got err writing barrier %s", err)
 			}
 			return
 		}
 
-		err := conn.Write(context.Background(), websocket.MessageBinary, buf)
+		err := conn.Write(ctx, websocket.MessageBinary, buf)
 		if err != nil {
 			logger.Debugf("Got err writing %s", err)
 			break
 		}
 	}
 
-	conn.Close(websocket.StatusNormalClosure, "")
+	conn.CloseNow()
 	r.Close()
 }
 

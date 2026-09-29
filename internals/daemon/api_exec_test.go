@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -353,6 +354,34 @@ func (s *execSuite) TestStopWhileExecRunning(c *C) {
 	c.Check(err, IsNil)
 	c.Check(elapsed < 500*time.Millisecond, Equals, true,
 		Commentf("Daemon.Stop took %s with an exec command running", elapsed))
+
+	select {
+	case err := <-waitDone:
+		c.Check(err, NotNil) // process was killed, so it's not a clean exit
+	case <-time.After(5 * time.Second):
+		c.Fatalf("timed out waiting for exec process to finish")
+	}
+}
+
+func (s *execSuite) TestExecContextCancel(c *C) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	process, err := s.client.ExecContext(ctx, &client.ExecOptions{
+		Command: []string{"sleep", "30"},
+		Stdin:   strings.NewReader(""),
+		Stdout:  io.Discard,
+		Stderr:  io.Discard,
+	})
+	c.Assert(err, IsNil)
+
+	waitDone := make(chan error, 1)
+	go func() {
+		waitDone <- process.Wait()
+	}()
+	time.Sleep(50 * time.Millisecond)
+
+	// Cancelling closes the websockets, and the daemon kills the process.
+	cancel()
 
 	select {
 	case err := <-waitDone:

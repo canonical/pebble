@@ -215,7 +215,7 @@ type Client struct {
 	getWebsocket getWebsocketFunc
 }
 
-type getWebsocketFunc func(urlPath string) (clientWebsocket, error)
+type getWebsocketFunc func(ctx context.Context, urlPath string) (clientWebsocket, error)
 
 type clientWebsocket interface {
 	wsutil.MessageReader
@@ -252,8 +252,8 @@ func New(config *Config) (*Client, error) {
 	}
 
 	client.requester = requester
-	client.getWebsocket = func(urlPath string) (clientWebsocket, error) {
-		return requester.getWebsocket(urlPath)
+	client.getWebsocket = func(ctx context.Context, urlPath string) (clientWebsocket, error) {
+		return requester.getWebsocket(ctx, urlPath)
 	}
 
 	return client, nil
@@ -263,9 +263,9 @@ func (client *Client) Requester() Requester {
 	return client.requester
 }
 
-func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
+func (client *Client) getTaskWebsocket(ctx context.Context, taskID, websocketID string) (clientWebsocket, error) {
 	urlPath := fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, websocketID)
-	return client.getWebsocket(urlPath)
+	return client.getWebsocket(ctx, urlPath)
 }
 
 // CloseIdleConnections closes any API connections that are currently unused.
@@ -743,7 +743,7 @@ func (rq *defaultRequester) Transport() *http.Transport {
 	return rq.transport
 }
 
-func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error) {
+func (rq *defaultRequester) getWebsocket(ctx context.Context, urlPath string) (clientWebsocket, error) {
 	opts := &websocket.DialOptions{
 		HTTPClient: &http.Client{
 			Transport: rq.transport,
@@ -762,7 +762,7 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 	if rq.basicUsername != "" && rq.basicPassword != "" {
 		r.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
-	conn, resp, err := websocket.Dial(context.Background(), url, opts)
+	conn, resp, err := websocket.Dial(ctx, url, opts)
 	if err != nil {
 		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
 			// FIXME: the websocket library truncates the response body to 1024

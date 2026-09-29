@@ -15,6 +15,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -185,8 +186,14 @@ func (cmd *cmdExec) Execute(args []string) error {
 		}
 	}
 
+	// Signals are forwarded to the remote process rather than cancelling ctx.
+	// Cancelling ctx on return closes the websockets, for example when
+	// exiting after SIGHUP while the remote process is still running.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Start the command.
-	process, err := cmd.client.Exec(opts)
+	process, err := cmd.client.ExecContext(ctx, opts)
 	if err != nil {
 		return err
 	}

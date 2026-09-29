@@ -46,7 +46,7 @@ func (s *execSuite) SetUpTest(c *C) {
 	s.stdioWs = &testWebsocket{}
 	s.controlWs = &testWebsocket{}
 	s.stderrWs = &testWebsocket{}
-	s.cli.SetGetWebsocket(func(url string) (client.ClientWebsocket, error) {
+	s.cli.SetGetWebsocket(func(ctx context.Context, url string) (client.ClientWebsocket, error) {
 		matches := websocketRegexp.FindStringSubmatch(url)
 		if matches == nil {
 			return nil, fmt.Errorf("invalid websocket URL %q", url)

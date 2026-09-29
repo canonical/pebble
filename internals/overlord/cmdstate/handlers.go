@@ -191,7 +191,8 @@ func (e *execution) waitIOConnected(ctx context.Context, execID string) error {
 	}
 }
 
-// do actually runs the command.
+// do actually runs the command. Cancelling ctx kills the command and stops
+// forwarding I/O over the websockets.
 func (e *execution) do(ctx context.Context, task *state.Task) error {
 	// Wait till client has connected to "stdio" websocket (and "stderr" if
 	// separating stderr), to avoid race conditions forwarding I/O.
@@ -245,23 +246,22 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			}
 		}
 
-		go e.controlLoop(task.ID(), pidCh, stopControl, int(master.Fd()))
+		go e.controlLoop(ctx, task.ID(), pidCh, stopControl, int(master.Fd()))
 
 		// Start goroutine to mirror PTY output to "stdio" websocket.
 		ioConn := e.getWebsocket(wsStdio)
 		wgOutputSent.Go(func() {
-
 			logger.Debugf("Exec %s: started mirroring websocket", task.ID())
 			defer logger.Debugf("Exec %s: finished mirroring websocket", task.ID())
 
-			wsutil.MirrorToWebsocket(ioConn, master, childDead, int(master.Fd()))
+			wsutil.MirrorToWebsocket(ctx, ioConn, master, childDead, int(master.Fd()))
 		})
 
 		if e.interactive {
 			// Interactive: start goroutine to receive stdin from "stdio"
 			// websocket and write to the PTY.
 			go func() {
-				<-wsutil.WebsocketRecvStream(master, ioConn)
+				<-wsutil.WebsocketRecvStream(ctx, master, ioConn)
 				// If the interactive is enforced, it is possible to finish
 				// reading earlier than the mirroring go routine sends all the
 				// output to the client. Thus, closing the master descriptor
@@ -279,14 +279,14 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			stdin = stdinReader
 			afterClosers = append(afterClosers, stdinReader)
 			go func() {
-				<-wsutil.WebsocketRecvStream(stdinWriter, ioConn)
+				<-wsutil.WebsocketRecvStream(ctx, stdinWriter, ioConn)
 				stdinWriter.Close()
 			}()
 		}
 	} else {
 		// No PTY/terminal, all I/O uses pipes.
 
-		go e.controlLoop(task.ID(), pidCh, stopControl, -1)
+		go e.controlLoop(ctx, task.ID(), pidCh, stopControl, -1)
 
 		// Start goroutine to receive stdin from "stdio" websocket and write to
 		// cmd.Stdin pipe.
@@ -298,7 +298,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		stdin = stdinReader
 		afterClosers = append(afterClosers, stdinReader)
 		go func() {
-			<-wsutil.WebsocketRecvStream(stdinWriter, ioConn)
+			<-wsutil.WebsocketRecvStream(ctx, stdinWriter, ioConn)
 			stdinWriter.Close()
 		}()
 
@@ -312,7 +312,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		stdout = stdoutWriter
 		stderr = stdoutWriter // stderr will be overwritten below if splitStderr true
 		wgOutputSent.Go(func() {
-			<-wsutil.WebsocketSendStream(ioConn, stdoutReader, -1)
+			<-wsutil.WebsocketSendStream(ctx, ioConn, stdoutReader, -1)
 			stdoutReader.Close()
 		})
 	}
@@ -328,18 +328,21 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		stderr = stderrWriter
 		stderrConn := e.getWebsocket(wsStderr)
 		wgOutputSent.Go(func() {
-			<-wsutil.WebsocketSendStream(stderrConn, stderrReader, -1)
+			<-wsutil.WebsocketSendStream(ctx, stderrConn, stderrReader, -1)
 			stderrReader.Close()
 		})
 	}
 
+	// The timeout only applies to the command, not the I/O goroutines above,
+	// so that output is still forwarded after the command is killed.
+	cmdCtx := ctx
 	if e.timeout != 0 {
 		var cancel func()
-		ctx, cancel = context.WithTimeout(ctx, e.timeout)
+		cmdCtx, cancel = context.WithTimeout(ctx, e.timeout)
 		defer cancel()
 	}
 
-	cmd := exec.CommandContext(ctx, e.command[0], e.command[1:]...)
+	cmd := exec.CommandContext(cmdCtx, e.command[0], e.command[1:]...)
 
 	// Ensure cmd.Env is not nil (does not inherit parent env). This is not
 	// strictly necessary as cmdstate.Exec always sets some environment
@@ -415,9 +418,9 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 		_ = closer.Close()
 	}
 
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	if errors.Is(cmdCtx.Err(), context.DeadlineExceeded) {
 		setExitCode(task, -1)
-		return fmt.Errorf("timed out after %v: %w", e.timeout, ctx.Err())
+		return fmt.Errorf("timed out after %v: %w", e.timeout, cmdCtx.Err())
 	}
 	if err != nil {
 		setExitCode(task, -1)
@@ -451,7 +454,7 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan struct{}, ptyFd int) {
+func (e *execution) controlLoop(ctx context.Context, execID string, pidCh <-chan int, stop <-chan struct{}, ptyFd int) {
 	logger.Debugf("Exec %s: control handler waiting", execID)
 	defer logger.Debugf("Exec %s: control handler finished", execID)
 
@@ -475,10 +478,11 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 	logger.Debugf("Exec %s: control handler started for PID %d", execID, pid)
 	for {
 		controlConn := e.getWebsocket(wsControl)
-		_, r, err := controlConn.Reader(context.Background())
+		_, r, err := controlConn.Reader(ctx)
 		if err != nil {
 			status := websocket.CloseStatus(err)
-			if status != websocket.StatusNormalClosure && status != websocket.StatusGoingAway && !errors.Is(err, net.ErrClosed) {
+			if status != websocket.StatusNormalClosure && status != websocket.StatusGoingAway &&
+				!errors.Is(err, net.ErrClosed) && ctx.Err() == nil {
 				logger.Debugf("Exec %s: cannot get next websocket reader for PID %d: %v", execID, pid, err)
 			}
 

@@ -16,9 +16,14 @@ package wsutil_test
 
 import (
 	"bytes"
+	"context"
+	"io"
+	"net"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/coder/websocket"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/testutil"
@@ -86,5 +91,76 @@ func (s *wsutilSuite) TestReaderToChannelStopWithAbandonedConsumer(c *C) {
 		case <-deadline:
 			c.Fatal("ReaderToChannel producer remained blocked")
 		}
+	}
+}
+
+// blockingConn blocks reads until it is closed.
+type blockingConn struct {
+	once   sync.Once
+	closed chan struct{}
+}
+
+func newBlockingConn() *blockingConn {
+	return &blockingConn{closed: make(chan struct{})}
+}
+
+func (b *blockingConn) Reader(ctx context.Context) (websocket.MessageType, io.Reader, error) {
+	<-b.closed
+	return 0, nil, net.ErrClosed
+}
+
+func (b *blockingConn) Write(ctx context.Context, typ websocket.MessageType, p []byte) error {
+	select {
+	case <-b.closed:
+		return net.ErrClosed
+	default:
+		return nil
+	}
+}
+
+func (b *blockingConn) CloseNow() error {
+	b.once.Do(func() { close(b.closed) })
+	return nil
+}
+
+func (s *wsutilSuite) TestWebsocketSendStreamCancel(c *C) {
+	conn := newBlockingConn()
+	r, w := io.Pipe()
+	defer w.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// The reader never produces any data, so only cancellation can stop
+	// the stream.
+	done := wsutil.WebsocketSendStream(ctx, conn, r, -1)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		c.Fatal("WebsocketSendStream did not stop after cancellation")
+	}
+	select {
+	case <-conn.closed:
+	default:
+		c.Fatal("WebsocketSendStream did not close the websocket")
+	}
+}
+
+func (s *wsutilSuite) TestWebsocketRecvStreamCancel(c *C) {
+	conn := newBlockingConn()
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := wsutil.WebsocketRecvStream(ctx, io.Discard, conn)
+	cancel()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		c.Fatal("WebsocketRecvStream did not stop after cancellation")
+	}
+	select {
+	case <-conn.closed:
+	default:
+		c.Fatal("WebsocketRecvStream did not close the websocket")
 	}
 }

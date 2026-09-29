@@ -43,16 +43,43 @@ type MessageReadWriter interface {
 	MessageWriter
 }
 
-// MessageWriteCloser is an interface that wraps websocket message writing
-// and closing.
+// MessageReadCloser is an interface that wraps websocket message reading and
+// closing.
+type MessageReadCloser interface {
+	MessageReader
+	CloseNow() error
+}
+
+// MessageWriteCloser is an interface that wraps websocket message writing and
+// closing.
 type MessageWriteCloser interface {
 	MessageWriter
-	Close(code websocket.StatusCode, reason string) error
+	CloseNow() error
+}
+
+// closeOnCancel closes conn if ctx is cancelled before stop returns. This
+// unblocks the peer, which would otherwise wait for an "end" command.
+func closeOnCancel(ctx context.Context, conn interface{ CloseNow() error }) (stop func()) {
+	stopAfter := context.AfterFunc(ctx, func() {
+		_ = conn.CloseNow()
+	})
+	return func() {
+		stopAfter()
+		// The AfterFunc runs asynchronously, so it may not have run (or
+		// finished) yet. CloseNow is idempotent, and waits for any concurrent
+		// close to finish.
+		if ctx.Err() != nil {
+			_ = conn.CloseNow()
+		}
+	}
 }
 
 var endCommandJSON = []byte(`{"command":"end"}`)
 
-func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan bool {
+// WebsocketSendStream sends data read from r to the websocket as binary
+// messages, followed by an "end" command. Cancelling ctx stops the stream and
+// closes the websocket.
+func WebsocketSendStream(ctx context.Context, conn MessageWriteCloser, r io.Reader, bufferSize int) chan bool {
 	ch := make(chan bool)
 
 	if r == nil {
@@ -60,48 +87,63 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 		return ch
 	}
 
-	go func(conn MessageWriter, r io.Reader) {
+	go func(conn MessageWriteCloser, r io.Reader) {
+		defer close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
+		defer closeOnCancel(ctx, conn)()
+
 		stop := make(chan struct{})
 		defer close(stop)
 
 		in := ReaderToChannel(r, bufferSize, stop)
+	loop:
 		for {
-			buf, ok := <-in
+			var buf []byte
+			var ok bool
+			select {
+			case buf, ok = <-in:
+			case <-ctx.Done():
+				break loop
+			}
 			if !ok {
 				break
 			}
 
-			err := conn.Write(context.Background(), websocket.MessageBinary, buf)
+			err := conn.Write(ctx, websocket.MessageBinary, buf)
 			if err != nil {
 				logger.Debugf("Got err writing %s", err)
 				break
 			}
 		}
-		conn.Write(context.Background(), websocket.MessageText, endCommandJSON)
-		close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
+		conn.Write(ctx, websocket.MessageText, endCommandJSON)
 	}(conn, r)
 
 	return ch
 }
 
-func WebsocketRecvStream(w io.Writer, conn MessageReader) chan bool {
+// WebsocketRecvStream writes binary messages received from the websocket to
+// w until an "end" command is received or the websocket is closed. Cancelling
+// ctx stops the stream and closes the websocket.
+func WebsocketRecvStream(ctx context.Context, w io.Writer, conn MessageReadCloser) chan bool {
 	ch := make(chan bool)
 
 	go func() {
-		recvLoop(w, conn)
-		close(ch)
+		defer close(ch)
+		defer closeOnCancel(ctx, conn)()
+		recvLoop(ctx, w, conn)
 	}()
 
 	return ch
 }
 
-func recvLoop(w io.Writer, conn MessageReader) {
+func recvLoop(ctx context.Context, w io.Writer, conn MessageReader) {
 	buf := make([]byte, 32*1024) // only allocate once per websocket, not once per loop
 
 	for {
-		mt, r, err := conn.Reader(context.Background())
+		mt, r, err := conn.Reader(ctx)
 		if err != nil {
-			if websocket.CloseStatus(err) != -1 {
+			if ctx.Err() != nil {
+				logger.Debugf("Reader cancelled: %v", err)
+			} else if websocket.CloseStatus(err) != -1 {
 				logger.Debugf("Got close message for reader")
 			} else if !IsAbnormalClosure(err) {
 				logger.Debugf("Cannot get next reader: %v", err)
