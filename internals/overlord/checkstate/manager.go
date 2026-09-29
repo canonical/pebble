@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 const (
@@ -659,7 +660,9 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	// If the check is stopped, run the check directly without using changes and tasks.
 	if changeID == "" {
 		chk := newChecker(check)
+		ctx, span := startCheckSpan(ctx, ctx, check)
 		err := runCheck(ctx, chk, check.Timeout.Value)
+		tracing.EndSpan(span, err)
 		if err != nil {
 			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))
 		}

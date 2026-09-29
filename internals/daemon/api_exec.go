@@ -88,6 +88,7 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
+	st.AddTraceContext(req.Context())
 
 	args := &cmdstate.ExecArgs{
 		Command:     payload.Command,
@@ -107,7 +108,7 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 		return ServerError("cannot call exec: %v", err)
 	}
 
-	change := st.NewChange("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
+	change := st.NewChangeContext(req.Context(), "exec", fmt.Sprintf("Execute command %q", args.Command[0]))
 	taskSet := state.NewTaskSet(task)
 	change.AddAll(taskSet)
 

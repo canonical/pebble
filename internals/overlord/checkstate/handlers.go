@@ -25,6 +25,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) error {
@@ -50,9 +51,18 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 
 	chk := newChecker(config)
 
-	performCheck := func() (shouldExit bool, err error) {
+	// performCheck runs the check. The parent context is that of the refresh
+	// request, or nil for periodic runs.
+	performCheck := func(parent context.Context) (shouldExit bool, err error) {
+		// The span covers recording the result too, so that the resulting
+		// state checkpoint is part of the check's trace.
 		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
-		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
+		ctx, span := startCheckSpan(tomb.Context(nil), parent, config)
+		var checkErr error
+		defer func() { tracing.EndSpan(span, checkErr) }()
+
+		err = runCheck(ctx, chk, config.Timeout.Value)
+		checkErr = err
 		if !tomb.Alive() {
 			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
 		}
@@ -61,6 +71,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			details.Failures++
 
 			m.state.Lock()
+			m.state.AddTraceContext(ctx)
 			atThreshold := details.Failures >= config.Threshold
 			if atThreshold {
 				details.Proceed = true
@@ -97,6 +108,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
+			m.state.AddTraceContext(ctx)
 			task.Logf("succeeded after %s", pluralise(oldFailures, "failure", "failures"))
 			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
@@ -104,6 +116,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
+			m.state.AddTraceContext(ctx)
 			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
 		}
@@ -115,7 +128,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		case info := <-refresh:
 			// Reset ticker on refresh.
 			ticker.Reset(config.Period.Value)
-			shouldExit, err := performCheck()
+			shouldExit, err := performCheck(info.ctx)
 			select {
 			case info.result <- err:
 			case <-info.ctx.Done():
@@ -124,7 +137,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				return err
 			}
 		case <-ticker.C:
-			shouldExit, err := performCheck()
+			shouldExit, err := performCheck(nil)
 			if shouldExit {
 				return err
 			}
@@ -168,9 +181,18 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 
 	chk := newChecker(config)
 
-	recoverCheck := func() (shouldExit bool, err error) {
+	// recoverCheck runs the check. The parent context is that of the refresh
+	// request, or nil for periodic runs.
+	recoverCheck := func(parent context.Context) (shouldExit bool, err error) {
+		// The span covers recording the result too, so that the resulting
+		// state checkpoint is part of the check's trace.
 		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
-		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
+		ctx, span := startCheckSpan(tomb.Context(nil), parent, config)
+		var checkErr error
+		defer func() { tracing.EndSpan(span, checkErr) }()
+
+		err = runCheck(ctx, chk, config.Timeout.Value)
+		checkErr = err
 		if !tomb.Alive() {
 			return true, checkStopped(config.Name, task.Kind(), tomb.Err())
 		}
@@ -180,6 +202,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 
 			m.state.Lock()
+			m.state.AddTraceContext(ctx)
 			task.Set(checkDetailsAttr, &details)
 			task.Errorf("%s", errorDetails(err))
 			m.state.Unlock()
@@ -194,6 +217,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		details.Failures = 0
 		details.Proceed = true
 		m.state.Lock()
+		m.state.AddTraceContext(ctx)
 		task.Set(checkDetailsAttr, &details)
 		m.state.Unlock()
 		return true, nil
@@ -204,7 +228,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		case info := <-refresh:
 			// Reset ticker on refresh.
 			ticker.Reset(config.Period.Value)
-			shouldExit, err := recoverCheck()
+			shouldExit, err := recoverCheck(info.ctx)
 			select {
 			case info.result <- err:
 			case <-info.ctx.Done():
@@ -213,7 +237,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 				return err
 			}
 		case <-ticker.C:
-			shouldExit, err := recoverCheck()
+			shouldExit, err := recoverCheck(nil)
 			if shouldExit {
 				return err
 			}

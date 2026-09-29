@@ -15,6 +15,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -37,6 +38,7 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/tracing"
 	"github.com/canonical/pebble/internals/workloads"
 )
 
@@ -195,6 +197,18 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		err := reaper.Stop()
 		if err != nil {
 			logger.Noticef("Cannot stop child process reaper: %v", err)
+		}
+	}()
+
+	shutdownTracing, err := tracing.Setup(context.Background(), cmd.Version)
+	if err != nil {
+		logger.Noticef("Cannot set up tracing: %v", err)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTracing(ctx); err != nil {
+			logger.Noticef("Cannot shut down tracing: %v", err)
 		}
 	}()
 

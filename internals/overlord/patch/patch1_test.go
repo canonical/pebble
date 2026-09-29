@@ -15,6 +15,7 @@
 package patch_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -58,7 +59,7 @@ func (s *patch1Suite) TestPatch1(c *C) {
 	restorer := patch.FakeLevel(1, 1)
 	defer restorer()
 
-	err = patch.Apply(st)
+	err = patch.Apply(context.Background(), st)
 	c.Assert(err, IsNil)
 
 	st.Lock()

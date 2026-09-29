@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/logstate/syslog"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 const (
@@ -64,6 +65,7 @@ type logGatherer struct {
 	*logGathererOptions
 
 	targetName string
+	targetType plan.LogTargetType
 	// tomb for the main loop
 	tomb tomb.Tomb
 
@@ -111,6 +113,7 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 		logGathererOptions: options,
 
 		targetName: target.Name,
+		targetType: target.Type,
 		client:     client,
 		setLabels:  make(chan svcWithLabels),
 		entryCh:    make(chan servicelog.Entry),
@@ -221,7 +224,13 @@ func (g *logGatherer) loop() error {
 	flushClient := func(ctx context.Context) {
 		// Mark timer as unset
 		flushTimer.Stop()
+		ctx, span := tracing.Tracer().Start(ctx, "flush logs "+g.targetName, tracing.WithAttributes(
+			tracing.AttrKey("log-target.name").String(g.targetName),
+			tracing.AttrKey("log-target.type").String(string(g.targetType)),
+			tracing.AttrKey("log-target.entries").Int(numWritten),
+		))
 		err := g.client.Flush(ctx)
+		tracing.EndSpan(span, err)
 		if err != nil {
 			logger.Noticef("Cannot flush logs to target %q: %v", g.targetName, err)
 		}

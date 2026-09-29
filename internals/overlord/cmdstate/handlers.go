@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
@@ -36,6 +37,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/ptyutil"
 	"github.com/canonical/pebble/internals/reaper"
+	"github.com/canonical/pebble/internals/tracing"
 	"github.com/canonical/pebble/internals/wsutil"
 )
 
@@ -120,7 +122,8 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 	}()
 
 	// Run the command! Killing the tomb will terminate the command.
-	ctx := tomb.Context(context.Background())
+	//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
+	ctx := tomb.Context(nil) // carries the task's trace span
 	return e.do(ctx, task)
 }
 
@@ -342,9 +345,17 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	// Ensure cmd.Env is not nil (does not inherit parent env). This is not
 	// strictly necessary as cmdstate.Exec always sets some environment
 	// variables, but code defensively.
-	cmd.Env = make([]string, 0, len(e.environment))
+	// Let the command continue the exec task's trace, unless the request
+	// set a trace context explicitly.
+	environment := maps.Clone(e.environment)
+	if environment == nil {
+		environment = make(map[string]string)
+	}
+	tracing.InjectEnv(ctx, environment)
 
-	for k, v := range e.environment {
+	cmd.Env = make([]string, 0, len(environment))
+
+	for k, v := range environment {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 

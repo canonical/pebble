@@ -146,6 +146,7 @@ func v1PostIdentities(c *Command, r *http.Request, user *UserState) Response {
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
+	st.AddTraceContext(r.Context())
 
 	identitiesMgr := c.d.overlord.IdentitiesManager()
 

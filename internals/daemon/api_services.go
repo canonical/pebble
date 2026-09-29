@@ -110,6 +110,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	st := c.d.overlord.State()
 	st.Lock()
 	defer st.Unlock()
+	st.AddTraceContext(r.Context())
 
 	var taskSet *state.TaskSet
 	var lanes [][]string
@@ -219,7 +220,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		//
 		//lint:ignore SA1019 strings.Title is deprecated
 		summary = fmt.Sprintf("%s - no services", strings.Title(payload.Action))
-		change := st.NewChange(payload.Action, summary)
+		change := st.NewChangeContext(r.Context(), payload.Action, summary)
 		change.SetStatus(state.DoneStatus)
 		return AsyncResponse(nil, change.ID())
 	case len(services) == 1:
@@ -230,7 +231,7 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 		summary = fmt.Sprintf("%s service %q and %d more", strings.Title(payload.Action), payload.Services[0], len(services)-1)
 	}
 
-	change := st.NewChange(payload.Action, summary)
+	change := st.NewChangeContext(r.Context(), payload.Action, summary)
 	change.AddAll(taskSet)
 	if len(payload.Services) > 0 {
 		change.Set("service-names", payload.Services)
