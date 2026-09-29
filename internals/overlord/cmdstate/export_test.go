@@ -15,7 +15,7 @@
 package cmdstate
 
 import (
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 )
 
 // AddTestExecution inserts a fake execution into the manager's map and

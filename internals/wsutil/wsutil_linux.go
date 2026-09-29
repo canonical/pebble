@@ -15,41 +15,44 @@
 package wsutil
 
 import (
+	"context"
 	"io"
 	"sync"
 	"sync/atomic"
 	"syscall"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	"golang.org/x/sys/unix"
 
 	"github.com/canonical/pebble/internals/logger"
 )
 
-// MirrorToWebsocket mirrors PTY output from r (file descriptor fd) to the websocket.
-func MirrorToWebsocket(conn MessageWriter, r io.ReadCloser, exited chan struct{}, fd int) {
+// MirrorToWebsocket mirrors PTY output from r (file descriptor fd) to the
+// websocket. Cancelling ctx closes the websocket.
+func MirrorToWebsocket(ctx context.Context, conn MessageWriteCloser, r io.ReadCloser, exited chan struct{}, fd int) {
+	defer closeOnCancel(ctx, conn)()
+
 	in := ExecReaderToChannel(r, -1, exited, fd)
 	for {
 		buf, ok := <-in
 		if !ok {
 			_ = r.Close()
 			logger.Debugf("Sending write barrier")
-			err := conn.WriteMessage(websocket.TextMessage, endCommandJSON)
+			err := conn.Write(ctx, websocket.MessageText, endCommandJSON)
 			if err != nil {
 				logger.Debugf("Got err writing barrier %s", err)
 			}
 			return
 		}
 
-		err := conn.WriteMessage(websocket.BinaryMessage, buf)
+		err := conn.Write(ctx, websocket.MessageBinary, buf)
 		if err != nil {
 			logger.Debugf("Got err writing %s", err)
 			break
 		}
 	}
 
-	closeMsg := websocket.FormatCloseMessage(websocket.CloseNormalClosure, "")
-	conn.WriteMessage(websocket.CloseMessage, closeMsg)
+	conn.CloseNow()
 	r.Close()
 }
 

@@ -33,7 +33,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/canonical/pebble/internals/wsutil"
 )
@@ -215,17 +215,12 @@ type Client struct {
 	getWebsocket getWebsocketFunc
 }
 
-type getWebsocketFunc func(urlPath string) (clientWebsocket, error)
+type getWebsocketFunc func(ctx context.Context, urlPath string) (clientWebsocket, error)
 
 type clientWebsocket interface {
 	wsutil.MessageReader
 	wsutil.MessageWriter
-	io.Closer
-	jsonWriter
-}
-
-type jsonWriter interface {
-	WriteJSON(v any) error
+	CloseNow() error
 }
 
 func New(config *Config) (*Client, error) {
@@ -257,8 +252,8 @@ func New(config *Config) (*Client, error) {
 	}
 
 	client.requester = requester
-	client.getWebsocket = func(urlPath string) (clientWebsocket, error) {
-		return requester.getWebsocket(urlPath)
+	client.getWebsocket = func(ctx context.Context, urlPath string) (clientWebsocket, error) {
+		return requester.getWebsocket(ctx, urlPath)
 	}
 
 	return client, nil
@@ -268,9 +263,9 @@ func (client *Client) Requester() Requester {
 	return client.requester
 }
 
-func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
+func (client *Client) getTaskWebsocket(ctx context.Context, taskID, websocketID string) (clientWebsocket, error) {
 	urlPath := fmt.Sprintf("/v1/tasks/%s/websocket/%s", taskID, websocketID)
-	return client.getWebsocket(urlPath)
+	return client.getWebsocket(ctx, urlPath)
 }
 
 // CloseIdleConnections closes any API connections that are currently unused.
@@ -748,12 +743,13 @@ func (rq *defaultRequester) Transport() *http.Transport {
 	return rq.transport
 }
 
-func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error) {
-	dialer := websocket.Dialer{
-		NetDialContext:   rq.transport.DialContext,
-		Proxy:            rq.transport.Proxy,
-		TLSClientConfig:  rq.transport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
+func (rq *defaultRequester) getWebsocket(ctx context.Context, urlPath string) (clientWebsocket, error) {
+	opts := &websocket.DialOptions{
+		HTTPClient: &http.Client{
+			Transport: rq.transport,
+			// The timeout only applies to the handshake.
+			Timeout: 5 * time.Second,
+		},
 	}
 
 	scheme := "ws"
@@ -766,13 +762,20 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 	if rq.basicUsername != "" && rq.basicPassword != "" {
 		r.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
-	conn, resp, err := dialer.Dial(url, nil)
-	if errors.Is(err, websocket.ErrBadHandshake) {
-		// FIXME: gorilla truncates the response body to 1024 characters.
-		// If parsing fails, the real error should appear in the server logs.
-		return conn, parseError(resp)
+	conn, resp, err := websocket.Dial(ctx, url, opts)
+	if err != nil {
+		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
+			// FIXME: the websocket library truncates the response body to 1024
+			// characters. If parsing fails, the real error should appear in
+			// the server logs.
+			return nil, parseError(resp)
+		}
+		return nil, err
 	}
-	return conn, err
+	// Messages are up to 128KiB (see wsutil.ReaderToChannel), so don't limit
+	// the size of messages read.
+	conn.SetReadLimit(-1)
+	return conn, nil
 }
 
 // getIdentityFingerprint extracts the public key from the certificate and

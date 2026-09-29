@@ -16,13 +16,14 @@ package client_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"regexp"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
@@ -45,7 +46,7 @@ func (s *execSuite) SetUpTest(c *C) {
 	s.stdioWs = &testWebsocket{}
 	s.controlWs = &testWebsocket{}
 	s.stderrWs = &testWebsocket{}
-	s.cli.SetGetWebsocket(func(url string) (client.ClientWebsocket, error) {
+	s.cli.SetGetWebsocket(func(ctx context.Context, url string) (client.ClientWebsocket, error) {
 		matches := websocketRegexp.FindStringSubmatch(url)
 		if matches == nil {
 			return nil, fmt.Errorf("invalid websocket URL %q", url)
@@ -233,8 +234,8 @@ func (s *execSuite) TestSendSignal(c *C) {
 	err = process.SendSignal("SIGUSR1")
 	c.Assert(err, IsNil)
 	c.Assert(s.controlWs.writes, DeepEquals, []write{
-		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGHUP"}}`},
-		{websocket.TextMessage, `{"command":"signal","signal":{"name":"SIGUSR1"}}`},
+		{websocket.MessageText, `{"command":"signal","signal":{"name":"SIGHUP"}}`},
+		{websocket.MessageText, `{"command":"signal","signal":{"name":"SIGUSR1"}}`},
 	})
 }
 
@@ -251,17 +252,17 @@ func (s *execSuite) TestSendResize(c *C) {
 	err = process.SendResize(80, 25)
 	c.Assert(err, IsNil)
 	c.Assert(s.controlWs.writes, DeepEquals, []write{
-		{websocket.TextMessage, `{"command":"resize","resize":{"width":150,"height":50}}`},
-		{websocket.TextMessage, `{"command":"resize","resize":{"width":80,"height":25}}`},
+		{websocket.MessageText, `{"command":"resize","resize":{"width":150,"height":50}}`},
+		{websocket.MessageText, `{"command":"resize","resize":{"width":80,"height":25}}`},
 	})
 }
 
 func (s *execSuite) TestOutputCombined(c *C) {
 	stdout := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
-		read{websocket.BinaryMessage, "OUT\n"},
-		read{websocket.BinaryMessage, "ERR\n"},
-		read{websocket.TextMessage, `{"command":"end"}`},
+		read{websocket.MessageBinary, "OUT\n"},
+		read{websocket.MessageBinary, "ERR\n"},
+		read{websocket.MessageText, `{"command":"end"}`},
 	)
 	opts := &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >err"},
@@ -280,12 +281,12 @@ func (s *execSuite) TestOutputSplit(c *C) {
 	stdout := bytes.Buffer{}
 	stderr := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
-		read{websocket.BinaryMessage, "OUT\n"},
-		read{websocket.TextMessage, `{"command":"end"}`},
+		read{websocket.MessageBinary, "OUT\n"},
+		read{websocket.MessageText, `{"command":"end"}`},
 	)
 	s.stderrWs.reads = append(s.stderrWs.reads,
-		read{websocket.BinaryMessage, "ERR\n"},
-		read{websocket.TextMessage, `{"command":"end"}`},
+		read{websocket.MessageBinary, "ERR\n"},
+		read{websocket.MessageText, `{"command":"end"}`},
 	)
 	opts := &client.ExecOptions{
 		Command: []string{"/bin/sh", "-c", "echo OUT; echo ERR >err"},
@@ -306,8 +307,8 @@ func (s *execSuite) TestOutputSplit(c *C) {
 func (s *execSuite) TestStdinAndStdout(c *C) {
 	stdout := bytes.Buffer{}
 	s.stdioWs.reads = append(s.stdioWs.reads,
-		read{websocket.BinaryMessage, "FOO\nBAR BAZZ\n"},
-		read{websocket.TextMessage, `{"command":"end"}`},
+		read{websocket.MessageBinary, "FOO\nBAR BAZZ\n"},
+		read{websocket.MessageText, `{"command":"end"}`},
 	)
 	opts := &client.ExecOptions{
 		Command: []string{"awk", "{ print toupper($0) }"},
@@ -322,8 +323,8 @@ func (s *execSuite) TestStdinAndStdout(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(stdout.String(), Equals, "FOO\nBAR BAZZ\n")
 	c.Assert(s.stdioWs.writes, DeepEquals, []write{
-		{websocket.BinaryMessage, "foo\nBar BAZZ\n"},
-		{websocket.TextMessage, `{"command":"end"}`},
+		{websocket.MessageBinary, "foo\nBar BAZZ\n"},
+		{websocket.MessageText, `{"command":"end"}`},
 	})
 }
 
@@ -333,39 +334,30 @@ type testWebsocket struct {
 }
 
 type read struct {
-	messageType int
+	messageType websocket.MessageType
 	data        string
 }
 
 type write struct {
-	messageType int
+	messageType websocket.MessageType
 	data        string
 }
 
-func (w *testWebsocket) NextReader() (messageType int, r io.Reader, err error) {
+func (w *testWebsocket) Reader(ctx context.Context) (websocket.MessageType, io.Reader, error) {
 	if len(w.reads) == 0 {
-		return websocket.CloseMessage, nil, nil
+		return 0, nil, websocket.CloseError{Code: websocket.StatusNormalClosure}
 	}
 	read := w.reads[0]
 	w.reads = w.reads[1:]
 	return read.messageType, bytes.NewBufferString(read.data), nil
 }
 
-func (w *testWebsocket) WriteMessage(messageType int, data []byte) error {
+func (w *testWebsocket) Write(ctx context.Context, messageType websocket.MessageType, data []byte) error {
 	w.writes = append(w.writes, write{messageType, string(data)})
 	return nil
 }
 
-func (w *testWebsocket) Close() error {
-	return nil
-}
-
-func (w *testWebsocket) WriteJSON(v any) error {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	w.writes = append(w.writes, write{websocket.TextMessage, string(data)})
+func (w *testWebsocket) CloseNow() error {
 	return nil
 }
 
