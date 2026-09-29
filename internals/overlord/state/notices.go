@@ -16,7 +16,8 @@ package state
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"slices"
@@ -133,7 +134,7 @@ type jsonNotice struct {
 	ExpireAfter   string            `json:"expire-after,omitempty"`
 }
 
-func (n *Notice) MarshalJSON() ([]byte, error) {
+func (n *Notice) MarshalJSONTo(enc *jsontext.Encoder) error {
 	jn := jsonNotice{
 		ID:            n.id,
 		UserID:        n.userID,
@@ -151,12 +152,12 @@ func (n *Notice) MarshalJSON() ([]byte, error) {
 	if n.expireAfter != 0 {
 		jn.ExpireAfter = n.expireAfter.String()
 	}
-	return json.Marshal(jn)
+	return json.MarshalEncode(enc, jn)
 }
 
-func (n *Notice) UnmarshalJSON(data []byte) error {
+func (n *Notice) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	var jn jsonNotice
-	err := json.Unmarshal(data, &jn)
+	err := json.UnmarshalDecode(dec, &jn)
 	if err != nil {
 		return err
 	}

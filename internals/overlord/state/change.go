@@ -16,7 +16,8 @@ package state
 
 import (
 	"bytes"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"maps"
@@ -170,28 +171,28 @@ func newChange(state *State, id, kind, summary string) *Change {
 }
 
 type marshalledChange struct {
-	ID      string                      `json:"id"`
-	Kind    string                      `json:"kind"`
-	Summary string                      `json:"summary"`
-	Status  Status                      `json:"status"`
-	Clean   bool                        `json:"clean,omitempty"`
-	Data    map[string]*json.RawMessage `json:"data,omitempty"`
-	TaskIDs []string                    `json:"task-ids,omitempty"`
+	ID      string                     `json:"id"`
+	Kind    string                     `json:"kind"`
+	Summary string                     `json:"summary"`
+	Status  Status                     `json:"status"`
+	Clean   bool                       `json:"clean,omitzero"`
+	Data    map[string]*jsontext.Value `json:"data,omitempty"`
+	TaskIDs []string                   `json:"task-ids,omitempty"`
 
 	SpawnTime time.Time  `json:"spawn-time"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
 
-	LastRecordedNoticeStatus Status `json:"last-recorded-notice-status,omitempty"`
+	LastRecordedNoticeStatus Status `json:"last-recorded-notice-status,omitzero"`
 }
 
-// MarshalJSON makes Change a json.Marshaller
-func (c *Change) MarshalJSON() ([]byte, error) {
+// MarshalJSONTo implements json.MarshalerTo.
+func (c *Change) MarshalJSONTo(enc *jsontext.Encoder) error {
 	c.state.reading()
 	var readyTime *time.Time
 	if !c.readyTime.IsZero() {
 		readyTime = &c.readyTime
 	}
-	return json.Marshal(marshalledChange{
+	return json.MarshalEncode(enc, marshalledChange{
 		ID:      c.id,
 		Kind:    c.kind,
 		Summary: c.summary,
@@ -207,13 +208,13 @@ func (c *Change) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON makes Change a json.Unmarshaller
-func (c *Change) UnmarshalJSON(data []byte) error {
+// UnmarshalJSONFrom implements json.UnmarshalerFrom.
+func (c *Change) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if c.state != nil {
 		c.state.writing()
 	}
 	var unmarshalled marshalledChange
-	err := json.Unmarshal(data, &unmarshalled)
+	err := json.UnmarshalDecode(dec, &unmarshalled)
 	if err != nil {
 		return err
 	}

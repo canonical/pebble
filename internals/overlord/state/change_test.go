@@ -15,7 +15,7 @@
 package state_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"sort"
@@ -437,7 +437,7 @@ func (cs *changeSuite) TestMethodEntrance(c *C) {
 		func() { chg.SetStatus(state.DoStatus) },
 		func() { chg.AddTask(nil) },
 		func() { chg.AddAll(nil) },
-		func() { chg.UnmarshalJSON(nil) },
+		func() { json.Unmarshal([]byte("{}"), chg) },
 	}
 
 	reads := []func(){
@@ -446,7 +446,7 @@ func (cs *changeSuite) TestMethodEntrance(c *C) {
 		func() { chg.IsClean() },
 		func() { chg.Tasks() },
 		func() { chg.Err() },
-		func() { chg.MarshalJSON() },
+		func() { json.Marshal(chg) },
 		func() { chg.SpawnTime() },
 		func() { chg.ReadyTime() },
 	}
