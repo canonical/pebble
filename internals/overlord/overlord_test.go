@@ -16,6 +16,7 @@ package overlord_test
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -158,7 +159,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	state.Lock()
 	defer state.Unlock()
 
-	d, err := json.Marshal(state)
+	d, err := jsonv2.Marshal(state)
 	c.Assert(err, IsNil)
 
 	var got, expected map[string]any
