@@ -11,8 +11,8 @@ import (
 	"slices"
 	"strconv"
 
-	pb "./internal/pb"
 	v11 "github.com/canonical/pebble/internals/otlp/common/v1"
+	pb "github.com/canonical/pebble/internals/otlp/internal/pb"
 )
 
 // Resource information.

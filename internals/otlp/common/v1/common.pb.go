@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	pb "./internal/pb"
+	pb "github.com/canonical/pebble/internals/otlp/internal/pb"
 )
 
 const (
