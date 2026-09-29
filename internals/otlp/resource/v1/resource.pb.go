@@ -4,43 +4,15 @@
 package v1
 
 import (
-	"bytes"
+	"cmp"
 	"encoding/binary"
 	"encoding/json/jsontext"
-	"encoding/json/v2"
 	"errors"
-	"io"
-	"math"
-	"math/big"
-	"math/bits"
 	"slices"
 	"strconv"
-	"strings"
 
+	pb "./internal/pb"
 	v11 "github.com/canonical/pebble/internals/otlp/common/v1"
-)
-
-const (
-	resourceWireVarint        = 0
-	resourceWireFixed64       = 1
-	resourceWireBytes         = 2
-	resourceWireStartGroup    = 3
-	resourceWireEndGroup      = 4
-	resourceWireFixed32       = 5
-	resourceTagTypeBits       = 3
-	resourceTagTypeMask       = 1<<3 - 1
-	resourceMaxFieldNumber    = 1<<29 - 1
-	resourceFixed32Size       = 4
-	resourceFixed64Size       = 8
-	resourceVarintPayloadBits = 7
-	resourceVarintContBit     = 0x80
-	resourceMaxDepth          = 10000
-	resourceSkipStackSize     = 16
-	resourceClassNone         = 0
-	resourceClassUnsigned     = 2
-	resourceMaxJSONExponent   = 100
-	resourceErrDepth          = "proto: exceeded maximum recursion depth"
-	resourceErrParse          = "proto: cannot parse invalid wire-format data"
 )
 
 // Resource information.
@@ -60,44 +32,26 @@ type Resource struct {
 	// Status: [Development]
 	EntityRefs []*v11.EntityRef
 
-	unknownFields []byte
+	u []byte
 }
 
 // Reset clears all fields of m.
-func (m *Resource) Reset() { *m = Resource{} }
+func (m *Resource) Reset()                            { *m = Resource{} }
+func (m *Resource) z() *Resource                      { return pb.If(m == nil, &resourceZResource, m) }
+func (m *Resource) GetAttributes() []*v11.KeyValue    { return m.z().Attributes }
+func (m *Resource) GetDroppedAttributesCount() uint32 { return m.z().DroppedAttributesCount }
+func (m *Resource) GetEntityRefs() []*v11.EntityRef   { return m.z().EntityRefs }
 
-func (m *Resource) GetAttributes() []*v11.KeyValue {
-	return resourceGet(m, func(m *Resource) []*v11.KeyValue { return m.Attributes })
-}
-func (m *Resource) GetDroppedAttributesCount() uint32 {
-	return resourceGet(m, func(m *Resource) uint32 { return m.DroppedAttributesCount })
-}
-func (m *Resource) GetEntityRefs() []*v11.EntityRef {
-	return resourceGet(m, func(m *Resource) []*v11.EntityRef { return m.EntityRefs })
-}
-
-// ProtoUnknownFields returns the raw bytes of fields that were not
-// recognized when m was decoded.
-func (m *Resource) ProtoUnknownFields() []byte {
-	return resourceGet(m, func(m *Resource) []byte { return m.unknownFields })
-}
+// ProtoUnknownFields returns the raw bytes of fields that were not recognized when m was decoded.
+func (m *Resource) ProtoUnknownFields() []byte { return m.z().u }
 
 // ProtoSize returns the size of the wire-format encoding of m.
 func (m *Resource) ProtoSize() (n int) {
-	if m == nil {
-		return 0
-	}
-	for _, v := range m.Attributes {
-		n += 1 + resourceSizeLen(v.ProtoSize())
-	}
-	if m.DroppedAttributesCount != 0 {
-		n += 1 + (bits.Len64(uint64(m.DroppedAttributesCount)|1)+resourceVarintPayloadBits-1)/resourceVarintPayloadBits
-	}
-	for _, v := range m.EntityRefs {
-		n += 1 + resourceSizeLen(v.ProtoSize())
-	}
-	n += len(m.unknownFields)
-	return n
+	m = m.z()
+	n += pb.SizeMsgs(1, m.Attributes, func(v *v11.KeyValue) int { return v.ProtoSize() })
+	n += pb.SizeVarint(1, uint64(m.DroppedAttributesCount))
+	n += pb.SizeMsgs(1, m.EntityRefs, func(v *v11.EntityRef) int { return v.ProtoSize() })
+	return n + len(m.u)
 }
 
 // MarshalBinary returns the wire-format encoding of m.
@@ -105,470 +59,120 @@ func (m *Resource) MarshalBinary() ([]byte, error) { return m.AppendBinary(nil) 
 
 // AppendBinary appends the wire-format encoding of m to b.
 func (m *Resource) AppendBinary(b []byte) ([]byte, error) {
-	size := m.ProtoSize()
-	b = slices.Grow(b, size)
-	n, err := m.ProtoMarshalToSizedBuffer(b[len(b) : len(b)+size])
-	return resourceAppended(b, size, n, err)
+	return pb.AppendBinary(b, m.ProtoSize(), m.ProtoMarshalToSizedBuffer)
 }
 
-// ProtoMarshalToSizedBuffer encodes m into the end of b, which must be
-// at least m.ProtoSize() bytes long, and returns the number of bytes
-// written. It does not check required fields.
+// ProtoMarshalToSizedBuffer encodes m into the end of b, which must hold m.ProtoSize() bytes, and returns the count written, without checking required fields.
 func (m *Resource) ProtoMarshalToSizedBuffer(b []byte) (int, error) {
-	if m == nil {
-		return 0, nil
-	}
-	i := len(b)
-	if len(m.unknownFields) > 0 {
-		i -= copy(b[i-len(m.unknownFields):], m.unknownFields)
-	}
+	m = m.z()
+	i := pb.CopyUnknown(b, len(b), m.u)
 	for _, v := range slices.Backward(m.EntityRefs) {
 		n, err := v.ProtoMarshalToSizedBuffer(b[:i])
 		if err != nil {
 			return 0, err
 		}
-		i = resourcePutVarint(b, resourcePutVarint(b, i-n, uint64(n)), 3<<resourceTagTypeBits|resourceWireBytes)
+		i = pb.PutVarint(b, pb.PutVarint(b, i-n, uint64(n)), 3<<pb.TagTypeBits|pb.WireBytes)
 	}
-	if m.DroppedAttributesCount != 0 {
-		i = resourcePutVarint(b, resourcePutVarint(b, i, uint64(m.DroppedAttributesCount)), 2<<resourceTagTypeBits|resourceWireVarint)
-	}
+	i = pb.PutVarintField(b, i, uint64(m.DroppedAttributesCount), 2<<pb.TagTypeBits|pb.WireVarint)
 	for _, v := range slices.Backward(m.Attributes) {
 		n, err := v.ProtoMarshalToSizedBuffer(b[:i])
 		if err != nil {
 			return 0, err
 		}
-		i = resourcePutVarint(b, resourcePutVarint(b, i-n, uint64(n)), 1<<resourceTagTypeBits|resourceWireBytes)
+		i = pb.PutVarint(b, pb.PutVarint(b, i-n, uint64(n)), 1<<pb.TagTypeBits|pb.WireBytes)
 	}
 	return len(b) - i, nil
 }
 
-// UnmarshalBinary replaces the contents of m with the decoded
-// wire-format message in b.
-func (m *Resource) UnmarshalBinary(b []byte) error {
-	*m = Resource{}
-	return m.ProtoMergeDepth(b, 0)
-}
+// UnmarshalBinary replaces the contents of m with the wire-format message in b.
+func (m *Resource) UnmarshalBinary(b []byte) error { *m = Resource{}; return m.ProtoMergeDepth(b, 0) }
 
-// ProtoMerge decodes the wire-format message in b and merges it into m.
-// It does not check required fields.
+// ProtoMerge decodes the wire-format message in b and merges it into m, without checking required fields.
 func (m *Resource) ProtoMerge(b []byte) error { return m.ProtoMergeDepth(b, 0) }
 
 // ProtoMergeDepth is ProtoMerge for a message nested depth levels deep.
 func (m *Resource) ProtoMergeDepth(b []byte, depth int) error {
-	if depth >= resourceMaxDepth {
-		return errors.New(resourceErrDepth)
-	}
-	for len(b) > 0 {
-		t, n := binary.Uvarint(b)
-		if n <= 0 || t>>resourceTagTypeBits == 0 || t>>resourceTagTypeBits > resourceMaxFieldNumber {
-			goto errParse
-		}
-		start := b
+	var x, err = []byte(nil), pb.Depth(depth)
+	for t, n := binary.Uvarint(b); n > 0 && err == nil; t, n = binary.Uvarint(b) {
 		b = b[n:]
 		switch t {
-		case 1<<resourceTagTypeBits | resourceWireBytes:
-			v, n := resourceReadBytes(b)
-			if n < 0 {
-				goto errParse
-			}
-			mv := &v11.KeyValue{}
-			m.Attributes = append(m.Attributes, mv)
-			if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-				return err
-			}
-			b = b[n:]
-		case 2<<resourceTagTypeBits | resourceWireVarint:
-			x, n := binary.Uvarint(b)
-			if n <= 0 {
-				goto errParse
-			}
-			b, m.DroppedAttributesCount = b[n:], uint32(x)
-		case 3<<resourceTagTypeBits | resourceWireBytes:
-			v, n := resourceReadBytes(b)
-			if n < 0 {
-				goto errParse
-			}
-			mv := &v11.EntityRef{}
-			m.EntityRefs = append(m.EntityRefs, mv)
-			if err := mv.ProtoMergeDepth(v, depth+1); err != nil {
-				return err
-			}
-			b = b[n:]
+		case 1<<pb.TagTypeBits | pb.WireBytes:
+			x, n = pb.ReadBytes(b)
+			err = pb.Alloc(pb.Grow(&m.Attributes)).ProtoMergeDepth(x, depth+1)
+		case 2<<pb.TagTypeBits | pb.WireVarint:
+			n = pb.Varint(b, &m.DroppedAttributesCount)
+		case 3<<pb.TagTypeBits | pb.WireBytes:
+			x, n = pb.ReadBytes(b)
+			err = pb.Alloc(pb.Grow(&m.EntityRefs)).ProtoMergeDepth(x, depth+1)
 		default:
-			n, err := resourceSkipField(b, t, depth)
-			if err != nil {
-				return err
-			}
-			m.unknownFields = append(m.unknownFields, start[:len(start)-len(b)+n]...)
-			b = b[n:]
+			n, err = pb.Unknown(b, t, depth, &m.u)
 		}
+		if n <= 0 || err != nil {
+			return cmp.Or(err, errors.New(pb.ErrParse))
+		}
+		b = b[n:]
 	}
-	return nil
-errParse:
-	return errors.New(resourceErrParse)
+	return pb.End(b, err)
 }
 
-// ProtoCheckInitialized returns an error if any required field in m
-// or its sub-messages is not set.
+// ProtoCheckInitialized returns an error if a required field of m or of a message in m is not set.
 func (m *Resource) ProtoCheckInitialized() error { return nil }
 
 // MarshalJSON returns the ProtoJSON encoding of m.
 func (m *Resource) MarshalJSON() ([]byte, error) { return m.ProtoAppendJSON(nil) }
 
-// MarshalJSONTo writes the ProtoJSON encoding of m to e. It implements
-// json.MarshalerTo from encoding/json/v2.
+// MarshalJSONTo writes the ProtoJSON encoding of m to e, implementing json.MarshalerTo from encoding/json/v2.
 func (m *Resource) MarshalJSONTo(e *jsontext.Encoder) error {
-	b, err := m.ProtoAppendJSON(e.AvailableBuffer())
-	return resourceWriteJSON(e, b, err)
+	return pb.MarshalTo(e, m.ProtoAppendJSON)
 }
 
-// ProtoAppendJSON appends the ProtoJSON encoding of m to b. It does not
-// check required fields.
+// ProtoAppendJSON appends the ProtoJSON encoding of m to b, without checking required fields.
 func (m *Resource) ProtoAppendJSON(b []byte) ([]byte, error) {
 	var err error
-	if m == nil {
-		return append(b, "{}"...), nil
-	}
-	start := len(b)
-	if len(m.Attributes) > 0 {
-		b = append(b, ",\"attributes\":["...)
-		for j := range m.Attributes {
-			if b, err = m.Attributes[j].ProtoAppendJSON(b); err != nil {
-				return nil, err
-			}
-			b = append(b, ',')
-		}
-		b[len(b)-1] = ']'
-	}
+	m, start := m.z(), len(b)
+	b, err = pb.AppendList(b, ",\"attributes\":[", m.Attributes, (*v11.KeyValue).ProtoAppendJSON, err)
 	if m.DroppedAttributesCount != 0 {
 		b = strconv.AppendUint(append(b, ",\"droppedAttributesCount\":"...), uint64(m.DroppedAttributesCount), 10)
 	}
-	if len(m.EntityRefs) > 0 {
-		b = append(b, ",\"entityRefs\":["...)
-		for j := range m.EntityRefs {
-			if b, err = m.EntityRefs[j].ProtoAppendJSON(b); err != nil {
-				return nil, err
-			}
-			b = append(b, ',')
-		}
-		b[len(b)-1] = ']'
-	}
-	return resourceCloseObject(b, start), nil
+	b, err = pb.AppendList(b, ",\"entityRefs\":[", m.EntityRefs, (*v11.EntityRef).ProtoAppendJSON, err)
+	return pb.CloseObject(b, start), err
 }
 
-// UnmarshalJSON replaces the contents of m with the decoded ProtoJSON
-// value in b.
-func (m *Resource) UnmarshalJSON(b []byte) error {
-	*m = Resource{}
-	return m.ProtoMergeJSON(b)
-}
+// UnmarshalJSON replaces the contents of m with the ProtoJSON value in b.
+func (m *Resource) UnmarshalJSON(b []byte) error { *m = Resource{}; return m.ProtoMergeJSON(b) }
 
-// ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m.
-// It does not check required fields.
+// ProtoMergeJSON decodes the ProtoJSON value in b and merges it into m, without checking required fields.
 func (m *Resource) ProtoMergeJSON(b []byte) error {
-	d := jsontext.NewDecoder(bytes.NewBuffer(b))
-	return resourceEndJSON(d, m.ProtoMergeJSONFrom(d), "opentelemetry.proto.resource.v1.Resource")
+	return pb.MergeJSON(b, "opentelemetry.proto.resource.v1.Resource", m.ProtoMergeJSONFrom)
 }
 
-// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value
-// read from d. It implements json.UnmarshalerFrom from encoding/json/v2.
+// UnmarshalJSONFrom replaces the contents of m with the ProtoJSON value read from d, implementing json.UnmarshalerFrom from encoding/json/v2.
 func (m *Resource) UnmarshalJSONFrom(d *jsontext.Decoder) error {
-	d, err := resourceStrictDecoder(d)
-	if err != nil {
-		return err
-	}
 	*m = Resource{}
-	return m.ProtoMergeJSONFrom(d)
+	return pb.MergeFrom(d, m.ProtoMergeJSONFrom)
 }
 
-// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it
-// into m. It does not check required fields. d should reject invalid
-// UTF-8, as jsontext decoders do by default.
+// ProtoMergeJSONFrom decodes one ProtoJSON value from d and merges it into m, without checking required fields; d should reject invalid UTF-8, as jsontext decoders do by default.
 func (m *Resource) ProtoMergeJSONFrom(d *jsontext.Decoder) error {
-	ok, err := resourceOpenJSON(d, jsontext.KindBeginObject, "opentelemetry.proto.resource.v1.Resource", "object")
-	if !ok {
-		return err
-	}
-	seen, in, f := [3]bool{}, jsontext.KindInvalid, 0
-	for {
-		if in == jsontext.KindInvalid {
-			kt, more, err := resourceNextKey(d)
-			if !more {
-				return err
-			}
-			key := kt.String()
-			switch key {
-			case "attributes":
-				f = 0
-			case "droppedAttributesCount", "dropped_attributes_count":
-				f = 1
-			case "entityRefs", "entity_refs":
-				f = 2
-			default:
-				if err := d.SkipValue(); err != nil {
-					return err
-				}
-				continue
-			}
-			if seen[f] {
-				return errors.New("proto: opentelemetry.proto.resource.v1.Resource: duplicate field " + strconv.Quote(key))
-			}
-			seen[f] = true
-			if d.PeekKind() == jsontext.KindNull {
-				if err := d.SkipValue(); err != nil {
-					return err
-				}
-				continue
-			}
-			switch f {
-			case 0, 2:
-				if err := resourceExpectJSON(d, jsontext.KindBeginArray, "opentelemetry.proto.resource.v1.Resource", "array"); err != nil {
-					return err
-				}
-				in = jsontext.KindBeginArray
-				continue
-			}
-		} else {
-			if k := d.PeekKind(); k == jsontext.KindEndArray || k == jsontext.KindEndObject {
-				if _, err := d.ReadToken(); err != nil {
-					return err
-				}
-				in = jsontext.KindInvalid
-				continue
-			}
-			if d.PeekKind() == jsontext.KindNull {
-				return errors.New("proto: opentelemetry.proto.resource.v1.Resource: null is not allowed in repeated fields or map values")
-			}
-		}
-		class, bits, uv, tok := resourceResourceJSONClasses[f][0], resourceResourceJSONClasses[f][1], uint64(0), jsontext.Token{}
-		if class != resourceClassNone {
-			if tok, err = d.ReadToken(); err != nil {
-				return err
-			}
-		}
-		switch class {
-		case resourceClassUnsigned:
-			uv, err = resourceParseUint(tok, bits, "opentelemetry.proto.resource.v1.Resource")
-		}
+	var seen [3]bool
+	for kt, err := pb.OpenObject(d, "opentelemetry.proto.resource.v1.Resource"); kt.Kind() != jsontext.KindEndObject; kt, err = pb.NextKey(d, err) {
 		if err != nil {
 			return err
 		}
-		switch f {
-		case 0:
-			mv := &v11.KeyValue{}
-			if err := mv.ProtoMergeJSONFrom(d); err != nil {
-				return err
-			}
-			m.Attributes = append(m.Attributes, mv)
-		case 1:
-			m.DroppedAttributesCount = uint32(uv)
-		case 2:
-			mv := &v11.EntityRef{}
-			if err := mv.ProtoMergeJSONFrom(d); err != nil {
-				return err
-			}
-			m.EntityRefs = append(m.EntityRefs, mv)
-		}
-	}
-}
-
-var resourceResourceJSONClasses = [3][2]int{{resourceClassNone, 64}, {resourceClassUnsigned, 32}, {resourceClassNone, 64}}
-
-func resourcePutVarint(b []byte, i int, u uint64) int {
-	if u < resourceVarintContBit {
-		b[i-1] = byte(u)
-		return i - 1
-	}
-	i -= (bits.Len64(u|1) + resourceVarintPayloadBits - 1) / resourceVarintPayloadBits
-	binary.PutUvarint(b[i:], u)
-	return i
-}
-
-func resourceSizeLen(l int) int {
-	return l + (bits.Len64(uint64(l)|1)+resourceVarintPayloadBits-1)/resourceVarintPayloadBits
-}
-
-func resourceReadBytes(b []byte) (v []byte, n int) {
-	ln, k := binary.Uvarint(b)
-	if k <= 0 || ln > uint64(len(b)-k) {
-		return nil, -1
-	}
-	return b[k : k+int(ln)], k + int(ln)
-}
-
-func resourceSkipField(b []byte, t uint64, depth int) (int, error) {
-	switch t & resourceTagTypeMask {
-	case resourceWireVarint:
-		if _, n := binary.Uvarint(b); n > 0 {
-			return n, nil
-		}
-	case resourceWireFixed64:
-		if len(b) >= resourceFixed64Size {
-			return resourceFixed64Size, nil
-		}
-	case resourceWireBytes:
-		if _, n := resourceReadBytes(b); n >= 0 {
-			return n, nil
-		}
-	case resourceWireStartGroup:
-		return resourceSkipGroup(b, int32(t>>resourceTagTypeBits), depth)
-	case resourceWireFixed32:
-		if len(b) >= resourceFixed32Size {
-			return resourceFixed32Size, nil
-		}
-	}
-	return 0, errors.New(resourceErrParse)
-}
-
-func resourceSkipGroup(b []byte, num int32, depth int) (int, error) {
-	var stk [resourceSkipStackSize]int32
-	open := append(stk[:0], num)
-	n := 0
-	for len(open) > 0 {
-		if depth+len(open) > resourceMaxDepth {
-			return 0, errors.New(resourceErrDepth)
-		}
-		t, k := binary.Uvarint(b[n:])
-		if k <= 0 || t>>resourceTagTypeBits == 0 || t>>resourceTagTypeBits > resourceMaxFieldNumber {
-			return 0, errors.New(resourceErrParse)
-		}
-		n += k
-		switch t & resourceTagTypeMask {
-		case resourceWireStartGroup:
-			open = append(open, int32(t>>resourceTagTypeBits))
-		case resourceWireEndGroup:
-			if open[len(open)-1] != int32(t>>resourceTagTypeBits) {
-				return 0, errors.New(resourceErrParse)
-			}
-			open = open[:len(open)-1]
+		switch key := kt.String(); key {
+		case "attributes":
+			err = pb.RepField(d, &seen[0], key, "opentelemetry.proto.resource.v1.Resource", &m.Attributes, false, pb.JSONMsg)
+		case "droppedAttributesCount", "dropped_attributes_count":
+			err = pb.Field(d, &seen[1], key, "opentelemetry.proto.resource.v1.Resource", &m.DroppedAttributesCount, pb.JSONUint)
+		case "entityRefs", "entity_refs":
+			err = pb.RepField(d, &seen[2], key, "opentelemetry.proto.resource.v1.Resource", &m.EntityRefs, false, pb.JSONMsg)
 		default:
-			k, err := resourceSkipField(b[n:], t, depth)
-			if err != nil {
-				return 0, err
-			}
-			n += k
+			err = d.SkipValue()
 		}
-	}
-	return n, nil
-}
-
-func resourceAppended(b []byte, size, n int, err error) ([]byte, error) {
-	if err == nil && n != size {
-		err = errors.New("proto: message size changed during marshal")
-	}
-	if err != nil {
-		return b, err
-	}
-	return b[:len(b)+size], nil
-}
-
-func resourceGet[M, T any](m *M, f func(*M) T) (t T) {
-	if m != nil {
-		t = f(m)
-	}
-	return t
-}
-
-func resourceWriteJSON(e *jsontext.Encoder, b []byte, err error) error {
-	if err != nil {
-		return err
-	}
-	return e.WriteValue(b)
-}
-
-func resourceCloseObject(b []byte, start int) []byte {
-	if len(b) == start {
-		return append(b, "{}"...)
-	}
-	b[start] = '{'
-	return append(b, '}')
-}
-
-func resourceEndJSON(d *jsontext.Decoder, err error, name string) error {
-	if err != nil {
-		return err
-	}
-	if _, err := d.ReadToken(); err != io.EOF {
-		return resourceJSONError(name, "unexpected data after JSON value")
 	}
 	return nil
 }
 
-func resourceStrictDecoder(d *jsontext.Decoder) (*jsontext.Decoder, error) {
-	if lax, _ := json.GetOption(d.Options(), jsontext.AllowInvalidUTF8); !lax {
-		return d, nil
-	}
-	v, err := d.ReadValue()
-	if err != nil {
-		return nil, err
-	}
-	return jsontext.NewDecoder(bytes.NewBuffer(v)), nil
-}
-
-func resourceOpenJSON(d *jsontext.Decoder, kind jsontext.Kind, name, what string) (bool, error) {
-	if d.PeekKind() == jsontext.KindNull {
-		return false, d.SkipValue()
-	}
-	err := resourceExpectJSON(d, kind, name, what)
-	return err == nil, err
-}
-
-func resourceExpectJSON(d *jsontext.Decoder, kind jsontext.Kind, name, what string) error {
-	tok, err := d.ReadToken()
-	if err != nil {
-		return err
-	}
-	if tok.Kind() != kind {
-		return resourceJSONError(name, "expected a JSON "+what)
-	}
-	return nil
-}
-
-func resourceNextKey(d *jsontext.Decoder) (jsontext.Token, bool, error) {
-	if d.PeekKind() == jsontext.KindEndObject {
-		_, err := d.ReadToken()
-		return jsontext.Token{}, false, err
-	}
-	tok, err := d.ReadToken()
-	return tok, err == nil, err
-}
-
-func resourceParseUint(tok jsontext.Token, bits int, name string) (uint64, error) {
-	s, err := resourceJSONNumber(tok, name)
-	if err != nil {
-		return 0, err
-	}
-	if v, err := strconv.ParseUint(s, 10, bits); err == nil {
-		return v, nil
-	}
-	n := resourceExactInt(s)
-	if n == nil || !n.IsUint64() || (bits == 32 && n.Uint64() > math.MaxUint32) {
-		return 0, resourceJSONError(name, "invalid integer "+s)
-	}
-	return n.Uint64(), nil
-}
-
-func resourceExactInt(s string) *big.Int {
-	if i := strings.IndexAny(s, "eE"); i >= 0 {
-		if e, err := strconv.Atoi(s[i+1:]); err != nil || e > resourceMaxJSONExponent || e < -resourceMaxJSONExponent {
-			return nil
-		}
-	}
-	r, ok := new(big.Rat).SetString(s)
-	if !ok || !r.IsInt() {
-		return nil
-	}
-	return r.Num()
-}
-
-func resourceJSONNumber(tok jsontext.Token, name string) (string, error) {
-	s := tok.String()
-	if k := tok.Kind(); k != jsontext.KindNumber && (k != jsontext.KindString || s == "" || (s[0] != '-' && (s[0] < '0' || s[0] > '9')) || !jsontext.Value(s).IsValid()) {
-		return "", resourceJSONError(name, "invalid number "+s)
-	}
-	return s, nil
-}
-
-func resourceJSONError(name, msg string) error {
-	return errors.New("proto: " + name + ": " + msg)
-}
+var (
+	resourceZResource Resource
+)
