@@ -16,6 +16,7 @@ package overlord_test
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -158,7 +159,7 @@ func (ovs *overlordSuite) TestNewWithGoodState(c *C) {
 	state.Lock()
 	defer state.Unlock()
 
-	d, err := state.MarshalJSON()
+	d, err := jsonv2.Marshal(state)
 	c.Assert(err, IsNil)
 
 	var got, expected map[string]any
@@ -179,7 +180,7 @@ func (ovs *overlordSuite) TestNewWithInvalidState(c *C) {
 	c.Assert(err, IsNil)
 
 	_, err = overlord.New(&overlord.Options{PebbleDir: ovs.dir})
-	c.Assert(err, ErrorMatches, "cannot read state: EOF")
+	c.Assert(err, ErrorMatches, "cannot read state: jsontext: unexpected EOF")
 }
 
 func (ovs *overlordSuite) TestNewWithPatches(c *C) {

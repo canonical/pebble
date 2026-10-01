@@ -15,7 +15,8 @@
 package state
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"slices"
 	"time"
@@ -76,31 +77,32 @@ func newTask(state *State, id, kind, summary string) *Task {
 }
 
 type marshalledTask struct {
-	ID           string                      `json:"id"`
-	Kind         string                      `json:"kind"`
-	Summary      string                      `json:"summary"`
-	Status       Status                      `json:"status"`
-	WaitedStatus Status                      `json:"waited-status"`
-	Clean        bool                        `json:"clean,omitempty"`
-	Progress     *progress                   `json:"progress,omitempty"`
-	Data         map[string]*json.RawMessage `json:"data,omitempty"`
-	WaitTasks    []string                    `json:"wait-tasks,omitempty"`
-	HaltTasks    []string                    `json:"halt-tasks,omitempty"`
-	Lanes        []int                       `json:"lanes,omitempty"`
-	Log          []string                    `json:"log,omitempty"`
-	Change       string                      `json:"change"`
+	ID           string                     `json:"id"`
+	Kind         string                     `json:"kind"`
+	Summary      string                     `json:"summary"`
+	Status       Status                     `json:"status"`
+	WaitedStatus Status                     `json:"waited-status"`
+	Clean        bool                       `json:"clean,omitzero"`
+	Progress     *progress                  `json:"progress,omitzero"`
+	Data         map[string]*jsontext.Value `json:"data,omitempty"`
+	WaitTasks    []string                   `json:"wait-tasks,omitempty"`
+	HaltTasks    []string                   `json:"halt-tasks,omitempty"`
+	Lanes        []int                      `json:"lanes,omitempty"`
+	Log          []string                   `json:"log,omitempty"`
+	Change       string                     `json:"change"`
 
 	SpawnTime time.Time  `json:"spawn-time"`
 	ReadyTime *time.Time `json:"ready-time,omitempty"`
 
-	DoingTime   time.Duration `json:"doing-time,omitempty"`
-	UndoingTime time.Duration `json:"undoing-time,omitempty"`
+	// DoingTime and UndoingTime are durations in nanoseconds.
+	DoingTime   int64 `json:"doing-time,omitzero"`
+	UndoingTime int64 `json:"undoing-time,omitzero"`
 
 	AtTime *time.Time `json:"at-time,omitempty"`
 }
 
-// MarshalJSON makes Task a json.Marshaller
-func (t *Task) MarshalJSON() ([]byte, error) {
+// MarshalJSONTo implements json.MarshalerTo.
+func (t *Task) MarshalJSONTo(enc *jsontext.Encoder) error {
 	t.state.reading()
 	var readyTime *time.Time
 	if !t.readyTime.IsZero() {
@@ -110,7 +112,7 @@ func (t *Task) MarshalJSON() ([]byte, error) {
 	if !t.atTime.IsZero() {
 		atTime = &t.atTime
 	}
-	return json.Marshal(marshalledTask{
+	return json.MarshalEncode(enc, marshalledTask{
 		ID:           t.id,
 		Kind:         t.kind,
 		Summary:      t.summary,
@@ -128,20 +130,20 @@ func (t *Task) MarshalJSON() ([]byte, error) {
 		SpawnTime: t.spawnTime,
 		ReadyTime: readyTime,
 
-		DoingTime:   t.doingTime,
-		UndoingTime: t.undoingTime,
+		DoingTime:   int64(t.doingTime),
+		UndoingTime: int64(t.undoingTime),
 
 		AtTime: atTime,
 	})
 }
 
-// UnmarshalJSON makes Task a json.Unmarshaller
-func (t *Task) UnmarshalJSON(data []byte) error {
+// UnmarshalJSONFrom implements json.UnmarshalerFrom.
+func (t *Task) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	if t.state != nil {
 		t.state.writing()
 	}
 	var unmarshalled marshalledTask
-	err := json.Unmarshal(data, &unmarshalled)
+	err := json.UnmarshalDecode(dec, &unmarshalled)
 	if err != nil {
 		return err
 	}
@@ -175,8 +177,8 @@ func (t *Task) UnmarshalJSON(data []byte) error {
 	if unmarshalled.AtTime != nil {
 		t.atTime = *unmarshalled.AtTime
 	}
-	t.doingTime = unmarshalled.DoingTime
-	t.undoingTime = unmarshalled.UndoingTime
+	t.doingTime = time.Duration(unmarshalled.DoingTime)
+	t.undoingTime = time.Duration(unmarshalled.UndoingTime)
 	return nil
 }
 

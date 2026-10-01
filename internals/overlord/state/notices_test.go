@@ -17,7 +17,7 @@ package state_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"sync"
@@ -620,7 +620,7 @@ func (s *noticesSuite) TestReadStateWaitNotices(c *C) {
 	st.Lock()
 	defer st.Unlock()
 
-	marshalled, err := st.MarshalJSON()
+	marshalled, err := json.Marshal(st)
 	c.Assert(err, IsNil)
 
 	st2, err := state.ReadState(nil, bytes.NewBuffer(marshalled))

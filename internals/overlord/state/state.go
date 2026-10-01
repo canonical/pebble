@@ -16,7 +16,8 @@
 package state
 
 import (
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -38,7 +39,7 @@ type Backend interface {
 	NeedsCheckpoint() bool
 }
 
-type customData map[string]*json.RawMessage
+type customData map[string]*jsontext.Value
 
 func (data customData) get(key string, value any) error {
 	entryJSON := data[key]
@@ -61,11 +62,11 @@ func (data customData) set(key string, value any) {
 		delete(data, key)
 		return
 	}
-	serialized, err := json.Marshal(value)
+	serialized, err := json.Marshal(value, json.Deterministic(true))
 	if err != nil {
 		logger.Panicf("internal error: could not marshal value for state entry %q: %v", key, err)
 	}
-	entryJSON := json.RawMessage(serialized)
+	entryJSON := jsontext.Value(serialized)
 	data[key] = &entryJSON
 }
 
@@ -95,7 +96,7 @@ type State struct {
 	tasks   map[string]*Task
 	notices map[noticeKey]*Notice
 
-	legacyIdentities json.RawMessage
+	legacyIdentities jsontext.Value
 
 	noticeCond        *sync.Cond
 	latestWarningTime atomic.Pointer[time.Time]
@@ -159,14 +160,14 @@ func (s *State) unlock() {
 }
 
 type marshalledState struct {
-	Data    map[string]*json.RawMessage `json:"data"`
-	Changes map[string]*Change          `json:"changes"`
-	Tasks   map[string]*Task            `json:"tasks"`
-	Notices []*Notice                   `json:"notices,omitempty"`
+	Data    map[string]*jsontext.Value `json:"data"`
+	Changes map[string]*Change         `json:"changes"`
+	Tasks   map[string]*Task           `json:"tasks"`
+	Notices []*Notice                  `json:"notices,omitempty"`
 
 	// The "identities" key used to be stored directly on state at the top level,
 	// so be sure to read them from old state files.
-	LegacyIdentities json.RawMessage `json:"identities,omitempty"`
+	LegacyIdentities jsontext.Value `json:"identities,omitzero"`
 
 	LastChangeId int `json:"last-change-id"`
 	LastTaskId   int `json:"last-task-id"`
@@ -174,10 +175,10 @@ type marshalledState struct {
 	LastNoticeId int `json:"last-notice-id"`
 }
 
-// MarshalJSON makes State a json.Marshaller
-func (s *State) MarshalJSON() ([]byte, error) {
+// MarshalJSONTo implements json.MarshalerTo.
+func (s *State) MarshalJSONTo(enc *jsontext.Encoder) error {
 	s.reading()
-	return json.Marshal(marshalledState{
+	return json.MarshalEncode(enc, marshalledState{
 		Data:    s.data,
 		Changes: s.changes,
 		Tasks:   s.tasks,
@@ -190,11 +191,11 @@ func (s *State) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// UnmarshalJSON makes State a json.Unmarshaller
-func (s *State) UnmarshalJSON(data []byte) error {
+// UnmarshalJSONFrom implements json.UnmarshalerFrom.
+func (s *State) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	s.writing()
 	var unmarshalled marshalledState
-	err := json.Unmarshal(data, &unmarshalled)
+	err := json.UnmarshalDecode(dec, &unmarshalled)
 	if err != nil {
 		return err
 	}
@@ -220,13 +221,13 @@ func (s *State) UnmarshalJSON(data []byte) error {
 }
 
 // LegacyIdentities is exported for use in patch2.go to perform the migration.
-func (s *State) LegacyIdentities() json.RawMessage {
+func (s *State) LegacyIdentities() jsontext.Value {
 	s.reading()
 	return s.legacyIdentities
 }
 
 func (s *State) checkpointData() []byte {
-	data, err := json.Marshal(s)
+	data, err := json.Marshal(s, json.Deterministic(true))
 	if err != nil {
 		// this shouldn't happen, because the actual delicate serializing happens at various Set()s
 		logger.Panicf("internal error: could not marshal state for checkpointing: %v", err)
@@ -714,8 +715,7 @@ func ReadState(backend Backend, r io.Reader) (*State, error) {
 	s := new(State)
 	s.Lock()
 	defer s.unlock()
-	d := json.NewDecoder(r)
-	err := d.Decode(&s)
+	err := json.UnmarshalRead(r, s)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read state: %s", err)
 	}

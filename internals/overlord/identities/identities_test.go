@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"encoding/pem"
 	"testing"
 
@@ -86,7 +87,7 @@ func (s *identitiesSuite) TestMarshalState(c *C) {
 	c.Assert(err, IsNil)
 
 	// Marshal entire state, then pull out just the "identities" key to test that.
-	data, err := json.Marshal(st)
+	data, err := jsonv2.Marshal(st)
 	c.Assert(err, IsNil)
 
 	var unmarshalled map[string]any

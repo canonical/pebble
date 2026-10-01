@@ -15,7 +15,7 @@
 package state_test
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"time"
 
@@ -186,7 +186,7 @@ func (ts *taskSuite) TestTaskMarshalsWaitStatus(c *C) {
 	t1 := st.NewTask("download", "1...")
 	t1.SetToWait(state.UndoStatus)
 
-	d, err := t1.MarshalJSON()
+	d, err := json.Marshal(t1)
 	c.Assert(err, IsNil)
 
 	needle := fmt.Sprintf(`"waited-status":%d`, t1.WaitedStatus())
@@ -208,8 +208,8 @@ func (ts *taskSuite) TestIsCleanAndSetClean(c *C) {
 	c.Check(t.IsClean(), Equals, true)
 }
 
-func jsonStr(m json.Marshaler) string {
-	data, err := m.MarshalJSON()
+func jsonStr(v any) string {
+	data, err := json.Marshal(v)
 	if err != nil {
 		panic(err)
 	}
@@ -306,7 +306,7 @@ func (ts *taskSuite) TestTaskMarshalsWaitFor(c *C) {
 	t2 := st.NewTask("install", "2...")
 	t2.WaitFor(t1)
 
-	d, err := t2.MarshalJSON()
+	d, err := json.Marshal(t2)
 	c.Assert(err, IsNil)
 
 	needle := fmt.Sprintf(`"wait-tasks":["%s"`, t1.ID())
@@ -322,7 +322,7 @@ func (ts *taskSuite) TestTaskMarshalsDoingUndoingTime(c *C) {
 	t.AccumulateDoingTime(123456)
 	t.AccumulateUndoingTime(654321)
 
-	d, err := t.MarshalJSON()
+	d, err := json.Marshal(t)
 	c.Assert(err, IsNil)
 
 	c.Assert(string(d), testutil.Contains, `"doing-time":123456`)
@@ -433,7 +433,7 @@ func (ts *taskSuite) TestTaskMarshalsLog(c *C) {
 	t := st.NewTask("download", "1...")
 	t.Logf("foo")
 
-	d, err := t.MarshalJSON()
+	d, err := json.Marshal(t)
 	c.Assert(err, IsNil)
 
 	c.Assert(string(d), Matches, `.*"log":\["....-..-..T.* INFO foo"\].*`)
@@ -456,7 +456,7 @@ func (cs *taskSuite) TestMethodEntrance(c *C) {
 		func() { t1.SetProgress("", 2, 2) },
 		func() { t1.Logf("") },
 		func() { t1.Errorf("") },
-		func() { t1.UnmarshalJSON(nil) },
+		func() { json.Unmarshal([]byte("{}"), t1) },
 		func() { t1.SetProgress("", 1, 1) },
 		func() { t1.JoinLane(1) },
 		func() { t1.AccumulateDoingTime(1) },
@@ -471,7 +471,7 @@ func (cs *taskSuite) TestMethodEntrance(c *C) {
 		func() { t1.HaltTasks() },
 		func() { t1.Progress() },
 		func() { t1.Log() },
-		func() { t1.MarshalJSON() },
+		func() { json.Marshal(t1) },
 		func() { t1.Progress() },
 		func() { t1.SetProgress("", 0, 1) },
 		func() { t1.Lanes() },

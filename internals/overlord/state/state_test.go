@@ -18,6 +18,7 @@ package state_test
 
 import (
 	"bytes"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"reflect"
@@ -127,7 +128,7 @@ func (ss *stateSuite) TestSetPanic(c *C) {
 	unsupported := struct {
 		Ch chan bool
 	}{}
-	c.Check(func() { st.Set("mgr9", unsupported) }, PanicMatches, `internal error: could not marshal value for state entry "mgr9": json: unsupported type:.*`)
+	c.Check(func() { st.Set("mgr9", unsupported) }, PanicMatches, `internal error: could not marshal value for state entry "mgr9": json: cannot marshal from Go chan bool.*`)
 }
 
 func (ss *stateSuite) TestGetNoState(c *C) {
@@ -786,7 +787,7 @@ func (ss *stateSuite) TestMethodEntrance(c *C) {
 		func() { st.Set("foo", 1) },
 		func() { st.NewChange("install", "...") },
 		func() { st.NewTask("download", "...") },
-		func() { st.UnmarshalJSON(nil) },
+		func() { json.Unmarshal([]byte("{}"), st) },
 		func() { st.NewLane() },
 		func() { st.Warnf("hello") },
 	}
@@ -799,7 +800,7 @@ func (ss *stateSuite) TestMethodEntrance(c *C) {
 		func() { st.Change("foo") },
 		func() { st.Tasks() },
 		func() { st.Task("foo") },
-		func() { st.MarshalJSON() },
+		func() { json.Marshal(st) },
 		func() { st.Prune(time.Now(), time.Hour, time.Hour, 100, 100) },
 		func() { st.TaskCount() },
 	}

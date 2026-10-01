@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -878,10 +879,10 @@ func (s *apiSuite) TestNoticeNonAdminNotAllowed(c *C) {
 }
 
 func noticeToMap(c *C, notice *state.Notice) map[string]any {
-	buf, err := json.Marshal(notice)
+	buf, err := jsonv2.Marshal(notice)
 	c.Assert(err, IsNil)
 	var n map[string]any
-	err = json.Unmarshal(buf, &n)
+	err = jsonv2.Unmarshal(buf, &n)
 	c.Assert(err, IsNil)
 	return n
 }
