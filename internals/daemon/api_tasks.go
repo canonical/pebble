@@ -21,6 +21,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
@@ -38,6 +39,16 @@ func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
 		// "bad handshake".
 		logger.Noticef("Websocket: cannot find task %q", taskID)
 		return NotFound("cannot find task %q", taskID)
+	}
+
+	// Record the task and change the websocket is for on the request's span.
+	span := tracing.SpanFromContext(req.Context())
+	span.SetAttributes(
+		tracing.AttrKey(attrTaskID).String(taskID),
+		tracing.AttrKey(attrWebsocketID).String(websocketID),
+	)
+	if change := task.Change(); change != nil {
+		span.SetAttributes(tracing.AttrKey(attrChangeID).String(change.ID()))
 	}
 
 	var connect websocketConnectFunc
