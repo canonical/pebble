@@ -22,6 +22,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 type changeInfo struct {
@@ -192,6 +193,19 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 	if err != nil {
 		return BadRequest("invalid timeout: %v", err)
 	}
+
+	// The request's span covers the wait, and records how the wait ended:
+	// timing out or the client going away are expected outcomes, not
+	// failures of the daemon.
+	span := tracing.SpanFromContext(r.Context())
+	span.SetAttributes(tracing.AttrKey(attrChangeID).String(changeID))
+	if timeout != 0 {
+		span.SetAttributes(tracing.AttrKey(attrWaitTimeout).String(timeout.String()))
+	}
+	waitOutcome := func(outcome string) {
+		span.SetAttributes(tracing.AttrKey(attrWaitOutcome).String(outcome))
+	}
+
 	if timeout != 0 {
 		// Timeout specified, wait till change is ready or timeout occurs,
 		// whichever is first.
@@ -200,8 +214,12 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 		case <-change.Ready():
 			timer.Stop() // change ready, release timer resources
 		case <-timer.C:
+			waitOutcome("timeout")
+			expectedStatus(r)
 			return GatewayTimeout("timed out waiting for change after %s", timeout)
 		case <-r.Context().Done():
+			waitOutcome("cancelled")
+			expectedStatus(r)
 			return ServerError("request cancelled")
 		}
 	} else {
@@ -209,12 +227,16 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 		select {
 		case <-change.Ready():
 		case <-r.Context().Done():
+			waitOutcome("cancelled")
+			expectedStatus(r)
 			return ServerError("request cancelled")
 		}
 	}
+	waitOutcome("ready")
 
 	st.Lock()
 	defer st.Unlock()
+	span.SetAttributes(tracing.AttrKey(attrChangeStatus).String(change.Status().String()))
 	return SyncResponse(change2changeInfo(change))
 }
 

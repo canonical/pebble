@@ -34,10 +34,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
 	"github.com/canonical/pebble/internals/testutil"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // Hook up check.v1 into the "go test" runner
@@ -314,6 +316,137 @@ func (cs *clientSuite) TestUserAgent(c *C) {
 	err = resp.DecodeResult(&v)
 	c.Assert(err, NotNil)
 	c.Check(cs.req.Header.Get("User-Agent"), Equals, "some-agent/9.87")
+}
+
+func (cs *clientSuite) TestTraceContextFromConfig(c *C) {
+	sc := tracing.ParseTraceParent(
+		"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+		"foo=bar",
+	)
+	c.Assert(sc.IsValid(), Equals, true)
+
+	cli, err := client.New(&client.Config{SpanContext: sc})
+	c.Assert(err, IsNil)
+	cli.SetDoer(cs)
+
+	_, err = cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+	c.Check(cs.req.Header.Get("tracestate"), Equals, "foo=bar")
+
+	// A span carried by the request context takes precedence.
+	ctxSC := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{1},
+		SpanID:     tracing.SpanID{2},
+		TraceFlags: tracing.FlagsSampled,
+	})
+	_, err = cli.Requester().Do(tracing.ContextWithSpanContext(context.Background(), ctxSC), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-01000000000000000000000000000000-0200000000000000-01")
+	c.Check(cs.req.Header.Get("tracestate"), Equals, "")
+}
+
+func (cs *clientSuite) TestNoTraceContext(c *C) {
+	_, err := cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Values("traceparent"), HasLen, 0)
+	c.Check(cs.req.Header.Values("tracestate"), HasLen, 0)
+}
+
+func (cs *clientSuite) TestSetSpanContext(c *C) {
+	doRequest := func() {
+		_, err := cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
+			Type:   client.RawRequest,
+			Method: "GET",
+			Path:   "/",
+		})
+		c.Assert(err, IsNil)
+	}
+
+	// The client was created without a span context.
+	doRequest()
+	c.Check(cs.req.Header.Values("traceparent"), HasLen, 0)
+
+	// Requests made after setting one carry it.
+	sc := tracing.ParseTraceParent(
+		"00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01",
+		"foo=bar",
+	)
+	c.Assert(sc.IsValid(), Equals, true)
+	cs.cli.SetSpanContext(sc)
+	doRequest()
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+	c.Check(cs.req.Header.Get("tracestate"), Equals, "foo=bar")
+
+	// Setting another replaces it.
+	cs.cli.SetSpanContext(tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{1},
+		SpanID:     tracing.SpanID{2},
+		TraceFlags: tracing.FlagsSampled,
+	}))
+	doRequest()
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-01000000000000000000000000000000-0200000000000000-01")
+	c.Check(cs.req.Header.Values("tracestate"), HasLen, 0)
+
+	// A span carried by the request context still takes precedence.
+	ctxSC := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{3},
+		SpanID:     tracing.SpanID{4},
+		TraceFlags: tracing.FlagsSampled,
+	})
+	_, err := cs.cli.Requester().Do(tracing.ContextWithSpanContext(context.Background(), ctxSC), &client.RequestOptions{
+		Type:   client.RawRequest,
+		Method: "GET",
+		Path:   "/",
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-03000000000000000000000000000000-0400000000000000-01")
+
+	// An invalid span context clears it.
+	cs.cli.SetSpanContext(tracing.SpanContext{})
+	doRequest()
+	c.Check(cs.req.Header.Values("traceparent"), HasLen, 0)
+}
+
+func (cs *clientSuite) TestSetSpanContextWebsocket(c *C) {
+	// The websocket handshake carries the span context set on the client.
+	var header http.Header
+	upgrader := websocket.Upgrader{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header = r.Header.Clone()
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn.Close()
+	}))
+	defer server.Close()
+
+	cli, err := client.New(&client.Config{BaseURL: server.URL})
+	c.Assert(err, IsNil)
+	conn, err := cli.GetWebsocket("/v1/tasks/1/websocket/control")
+	c.Assert(err, IsNil)
+	conn.Close()
+	c.Check(header.Values("traceparent"), HasLen, 0)
+
+	cli.SetSpanContext(tracing.ParseTraceParent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", ""))
+	conn, err = cli.GetWebsocket("/v1/tasks/1/websocket/control")
+	c.Assert(err, IsNil)
+	conn.Close()
+	c.Check(header.Get("traceparent"), Equals, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+	c.Check(header.Values("tracestate"), HasLen, 0)
 }
 
 func (cs *clientSuite) TestContentType(c *C) {
@@ -673,4 +806,39 @@ func createTestClientTLSCerts(c *C) *tls.Certificate {
 		PrivateKey:  tlsKeyPair,
 		Leaf:        cert,
 	}
+}
+
+func (cs *clientSuite) TestWebsocketHeaders(c *C) {
+	// The websocket handshake must carry the trace context and basic auth,
+	// like other requests.
+	var header http.Header
+	upgrader := websocket.Upgrader{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		header = r.Header.Clone()
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn.Close()
+	}))
+	defer server.Close()
+
+	sc := tracing.ParseTraceParent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", "foo=bar")
+	cli, err := client.New(&client.Config{
+		BaseURL:       server.URL,
+		BasicUsername: "bob",
+		BasicPassword: "secret",
+		SpanContext:   sc,
+	})
+	c.Assert(err, IsNil)
+	conn, err := cli.GetWebsocket("/v1/tasks/1/websocket/control")
+	c.Assert(err, IsNil)
+	conn.Close()
+
+	c.Check(header.Get("traceparent"), Equals, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+	c.Check(header.Get("tracestate"), Equals, "foo=bar")
+	user, pass, ok := (&http.Request{Header: header}).BasicAuth()
+	c.Check(ok, Equals, true)
+	c.Check(user, Equals, "bob")
+	c.Check(pass, Equals, "secret")
 }
