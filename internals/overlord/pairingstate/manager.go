@@ -16,6 +16,7 @@
 package pairingstate
 
 import (
+	"context"
 	"crypto/x509"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // maxUsernameSuffix determines the maximum number suffix for users
@@ -129,7 +131,7 @@ func NewManager(st *state.State, identitiesMgr *identities.Manager) (*PairingMan
 }
 
 // PlanChanged informs the pairing manager that the plan has been updated.
-func (m *PairingManager) PlanChanged(update *plan.Plan) {
+func (m *PairingManager) PlanChanged(ctx context.Context, update *plan.Plan) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -204,7 +206,9 @@ func (m *PairingManager) EnablePairing(timeout time.Duration) error {
 
 // PairMTLS adds a client identity with admin permissions to the identity
 // subsystem. A pairing request always leaves the pairing window disabled.
-func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
+// The identity added is traced as part of the span carried by ctx (the
+// pairing request), if any.
+func (m *PairingManager) PairMTLS(ctx context.Context, clientCert *x509.Certificate) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -237,6 +241,8 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 
 	m.state.Lock()
 	defer m.state.Unlock()
+	m.state.AddTraceContext(ctx)
+	span := tracing.SpanFromContext(ctx)
 
 	existingIdentities := m.identitiesMgr.Identities()
 
@@ -252,6 +258,7 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 			// it again with a new username.
 			m.details.Paired = true
 			m.state.Set(pairingDetailsAttr, m.details)
+			span.AddEvent("already paired")
 
 			return nil
 		}
@@ -273,6 +280,7 @@ func (m *PairingManager) PairMTLS(clientCert *x509.Certificate) error {
 	if err != nil {
 		return fmt.Errorf("cannot add identity: %w", err)
 	}
+	span.AddEvent("paired", tracing.WithAttributes(tracing.UserName(username)))
 
 	m.details.Paired = true
 	m.state.Set(pairingDetailsAttr, m.details)

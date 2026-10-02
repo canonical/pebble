@@ -16,6 +16,7 @@ package servstate_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -1013,18 +1014,18 @@ func (s *S) TestOnCheckFailureRestartWhileRunning(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(plan.NewPlan())
+	defer checkMgr.PlanChanged(context.Background(), plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
-	checkMgr.NotifyCheckFailed(func(name string) {
+	checkMgr.NotifyCheckFailed(func(ctx context.Context, name string) {
 		// Control when the action should be applied
 		select {
 		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
 			panic("timed out waiting to send on check-failed channel")
 		}
-		s.manager.CheckFailed(name)
+		s.manager.CheckFailed(ctx, name)
 	})
 
 	tempDir := c.MkDir()
@@ -1051,7 +1052,7 @@ checks:
 		tempFile,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(context.Background(), s.plan)
 
 	// Start service and wait till it starts up
 	s.startServices(c, [][]string{{"test2"}})
@@ -1108,18 +1109,18 @@ func (s *S) TestOnCheckFailureRestartDuringBackoff(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(plan.NewPlan())
+	defer checkMgr.PlanChanged(context.Background(), plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
-	checkMgr.NotifyCheckFailed(func(name string) {
+	checkMgr.NotifyCheckFailed(func(ctx context.Context, name string) {
 		// Control when the action should be applied
 		select {
 		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
 			panic("timed out waiting to send on check-failed channel")
 		}
-		s.manager.CheckFailed(name)
+		s.manager.CheckFailed(ctx, name)
 	})
 
 	tempDir := c.MkDir()
@@ -1147,7 +1148,7 @@ checks:
 		tempFile,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(context.Background(), s.plan)
 
 	// Start service and wait till it starts up
 	s.startServices(c, [][]string{{"test2"}})
@@ -1200,18 +1201,18 @@ func (s *S) TestOnCheckFailureIgnore(c *C) {
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(plan.NewPlan())
+	defer checkMgr.PlanChanged(context.Background(), plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
-	checkMgr.NotifyCheckFailed(func(name string) {
+	checkMgr.NotifyCheckFailed(func(ctx context.Context, name string) {
 		// Control when the action should be applied
 		select {
 		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
 			panic("timed out waiting to send on check-failed channel")
 		}
-		s.manager.CheckFailed(name)
+		s.manager.CheckFailed(ctx, name)
 	})
 
 	tempDir := c.MkDir()
@@ -1237,7 +1238,7 @@ checks:
 		tempFile,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(context.Background(), s.plan)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, [][]string{{"test2"}})
@@ -1285,18 +1286,18 @@ func (s *S) testOnCheckFailureShutdown(c *C, action string, restartType restart.
 
 	// Create check manager and tell it about plan updates
 	checkMgr := checkstate.NewManager(s.st, s.runner, nil)
-	defer checkMgr.PlanChanged(plan.NewPlan())
+	defer checkMgr.PlanChanged(context.Background(), plan.NewPlan())
 
 	// Tell service manager about check failures
 	checkFailed := make(chan struct{})
-	checkMgr.NotifyCheckFailed(func(name string) {
+	checkMgr.NotifyCheckFailed(func(ctx context.Context, name string) {
 		// Control when the action should be applied
 		select {
 		case checkFailed <- struct{}{}:
 		case <-time.After(10 * time.Second):
 			panic("timed out waiting to send on check-failed channel")
 		}
-		s.manager.CheckFailed(name)
+		s.manager.CheckFailed(ctx, name)
 	})
 
 	tempDir := c.MkDir()
@@ -1322,7 +1323,7 @@ checks:
 		action,
 	))
 	s.planChanged(c)
-	checkMgr.PlanChanged(s.plan)
+	checkMgr.PlanChanged(context.Background(), s.plan)
 
 	// Start service and wait till it starts up (output file is written to)
 	s.startServices(c, [][]string{{"test2"}})
@@ -2008,7 +2009,7 @@ func (s *S) newServiceManager(c *C) {
 
 func (s *S) planChanged(c *C) {
 	c.Assert(s.plan, NotNil)
-	s.manager.PlanChanged(s.plan)
+	s.manager.PlanChanged(context.Background(), s.plan)
 	s.planPropagated = true
 }
 

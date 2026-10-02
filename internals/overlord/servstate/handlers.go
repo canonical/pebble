@@ -1,13 +1,14 @@
 package servstate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
-	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"sync/atomic"
 	"syscall"
@@ -24,6 +25,7 @@ import (
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/tracing"
 	"github.com/canonical/pebble/internals/workloads"
 )
 
@@ -110,6 +112,13 @@ type serviceData struct {
 	restarting   bool
 	currentSince time.Time
 	startCount   atomic.Int64
+
+	// Tracing (see tracing.go): the span of the task currently starting or
+	// stopping the service, the span for a restart or exit happening outside
+	// a task, and the context of the span that started the current process.
+	taskSpan         tracing.Span
+	lifecycleSpan    tracing.Span
+	startSpanContext tracing.SpanContext
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -128,6 +137,11 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	if err != nil {
 		return err
 	}
+
+	//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
+	ctx := tomb.Context(nil) // carries the task's trace span
+	span := tracing.SpanFromContext(ctx)
+	span.SetAttributes(tracing.AttrKey(attrServiceName).String(request.Name))
 
 	currentPlan := m.getPlan()
 	config, ok := currentPlan.Services[request.Name]
@@ -156,8 +170,12 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	task.Set("started", true)
 	m.state.Unlock()
 
+	// Record what happens to the service while starting on the task's span.
+	service.setTaskSpan(span)
+	defer service.setTaskSpan(nil)
+
 	// Start the service and transition to stateStarting.
-	err = service.start()
+	err = service.start(ctx)
 	if err != nil {
 		return err
 	}
@@ -180,6 +198,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		m.servicesLock.Lock()
 		defer m.servicesLock.Unlock()
 		service.transition(stateStopped)
+		span.AddEvent("sigkill")
 		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
 			return fmt.Errorf("start aborted, but cannot send SIGKILL to process: %v", err)
@@ -227,6 +246,11 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 		return nil, fmt.Sprintf("Service %q already started.", config.Name)
 	case stateBackoff, stateStopped, stateExited:
 		// Start allowed when service is backing off, was stopped, or has exited.
+		if service.state == stateBackoff {
+			// The pending restart is superseded by this start.
+			service.span().AddEvent("start requested")
+			service.endLifecycleSpan(nil)
+		}
 		service.backoffNum = 0
 		service.backoffTime = 0
 		if service.logs == nil || service.logs.Closed() {
@@ -256,6 +280,10 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
+	//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
+	span := tracing.SpanFromContext(tomb.Context(nil)) // the task's trace span
+	span.SetAttributes(tracing.AttrKey(attrServiceName).String(request.Name))
+
 	service, taskLog := m.serviceForStop(request.Name)
 	if taskLog != "" {
 		addTaskLog(task, taskLog)
@@ -263,6 +291,10 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 	if service == nil {
 		return nil
 	}
+
+	// Record the signals sent and the process exiting on the task's span.
+	service.setTaskSpan(span)
+	defer service.setTaskSpan(nil)
 
 	// Stop service: send SIGTERM, and if that doesn't stop the process in a
 	// short time, send SIGKILL.
@@ -284,6 +316,7 @@ func (m *ServiceManager) doStop(task *state.Task, tomb *tomb.Tomb) error {
 			// already been sent to the process, so there's not much more we
 			// can do than log it.
 			logger.Noticef("Cannot abort stop for service %q, signals already sent", request.Name)
+			span.AddEvent("abort ignored, signals already sent")
 		}
 	}
 }
@@ -335,13 +368,15 @@ func (s *serviceData) transitionRestarting(state serviceState, restarting bool) 
 }
 
 // start is called to transition from the initial state and start the service.
-func (s *serviceData) start() error {
+// The span carried by ctx, if any, is the one starting the service (see
+// startInternal).
+func (s *serviceData) start(ctx context.Context) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateInitial:
-		err := s.startInternal()
+		err := s.startInternal(ctx)
 		if err != nil {
 			s.transition(stateStopped)
 			return err
@@ -364,12 +399,21 @@ func logError(err error) {
 // startInternal is an internal helper used to actually start (or restart) the
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
-func (s *serviceData) startInternal() error {
+//
+// The span carried by ctx, if any, is the one on whose behalf the service is
+// being started: the start task's span, or the span for an automatic restart.
+// It's recorded as the process's parent trace context, and later restarts and
+// exits of the process link to it.
+func (s *serviceData) startInternal(ctx context.Context) error {
+	span := tracing.SpanFromContext(ctx)
+	s.startSpanContext = span.SpanContext()
+
 	base, extra, err := s.config.ParseCommand()
 	if err != nil {
 		return err
 	}
 	args := append(base, extra...)
+	span.SetAttributes(tracing.ProcessExecutableName(filepath.Base(args[0])))
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -437,9 +481,18 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
-	// Pass service description's environment variables to child process.
-	s.cmd.Env = os.Environ()
-	for k, v := range environment {
+	// The service inherits the daemon's environment, except for its trace
+	// context, which doesn't describe the service's parent. The service
+	// description's environment variables take precedence.
+	env := osutil.Environ()
+	tracing.DeleteEnv(env)
+	maps.Copy(env, environment)
+	// Let the service continue the trace of whatever started it (unless the
+	// service description sets a trace context explicitly).
+	tracing.InjectEnv(ctx, env)
+
+	s.cmd.Env = make([]string, 0, len(env))
+	for k, v := range env {
 		s.cmd.Env = append(s.cmd.Env, k+"="+v)
 	}
 
@@ -480,6 +533,8 @@ func (s *serviceData) startInternal() error {
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
+	span.SetAttributes(tracing.ProcessPID(s.cmd.Process.Pid))
+	span.AddEvent("process started")
 	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
@@ -526,6 +581,7 @@ func (s *serviceData) okayWaitElapsed() error {
 
 	switch s.state {
 	case stateStarting:
+		s.span().AddEvent("okay")
 		s.started <- nil // still running fine after short duration, no error
 		s.transition(stateRunning)
 
@@ -545,19 +601,30 @@ func (s *serviceData) exited(exitCode int) error {
 		s.resetTimer.Stop()
 	}
 
+	exitAttr := tracing.ProcessExitCode(exitCode)
+
 	switch s.state {
 	case stateStarting:
 		// Send error to select waiting in doStart, then fall through to perform action.
 		action, _ := getAction(s.config, exitCode == 0)
+		s.span().SetAttributes(exitAttr)
 		s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
 		fallthrough
 
 	case stateRunning:
 		logger.Noticef("Service %q stopped unexpectedly with code %d", s.config.Name, exitCode)
 		action, onType := getAction(s.config, exitCode == 0)
+		// The exit and what's done about it is a trace of its own, as no
+		// task is driving the service at this point.
+		spanName := "service exit"
+		if action == plan.ActionRestart {
+			spanName = "service restart"
+		}
+		s.startLifecycleSpan(context.Background(), spanName, onType, action, exitAttr)
 		switch action {
 		case plan.ActionIgnore:
 			logger.Noticef("Service %q %s action is %q, not doing anything further", s.config.Name, onType, action)
+			s.endLifecycleSpan(nil)
 			// On success we transition to state stopped.
 			if exitCode == 0 {
 				s.transition(stateStopped)
@@ -574,27 +641,29 @@ func (s *serviceData) exited(exitCode int) error {
 			}
 			logger.Noticef("Service %q %s action is %q, triggering %s shutdown",
 				s.config.Name, onType, action, shutdownStr)
-			s.manager.restarter.HandleRestart(restartType)
+			s.requestRestart(restartType)
 			s.transition(stateExited)
 
 		case plan.ActionSuccessShutdown:
 			logger.Noticef("Service %q %s action is %q, triggering success shutdown", s.config.Name, onType, action)
-			s.manager.restarter.HandleRestart(restart.RestartDaemon)
+			s.requestRestart(restart.RestartDaemon)
 			s.transition(stateExited)
 
 		case plan.ActionFailureShutdown:
 			logger.Noticef("Service %q %s action is %q, triggering failure shutdown", s.config.Name, onType, action)
-			s.manager.restarter.HandleRestart(restart.RestartServiceFailure)
+			s.requestRestart(restart.RestartServiceFailure)
 			s.transition(stateExited)
 
 		case plan.ActionRestart:
 			s.doBackoff(action, onType)
 
 		default:
+			s.endLifecycleSpan(fmt.Errorf("internal error: unexpected action %q", action))
 			return fmt.Errorf("internal error: unexpected action %q", action)
 		}
 
 	case stateTerminating, stateKilling:
+		s.span().AddEvent("process exited", tracing.WithAttributes(exitAttr))
 		if s.restarting {
 			logger.Noticef("Service %q exited after check failure, restarting", s.config.Name)
 			s.doBackoff(plan.ActionRestart, "on-check-failure")
@@ -629,6 +698,17 @@ func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
 	}
 }
 
+// requestRestart asks the daemon to restart or shut down as the result of a
+// service's action, recording the request on the service's lifecycle span and
+// ending it, as there's nothing further for the service to do.
+func (s *serviceData) requestRestart(t restart.RestartType) {
+	s.span().AddEvent("restart requested", tracing.WithAttributes(
+		tracing.AttrKey(attrRestartType).String(t.String()),
+	))
+	s.manager.restarter.HandleRestart(t)
+	s.endLifecycleSpan(nil)
+}
+
 func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 	s.backoffNum++
 	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
@@ -636,6 +716,10 @@ func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 		s.config.Name, onType, action, s.backoffTime, s.backoffNum)
 	s.transition(stateBackoff)
 	duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
+	s.span().AddEvent("backoff", tracing.WithAttributes(
+		tracing.AttrKey(attrBackoffNum).Int(s.backoffNum),
+		tracing.AttrKey(attrBackoffDelay).String(duration.String()),
+	))
 	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
 }
 
@@ -728,15 +812,15 @@ func (s *serviceData) stop() error {
 	case stateRunning:
 		logger.Debugf("Attempting to stop service %q by sending SIGTERM", s.config.Name)
 		// First send SIGTERM to try to terminate it gracefully.
-		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
-		if err != nil {
-			logger.Noticef("Cannot send SIGTERM to process: %v", err)
-		}
+		s.sendSigterm()
 		s.transition(stateTerminating)
 		time.AfterFunc(s.killDelay(), func() { logError(s.terminateTimeElapsed()) })
 
 	case stateBackoff:
 		logger.Noticef("Service %q stopped while waiting for backoff", s.config.Name)
+		// The pending restart is cancelled by the stop.
+		s.span().AddEvent("stopped during backoff")
+		s.endLifecycleSpan(nil)
 		s.stopped <- nil
 		s.transition(stateStopped)
 
@@ -754,7 +838,9 @@ func (s *serviceData) backoffTimeElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
-		err := s.startInternal()
+		// The restarted process continues the restart's trace.
+		err := s.startInternal(s.lifecycleContext())
+		s.endLifecycleSpan(err)
 		if err != nil {
 			return err
 		}
@@ -767,6 +853,18 @@ func (s *serviceData) backoffTimeElapsed() error {
 	return nil
 }
 
+// sendSigterm sends SIGTERM to the service's process group, recording it on
+// the service's span. It must be called with servicesLock held.
+func (s *serviceData) sendSigterm() {
+	s.span().AddEvent("sigterm", tracing.WithAttributes(
+		tracing.AttrKey(attrKillDelay).String(s.killDelay().String()),
+	))
+	err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
+	if err != nil {
+		logger.Noticef("Cannot send SIGTERM to process: %v", err)
+	}
+}
+
 // terminateTimeElapsed is called after stop sends SIGTERM and the service
 // still hasn't exited (and we then send SIGTERM).
 func (s *serviceData) terminateTimeElapsed() error {
@@ -777,6 +875,7 @@ func (s *serviceData) terminateTimeElapsed() error {
 	case stateTerminating:
 		logger.Debugf("Attempting to stop service %q again by sending SIGKILL", s.config.Name)
 		// Process hasn't exited after SIGTERM, try SIGKILL.
+		s.span().AddEvent("sigkill")
 		err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
 			logger.Noticef("Cannot send SIGKILL to process: %v", err)
@@ -802,6 +901,7 @@ func (s *serviceData) killTimeElapsed() error {
 	case stateKilling:
 		if s.restarting {
 			logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
+			s.endLifecycleSpan(fmt.Errorf("process still running after SIGTERM and SIGKILL"))
 			s.transition(stateStopped)
 		} else {
 			logger.Noticef("Service %q still running after SIGTERM and SIGKILL", s.config.Name)
@@ -837,8 +937,9 @@ func (s *serviceData) backoffResetElapsed() error {
 	return nil
 }
 
-// checkFailed handles a health check failure (from the check manager).
-func (s *serviceData) checkFailed(action plan.ServiceAction) {
+// checkFailed handles a health check failure (from the check manager). The
+// span carried by ctx, if any, is that of the failing check run.
+func (s *serviceData) checkFailed(ctx context.Context, action plan.ServiceAction) {
 	switch s.state {
 	case stateRunning, stateBackoff, stateExited:
 		onType := "on-check-failure"
@@ -848,28 +949,30 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 
 		case plan.ActionShutdown:
 			logger.Noticef("Service %q %s action is %q, triggering failure shutdown", s.config.Name, onType, action)
-			s.manager.restarter.HandleRestart(restart.RestartCheckFailure)
+			s.startLifecycleSpan(ctx, "service exit", onType, action)
+			s.requestRestart(restart.RestartCheckFailure)
 
 		case plan.ActionSuccessShutdown:
 			logger.Noticef("Service %q %s action is %q, triggering success shutdown", s.config.Name, onType, action)
-			s.manager.restarter.HandleRestart(restart.RestartDaemon)
+			s.startLifecycleSpan(ctx, "service exit", onType, action)
+			s.requestRestart(restart.RestartDaemon)
 
 		case plan.ActionRestart:
 			switch s.state {
 			case stateRunning:
 				logger.Noticef("Service %q %s action is %q, terminating process before restarting",
 					s.config.Name, onType, action)
-				err := syscall.Kill(-s.cmd.Process.Pid, syscall.SIGTERM)
-				if err != nil {
-					logger.Noticef("Cannot send SIGTERM to process: %v", err)
-				}
+				s.startLifecycleSpan(ctx, "service restart", onType, action)
+				s.sendSigterm()
 				s.transitionRestarting(stateTerminating, true)
 				time.AfterFunc(s.killDelay(), func() { logError(s.terminateTimeElapsed()) })
 			case stateBackoff:
 				logger.Noticef("Service %q %s action is %q, waiting for current backoff",
 					s.config.Name, onType, action)
+				s.span().AddEvent("check failed, waiting for current backoff")
 				return
 			case stateExited:
+				s.startLifecycleSpan(ctx, "service restart", onType, action)
 				s.doBackoff(action, onType)
 			}
 

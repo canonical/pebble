@@ -238,11 +238,7 @@ jobs:
           BASE_BRANCH: ${{ steps.vars.outputs.base-branch }}
         run: |
           set -eu
-          if [[ -f cmd/VERSION ]]; then
-            CURRENT=$(cat cmd/VERSION)
-          else
-            CURRENT=$(sed -n 's/^var Version = "\(.*\)"$/\1/p' cmd/version.go)
-          fi
+          CURRENT=$(cat cmd/VERSION)
           if [[ "$CURRENT" == "$EXPECTED_VERSION" ]]; then
             echo "${BASE_BRANCH} is already at ${EXPECTED_VERSION}."
             echo "done=true" >> "$GITHUB_OUTPUT"
@@ -780,13 +776,9 @@ jobs:
         id: version
         run: |
           set -eu
-          if [[ -f cmd/VERSION ]]; then
-            VERSION=$(cat cmd/VERSION)
-          else
-            VERSION=$(sed -n 's/^var Version = "\(.*\)"$/\1/p' cmd/version.go)
-          fi
+          VERSION=$(cat cmd/VERSION)
           if [[ -z "$VERSION" ]]; then
-            echo "::error::Could not determine version from cmd/VERSION or cmd/version.go"
+            echo "::error::Could not determine version from cmd/VERSION"
             exit 1
           fi
           echo "Version is ${VERSION}"

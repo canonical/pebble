@@ -54,7 +54,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 	svc2 := newTestService("svc2")
 	svc3 := newTestService("svc3")
 
-	m.PlanChanged(&plan.Plan{
+	m.PlanChanged(context.Background(), &plan.Plan{
 		Services: map[string]*plan.Service{
 			svc1.name: svc1.config,
 			svc2.name: svc2.config,
@@ -79,7 +79,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 
 	svc4 := newTestService("svc4")
 
-	m.PlanChanged(&plan.Plan{
+	m.PlanChanged(context.Background(), &plan.Plan{
 		Services: map[string]*plan.Service{
 			svc1.name: svc1.config,
 			svc2.name: svc2.config,
@@ -155,7 +155,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 			Services: []string{"all"},
 		}
 	}
-	m.PlanChanged(&plan.Plan{
+	m.PlanChanged(context.Background(), &plan.Plan{
 		Services: map[string]*plan.Service{
 			"svc1": svc1.config,
 		},
@@ -260,7 +260,7 @@ func (s *managerSuite) TestLabels(c *C) {
 		},
 	}
 
-	m.PlanChanged(pl)
+	m.PlanChanged(context.Background(), pl)
 	checkGatherers(c, m.gatherers, map[string][]string{
 		"tgt1": nil,
 	})
@@ -284,7 +284,7 @@ func (s *managerSuite) TestLabels(c *C) {
 	// If we change only the target's labels (with no change to the services),
 	// we still need to recalculate the client's labels.
 	pl.LogTargets["tgt1"].Labels["foo"] = "bar"
-	m.PlanChanged(pl)
+	m.PlanChanged(context.Background(), pl)
 
 	// Wait for labels to be set
 	fakeClient.waitLabels(c)

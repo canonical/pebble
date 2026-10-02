@@ -25,19 +25,22 @@ import (
 // Span attribute names used by the daemon. The full attribute key is prefixed
 // with the program name (see tracing.AttrKey).
 const (
-	attrChangeID       = "change.id"
-	attrChangeStatus   = "change.status"
-	attrTaskID         = "task.id"
-	attrWebsocketID    = "websocket.id"
-	attrUserAccess     = "user.access"
-	attrError          = "error.message"
-	attrMaintenance    = "maintenance.kind"
-	attrWaitTimeout    = "wait.timeout"
-	attrWaitOutcome    = "wait.outcome"
-	attrNoticesCount   = "notices.count"
-	attrHealthy        = "health.healthy"
-	attrAuthMethod     = "auth.method"
-	attrAuthIdentified = "auth.identified"
+	attrChangeID         = "change.id"
+	attrChangeStatus     = "change.status"
+	attrTaskID           = "task.id"
+	attrWebsocketID      = "websocket.id"
+	attrUserAccess       = "user.access"
+	attrError            = "error.message"
+	attrMaintenance      = "maintenance.kind"
+	attrRestartType      = "restart.type"
+	attrRebootDelay      = "reboot.delay"
+	attrServicesStopping = "services.stopping"
+	attrWaitTimeout      = "wait.timeout"
+	attrWaitOutcome      = "wait.outcome"
+	attrNoticesCount     = "notices.count"
+	attrHealthy          = "health.healthy"
+	attrAuthMethod       = "auth.method"
+	attrAuthIdentified   = "auth.identified"
 )
 
 // requestTrace holds what handling a request records for its server span

@@ -1,6 +1,7 @@
 package servstate
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -64,7 +65,7 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 }
 
 // PlanChanged informs the service manager that the plan has been updated.
-func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
+func (m *ServiceManager) PlanChanged(ctx context.Context, plan *plan.Plan) {
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
 	m.plan = plan
@@ -100,6 +101,11 @@ func (m *ServiceManager) Stop() {
 	for _, s := range m.services {
 		if s.logs != nil {
 			_ = s.logs.Close()
+		}
+		// A restart still pending (in backoff) won't happen now.
+		if s.lifecycleSpan != nil {
+			s.lifecycleSpan.AddEvent("daemon stopping")
+			s.endLifecycleSpan(nil)
 		}
 	}
 }
@@ -366,15 +372,16 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 
 // CheckFailed response to a health check failure. If the given check name is
 // in the on-check-failure map for a service, tell the service to perform the
-// configured action (for example, "restart").
-func (m *ServiceManager) CheckFailed(name string) {
+// configured action (for example, "restart"). The span carried by ctx, if
+// any, is that of the failing check run, which the action's trace links to.
+func (m *ServiceManager) CheckFailed(ctx context.Context, name string) {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
 	for _, service := range m.services {
 		for checkName, action := range service.config.OnCheckFailure {
 			if checkName == name {
-				service.checkFailed(action)
+				service.checkFailed(ctx, action)
 			}
 		}
 	}

@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +43,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/timing"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 var (
@@ -91,6 +93,11 @@ type Options struct {
 	Extension Extension
 	// Persist specifies whether the state should be persisted to disk.
 	Persist PersistMode
+	// StartupContext optionally carries the trace span of the daemon's
+	// startup, which the spans for loading the state and plan, and for
+	// starting up the overlord, are children of. It defaults to
+	// context.Background(), in which case each is its own trace.
+	StartupContext context.Context
 }
 
 type PersistMode int
@@ -116,6 +123,9 @@ type Overlord struct {
 	pruneTicker *time.Ticker
 
 	startOfOperationTime time.Time
+
+	// startupCtx is Options.StartupContext (see there).
+	startupCtx context.Context
 
 	// managers
 	inited        bool
@@ -159,6 +169,8 @@ func New(opts *Options) (*Overlord, error) {
 		return nil, err
 	}
 
+	o.startupCtx = opts.StartupContext
+
 	var s *state.State
 	var restartMgr *restart.RestartManager
 	if opts.Persist == PersistDefault {
@@ -167,7 +179,7 @@ func New(opts *Options) (*Overlord, error) {
 			path:         statePath,
 			ensureBefore: o.ensureBefore,
 		}
-		s, restartMgr, err = loadState(curBootID, statePath, opts.RestartHandler, backend)
+		s, restartMgr, err = loadState(o.startupContext(), curBootID, statePath, opts.RestartHandler, backend)
 		if err != nil {
 			return nil, err
 		}
@@ -176,7 +188,7 @@ func New(opts *Options) (*Overlord, error) {
 		backend := &inMemoryBackend{
 			ensureBefore: o.ensureBefore,
 		}
-		s, restartMgr, err = setupState(curBootID, opts.RestartHandler, backend)
+		s, restartMgr, err = setupState(o.startupContext(), curBootID, opts.RestartHandler, backend)
 		if err != nil {
 			return nil, err
 		}
@@ -279,7 +291,7 @@ func New(opts *Options) (*Overlord, error) {
 	// Load the plan from the Pebble layers directory (which may be missing
 	// or have no layers, resulting in an empty plan), and propagate PlanChanged
 	// notifications to all notification subscribers.
-	err = o.planMgr.Load(nil)
+	err = o.planMgr.Load(o.startupContext(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load plan: %w", err)
 	}
@@ -312,8 +324,14 @@ func getCurrentBootID() (string, error) {
 	return curBootID, nil
 }
 
-func loadState(curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+func loadState(ctx context.Context, curBootID, statePath string, restartHandler restart.Handler, backend state.Backend) (_ *state.State, _ *restart.RestartManager, err error) {
 	timings := timing.Start("", "", map[string]string{"startup": "load-state"})
+
+	// Loading the state is traced as part of the daemon's startup (or as its
+	// own trace), and the checkpoints made while initialising and patching
+	// the state are part of it.
+	ctx, traceSpan := tracing.Tracer().Start(ctx, "state load")
+	defer func() { tracing.EndSpan(traceSpan, err) }()
 
 	if !osutil.FileExists(statePath) {
 		// fail fast, mostly interesting for tests, this dir is set up by pebble
@@ -322,11 +340,11 @@ func loadState(curBootID, statePath string, restartHandler restart.Handler, back
 			return nil, nil, fmt.Errorf("fatal: directory %q must be present", stateDir)
 		}
 		s := state.New(backend)
-		restartMgr, err := initRestart(s, curBootID, restartHandler)
+		restartMgr, err := initRestart(ctx, s, curBootID, restartHandler)
 		if err != nil {
 			return nil, nil, err
 		}
-		patch.Init(s)
+		patch.Init(ctx, s)
 		return s, restartMgr, nil
 	}
 	r, err := os.Open(statePath)
@@ -349,58 +367,77 @@ func loadState(curBootID, statePath string, restartHandler restart.Handler, back
 	//perfTimings.Save(s)
 	//s.Unlock()
 
-	restartMgr, err := initRestart(s, curBootID, restartHandler)
+	restartMgr, err := initRestart(ctx, s, curBootID, restartHandler)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// one-shot migrations
-	err = patch.Apply(s)
+	err = patch.Apply(ctx, s)
 	if err != nil {
 		return nil, nil, err
 	}
 	return s, restartMgr, nil
 }
 
-func setupState(curBootID string, restartHandler restart.Handler, backend state.Backend) (*state.State, *restart.RestartManager, error) {
+func setupState(ctx context.Context, curBootID string, restartHandler restart.Handler, backend state.Backend) (_ *state.State, _ *restart.RestartManager, err error) {
+	ctx, traceSpan := tracing.Tracer().Start(ctx, "state load")
+	defer func() { tracing.EndSpan(traceSpan, err) }()
+
 	// Create a new state for in-memory backend.
 	s := state.New(backend)
-	patch.Init(s)
+	patch.Init(ctx, s)
 
-	restartMgr, err := initRestart(s, curBootID, restartHandler)
+	restartMgr, err := initRestart(ctx, s, curBootID, restartHandler)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// one-shot migrations
-	err = patch.Apply(s)
+	err = patch.Apply(ctx, s)
 	if err != nil {
 		return nil, nil, err
 	}
 	return s, restartMgr, nil
 }
 
-func initRestart(s *state.State, curBootID string, restartHandler restart.Handler) (*restart.RestartManager, error) {
+func initRestart(ctx context.Context, s *state.State, curBootID string, restartHandler restart.Handler) (*restart.RestartManager, error) {
 	s.Lock()
 	defer s.Unlock()
+	s.AddTraceContext(ctx)
 	return restart.Manager(s, curBootID, restartHandler)
 }
 
-func (o *Overlord) StartUp() error {
+func (o *Overlord) StartUp() (err error) {
 	if o.startedUp {
 		return nil
 	}
 	o.startedUp = true
 
-	var err error
+	// Starting up is traced as part of the daemon's startup (or as its own
+	// trace), and the resulting checkpoint (when recording the start of
+	// operation time) is part of it.
+	ctx, span := tracing.Tracer().Start(o.startupContext(), "overlord startup")
+	defer func() { tracing.EndSpan(span, err) }()
+
 	st := o.State()
 	st.Lock()
+	st.AddTraceContext(ctx)
 	o.startOfOperationTime, err = o.StartOfOperationTime()
 	st.Unlock()
 	if err != nil {
 		return fmt.Errorf("cannot get start of operation time: %s", err)
 	}
 	return o.stateEng.StartUp()
+}
+
+// startupContext returns Options.StartupContext, or a background context if
+// none was given (or the overlord was created for testing).
+func (o *Overlord) startupContext() context.Context {
+	if o.startupCtx == nil {
+		return context.Background()
+	}
+	return o.startupCtx
 }
 
 func (o *Overlord) ensureTimerSetup() {
@@ -523,6 +560,12 @@ func (o *Overlord) Stop() error {
 	o.loopTomb.Kill(nil)
 	err := o.loopTomb.Wait()
 	o.stateEng.Stop()
+	// Export the spans of changes that are still in progress, which would
+	// otherwise be lost.
+	st := o.State()
+	st.Lock()
+	st.EndChangeSpans()
+	st.Unlock()
 	return err
 }
 

@@ -92,21 +92,62 @@
 //     TRACESTATE environment variables (see [SpanContextFromEnv]) as HTTP
 //     headers, and the daemon continues the trace from the headers of each
 //     API request (see [StartHTTPServerSpan]).
-//   - Outbound HTTP requests can carry the trace context in their headers
-//     (see [StartHTTPClientSpan]), and processes run by Pebble can receive
-//     it in their TRACEPARENT and TRACESTATE environment variables (see
-//     [InjectEnv] and [DeleteEnv]).
+//   - Outbound HTTP requests, such as HTTP checks and log forwarding, carry
+//     the trace context in their headers (see [StartHTTPClientSpan]).
+//   - Processes run by Pebble (services, exec commands and exec checks)
+//     receive the trace context in their TRACEPARENT and TRACESTATE
+//     environment variables (see [InjectEnv]): that of the task or check
+//     run that started them, or of the automatic restart of a service. The
+//     daemon's own inherited values are removed first (see [DeleteEnv]), as
+//     they don't describe the process's parent, but values explicitly
+//     configured for the process are kept.
 //
 // # What is traced
 //
-// Instrumentation lives alongside the code it traces. Each API request is a
-// server span (see the daemon package), a child of the trace described by
-// the request's headers, if any. The span records who made the request, the
-// change it created and the kind and message of an error response. Expected
-// 5xx responses, such as a long poll timing out or the health endpoint
-// reporting that the system is unhealthy, aren't recorded as errors.
-// Authenticating the request is a child span, as it may verify a password or
-// certificate while holding the state lock.
+// Instrumentation lives alongside the code it traces. In outline:
+//
+//   - The daemon's startup is a trace (a child of the trace described by
+//     the daemon's TRACEPARENT, if any), covering loading the state and
+//     plan, starting the overlord and API, and the daemon's own requests to
+//     replace identities and start the default services. Shutdown is a
+//     trace too, covering stopping the services and the API.
+//   - Each API request is a server span, and changes created by a request
+//     are children of it. The span records who made the request, the change
+//     it created and the kind and message of an error response. Expected
+//     5xx responses, such as a long poll timing out or the health endpoint
+//     reporting that the system is unhealthy, aren't recorded as errors.
+//     Authenticating the request is a child span, as it may verify a
+//     password or certificate while holding the state lock.
+//   - A change's span covers its lifetime, and each run of a task handler
+//     (do, undo or cleanup) is a span within it. The change's span context
+//     is persisted in the state, so tasks run after a restart remain part of
+//     the same trace, and the spans of changes still in progress when the
+//     daemon stops are ended, marked as interrupted, so that they're
+//     exported. Cleanups can run long after a change is ready, so they start
+//     new traces linked to the change.
+//   - Starting and stopping a service records what the service's process
+//     did on the task's span: starting, being sent SIGTERM and SIGKILL, and
+//     exiting. When a service exits or a check fails outside any task, the
+//     resulting restart (with its backoff) or daemon shutdown is a short
+//     trace of its own, linked to the span that started the process and to
+//     the failing check run.
+//   - An exec task's span records when the client connected its websockets,
+//     when the process started and exited and its exit code, when all its
+//     output had been sent, and the signals forwarded to it. The websocket
+//     requests are part of the client's trace, linked to the change.
+//   - Each check run is a span. Periodic runs start their own short traces,
+//     linked to the check's long-running task, while runs requested through
+//     the API are children of the request. The changes performing and
+//     recovering a check are linked to the change they follow on from.
+//   - Changing the plan (loading it at startup, or adding a layer) is a span
+//     within the request or startup, and the changes started as a result,
+//     such as new checks, are its children.
+//   - Each log flush to a log target is a span, with the outbound request as
+//     a child.
+//   - State checkpoints are spans in the trace of whatever modified the
+//     state: the first cause is the parent and any others are links. State
+//     loading, startup and pruning have spans of their own, so that the
+//     checkpoints they cause have a parent too.
 //
 // Pebble-specific span attributes are prefixed with the program name, such
 // as "pebble.change.id" (see [AttrKey]). Standard attributes follow the

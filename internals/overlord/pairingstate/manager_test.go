@@ -15,6 +15,7 @@
 package pairingstate_test
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -179,7 +180,7 @@ func (ps *pairingSuite) TestPairMTLSSuccess(c *C) {
 	c.Assert(err, IsNil)
 	c.Assert(ps.manager.PairingEnabled(), Equals, true)
 
-	err = ps.manager.PairMTLS(clientCert)
+	err = ps.manager.PairMTLS(context.Background(), clientCert)
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
@@ -209,7 +210,7 @@ func (ps *pairingSuite) TestPairMTLSNotOpen(c *C) {
 
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
 
-	err := ps.manager.PairMTLS(clientCert)
+	err := ps.manager.PairMTLS(context.Background(), clientCert)
 	c.Assert(err, ErrorMatches, ".* pairing window is disabled")
 
 	pairingDetails := ps.PairingDetails()
@@ -242,7 +243,7 @@ func (ps *pairingSuite) TestPairMTLSDuplicateCertificate(c *C) {
 	err := ps.manager.EnablePairing(testWindowDuration)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(clientCert)
+	err = ps.manager.PairMTLS(context.Background(), clientCert)
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)
@@ -283,7 +284,7 @@ func (ps *pairingSuite) TestPairMTLSUsernameIncrementing(c *C) {
 	err := ps.manager.EnablePairing(10 * time.Millisecond)
 	c.Assert(err, IsNil)
 
-	err = ps.manager.PairMTLS(clientCert)
+	err = ps.manager.PairMTLS(context.Background(), clientCert)
 	c.Assert(err, IsNil)
 
 	c.Assert(ps.manager.PairingEnabled(), Equals, false)

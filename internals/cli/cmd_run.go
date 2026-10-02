@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -212,6 +213,25 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		}
 	}()
 
+	// Starting the daemon, up to its default services having started, is
+	// one trace: a child of the trace of whatever started Pebble, if the
+	// TRACEPARENT environment variable describes it. The daemon's own
+	// requests during startup (to replace identities and start the default
+	// services) are made on behalf of this span.
+	startupCtx := context.Background()
+	if sc := tracing.SpanContextFromEnv(); sc.IsValid() {
+		startupCtx = tracing.ContextWithRemoteSpanContext(startupCtx, sc)
+	}
+	startupCtx, startupSpan := tracing.Tracer().Start(startupCtx, "daemon startup")
+	startupDone := sync.OnceFunc(func() { startupSpan.End() })
+	defer startupDone()
+	rcmd.client.SetSpanContext(startupSpan.SpanContext())
+	startupFailed := func(err error) error {
+		startupSpan.RecordError(err)
+		startupSpan.SetStatus(tracing.StatusError, err.Error())
+		return err
+	}
+
 	t0 := time.Now().Truncate(time.Millisecond)
 
 	if rcmd.CreateDirs {
@@ -229,10 +249,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	plan.RegisterSectionExtension(pairingstate.PairingField, &pairingstate.SectionExtension{})
 
 	dopts := daemon.Options{
-		Dir:          rcmd.pebbleDir,
-		SocketPath:   rcmd.socketPath,
-		HTTPAddress:  rcmd.HTTP,
-		HTTPSAddress: rcmd.HTTPS,
+		Dir:            rcmd.pebbleDir,
+		SocketPath:     rcmd.socketPath,
+		HTTPAddress:    rcmd.HTTP,
+		HTTPSAddress:   rcmd.HTTPS,
+		StartupContext: startupCtx,
 	}
 	if os.Getenv("PEBBLE_VERBOSE") == "1" || rcmd.Verbose {
 		dopts.ServiceOutput = os.Stdout
@@ -249,19 +270,20 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 
 	d, err := daemon.New(&dopts)
 	if err != nil {
-		return err
+		return startupFailed(err)
 	}
 	if err := d.Init(); err != nil {
-		return err
+		return startupFailed(err)
 	}
+	startupSpan.AddEvent("listeners ready")
 
 	if rcmd.Args != nil {
 		mappedArgs, err := convertArgs(rcmd.Args)
 		if err != nil {
-			return err
+			return startupFailed(err)
 		}
-		if err := d.SetServiceArgs(mappedArgs); err != nil {
-			return err
+		if err := d.SetServiceArgs(startupCtx, mappedArgs); err != nil {
+			return startupFailed(err)
 		}
 	}
 
@@ -274,14 +296,17 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		degradedErr := fmt.Errorf("system is not healthy: %s", err)
 		logger.Noticef("%s", degradedErr)
 		d.SetDegradedMode(degradedErr)
+		startupSpan.AddEvent("degraded mode", tracing.WithAttributes(
+			tracing.AttrKey("error.message").String(degradedErr.Error())))
 		tic = time.NewTicker(checkRunningConditionsRetryDelay)
 		checkTicker = tic.C
 	}
 
 	d.Version = cmd.Version
 	if err := d.Start(); err != nil {
-		return err
+		return startupFailed(err)
 	}
+	startupSpan.AddEvent("api started")
 
 	watchdog, err := runWatchdog(d)
 	if err != nil {
@@ -296,11 +321,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 	if rcmd.Identities != "" {
 		identities, err := readIdentities(rcmd.Identities)
 		if err != nil {
-			return fmt.Errorf("cannot read identities: %w", err)
+			return startupFailed(fmt.Errorf("cannot read identities: %w", err))
 		}
 		err = rcmd.client.ReplaceIdentities(identities)
 		if err != nil {
-			return fmt.Errorf("cannot replace identities: %w", err)
+			return startupFailed(fmt.Errorf("cannot replace identities: %w", err))
 		}
 	}
 
@@ -320,7 +345,11 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 		changeID, err := rcmd.client.AutoStart(&servopts)
 		if err != nil {
 			logger.Noticef("Cannot start default services: %v", err)
+			startupSpan.AddEvent("cannot start default services", tracing.WithAttributes(
+				tracing.AttrKey("error.message").String(err.Error())))
+			startupDone()
 		} else {
+			startupSpan.SetAttributes(tracing.AttrKey("change.id").String(changeID))
 			// Wait for the default services to actually start and then notify
 			// the ready channel (for the "enter" command).
 			go func() {
@@ -328,16 +357,24 @@ func runDaemon(rcmd *cmdRun, ch chan os.Signal, ready chan<- func()) error {
 				_, err := rcmd.client.WaitChange(changeID, nil)
 				if err != nil {
 					logger.Noticef("Cannot wait for autostart change %s: %v", changeID, err)
+					startupSpan.RecordError(err)
 				} else {
 					logger.Noticef("Started default services with change %s.", changeID)
 				}
+				// The daemon has started: requests it makes from now on
+				// aren't part of the startup.
+				rcmd.client.SetSpanContext(tracing.SpanContext{})
+				startupDone()
 				if ready != nil {
 					notifyReady()
 				}
 			}()
 		}
-	} else if ready != nil {
-		notifyReady()
+	} else {
+		startupDone()
+		if ready != nil {
+			notifyReady()
+		}
 	}
 
 out:

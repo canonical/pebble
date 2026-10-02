@@ -89,7 +89,7 @@ func (s *ManagerSuite) TearDownTest(c *C) {
 }
 
 func (s *ManagerSuite) TestChecks(c *C) {
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -125,7 +125,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 	})
 
 	// Re-configuring should update checks.
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk4": {
 				Name:      "chk4",
@@ -144,7 +144,7 @@ func (s *ManagerSuite) TestChecks(c *C) {
 }
 
 func (s *ManagerSuite) TestTimeout(c *C) {
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -180,13 +180,13 @@ func (s *ManagerSuite) TestTimeout(c *C) {
 
 func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	failureName := ""
-	s.manager.NotifyCheckFailed(func(name string) {
+	s.manager.NotifyCheckFailed(func(ctx context.Context, name string) {
 		failureName = name
 	})
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c "for i in {1..1000}; do echo x >>%s; sleep 0.005; done"`, tempFile)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -212,7 +212,7 @@ func (s *ManagerSuite) TestCheckCanceled(c *C) {
 	}
 
 	// Cancel the check in-flight
-	s.manager.PlanChanged(plan.NewPlan())
+	s.manager.PlanChanged(context.Background(), plan.NewPlan())
 	waitChecks(c, s.manager, nil)
 
 	// Ensure command was terminated (output file didn't grow in size)
@@ -231,13 +231,13 @@ func (s *ManagerSuite) TestFailures(c *C) {
 	const threshold = 10
 
 	var notifies atomic.Int32
-	s.manager.NotifyCheckFailed(func(name string) {
+	s.manager.NotifyCheckFailed(func(ctx context.Context, name string) {
 		notifies.Add(1)
 	})
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -301,7 +301,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -331,7 +331,7 @@ func (s *ManagerSuite) TestFailuresBelowThreshold(c *C) {
 }
 
 func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -371,7 +371,7 @@ func (s *ManagerSuite) TestPlanChangedSmarts(c *C) {
 	}
 
 	// Modify plan: chk1 unchanged, chk2 modified, chk3 deleted.
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -445,7 +445,7 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 			},
 		},
 	}
-	s.manager.PlanChanged(origPlan)
+	s.manager.PlanChanged(context.Background(), origPlan)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "enabled", Status: "up", Threshold: 3},
@@ -459,7 +459,7 @@ func (s *ManagerSuite) TestPlanChangedServiceContext(c *C) {
 	}
 
 	// Modify plan: chk1 service context unchanged, chk2 service context changed.
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Services: map[string]*plan.Service{
 			"svc1": origPlan.Services["svc1"],
 			"svc2": {
@@ -495,7 +495,7 @@ func (s *ManagerSuite) TestSuccessNoLog(c *C) {
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -636,9 +636,9 @@ func (s *ManagerSuite) TestStartChecks(c *C) {
 			},
 		},
 	}
-	err := s.planMgr.AppendLayer(origLayer, false)
+	err := s.planMgr.AppendLayer(context.Background(), origLayer, false)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(s.planMgr.Plan())
+	s.manager.PlanChanged(context.Background(), s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
@@ -651,7 +651,7 @@ func (s *ManagerSuite) TestStartChecks(c *C) {
 		originalChangeIDs = append(originalChangeIDs, check.ChangeID)
 	}
 
-	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
+	changed, err := s.manager.StartChecks(context.Background(), []string{"chk1", "chk2"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "up", Threshold: 3},
@@ -687,13 +687,13 @@ func (s *ManagerSuite) TestStartChecksNotFound(c *C) {
 			},
 		},
 	}
-	err := s.planMgr.AppendLayer(origLayer, false)
+	err := s.planMgr.AppendLayer(context.Background(), origLayer, false)
 	c.Assert(err, IsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 
-	changed, err := s.manager.StartChecks([]string{"chk1", "chk2"})
+	changed, err := s.manager.StartChecks(context.Background(), []string{"chk1", "chk2"})
 	var notFoundErr *checkstate.ChecksNotFound
 	c.Assert(errors.As(err, &notFoundErr), Equals, true)
 	c.Assert(notFoundErr.Names, DeepEquals, []string{"chk2"})
@@ -728,7 +728,7 @@ func (s *ManagerSuite) TestStopChecks(c *C) {
 			},
 		},
 	}
-	err := s.planMgr.AppendLayer(origLayer, false)
+	err := s.planMgr.AppendLayer(context.Background(), origLayer, false)
 	c.Assert(err, IsNil)
 
 	// Run an Ensure pass to kick the check tasks into Doing status.
@@ -770,7 +770,7 @@ func (s *ManagerSuite) TestStopChecks(c *C) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
+	changed, err := s.manager.StopChecks(context.Background(), []string{"chk1", "chk2"})
 	c.Assert(err, IsNil)
 	c.Assert(changed, DeepEquals, []string{"chk1"})
 
@@ -818,13 +818,13 @@ func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
 			},
 		},
 	}
-	err := s.planMgr.AppendLayer(origLayer, false)
+	err := s.planMgr.AppendLayer(context.Background(), origLayer, false)
 	c.Assert(err, IsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 
-	changed, err := s.manager.StopChecks([]string{"chk1", "chk2"})
+	changed, err := s.manager.StopChecks(context.Background(), []string{"chk1", "chk2"})
 	var notFoundErr *checkstate.ChecksNotFound
 	c.Assert(errors.As(err, &notFoundErr), Equals, true)
 	c.Assert(notFoundErr.Names, DeepEquals, []string{"chk2"})
@@ -859,14 +859,14 @@ func (s *ManagerSuite) TestReplan(c *C) {
 			},
 		},
 	}
-	err := s.planMgr.AppendLayer(origLayer, false)
+	err := s.planMgr.AppendLayer(context.Background(), origLayer, false)
 	c.Assert(err, IsNil)
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
 		{Name: "chk3", Startup: "enabled", Status: "up", Threshold: 3},
 	})
-	s.manager.StopChecks([]string{"chk1"})
+	s.manager.StopChecks(context.Background(), []string{"chk1"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 		{Name: "chk2", Startup: "disabled", Status: "inactive", Threshold: 3},
@@ -879,7 +879,7 @@ func (s *ManagerSuite) TestReplan(c *C) {
 	}
 
 	s.overlord.State().Lock()
-	s.manager.Replan()
+	s.manager.Replan(context.Background())
 	s.overlord.State().Unlock()
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
@@ -909,7 +909,7 @@ func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -960,7 +960,7 @@ func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -1006,7 +1006,7 @@ func (s *ManagerSuite) TestMetricsInactiveCheck(c *C) {
 	tempDir := c.MkDir()
 	tempFile := filepath.Join(tempDir, "file.txt")
 	command := fmt.Sprintf(`/bin/sh -c 'echo -n x >>%s'`, tempFile)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -1051,9 +1051,9 @@ func (s *ManagerSuite) TestRefreshCheck(c *C) {
 			"chk1": chk1,
 		},
 	}
-	err := s.planMgr.AppendLayer(layer, false)
+	err := s.planMgr.AppendLayer(context.Background(), layer, false)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(s.planMgr.Plan())
+	s.manager.PlanChanged(context.Background(), s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
@@ -1093,9 +1093,9 @@ func (s *ManagerSuite) TestRefreshCheckFailure(c *C) {
 			"chk1": chk1,
 		},
 	}
-	err = s.planMgr.AppendLayer(layer, false)
+	err = s.planMgr.AppendLayer(context.Background(), layer, false)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(s.planMgr.Plan())
+	s.manager.PlanChanged(context.Background(), s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
@@ -1129,16 +1129,16 @@ func (s *ManagerSuite) TestRefreshStoppedCheck(c *C) {
 			"chk1": chk1,
 		},
 	}
-	err := s.planMgr.AppendLayer(layer, false)
+	err := s.planMgr.AppendLayer(context.Background(), layer, false)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(s.planMgr.Plan())
+	s.manager.PlanChanged(context.Background(), s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	_, err = s.manager.Checks()
 	c.Assert(err, IsNil)
 
-	changed, err := s.manager.StopChecks([]string{"chk1"})
+	changed, err := s.manager.StopChecks(context.Background(), []string{"chk1"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 	})
@@ -1176,16 +1176,16 @@ func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *C) {
 			"chk1": chk1,
 		},
 	}
-	err = s.planMgr.AppendLayer(layer, false)
+	err = s.planMgr.AppendLayer(context.Background(), layer, false)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(s.planMgr.Plan())
+	s.manager.PlanChanged(context.Background(), s.planMgr.Plan())
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "up", Threshold: 3},
 	})
 	_, err = s.manager.Checks()
 	c.Assert(err, IsNil)
 
-	changed, err := s.manager.StopChecks([]string{"chk1"})
+	changed, err := s.manager.StopChecks(context.Background(), []string{"chk1"})
 	waitChecks(c, s.manager, []*checkstate.CheckInfo{
 		{Name: "chk1", Startup: "enabled", Status: "inactive", Threshold: 3},
 	})
@@ -1210,7 +1210,7 @@ func (s *ManagerSuite) TestChecksSuccesses(c *C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",
@@ -1257,7 +1257,7 @@ func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
 	c.Assert(err, IsNil)
-	s.manager.PlanChanged(&plan.Plan{
+	s.manager.PlanChanged(context.Background(), &plan.Plan{
 		Checks: map[string]*plan.Check{
 			"chk1": {
 				Name:      "chk1",

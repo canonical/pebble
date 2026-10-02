@@ -41,7 +41,8 @@ func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
 		return NotFound("cannot find task %q", taskID)
 	}
 
-	// Record the task and change the websocket is for on the request's span.
+	// The request's span is part of the client's trace; link it to the
+	// change the websocket is for, so the two can be found from each other.
 	span := tracing.SpanFromContext(req.Context())
 	span.SetAttributes(
 		tracing.AttrKey(attrTaskID).String(taskID),
@@ -49,6 +50,7 @@ func v1GetTaskWebsocket(c *Command, req *http.Request, _ *UserState) Response {
 	)
 	if change := task.Change(); change != nil {
 		span.SetAttributes(tracing.AttrKey(attrChangeID).String(change.ID()))
+		span.AddLink(tracing.Link{SpanContext: change.SpanContext()})
 	}
 
 	var connect websocketConnectFunc

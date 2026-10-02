@@ -28,6 +28,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 const (
@@ -294,7 +295,10 @@ func (c *Client) sendBatch(ctx context.Context, payload payload) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.options.UserAgent)
 
+	// Trace the request, and propagate the trace to the collector.
+	req, span := tracing.StartHTTPClientSpan(req)
 	resp, err := c.httpClient.Do(req)
+	tracing.EndHTTPClientSpan(span, resp, err)
 	if err != nil {
 		return fmt.Errorf("cannot send logs: %v", err)
 	}

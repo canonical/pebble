@@ -15,6 +15,7 @@
 package checkstate
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -33,14 +34,19 @@ type performConfigKey struct {
 	changeID string
 }
 
-func performCheckChange(st *state.State, config *plan.Check) (changeID string) {
+// performCheckChange creates the change to perform a check. The change's span
+// is a child of the span carried by ctx (for example, the API request that
+// started the check), if any, and linked to the previous change for the check
+// (identified by prevChangeID), if any.
+func performCheckChange(ctx context.Context, st *state.State, config *plan.Check, prevChangeID string) (changeID string) {
 	summary := fmt.Sprintf("Perform %s check %q", checkType(config), config.Name)
 	task := st.NewTask(performCheckKind, summary)
 	task.Set(checkDetailsAttr, &checkDetails{Name: config.Name})
 
-	change := st.NewChangeWithNoticeData(performCheckKind, task.Summary(), map[string]string{
+	change := st.NewChangeWithNoticeDataContext(ctx, performCheckKind, task.Summary(), map[string]string{
 		"check-name": config.Name,
 	})
+	linkPrevChange(st, change, prevChangeID)
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
 
@@ -53,7 +59,9 @@ type recoverConfigKey struct {
 	changeID string
 }
 
-func recoverCheckChange(st *state.State, config *plan.Check, successes, failures int) (changeID string) {
+// recoverCheckChange creates the change to recover a failed check. The
+// change's span is linked to the previous (failed) change for the check.
+func recoverCheckChange(st *state.State, config *plan.Check, successes, failures int, prevChangeID string) (changeID string) {
 	summary := fmt.Sprintf("Recover %s check %q", checkType(config), config.Name)
 	task := st.NewTask(recoverCheckKind, summary)
 	task.Set(checkDetailsAttr, &checkDetails{
@@ -65,10 +73,24 @@ func recoverCheckChange(st *state.State, config *plan.Check, successes, failures
 	change := st.NewChangeWithNoticeData(recoverCheckKind, task.Summary(), map[string]string{
 		"check-name": config.Name,
 	})
+	linkPrevChange(st, change, prevChangeID)
 	change.Set(noPruneAttr, true)
 	change.AddTask(task)
 
 	st.Cache(recoverConfigKey{change.ID()}, config)
 
 	return change.ID()
+}
+
+// linkPrevChange links the span of change to that of the previous change for
+// the same check, so that the sequence of perform and recover changes can be
+// followed in a tracing backend without the trace of a flapping check growing
+// indefinitely.
+func linkPrevChange(st *state.State, change *state.Change, prevChangeID string) {
+	if prevChangeID == "" {
+		return
+	}
+	if prev := st.Change(prevChangeID); prev != nil {
+		change.AddSpanLink(prev.SpanContext())
+	}
 }

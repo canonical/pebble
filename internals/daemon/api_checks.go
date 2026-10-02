@@ -89,14 +89,14 @@ func v1PostChecks(c *Command, r *http.Request, user *UserState) Response {
 	var changed []string
 	switch payload.Action {
 	case "start":
-		changed, err = checkmgr.StartChecks(payload.Checks)
+		changed, err = checkmgr.StartChecks(r.Context(), payload.Checks)
 	case "stop":
 		for _, check := range payload.Checks {
 			logger.SecurityWarn(logger.SecuritySysMonitorDisabled,
 				fmt.Sprintf("%s,%s", userString(user), check),
 				fmt.Sprintf("Stopping check %s", check))
 		}
-		changed, err = checkmgr.StopChecks(payload.Checks)
+		changed, err = checkmgr.StopChecks(r.Context(), payload.Checks)
 	default:
 		return BadRequest("invalid action %q", payload.Action)
 	}

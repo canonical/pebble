@@ -194,11 +194,12 @@ func v1GetChangeWait(c *Command, r *http.Request, _ *UserState) Response {
 		return BadRequest("invalid timeout: %v", err)
 	}
 
-	// The request's span covers the wait, and records how the wait ended:
-	// timing out or the client going away are expected outcomes, not
-	// failures of the daemon.
+	// The request's span covers the wait. It's linked to the change, and
+	// records how the wait ended: timing out or the client going away are
+	// expected outcomes, not failures of the daemon.
 	span := tracing.SpanFromContext(r.Context())
 	span.SetAttributes(tracing.AttrKey(attrChangeID).String(changeID))
+	span.AddLink(tracing.Link{SpanContext: change.SpanContext()})
 	if timeout != 0 {
 		span.SetAttributes(tracing.AttrKey(attrWaitTimeout).String(timeout.String()))
 	}
@@ -245,6 +246,7 @@ func v1PostChange(c *Command, r *http.Request, _ *UserState) Response {
 	state := c.d.overlord.State()
 	state.Lock()
 	defer state.Unlock()
+	state.AddTraceContext(r.Context())
 	chg := state.Change(chID)
 	if chg == nil {
 		return NotFound("cannot find change with id %q", chID)

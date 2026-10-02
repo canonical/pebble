@@ -15,12 +15,14 @@
 package planstate
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
 
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // LabelExists is the error returned by AppendLayer when a layer with that
@@ -55,21 +57,30 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // final plan, and finally notifies registered managers of the plan update. In
 // the case of a non-existent layers directory, or no layers in the layers
 // directory, the base plan (or an empty plan) is announced to change subscribers.
-func (m *PlanManager) Load(base *plan.Plan) (err error) {
+//
+// Loading is traced as a span, a child of the span carried by ctx (for
+// example, the daemon's startup), which the listeners are called with.
+func (m *PlanManager) Load(ctx context.Context, base *plan.Plan) (err error) {
 	m.planLock.Lock()
 
 	var p *plan.Plan
 	wasLoaded := m.isLoaded
-	defer func() {
+	if wasLoaded {
 		m.planLock.Unlock()
-		if err == nil && !wasLoaded {
-			m.callChangeListeners(p)
-		}
-	}()
-
-	if m.isLoaded {
 		return nil
 	}
+
+	ctx, span := tracing.Tracer().Start(ctx, "plan load")
+	defer func() {
+		if err == nil {
+			span.SetAttributes(planAttrs(p)...)
+		}
+		m.planLock.Unlock()
+		if err == nil {
+			m.callChangeListeners(ctx, p)
+		}
+		tracing.EndSpan(span, err)
+	}()
 
 	p, err = plan.ReadDir(m.layersDir, base)
 	if err != nil {
@@ -80,8 +91,9 @@ func (m *PlanManager) Load(base *plan.Plan) (err error) {
 	return nil
 }
 
-// PlanChangedFunc is the function type used by AddChangeListener.
-type PlanChangedFunc func(p *plan.Plan)
+// PlanChangedFunc is the function type used by AddChangeListener. The span
+// carried by ctx, if any, is that of the operation that changed the plan.
+type PlanChangedFunc func(ctx context.Context, p *plan.Plan)
 
 // AddChangeListener adds f to the list of functions that are called whenever
 // a plan change event took place (Load, AppendLayer, CombineLayer). A plan
@@ -91,14 +103,14 @@ func (m *PlanManager) AddChangeListener(f PlanChangedFunc) {
 	m.changeListeners = append(m.changeListeners, f)
 }
 
-func (m *PlanManager) callChangeListeners(plan *plan.Plan) {
+func (m *PlanManager) callChangeListeners(ctx context.Context, plan *plan.Plan) {
 	if plan == nil {
 		// Avoids if statement on every deferred call to this method (we
 		// shouldn't call listeners when the operation fails).
 		return
 	}
 	for _, f := range m.changeListeners {
-		f(plan)
+		f(ctx, plan)
 	}
 }
 
@@ -117,9 +129,16 @@ func (m *PlanManager) Plan() *plan.Plan {
 // exists, return an error of type *LabelExists. Inner must be set to true
 // if the append operation may be demoted to an insert due to the layer
 // configuration being located in a sub-directory.
-func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
+//
+// The operation is traced as a span, a child of the span carried by ctx (for
+// example, the API request), which the listeners are called with.
+func (m *PlanManager) AppendLayer(ctx context.Context, layer *plan.Layer, inner bool) (err error) {
+	ctx, span := startLayerSpan(ctx, layer, false, inner)
 	var newPlan *plan.Plan
-	defer func() { m.callChangeListeners(newPlan) }()
+	defer func() {
+		endLayerSpan(span, newPlan, layer, err)
+		m.callChangeListeners(ctx, newPlan)
+	}()
 
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
@@ -129,7 +148,7 @@ func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
 		return &LabelExists{Label: layer.Label}
 	}
 
-	newPlan, err := m.appendLayer(layer, inner)
+	newPlan, err = m.appendLayer(layer, inner)
 	return err
 }
 
@@ -138,10 +157,14 @@ func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
 // case, update the layer.Order field to the new order. Inner must be set to
 // true if a combine operation gets demoted to an append operation (due to the
 // layer not yet existing), and if the configuration layer is located in a
-// sub-directory (see AppendLayer).
-func (m *PlanManager) CombineLayer(layer *plan.Layer, inner bool) error {
+// sub-directory (see AppendLayer). The operation is traced like AppendLayer.
+func (m *PlanManager) CombineLayer(ctx context.Context, layer *plan.Layer, inner bool) (err error) {
+	ctx, span := startLayerSpan(ctx, layer, true, inner)
 	var newPlan *plan.Plan
-	defer func() { m.callChangeListeners(newPlan) }()
+	defer func() {
+		endLayerSpan(span, newPlan, layer, err)
+		m.callChangeListeners(ctx, newPlan)
+	}()
 
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
@@ -149,13 +172,13 @@ func (m *PlanManager) CombineLayer(layer *plan.Layer, inner bool) error {
 	index, found := findLayer(m.plan.Layers, layer.Label)
 	if index < 0 {
 		// No layer found with this label, append new one.
-		var err error
 		newPlan, err = m.appendLayer(layer, inner)
 		return err
 	}
 
 	// Layer found with this label, combine into that one.
-	combined, err := plan.CombineLayers(found, layer)
+	var combined *plan.Layer
+	combined, err = plan.CombineLayers(found, layer)
 	if err != nil {
 		return err
 	}
@@ -303,9 +326,17 @@ func (m *PlanManager) Ensure() error {
 //
 // NOTE: This functionality should be redesigned (moved out of the plan manager)
 // as the plan manager should not be concerned with schema section details.
-func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
+//
+// The operation is traced as a span, a child of the span carried by ctx,
+// which the listeners are called with.
+func (m *PlanManager) SetServiceArgs(ctx context.Context, serviceArgs map[string][]string) (err error) {
+	ctx, span := tracing.Tracer().Start(ctx, "plan set service args",
+		tracing.WithAttributes(tracing.AttrKey(attrServices).Int(len(serviceArgs))))
 	var newPlan *plan.Plan
-	defer func() { m.callChangeListeners(newPlan) }()
+	defer func() {
+		tracing.EndSpan(span, err)
+		m.callChangeListeners(ctx, newPlan)
+	}()
 
 	m.planLock.Lock()
 	defer m.planLock.Unlock()
@@ -333,6 +364,6 @@ func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
 		}
 	}
 
-	newPlan, err := m.appendLayer(newLayer, false)
+	newPlan, err = m.appendLayer(newLayer, false)
 	return err
 }

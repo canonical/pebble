@@ -19,6 +19,7 @@ package restart
 
 import (
 	"errors"
+	"fmt"
 	"sync/atomic"
 
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -44,6 +45,35 @@ const (
 	RestartServiceFailure
 	RestartCheckFailure
 )
+
+// String returns a short name for the restart type, for use in logs and
+// trace attributes.
+func (t RestartType) String() string {
+	switch t {
+	case RestartUnset:
+		return "unset"
+	case RestartDaemon:
+		return "daemon"
+	case RestartSystem:
+		return "system"
+	case RestartSystemNow:
+		return "system-now"
+	case RestartSocket:
+		return "socket"
+	case StopDaemon:
+		return "stop"
+	case RestartSystemHaltNow:
+		return "system-halt-now"
+	case RestartSystemPoweroffNow:
+		return "system-poweroff-now"
+	case RestartServiceFailure:
+		return "service-failure"
+	case RestartCheckFailure:
+		return "check-failure"
+	default:
+		return fmt.Sprintf("RestartType(%d)", int32(t))
+	}
+}
 
 // Handler can handle restart requests and whether expected reboots happen.
 type Handler interface {

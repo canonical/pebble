@@ -53,3 +53,10 @@ func (t *Task) AccumulateUndoingTime(duration time.Duration) {
 func (s *State) NumNotices() int {
 	return len(s.notices)
 }
+
+// TraceCauses returns the lengths and capacities of the state's explicit and
+// implicit trace causes.
+func (s *State) TraceCauses() (explicitLen, explicitCap, implicitLen, implicitCap int) {
+	return len(s.traceCauses.explicit), cap(s.traceCauses.explicit),
+		len(s.traceCauses.implicit), cap(s.traceCauses.implicit)
+}

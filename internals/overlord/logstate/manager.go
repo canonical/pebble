@@ -15,6 +15,7 @@
 package logstate
 
 import (
+	"context"
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -41,7 +42,7 @@ func NewLogManager() *LogManager {
 
 // PlanChanged is called by the service manager when the plan changes.
 // Based on the new plan, we will Stop old gatherers and start new ones.
-func (m *LogManager) PlanChanged(pl *plan.Plan) {
+func (m *LogManager) PlanChanged(ctx context.Context, pl *plan.Plan) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

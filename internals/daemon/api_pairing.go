@@ -41,7 +41,7 @@ func v1PostPairing(c *Command, r *http.Request, user *UserState) Response {
 		clientCert := r.TLS.PeerCertificates[0]
 
 		pairingMgr := c.d.overlord.PairingManager()
-		if err := pairingMgr.PairMTLS(clientCert); err != nil {
+		if err := pairingMgr.PairMTLS(r.Context(), clientCert); err != nil {
 			return BadRequest("cannot pair client: %v", err)
 		}
 

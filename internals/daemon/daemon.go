@@ -160,6 +160,12 @@ type Options struct {
 
 	// Persist specifies whether the state should be persisted to disk.
 	Persist overlord.PersistMode
+
+	// StartupContext optionally carries the trace span of the daemon's
+	// startup, which the spans for loading the state and plan, and for
+	// starting up the overlord, are children of. It defaults to
+	// context.Background(), in which case each is its own trace.
+	StartupContext context.Context
 }
 
 // A Daemon listens for requests and routes them to the right command
@@ -717,12 +723,26 @@ var (
 var shutdownTimeout = time.Second
 
 // Stop shuts down the Daemon.
-func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
+func (d *Daemon) Stop(sigCh chan<- os.Signal) (err error) {
 	logger.SecurityWarn(logger.SecuritySysShutdown, strconv.Itoa(os.Getuid()), "Shutting down daemon")
+
+	// Shutting down is its own trace, which the change stopping the
+	// services is part of. It's exported when tracing is shut down, after
+	// Stop returns.
+	ctx, span := tracing.Tracer().Start(context.Background(), "daemon shutdown")
+	defer func() {
+		switch err {
+		case ErrRestartSocket, ErrRestartServiceFailure, ErrRestartCheckFailure, ErrRestartExternal:
+			// These tell the caller how to restart, and aren't failures.
+			span.End()
+		default:
+			tracing.EndSpan(span, err)
+		}
+	}()
 
 	if d.rebootIsMissing {
 		// we need to schedule/wait for a system restart again
-		return d.doReboot(sigCh, rebootRetryWaitTimeout)
+		return d.doReboot(ctx, sigCh, rebootRetryWaitTimeout)
 	}
 	if d.overlord == nil {
 		return fmt.Errorf("internal error: no Overlord")
@@ -731,10 +751,12 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	// Stop all running services. Must do this before overlord.Stop, as it
 	// creates a change and waits for the change, and overlord.Stop calls
 	// StateEngine.Stop, which locks, so Ensure would result in a deadlock.
-	err := d.stopRunningServices()
+	err = d.stopRunningServices(ctx)
 	if err != nil {
 		// This isn't fatal for exiting the daemon, so log and continue.
 		logger.Noticef("Cannot stop running services: %v", err)
+		span.AddEvent("cannot stop services", tracing.WithAttributes(tracing.AttrKey(attrError).String(err.Error())))
+		err = nil
 	}
 
 	d.tomb.Kill(nil)
@@ -742,6 +764,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	d.mu.Lock()
 	requestedRestart := d.requestedRestart
 	d.mu.Unlock()
+	span.SetAttributes(tracing.AttrKey(attrRestartType).String(requestedRestart.String()))
 
 	d.standbyOpinions.Stop()
 
@@ -762,16 +785,19 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		shutdownErr <- d.serve.Shutdown(ctx)
 	}()
 	<-d.httpListenersClosed
+	span.AddEvent("listeners closed")
 
 	// Stop the overlord only after the HTTP listeners have been closed. This
 	// prevents new requests from starting while the overlord is stopping,
 	// while still allowing active requests such as exec change waits to
 	// finish after their tasks are cancelled.
 	stopOverlord(d.overlord)
+	span.AddEvent("overlord stopped")
 
 	shutdownErrValue := <-shutdownErr
 	cancel()
 	d.tomb.Kill(shutdownErrValue)
+	span.AddEvent("requests finished")
 
 	if requestedRestart != restart.RestartSystem {
 		// tell systemd that we are stopping
@@ -790,6 +816,8 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 		if !d.standbyOpinions.CanStandby() {
 			requestedRestart = restart.RestartDaemon
 			d.requestedRestart = requestedRestart
+			span.AddEvent("cannot standby, restarting instead")
+			span.SetAttributes(tracing.AttrKey(attrRestartType).String(requestedRestart.String()))
 		}
 	}
 
@@ -807,7 +835,7 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 	}
 
 	if requestedRestart == restart.RestartSystem {
-		return d.doReboot(sigCh, rebootWaitTimeout)
+		return d.doReboot(ctx, sigCh, rebootWaitTimeout)
 	}
 
 	switch requestedRestart {
@@ -823,22 +851,26 @@ func (d *Daemon) Stop(sigCh chan<- os.Signal) error {
 }
 
 // stopRunningServices stops all running services, waiting for a short time
-// for them all to stop.
-func (d *Daemon) stopRunningServices() error {
+// for them all to stop. The change stopping them is a child of the span
+// carried by ctx.
+func (d *Daemon) stopRunningServices(ctx context.Context) error {
 	taskSet, err := servstate.StopRunning(d.state, d.overlord.ServiceManager())
 	if err != nil {
 		return err
 	}
+	span := tracing.SpanFromContext(ctx)
 	if taskSet == nil {
 		logger.Debugf("No services to stop.")
+		span.SetAttributes(tracing.AttrKey(attrServicesStopping).Int(0))
 		return nil
 	}
+	span.SetAttributes(tracing.AttrKey(attrServicesStopping).Int(len(taskSet.Tasks())))
 
 	// One change to stop them all.
 	logger.Noticef("Stopping all running services.")
 	st := d.state
 	st.Lock()
-	chg := st.NewChange("stop", "Stop all running services")
+	chg := st.NewChangeContext(ctx, "stop", "Stop all running services")
 	chg.AddAll(taskSet)
 	st.EnsureBefore(0) // start operation right away
 	st.Unlock()
@@ -847,6 +879,7 @@ func (d *Daemon) stopRunningServices() error {
 	select {
 	case <-chg.Ready():
 		logger.Debugf("All services stopped.")
+		span.AddEvent("services stopped")
 	case <-time.After(d.overlord.ServiceManager().StopTimeout()):
 		return errors.New("timeout stopping running services")
 	}
@@ -880,7 +913,7 @@ func (d *Daemon) rebootDelay() (time.Duration, error) {
 	return rebootDelay, nil
 }
 
-func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) error {
+func (d *Daemon) doReboot(ctx context.Context, sigCh chan<- os.Signal, waitTimeout time.Duration) error {
 	if rebootMode == ExternalMode {
 		return ErrRestartExternal
 	}
@@ -894,6 +927,8 @@ func (d *Daemon) doReboot(sigCh chan<- os.Signal, waitTimeout time.Duration) err
 	if err := rebootHandler(rebootDelay); err != nil {
 		return err
 	}
+	tracing.SpanFromContext(ctx).AddEvent("reboot scheduled", tracing.WithAttributes(
+		tracing.AttrKey(attrRebootDelay).String(rebootDelay.String())))
 	// wait for reboot to happen
 	logger.Noticef("Waiting for system reboot...")
 	if sigCh != nil {
@@ -1038,8 +1073,8 @@ func (d *Daemon) RebootDidNotHappen(st *state.State) error {
 
 // SetServiceArgs updates the specified service commands by replacing
 // existing arguments with the newly specified arguments.
-func (d *Daemon) SetServiceArgs(serviceArgs map[string][]string) error {
-	return d.overlord.PlanManager().SetServiceArgs(serviceArgs)
+func (d *Daemon) SetServiceArgs(ctx context.Context, serviceArgs map[string][]string) error {
+	return d.overlord.PlanManager().SetServiceArgs(ctx, serviceArgs)
 }
 
 // pairingWindowEnabled is a helper function to simplify testing of code
@@ -1055,6 +1090,7 @@ func New(opts *Options) (*Daemon, error) {
 	}
 
 	ovldOptions := overlord.Options{
+		StartupContext: opts.StartupContext,
 		PebbleDir:      opts.Dir,
 		LayersDir:      opts.LayersDir,
 		TLSOptions:     opts.TLSOptions,

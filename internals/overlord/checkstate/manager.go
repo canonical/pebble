@@ -29,6 +29,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 const (
@@ -50,8 +51,9 @@ type CheckManager struct {
 	checks     map[string]*checkData
 }
 
-// FailureFunc is the type of function called when a failure action is triggered.
-type FailureFunc func(name string)
+// FailureFunc is the type of function called when a failure action is
+// triggered. The span carried by ctx, if any, is that of the failing check run.
+type FailureFunc func(ctx context.Context, name string)
 
 // NewManager creates a new check manager.
 func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager) *CheckManager {
@@ -101,10 +103,12 @@ func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 }
 
 // PlanChanged handles updates to the plan (server configuration),
-// stopping the previous checks and starting the new ones as required.
-func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
+// stopping the previous checks and starting the new ones as required. The
+// checks started are traced as children of the span carried by ctx, if any.
+func (m *CheckManager) PlanChanged(ctx context.Context, newPlan *plan.Plan) {
 	m.state.Lock()
 	defer m.state.Unlock()
+	m.state.AddTraceContext(ctx)
 
 	shouldEnsure := false
 	newOrModified := make(map[string]bool)
@@ -178,7 +182,7 @@ func (m *CheckManager) PlanChanged(newPlan *plan.Plan) {
 	for _, config := range newPlan.Checks {
 		if newOrModified[config.Name] {
 			merged := mergeServiceContext(newPlan, config)
-			changeID := performCheckChange(m.state, merged)
+			changeID := performCheckChange(ctx, m.state, merged, "")
 			m.updateCheckData(config, changeID, "", 0, 0)
 			shouldEnsure = true
 		}
@@ -198,7 +202,7 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 		}
 		config := m.state.Cached(performConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
 		prevChangeID := change.ID()
-		changeID := recoverCheckChange(m.state, config, details.Successes, details.Failures)
+		changeID := recoverCheckChange(m.state, config, details.Successes, details.Failures, prevChangeID)
 		m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 		shouldEnsure = true
 
@@ -209,7 +213,7 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 		}
 		config := m.state.Cached(recoverConfigKey{change.ID()}).(*plan.Check) // panic if key not present (always should be)
 		prevChangeID := change.ID()
-		changeID := performCheckChange(m.state, config)
+		changeID := performCheckChange(context.Background(), m.state, config, prevChangeID)
 		m.updateCheckData(config, changeID, prevChangeID, details.Successes, details.Failures)
 		shouldEnsure = true
 	}
@@ -219,9 +223,9 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 	}
 }
 
-func (m *CheckManager) callFailureHandlers(name string) {
+func (m *CheckManager) callFailureHandlers(ctx context.Context, name string) {
 	for _, f := range m.failureHandlers {
-		f(name)
+		f(ctx, name)
 	}
 }
 
@@ -519,8 +523,9 @@ func (e *ChecksNotFound) Error() string {
 }
 
 // StartChecks starts the checks with the specified names, if not already
-// running, and returns the checks that did need to be started.
-func (m *CheckManager) StartChecks(checks []string) (started []string, err error) {
+// running, and returns the checks that did need to be started. The checks'
+// changes are traced as children of the span carried by ctx, if any.
+func (m *CheckManager) StartChecks(ctx context.Context, checks []string) (started []string, err error) {
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -536,6 +541,7 @@ func (m *CheckManager) StartChecks(checks []string) (started []string, err error
 
 	m.state.Lock()
 	defer m.state.Unlock()
+	m.state.AddTraceContext(ctx)
 
 	for _, name := range checks {
 		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
@@ -553,7 +559,7 @@ func (m *CheckManager) StartChecks(checks []string) (started []string, err error
 		if checkData.changeID != "" {
 			continue
 		}
-		changeID := performCheckChange(m.state, check)
+		changeID := performCheckChange(ctx, m.state, check, "")
 		m.updateCheckData(check, changeID, "", 0, 0)
 		started = append(started, check.Name)
 	}
@@ -562,8 +568,9 @@ func (m *CheckManager) StartChecks(checks []string) (started []string, err error
 }
 
 // StopChecks stops the checks with the specified names, if currently running,
-// and returns the checks that did need to be stopped.
-func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error) {
+// and returns the checks that did need to be stopped. The changes aborted are
+// linked to the span carried by ctx, if any.
+func (m *CheckManager) StopChecks(ctx context.Context, checks []string) (stopped []string, err error) {
 	currentPlan := m.planMgr.Plan()
 
 	// If any check specified is not in the plan, return an error.
@@ -579,6 +586,7 @@ func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error)
 
 	m.state.Lock()
 	defer m.state.Unlock()
+	m.state.AddTraceContext(ctx)
 
 	for _, name := range checks {
 		check := currentPlan.Checks[name] // We know this is ok because we checked it above.
@@ -598,6 +606,7 @@ func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error)
 		}
 		change := m.state.Change(checkData.changeID)
 		if change != nil {
+			change.AddSpanLink(tracing.SpanContextFromContext(ctx))
 			change.Abort()
 			stopped = append(stopped, check.Name)
 		}
@@ -614,9 +623,11 @@ func (m *CheckManager) StopChecks(checks []string) (stopped []string, err error)
 // Replan handles starting "startup: enabled" checks when a replan occurs.
 // Checks that are "startup: disabled" but are already running do not get
 // stopped in a replan.
-// The state lock must be held when calling this method.
-func (m *CheckManager) Replan() {
+// The state lock must be held when calling this method. The checks' changes
+// are traced as children of the span carried by ctx, if any.
+func (m *CheckManager) Replan(ctx context.Context) {
 	currentPlan := m.planMgr.Plan()
+	m.state.AddTraceContext(ctx)
 
 	for _, check := range currentPlan.Checks {
 		m.checksLock.Lock()
@@ -636,7 +647,7 @@ func (m *CheckManager) Replan() {
 		if checkData.changeID != "" {
 			continue
 		}
-		changeID := performCheckChange(m.state, check)
+		changeID := performCheckChange(ctx, m.state, check, "")
 		m.updateCheckData(check, changeID, "", 0, 0)
 	}
 }
@@ -659,7 +670,9 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 	// If the check is stopped, run the check directly without using changes and tasks.
 	if changeID == "" {
 		chk := newChecker(check)
+		ctx, span := startCheckSpan(ctx, ctx, check)
 		err := runCheck(ctx, chk, check.Timeout.Value)
+		tracing.EndSpan(span, err)
 		if err != nil {
 			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))
 		}

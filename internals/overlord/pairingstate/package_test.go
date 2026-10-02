@@ -15,6 +15,7 @@
 package pairingstate_test
 
 import (
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
@@ -100,7 +101,7 @@ func (ps *pairingSuite) updatePlan(mode pairingstate.Mode) {
 	config := &pairingstate.PairingConfig{Mode: mode}
 	testPlan := plan.NewPlan()
 	testPlan.Sections[pairingstate.PairingField] = config
-	ps.manager.PlanChanged(testPlan)
+	ps.manager.PlanChanged(context.Background(), testPlan)
 }
 
 // expectWindowEnableDisable makes sure that the pairing window enable phase,

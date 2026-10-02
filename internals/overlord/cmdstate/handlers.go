@@ -20,9 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -36,6 +38,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/ptyutil"
 	"github.com/canonical/pebble/internals/reaper"
+	"github.com/canonical/pebble/internals/tracing"
 	"github.com/canonical/pebble/internals/wsutil"
 )
 
@@ -120,7 +123,8 @@ func (m *CommandManager) doExec(task *state.Task, tomb *tomb.Tomb) error {
 	}()
 
 	// Run the command! Killing the tomb will terminate the command.
-	ctx := tomb.Context(context.Background())
+	//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
+	ctx := tomb.Context(nil) // carries the task's trace span
 	return e.do(ctx, task)
 }
 
@@ -191,12 +195,28 @@ func (e *execution) waitIOConnected(ctx context.Context, execID string) error {
 
 // do actually runs the command.
 func (e *execution) do(ctx context.Context, task *state.Task) error {
+	// The task's span records the command's lifecycle: how long the client
+	// took to connect its websockets, when the process started and exited
+	// and with what code, and when all of its output had been forwarded (a
+	// gap after the exit means a descendant of the process kept the output
+	// open).
+	span := tracing.SpanFromContext(ctx)
+	span.SetAttributes(
+		tracing.ProcessExecutableName(filepath.Base(e.command[0])),
+		tracing.AttrKey(attrExecTerminal).Bool(e.terminal),
+		tracing.AttrKey(attrExecInteractive).Bool(e.interactive),
+	)
+	if e.timeout != 0 {
+		span.SetAttributes(tracing.AttrKey(attrExecTimeout).String(e.timeout.String()))
+	}
+
 	// Wait till client has connected to "stdio" websocket (and "stderr" if
 	// separating stderr), to avoid race conditions forwarding I/O.
 	err := e.waitIOConnected(ctx, task.ID())
 	if err != nil {
 		return err
 	}
+	span.AddEvent("io connected")
 
 	// Files/pipes to close before and after waiting for output to be finished sending.
 	var beforeClosers []io.Closer
@@ -243,7 +263,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			}
 		}
 
-		go e.controlLoop(task.ID(), pidCh, stopControl, int(master.Fd()))
+		go e.controlLoop(task.ID(), span, pidCh, stopControl, int(master.Fd()))
 
 		// Start goroutine to mirror PTY output to "stdio" websocket.
 		ioConn := e.getWebsocket(wsStdio)
@@ -284,7 +304,7 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	} else {
 		// No PTY/terminal, all I/O uses pipes.
 
-		go e.controlLoop(task.ID(), pidCh, stopControl, -1)
+		go e.controlLoop(task.ID(), span, pidCh, stopControl, -1)
 
 		// Start goroutine to receive stdin from "stdio" websocket and write to
 		// cmd.Stdin pipe.
@@ -342,9 +362,17 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	// Ensure cmd.Env is not nil (does not inherit parent env). This is not
 	// strictly necessary as cmdstate.Exec always sets some environment
 	// variables, but code defensively.
-	cmd.Env = make([]string, 0, len(e.environment))
+	// Let the command continue the exec task's trace, unless the request
+	// set a trace context explicitly.
+	environment := maps.Clone(e.environment)
+	if environment == nil {
+		environment = make(map[string]string)
+	}
+	tracing.InjectEnv(ctx, environment)
 
-	for k, v := range e.environment {
+	cmd.Env = make([]string, 0, len(environment))
+
+	for k, v := range environment {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 
@@ -387,11 +415,16 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	err = reaper.StartCommand(cmd)
 	exitCode := -1
 	if err == nil {
+		span.SetAttributes(tracing.ProcessPID(cmd.Process.Pid))
+		span.AddEvent("process started")
+
 		// Send its PID to the control loop.
 		pidCh <- cmd.Process.Pid
 
 		// Wait for it to finish.
 		exitCode, err = reaper.WaitCommand(cmd)
+		span.SetAttributes(tracing.ProcessExitCode(exitCode))
+		span.AddEvent("process exited")
 	}
 
 	// Close open files and channels.
@@ -408,12 +441,14 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	close(childDead)
 
 	wgOutputSent.Wait()
+	span.AddEvent("output sent")
 
 	for _, closer := range afterClosers {
 		_ = closer.Close()
 	}
 
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		span.SetAttributes(tracing.AttrKey(attrExecTimedOut).Bool(true))
 		setExitCode(task, -1)
 		return fmt.Errorf("timed out after %v: %w", e.timeout, ctx.Err())
 	}
@@ -449,7 +484,9 @@ type execResizeArgs struct {
 	Height int `json:"height"`
 }
 
-func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan struct{}, ptyFd int) {
+// controlLoop handles the commands (signals and terminal resizes) sent over
+// the control websocket, recording the signals on span, the exec task's span.
+func (e *execution) controlLoop(execID string, span tracing.Span, pidCh <-chan int, stop <-chan struct{}, ptyFd int) {
 	logger.Debugf("Exec %s: control handler waiting", execID)
 	defer logger.Debugf("Exec %s: control handler finished", execID)
 
@@ -471,6 +508,7 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 	}
 
 	logger.Debugf("Exec %s: control handler started for PID %d", execID, pid)
+	span.AddEvent("control connected")
 	for {
 		controlConn := e.getWebsocket(wsControl)
 		mt, r, err := controlConn.NextReader()
@@ -484,6 +522,10 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 			}
 
 			if websocket.IsCloseError(err, websocket.CloseAbnormalClosure) {
+				// The client went away without closing the websocket
+				// properly, so kill the command rather than leave it
+				// running with nobody to send its output to.
+				span.AddEvent("client disconnected, sending SIGKILL")
 				err := unix.Kill(pid, unix.SIGKILL)
 				if err != nil {
 					logger.Noticef("Exec %s: cannot send SIGKILL to pid %d: %v", execID, pid, err)
@@ -530,9 +572,14 @@ func (e *execution) controlLoop(execID string, pidCh <-chan int, stop <-chan str
 			err := unix.Kill(pid, sig)
 			if err != nil {
 				logger.Noticef(`Exec %s: control command "signal" cannot forward %s to PID %d: %v`, execID, name, pid, err)
+				span.AddEvent("signal", tracing.WithAttributes(
+					tracing.AttrKey(attrExecSignal).String(name),
+					tracing.AttrKey(attrError).String(err.Error()),
+				))
 				continue
 			}
 			logger.Noticef("Exec %s: forwarded signal %s to PID %d", execID, name, pid)
+			span.AddEvent("signal", tracing.WithAttributes(tracing.AttrKey(attrExecSignal).String(name)))
 		default:
 			logger.Noticef("Exec %s: invalid control websocket command %q", execID, command.Command)
 		}

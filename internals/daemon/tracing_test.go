@@ -17,10 +17,12 @@ package daemon
 import (
 	"bufio"
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/GehirnInc/crypt/sha512_crypt"
@@ -567,6 +569,12 @@ func (s *tracingSuite) TestWaitChangeTimeout(c *C) {
 	// The error is still recorded.
 	c.Check(attrs["error.type"].AsString(), Equals, "504")
 	c.Check(attrs["pebble.error.message"].AsString(), Equals, "timed out waiting for change after 10ms")
+
+	// The span is linked to the change's span.
+	c.Assert(change.SpanContext().IsValid(), Equals, true)
+	c.Assert(span.Links(), HasLen, 1)
+	c.Check(span.Links()[0].SpanContext.SpanID(), Equals, change.SpanContext().SpanID())
+	c.Check(span.Links()[0].SpanContext.TraceID(), Equals, change.SpanContext().TraceID())
 }
 
 func (s *tracingSuite) TestWaitChangeReady(c *C) {
@@ -589,6 +597,8 @@ func (s *tracingSuite) TestWaitChangeReady(c *C) {
 	c.Check(attrs["pebble.wait.timeout"].AsString(), Equals, "5s")
 	c.Check(attrs["pebble.change.id"].AsString(), Equals, change.ID())
 	c.Check(attrs["pebble.change.status"].AsString(), Equals, "Done")
+	c.Assert(span.Links(), HasLen, 1)
+	c.Check(span.Links()[0].SpanContext.SpanID(), Equals, change.SpanContext().SpanID())
 }
 
 func (s *tracingSuite) TestWaitChangeNoTimeout(c *C) {
@@ -769,4 +779,118 @@ func (s *tracingSuite) TestWrappedWriterHijack(c *C) {
 	ww = &wrappedWriter{w: httptest.NewRecorder()}
 	_, _, err = ww.Hijack()
 	c.Assert(err, ErrorMatches, "underlying writer does not implement Hijack")
+}
+
+// startDaemon returns a daemon that is serving requests on a unix socket and
+// running changes, with the given layer. The test must stop it.
+func (s *tracingSuite) startDaemon(c *C, layerYAML string) *Daemon {
+	pebbleDir := c.MkDir()
+	if layerYAML != "" {
+		writeTestLayer(pebbleDir, layerYAML)
+	}
+	d, err := New(&Options{Dir: pebbleDir, SocketPath: pebbleDir + ".pebble.socket"})
+	c.Assert(err, IsNil)
+	c.Assert(d.Init(), IsNil)
+	c.Assert(d.Start(), IsNil)
+	s.daemons = append(s.daemons, d)
+	return d
+}
+
+func (s *tracingSuite) TestShutdown(c *C) {
+	d := s.startDaemon(c, "")
+	s.recorder.Reset()
+
+	c.Assert(d.Stop(nil), IsNil)
+
+	span := findSpan(c, s.recorder.Ended(), "daemon shutdown")
+	c.Check(span.Parent().IsValid(), Equals, false)
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
+	attrs := spanAttrs(span)
+	c.Check(attrs["pebble.restart.type"].AsString(), Equals, "unset")
+	c.Check(attrs["pebble.services.stopping"].AsInt64(), Equals, int64(0))
+	// No services were running, so no change was needed to stop them.
+	c.Check(eventNames(span), DeepEquals, []string{"listeners closed", "overlord stopped", "requests finished"})
+	c.Check(findSpans(s.recorder.Ended(), "change stop"), HasLen, 0)
+}
+
+func (s *tracingSuite) TestShutdownStopsServices(c *C) {
+	d := s.startDaemon(c, `
+services:
+    test1:
+        override: replace
+        command: sleep 10
+    test2:
+        override: replace
+        command: sleep 10
+`)
+
+	// Start the services, and wait for them to be running.
+	req := unixRequest(c, "POST", "/v1/services", 0)
+	req.Body = io.NopCloser(strings.NewReader(`{"action": "start", "services": ["test1", "test2"]}`))
+	span, rec := s.serveRouter(c, d.router, req)
+	c.Assert(rec.Code, Equals, http.StatusAccepted)
+	changeID := spanAttrs(span)["pebble.change.id"].AsString()
+	c.Assert(changeID, Not(Equals), "")
+	for i := 0; ; i++ {
+		if i >= 100 {
+			c.Fatalf("timed out waiting for services to start")
+		}
+		d.state.Lock()
+		change := d.state.Change(changeID)
+		d.state.Unlock()
+		if change != nil && change.IsReady() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	s.recorder.Reset()
+
+	c.Assert(d.Stop(nil), IsNil)
+
+	span = findSpan(c, s.recorder.Ended(), "daemon shutdown")
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
+	attrs := spanAttrs(span)
+	c.Check(attrs["pebble.restart.type"].AsString(), Equals, "unset")
+	c.Check(attrs["pebble.services.stopping"].AsInt64(), Equals, int64(2))
+	c.Check(eventNames(span), DeepEquals, []string{"services stopped", "listeners closed", "overlord stopped", "requests finished"})
+
+	// The change stopping the services is part of the shutdown trace.
+	stop := findSpan(c, s.recorder.Ended(), "change stop")
+	c.Check(stop.Parent().SpanID(), Equals, span.SpanContext().SpanID())
+	c.Check(stop.SpanContext().TraceID(), Equals, span.SpanContext().TraceID())
+	c.Check(spanAttrs(stop)["pebble.change.status"].AsString(), Equals, "Done")
+	stopTasks := findSpans(s.recorder.Ended(), "do stop")
+	c.Assert(stopTasks, HasLen, 2)
+	for _, task := range stopTasks {
+		c.Check(task.Parent().SpanID(), Equals, stop.SpanContext().SpanID())
+	}
+}
+
+func (s *tracingSuite) TestShutdownRestart(c *C) {
+	d := s.startDaemon(c, "")
+	s.recorder.Reset()
+
+	// A daemon restart was requested (systemd will start it again).
+	d.HandleRestart(restart.RestartDaemon)
+	c.Check(d.Stop(nil), IsNil)
+
+	span := findSpan(c, s.recorder.Ended(), "daemon shutdown")
+	c.Check(spanAttrs(span)["pebble.restart.type"].AsString(), Equals, "daemon")
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
+}
+
+func (s *tracingSuite) TestShutdownRestartSentinel(c *C) {
+	d := s.startDaemon(c, "")
+	s.recorder.Reset()
+
+	// Stopping because of a service failure is reported to the caller as an
+	// error, which the span records.
+	d.HandleRestart(restart.RestartServiceFailure)
+	err := d.Stop(nil)
+	c.Check(err, Equals, ErrRestartServiceFailure)
+
+	span := findSpan(c, s.recorder.Ended(), "daemon shutdown")
+	c.Check(spanAttrs(span)["pebble.restart.type"].AsString(), Equals, "service-failure")
+	// The error tells the caller how to restart; it's not a failure.
+	c.Check(span.Status().Code, Equals, tracing.StatusUnset)
 }

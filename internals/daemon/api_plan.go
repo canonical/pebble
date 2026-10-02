@@ -72,9 +72,9 @@ func v1PostLayers(c *Command, r *http.Request, user *UserState) Response {
 
 	planMgr := overlordPlanManager(c.d.overlord)
 	if payload.Combine {
-		err = planMgr.CombineLayer(layer, payload.Inner)
+		err = planMgr.CombineLayer(r.Context(), layer, payload.Inner)
 	} else {
-		err = planMgr.AppendLayer(layer, payload.Inner)
+		err = planMgr.AppendLayer(r.Context(), layer, payload.Inner)
 	}
 	if err != nil {
 		if _, ok := err.(*planstate.LabelExists); ok {
