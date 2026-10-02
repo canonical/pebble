@@ -49,6 +49,7 @@ import (
 	"github.com/canonical/pebble/internals/overlord/tlsstate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/systemd"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 var (
@@ -239,9 +240,26 @@ func userFromRequest(st *state.State, identitiesMgr *identities.Manager, r *http
 		userID = &ucred.Uid
 	}
 
+	// Looking up the identity may verify a password hash or a certificate,
+	// and holds the state lock, so it's worth seeing in the request's trace.
+	var method string
+	switch {
+	case clientCert != nil:
+		method = "certificate"
+	case username != "":
+		method = "basic"
+	case userID != nil:
+		method = "ucred"
+	default:
+		method = "none"
+	}
+	_, span := tracing.Tracer().Start(r.Context(), "authenticate",
+		tracing.WithAttributes(tracing.AttrKey(attrAuthMethod).String(method)))
 	st.Lock()
 	identity := identitiesMgr.IdentityFromInputs(userID, username, password, clientCert)
 	st.Unlock()
+	span.SetAttributes(tracing.AttrKey(attrAuthIdentified).Bool(identity != nil))
+	span.End()
 
 	if identity != nil {
 		u := &UserState{
@@ -279,18 +297,23 @@ func (c *Command) Daemon() *Daemon {
 }
 
 func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rsp := c.respond(r)
+	traceResponse(r, rsp)
+	rsp.ServeHTTP(w, r)
+}
+
+// respond handles the request, returning the response to send.
+func (c *Command) respond(r *http.Request) Response {
 	// check if we are in degradedMode
 	if c.d.degradedErr != nil && r.Method != "GET" {
-		ServerError(c.d.degradedErr.Error()).ServeHTTP(w, r)
-		return
+		return ServerError(c.d.degradedErr.Error())
 	}
 
 	// ucred returned will be nil for request over HTTP and HTTPS.
 	ucred, err := ucrednetGet(r.RemoteAddr)
 	if err != nil && err != errNoID {
 		logger.Noticef("Cannot parse UID from remote address %q: %s", r.RemoteAddr, err)
-		ServerError(err.Error()).ServeHTTP(w, r)
-		return
+		return ServerError(err.Error())
 	}
 
 	var rspf ResponseFunc
@@ -309,8 +332,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if rspf == nil {
-		MethodNotAllowed("method %q not allowed", r.Method).ServeHTTP(w, r)
-		return
+		return MethodNotAllowed("method %q not allowed", r.Method)
 	}
 
 	// Optimisation: avoid calling userFromRequest, which acquires the state
@@ -334,10 +356,11 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	traceUser(r, user)
+
 	// We only proceed if we support the transport (we can identify it).
 	if !RequestTransportType(r).IsValid() {
-		Forbidden("forbidden").ServeHTTP(w, r)
-		return
+		return Forbidden("forbidden")
 	}
 
 	if rspe := access.CheckAccess(c.d, r, user); rspe != nil {
@@ -347,8 +370,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("%s,%s", userStr, r.URL.Path),
 				fmt.Sprintf("User %s not authorized to access %s", userStr, r.URL.Path))
 		}
-		rspe.ServeHTTP(w, r)
-		return
+		return rspe
 	}
 
 	rsp := rspf(c, r, user)
@@ -369,7 +391,7 @@ func (c *Command) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rsp.ServeHTTP(w, r)
+	return rsp
 }
 
 type wrappedWriter struct {
@@ -402,7 +424,13 @@ func (w *wrappedWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	if !ok {
 		return nil, nil, fmt.Errorf("underlying writer does not implement Hijack")
 	}
-	return hijacker.Hijack()
+	conn, rw, err := hijacker.Hijack()
+	if err == nil && w.s == 0 {
+		// The websocket handshake writes its response directly to the
+		// connection, so record the status it will send.
+		w.s = http.StatusSwitchingProtocols
+	}
+	return conn, rw, err
 }
 
 func (w *wrappedWriter) status() int {
@@ -599,7 +627,7 @@ func (d *Daemon) Start() error {
 			}
 			return context.WithValue(ctx, TransportTypeKey{}, TransportTypeUnknown)
 		},
-		Handler: exitOnPanic(logit(d.router), os.Stderr, func() {
+		Handler: exitOnPanic(logit(traceRequest(d.router)), os.Stderr, func() {
 			os.Exit(1)
 		}),
 		ConnState: d.connTracker.trackConn,
