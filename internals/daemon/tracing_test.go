@@ -156,15 +156,6 @@ func spanAttrs(span tracingtest.ReadOnlySpan) map[string]tracing.AttributeValue 
 	return attrs
 }
 
-// eventNames returns the names of the span's events, in order.
-func eventNames(span tracingtest.ReadOnlySpan) []string {
-	var names []string
-	for _, event := range span.Events() {
-		names = append(names, event.Name)
-	}
-	return names
-}
-
 // unixRequest returns a request as received over the unix socket from a
 // process with the given UID.
 func unixRequest(c *C, method, url string, uid int) *http.Request {
