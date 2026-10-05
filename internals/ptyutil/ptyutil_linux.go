@@ -102,10 +102,13 @@ func OpenPtyInDevpts(devpts_fd int, uid, gid int64) (*os.File, *os.File, error) 
 		}
 
 		// Set flags.
-		t.Cflag |= unix.IMAXBEL
-		t.Cflag |= unix.IUTF8
-		t.Cflag |= unix.BRKINT
-		t.Cflag |= unix.IXANY
+		// IMAXBEL is a no-op on Linux: termios(3) states Linux acts as if it
+		// were always set. It is kept here only to make that explicit.
+		t.Iflag |= unix.IMAXBEL |
+			unix.IUTF8 |
+			unix.BRKINT |
+			unix.IXANY
+
 		t.Cflag |= unix.HUPCL
 
 		// Set termios.
