@@ -91,7 +91,7 @@ func (p *ANSIMeter) SetTotal(total float64) {
 }
 
 func (p *ANSIMeter) percent() string {
-	if !(p.total > 0.) {
+	if !(p.total > 0.) || math.IsInf(p.total, 0) {
 		return "---%"
 	}
 	q := p.written * 100 / p.total
@@ -103,7 +103,7 @@ func (p *ANSIMeter) percent() string {
 
 func (p *ANSIMeter) Set(current float64) {
 	total := p.total
-	if total < 0 || math.IsNaN(total) {
+	if total < 0 || math.IsNaN(total) || math.IsInf(total, 0) {
 		total = 0
 	}
 	if math.IsNaN(current) || current < 0 {
