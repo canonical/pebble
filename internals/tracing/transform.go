@@ -36,98 +36,155 @@ func tracesData(spans []sdktrace.ReadOnlySpan) *tracepb.TracesData {
 		res   *resource.Resource
 		scope instrumentation.Scope
 	}
+	var c converter
 	var resourceSpans []*tracepb.ResourceSpans
 	byResource := make(map[*resource.Resource]*tracepb.ResourceSpans)
 	byScope := make(map[scopeKey]*tracepb.ScopeSpans)
-	for _, span := range spans {
+	// Spans in a batch usually come from the same tracer, so remember the
+	// last group used and skip the map lookups when it matches.
+	var lastKey scopeKey
+	var lastScope *tracepb.ScopeSpans
+
+	bufs := make([]spanBuf, len(spans))
+	for i, span := range spans {
 		res := span.Resource()
-		rs, ok := byResource[res]
-		if !ok {
-			rs = &tracepb.ResourceSpans{Resource: resourceProto(res)}
-			if res != nil {
-				rs.SchemaUrl = res.SchemaURL()
+		key := scopeKey{res, span.InstrumentationScope()}
+		ss := lastScope
+		if ss == nil || key != lastKey {
+			rs, ok := byResource[res]
+			if !ok {
+				rs = &tracepb.ResourceSpans{Resource: c.resource(res)}
+				if res != nil {
+					rs.SchemaUrl = res.SchemaURL()
+				}
+				byResource[res] = rs
+				resourceSpans = append(resourceSpans, rs)
 			}
-			byResource[res] = rs
-			resourceSpans = append(resourceSpans, rs)
-		}
-
-		scope := span.InstrumentationScope()
-		key := scopeKey{res, scope}
-		ss, ok := byScope[key]
-		if !ok {
-			ss = &tracepb.ScopeSpans{
-				Scope: &commonpb.InstrumentationScope{
-					Name:       scope.Name,
-					Version:    scope.Version,
-					Attributes: keyValues(scope.Attributes.ToSlice()),
-				},
-				SchemaUrl: scope.SchemaURL,
+			ss, ok = byScope[key]
+			if !ok {
+				scope := key.scope
+				ss = &tracepb.ScopeSpans{
+					Scope: &commonpb.InstrumentationScope{
+						Name:       scope.Name,
+						Version:    scope.Version,
+						Attributes: c.keyValues(scope.Attributes.ToSlice()),
+					},
+					SchemaUrl: scope.SchemaURL,
+				}
+				byScope[key] = ss
+				rs.ScopeSpans = append(rs.ScopeSpans, ss)
 			}
-			byScope[key] = ss
-			rs.ScopeSpans = append(rs.ScopeSpans, ss)
+			lastKey, lastScope = key, ss
 		}
-
-		ss.Spans = append(ss.Spans, spanProto(span))
+		ss.Spans = append(ss.Spans, c.span(&bufs[i], span))
 	}
 	return &tracepb.TracesData{ResourceSpans: resourceSpans}
 }
 
-func resourceProto(res *resource.Resource) *resourcepb.Resource {
+// converter converts spans to OTLP messages. It is called for every batch
+// of spans exported, so rather than allocate each message separately it
+// allocates them from arenas shared by the whole batch, and lays out
+// messages that always go together (a span and its status, a key and its
+// value, and so on) in a single struct.
+type converter struct {
+	keyValueBufs arena[keyValueBuf]
+	keyValuePtrs arena[*commonpb.KeyValue]
+	values       arena[commonpb.AnyValue]
+	valuePtrs    arena[*commonpb.AnyValue]
+	strings      arena[commonpb.AnyValue_StringValue]
+	ints         arena[commonpb.AnyValue_IntValue]
+	doubles      arena[commonpb.AnyValue_DoubleValue]
+	bools        arena[commonpb.AnyValue_BoolValue]
+	events       arena[tracepb.Span_Event]
+	eventPtrs    arena[*tracepb.Span_Event]
+}
+
+func (c *converter) resource(res *resource.Resource) *resourcepb.Resource {
 	if res == nil {
 		return &resourcepb.Resource{}
 	}
-	return &resourcepb.Resource{Attributes: keyValues(res.Attributes())}
+	return &resourcepb.Resource{Attributes: c.keyValues(res.Attributes())}
 }
 
-func spanProto(span sdktrace.ReadOnlySpan) *tracepb.Span {
+// spanBuf is the storage for a span's protobuf message and the fixed-size
+// messages and byte arrays it points to.
+type spanBuf struct {
+	span     tracepb.Span
+	status   tracepb.Status
+	traceID  trace.TraceID
+	spanID   trace.SpanID
+	parentID trace.SpanID
+}
+
+// span fills buf with the OTLP representation of span and returns it.
+func (c *converter) span(buf *spanBuf, span sdktrace.ReadOnlySpan) *tracepb.Span {
 	sc := span.SpanContext()
-	s := &tracepb.Span{
-		TraceId:                traceIDBytes(sc.TraceID()),
-		SpanId:                 spanIDBytes(sc.SpanID()),
+	parent := span.Parent()
+	buf.traceID = sc.TraceID()
+	buf.spanID = sc.SpanID()
+	buf.status = statusProto(span.Status())
+	s := &buf.span
+	*s = tracepb.Span{
+		TraceId:                buf.traceID[:],
+		SpanId:                 buf.spanID[:],
 		TraceState:             sc.TraceState().String(),
-		Flags:                  spanFlags(sc.TraceFlags(), span.Parent().IsRemote()),
+		Flags:                  spanFlags(sc.TraceFlags(), parent.IsRemote()),
 		Name:                   span.Name(),
 		Kind:                   tracepb.Span_SpanKind(span.SpanKind()),
 		StartTimeUnixNano:      unixNano(span.StartTime()),
 		EndTimeUnixNano:        unixNano(span.EndTime()),
-		Attributes:             keyValues(span.Attributes()),
+		Attributes:             c.keyValues(span.Attributes()),
 		DroppedAttributesCount: uint32(span.DroppedAttributes()),
 		DroppedEventsCount:     uint32(span.DroppedEvents()),
 		DroppedLinksCount:      uint32(span.DroppedLinks()),
-		Status:                 statusProto(span.Status()),
+		Status:                 &buf.status,
 	}
-	if parent := span.Parent(); parent.SpanID().IsValid() {
-		s.ParentSpanId = spanIDBytes(parent.SpanID())
+	if parent.SpanID().IsValid() {
+		buf.parentID = parent.SpanID()
+		s.ParentSpanId = buf.parentID[:]
 	}
-	s.Events = make([]*tracepb.Span_Event, 0, len(span.Events()))
-	for _, event := range span.Events() {
-		s.Events = append(s.Events, &tracepb.Span_Event{
-			TimeUnixNano:           unixNano(event.Time),
-			Name:                   event.Name,
-			Attributes:             keyValues(event.Attributes),
-			DroppedAttributesCount: uint32(event.DroppedAttributeCount),
-		})
+
+	if events := span.Events(); len(events) > 0 {
+		s.Events = c.eventPtrs.alloc(len(events))
+		bufs := c.events.alloc(len(events))
+		for i, event := range events {
+			bufs[i] = tracepb.Span_Event{
+				TimeUnixNano:           unixNano(event.Time),
+				Name:                   event.Name,
+				Attributes:             c.keyValues(event.Attributes),
+				DroppedAttributesCount: uint32(event.DroppedAttributeCount),
+			}
+			s.Events[i] = &bufs[i]
+		}
 	}
-	s.Links = make([]*tracepb.Span_Link, 0, len(span.Links()))
-	for _, link := range span.Links() {
-		s.Links = append(s.Links, &tracepb.Span_Link{
-			TraceId:                traceIDBytes(link.SpanContext.TraceID()),
-			SpanId:                 spanIDBytes(link.SpanContext.SpanID()),
-			TraceState:             link.SpanContext.TraceState().String(),
-			Flags:                  spanFlags(link.SpanContext.TraceFlags(), link.SpanContext.IsRemote()),
-			Attributes:             keyValues(link.Attributes),
-			DroppedAttributesCount: uint32(link.DroppedAttributeCount),
-		})
+
+	if links := span.Links(); len(links) > 0 {
+		s.Links = make([]*tracepb.Span_Link, len(links))
+		bufs := make([]linkBuf, len(links))
+		for i, link := range links {
+			buf := &bufs[i]
+			buf.traceID = link.SpanContext.TraceID()
+			buf.spanID = link.SpanContext.SpanID()
+			buf.link = tracepb.Span_Link{
+				TraceId:                buf.traceID[:],
+				SpanId:                 buf.spanID[:],
+				TraceState:             link.SpanContext.TraceState().String(),
+				Flags:                  spanFlags(link.SpanContext.TraceFlags(), link.SpanContext.IsRemote()),
+				Attributes:             c.keyValues(link.Attributes),
+				DroppedAttributesCount: uint32(link.DroppedAttributeCount),
+			}
+			s.Links[i] = &buf.link
+		}
 	}
 	return s
 }
 
-func traceIDBytes(id trace.TraceID) []byte {
-	return id[:]
-}
-
-func spanIDBytes(id trace.SpanID) []byte {
-	return id[:]
+// linkBuf is the storage for a link's protobuf message and the byte arrays
+// it points to.
+type linkBuf struct {
+	link    tracepb.Span_Link
+	traceID trace.TraceID
+	spanID  trace.SpanID
 }
 
 // spanFlags returns the OTLP span flags: the W3C trace flags in the low
@@ -147,7 +204,7 @@ func unixNano(t time.Time) uint64 {
 	return uint64(t.UnixNano())
 }
 
-func statusProto(status sdktrace.Status) *tracepb.Status {
+func statusProto(status sdktrace.Status) tracepb.Status {
 	// The OTel API and OTLP number the status codes differently.
 	var code tracepb.Status_StatusCode
 	switch status.Code {
@@ -158,59 +215,111 @@ func statusProto(status sdktrace.Status) *tracepb.Status {
 	default:
 		code = tracepb.Status_STATUS_CODE_UNSET
 	}
-	return &tracepb.Status{Code: code, Message: status.Description}
+	return tracepb.Status{Code: code, Message: status.Description}
 }
 
-func keyValues(attrs []attribute.KeyValue) []*commonpb.KeyValue {
+// keyValueBuf is the storage for an attribute's key-value message and the
+// value message it points to.
+type keyValueBuf struct {
+	kv    commonpb.KeyValue
+	value commonpb.AnyValue
+}
+
+func (c *converter) keyValues(attrs []attribute.KeyValue) []*commonpb.KeyValue {
 	if len(attrs) == 0 {
 		return nil
 	}
-	kvs := make([]*commonpb.KeyValue, 0, len(attrs))
-	for _, attr := range attrs {
-		kvs = append(kvs, &commonpb.KeyValue{
-			Key:   string(attr.Key),
-			Value: anyValue(attr.Value),
-		})
+	kvs := c.keyValuePtrs.alloc(len(attrs))
+	bufs := c.keyValueBufs.alloc(len(attrs))
+	for i, attr := range attrs {
+		buf := &bufs[i]
+		buf.kv = commonpb.KeyValue{Key: string(attr.Key), Value: &buf.value}
+		c.setAnyValue(&buf.value, attr.Value)
+		kvs[i] = &buf.kv
 	}
 	return kvs
 }
 
-func anyValue(v attribute.Value) *commonpb.AnyValue {
+// setAnyValue sets dst to the OTLP representation of v.
+func (c *converter) setAnyValue(dst *commonpb.AnyValue, v attribute.Value) {
 	switch v.Type() {
 	case attribute.BOOL:
-		return &commonpb.AnyValue{Value: &commonpb.AnyValue_BoolValue{BoolValue: v.AsBool()}}
+		dst.Value = c.bools.new(commonpb.AnyValue_BoolValue{BoolValue: v.AsBool()})
 	case attribute.INT64:
-		return &commonpb.AnyValue{Value: &commonpb.AnyValue_IntValue{IntValue: v.AsInt64()}}
+		dst.Value = c.ints.new(commonpb.AnyValue_IntValue{IntValue: v.AsInt64()})
 	case attribute.FLOAT64:
-		return &commonpb.AnyValue{Value: &commonpb.AnyValue_DoubleValue{DoubleValue: v.AsFloat64()}}
+		dst.Value = c.doubles.new(commonpb.AnyValue_DoubleValue{DoubleValue: v.AsFloat64()})
 	case attribute.STRING:
-		return &commonpb.AnyValue{Value: &commonpb.AnyValue_StringValue{StringValue: v.AsString()}}
+		dst.Value = c.strings.new(commonpb.AnyValue_StringValue{StringValue: v.AsString()})
 	case attribute.BYTESLICE:
-		return &commonpb.AnyValue{Value: &commonpb.AnyValue_BytesValue{BytesValue: v.AsByteSlice()}}
+		dst.Value = &commonpb.AnyValue_BytesValue{BytesValue: v.AsByteSlice()}
 	case attribute.BOOLSLICE:
-		return arrayValue(v.AsBoolSlice(), attribute.BoolValue)
+		setArrayValue(c, dst, v.AsBoolSlice(), attribute.BoolValue)
 	case attribute.INT64SLICE:
-		return arrayValue(v.AsInt64Slice(), attribute.Int64Value)
+		setArrayValue(c, dst, v.AsInt64Slice(), attribute.Int64Value)
 	case attribute.FLOAT64SLICE:
-		return arrayValue(v.AsFloat64Slice(), attribute.Float64Value)
+		setArrayValue(c, dst, v.AsFloat64Slice(), attribute.Float64Value)
 	case attribute.STRINGSLICE:
-		return arrayValue(v.AsStringSlice(), attribute.StringValue)
+		setArrayValue(c, dst, v.AsStringSlice(), attribute.StringValue)
 	case attribute.SLICE:
-		return arrayValue(v.AsSlice(), func(v attribute.Value) attribute.Value { return v })
+		setArrayValue(c, dst, v.AsSlice(), func(v attribute.Value) attribute.Value { return v })
 	case attribute.MAP:
-		return &commonpb.AnyValue{Value: &commonpb.AnyValue_KvlistValue{
-			KvlistValue: &commonpb.KeyValueList{Values: keyValues(v.AsMap())},
-		}}
+		buf := &struct {
+			wrapper commonpb.AnyValue_KvlistValue
+			list    commonpb.KeyValueList
+		}{}
+		buf.list.Values = c.keyValues(v.AsMap())
+		buf.wrapper.KvlistValue = &buf.list
+		dst.Value = &buf.wrapper
 	default:
 		// EMPTY, or a type added to the API after this was written.
-		return &commonpb.AnyValue{}
+		dst.Value = nil
 	}
 }
 
-func arrayValue[T any](values []T, toValue func(T) attribute.Value) *commonpb.AnyValue {
-	array := &commonpb.ArrayValue{Values: make([]*commonpb.AnyValue, 0, len(values))}
-	for _, v := range values {
-		array.Values = append(array.Values, anyValue(toValue(v)))
+func setArrayValue[T any](c *converter, dst *commonpb.AnyValue, values []T, toValue func(T) attribute.Value) {
+	buf := &struct {
+		wrapper commonpb.AnyValue_ArrayValue
+		array   commonpb.ArrayValue
+	}{}
+	buf.array.Values = c.valuePtrs.alloc(len(values))
+	bufs := c.values.alloc(len(values))
+	for i, v := range values {
+		c.setAnyValue(&bufs[i], toValue(v))
+		buf.array.Values[i] = &bufs[i]
 	}
-	return &commonpb.AnyValue{Value: &commonpb.AnyValue_ArrayValue{ArrayValue: array}}
+	buf.wrapper.ArrayValue = &buf.array
+	dst.Value = &buf.wrapper
+}
+
+// arena hands out slices of T from larger chunks, so that many small
+// slices and values can be allocated with a few allocations. Pointers into
+// an arena stay valid as it grows, as chunks are never reallocated.
+type arena[T any] struct {
+	chunk []T
+}
+
+// arenaMaxChunk limits the chunk size so that the unused tail of the last
+// chunk stays small.
+const arenaMaxChunk = 256
+
+// alloc returns a zeroed slice of n values with capacity exactly n.
+func (a *arena[T]) alloc(n int) []T {
+	if n > cap(a.chunk)-len(a.chunk) {
+		// The first chunk is only as big as needed, so that converting a
+		// single span costs no more than it would without an arena; the
+		// chunks then grow as the batch turns out to be bigger.
+		size := max(n, min(2*cap(a.chunk), arenaMaxChunk))
+		a.chunk = make([]T, 0, size)
+	}
+	start := len(a.chunk)
+	a.chunk = a.chunk[:start+n]
+	return a.chunk[start : start+n : start+n]
+}
+
+// new returns a pointer to a copy of v.
+func (a *arena[T]) new(v T) *T {
+	s := a.alloc(1)
+	s[0] = v
+	return &s[0]
 }
