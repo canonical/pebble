@@ -199,9 +199,18 @@ func (s *State) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	s.data = unmarshalled.Data
+	if s.data == nil {
+		s.data = make(customData)
+	}
 
 	s.changes = unmarshalled.Changes
+	if s.changes == nil {
+		s.changes = make(map[string]*Change)
+	}
 	s.tasks = unmarshalled.Tasks
+	if s.tasks == nil {
+		s.tasks = make(map[string]*Task)
+	}
 	s.unflattenNotices(unmarshalled.Notices)
 	s.legacyIdentities = unmarshalled.LegacyIdentities
 	s.lastChangeId = unmarshalled.LastChangeId
