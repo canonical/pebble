@@ -16,7 +16,6 @@
 package tlsstate
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rand"
@@ -453,9 +452,8 @@ func isCertActive(cert *x509.Certificate) bool {
 // the signer public key. This confirms the certificate matches the
 // identity key.
 func isCertDerived(cert *x509.Certificate, signer crypto.Signer) bool {
-	signerPublic := signer.Public().(ed25519.PublicKey)
-	certPublic := cert.PublicKey.(ed25519.PublicKey)
-	return bytes.Equal(signerPublic, certPublic)
+	signerPublic, ok := signer.Public().(ed25519.PublicKey)
+	return ok && signerPublic.Equal(cert.PublicKey)
 }
 
 // expectPermission return an error if the specified directory or file
