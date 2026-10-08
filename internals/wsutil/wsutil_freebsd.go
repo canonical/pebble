@@ -14,6 +14,5 @@
 
 package wsutil
 
-import "golang.org/x/sys/unix"
-
-const pollRDHUP = unix.POLLRDHUP
+// POLLRDHUP from <sys/poll.h> (FreeBSD 14+); not exported by x/sys/unix.
+const pollRDHUP = 0x4000

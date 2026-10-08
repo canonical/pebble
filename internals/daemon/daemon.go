@@ -927,8 +927,8 @@ func systemdModeReboot(rebootDelay time.Duration) error {
 }
 
 var (
-	syscallSync   = syscall.Sync
-	syscallReboot = syscall.Reboot
+	syscallSync   = func() { syscall.Sync() }
+	syscallReboot = sysReboot
 )
 
 // syscallModeReboot performs a non-blocking delayed reboot using direct Linux
@@ -941,7 +941,7 @@ func syscallModeReboot(rebootDelay time.Duration) error {
 		// As per the requirements of the reboot syscall, we
 		// have to first call sync.
 		syscallSync()
-		err := syscallReboot(syscall.LINUX_REBOOT_CMD_RESTART)
+		err := syscallReboot(rebootCmdRestart)
 		if err != nil {
 			logger.Noticef("Failed on reboot syscall: %v", err)
 		}

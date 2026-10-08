@@ -153,15 +153,19 @@ func (s *PebbleSuite) TestEnterExecNoVerbose(c *C) {
 }
 
 func (s *PebbleSuite) TestEnterExecListDir(c *C) {
+	dir := filepath.Join(s.pebbleDir, "dir")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		panic(err)
+	}
 	files := []string{"foo", "bar", "baz"}
 	for _, file := range files {
-		path := filepath.Join(s.pebbleDir, file)
+		path := filepath.Join(dir, file)
 		if err := os.WriteFile(path, []byte{}, 0644); err != nil {
 			panic(err)
 		}
 	}
 
-	restore := fakeArgs("pebble", "enter", "exec", "ls", "--hide=identity", s.pebbleDir)
+	restore := fakeArgs("pebble", "enter", "exec", "ls", dir)
 	defer restore()
 
 	exitCode := cli.PebbleMain()

@@ -12,8 +12,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsutil
+package osutil
 
-import "golang.org/x/sys/unix"
+import (
+	"fmt"
 
-const pollRDHUP = unix.POLLRDHUP
+	"golang.org/x/sys/unix"
+)
+
+// BootID returns the unique system-generated boot identifier.
+//
+// FreeBSD has no equivalent of Linux's boot_id, so use the boot time. Note
+// that the kernel adjusts kern.boottime when the wall clock is stepped.
+func BootID() (string, error) {
+	tv, err := unix.SysctlTimeval("kern.boottime")
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%d.%06d", tv.Sec, tv.Usec), nil
+}

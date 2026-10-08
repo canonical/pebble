@@ -32,5 +32,5 @@ var _ = Suite(&bootIdSuite{})
 func (s *bootIdSuite) TestSmoke(c *C) {
 	id, err := osutil.BootID()
 	c.Assert(err, IsNil)
-	c.Assert(id, HasLen, 36)
+	c.Assert(id, Not(Equals), "")
 }

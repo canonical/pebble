@@ -177,10 +177,10 @@ func (cmd *cmdExec) Execute(args []string) error {
 
 	// If stdout and stderr both refer to the same file or device (e.g.,
 	// "/dev/pts/1"), combine stderr into stdout on the server.
-	stdoutPath, err := os.Readlink("/proc/self/fd/1")
+	stdoutInfo, err := os.Stdout.Stat()
 	if err == nil {
-		stderrPath, err := os.Readlink("/proc/self/fd/2")
-		if err == nil && stdoutPath == stderrPath {
+		stderrInfo, err := os.Stderr.Stat()
+		if err == nil && os.SameFile(stdoutInfo, stderrInfo) {
 			opts.Stderr = nil // opts.Stderr nil uses "combine stderr" mode
 		}
 	}

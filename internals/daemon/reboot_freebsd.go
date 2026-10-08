@@ -12,8 +12,17 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsutil
+package daemon
 
 import "golang.org/x/sys/unix"
 
-const pollRDHUP = unix.POLLRDHUP
+// RB_AUTOBOOT from <sys/reboot.h>; not exported by x/sys/unix.
+const rebootCmdRestart = 0
+
+func sysReboot(cmd int) error {
+	_, _, errno := unix.Syscall(unix.SYS_REBOOT, uintptr(cmd), 0, 0)
+	if errno != 0 {
+		return errno
+	}
+	return nil
+}
