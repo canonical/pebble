@@ -21,7 +21,6 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
-	"syscall"
 )
 
 var errNoID = errors.New("no pid/uid found")
@@ -101,7 +100,13 @@ type ucrednetListener struct {
 	closeErr     error
 }
 
-var getUcred = syscall.GetsockoptUcred
+// ucred holds the credentials of the peer of a Unix socket connection.
+type ucred struct {
+	Pid int32
+	Uid uint32
+}
+
+var getUcred = getPeerCred
 
 func (wl *ucrednetListener) Accept() (net.Conn, error) {
 	con, err := wl.Listener.Accept()
@@ -116,12 +121,12 @@ func (wl *ucrednetListener) Accept() (net.Conn, error) {
 			_ = con.Close()
 			return nil, err
 		}
-		var ucred *syscall.Ucred
+		var ucred *ucred
 		var ucredErr error
 		// Call getUcred inside a Control() block to ensure fd is valid for
 		// the duration of the call, avoiding a race condition.
 		err = rawConn.Control(func(fd uintptr) {
-			ucred, ucredErr = getUcred(int(fd), syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+			ucred, ucredErr = getUcred(int(fd))
 		})
 		if err != nil {
 			_ = con.Close()

@@ -215,6 +215,9 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	childDead := make(chan struct{})
 	var wgOutputSent sync.WaitGroup
 
+	// Master side of the pty, if a terminal was requested.
+	var master *os.File
+
 	if e.terminal {
 		var uid, gid int
 		if e.userID != nil && e.groupID != nil {
@@ -224,7 +227,8 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 			gid = os.Getgid()
 		}
 
-		master, slave, err := ptyutil.OpenPty(int64(uid), int64(gid))
+		var slave *os.File
+		master, slave, err = ptyutil.OpenPty(int64(uid), int64(gid))
 		if err != nil {
 			return err
 		}
@@ -264,8 +268,14 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 				// reading earlier than the mirroring go routine sends all the
 				// output to the client. Thus, closing the master descriptor
 				// here will terminate mirroring prematurely. Instead, we
-				// should send Ctrl-D to the fd to indicate the end of input.
-				master.Write([]byte{byte(unix.VEOF)})
+				// should send the EOF character (usually Ctrl-D) to the fd to
+				// indicate the end of input.
+				termios, err := ptyutil.GetTermios(int(master.Fd()))
+				if err != nil {
+					logger.Noticef("Exec %s: cannot get terminal attributes: %v", task.ID(), err)
+					return
+				}
+				master.Write([]byte{termios.Cc[unix.VEOF]})
 			}()
 		} else {
 			// Non-interactive: start goroutine to receive stdin from "stdio"
@@ -395,6 +405,9 @@ func (e *execution) do(ctx context.Context, task *state.Task) error {
 	}
 
 	// Close open files and channels.
+	if master != nil {
+		waitPtyDrained(int(master.Fd()))
+	}
 	for _, closer := range beforeClosers {
 		_ = closer.Close()
 	}

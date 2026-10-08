@@ -12,8 +12,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsutil
+//go:build !freebsd
 
-import "golang.org/x/sys/unix"
+package cmdstate
 
-const pollRDHUP = unix.POLLRDHUP
+// waitPtyDrained is only needed on FreeBSD; see ptydrain_freebsd.go.
+func waitPtyDrained(masterFd int) {}

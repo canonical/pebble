@@ -1,5 +1,7 @@
 // -*- Mode: Go; indent-tabs-mode: t -*-
 
+//go:build darwin || freebsd
+
 /*
  * Copyright (c) 2018 Canonical Ltd
  *

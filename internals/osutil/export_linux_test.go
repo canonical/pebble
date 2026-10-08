@@ -12,8 +12,26 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsutil
+package osutil
 
-import "golang.org/x/sys/unix"
+import (
+	"fmt"
+	"os"
+)
 
-const pollRDHUP = unix.POLLRDHUP
+// FakeMountInfo fakes content of /proc/self/mountinfo.
+func FakeMountInfo(text string) (restore func()) {
+	old := procSelfMountInfo
+	f, err := os.CreateTemp("", "mountinfo")
+	if err != nil {
+		panic(fmt.Errorf("cannot open temporary file: %s", err))
+	}
+	if err := os.WriteFile(f.Name(), []byte(text), 0644); err != nil {
+		panic(fmt.Errorf("cannot write mock mountinfo file: %s", err))
+	}
+	procSelfMountInfo = f.Name()
+	return func() {
+		os.Remove(f.Name())
+		procSelfMountInfo = old
+	}
+}

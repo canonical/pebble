@@ -12,8 +12,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsutil
+package daemon
 
-import "golang.org/x/sys/unix"
+import "syscall"
 
-const pollRDHUP = unix.POLLRDHUP
+func getPeerCred(fd int) (*ucred, error) {
+	cred, err := syscall.GetsockoptUcred(fd, syscall.SOL_SOCKET, syscall.SO_PEERCRED)
+	if err != nil {
+		return nil, err
+	}
+	return &ucred{Pid: cred.Pid, Uid: cred.Uid}, nil
+}

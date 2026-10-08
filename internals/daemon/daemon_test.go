@@ -88,7 +88,7 @@ func (s *daemonSuite) SetUpTest(c *C) {
 		c.Fatalf("cannot start reaper: %v", err)
 	}
 
-	s.socketPath = ""
+	s.socketPath = c.MkDir() + ".pebble.socket"
 	s.pebbleDir = c.MkDir()
 	s.statePath = filepath.Join(s.pebbleDir, cmd.StateFile)
 	systemdSdNotify = func(notif string) error {
@@ -1305,7 +1305,7 @@ func (s *daemonSuite) TestRebootExternal(c *C) {
 	didFallbackReboot := false
 	defer FakeSyscallSync(func() {})()
 	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+		if cmd == rebootCmdRestart {
 			didFallbackReboot = true
 		}
 		return nil
@@ -1763,7 +1763,7 @@ func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
 	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+		if cmd == rebootCmdRestart {
 			close(wait)
 		}
 		return nil
@@ -1785,7 +1785,7 @@ func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
 	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+		if cmd == rebootCmdRestart {
 			close(wait)
 		}
 		return nil
@@ -1814,7 +1814,7 @@ func (s *rebootSuite) TestSetSyscall(c *C) {
 	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
 	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == syscall.LINUX_REBOOT_CMD_RESTART {
+		if cmd == rebootCmdRestart {
 			close(wait)
 		}
 		return nil

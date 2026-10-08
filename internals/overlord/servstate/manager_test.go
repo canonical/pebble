@@ -29,9 +29,7 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 
-	"golang.org/x/sys/unix"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -221,7 +219,7 @@ services:
 
     test4:
         override: replace
-        command: echo -e 'too-fast\nsecond line'
+        command: printf 'too-fast\nsecond line\n'
 
     test5:
         override: replace
@@ -286,11 +284,11 @@ func (s *S) TestStopTimeout(c *C) {
 services:
     test9:
         override: merge
-        command: /bin/bash -c "sleep 20;"
+        command: bash -c "sleep 20;"
         kill-delay: 1h
     test10:
         override: merge
-        command: /bin/bash -c "sleep 20;"
+        command: bash -c "sleep 20;"
         kill-delay: 2h
 `)
 	s.planChanged(c)
@@ -363,7 +361,7 @@ func (s *S) TestKillDelayIsUsed(c *C) {
 services:
     test6:
         override: merge
-        command: /bin/bash -c "trap 'sleep 10' SIGTERM; sleep 20;"
+        command: bash -c "trap 'sleep 10' SIGTERM; sleep 20;"
         kill-delay: 300ms
 `)
 	s.planChanged(c)
@@ -716,7 +714,7 @@ func (s *S) TestStartFastExitCommand(c *C) {
 services:
     test4:
         override: replace
-        command: echo -e 'too-fast\nsecond line'
+        command: printf 'too-fast\nsecond line\n'
 `
 	s.planAddLayer(c, layer)
 	s.planChanged(c)
@@ -1691,11 +1689,9 @@ zombi:
 	for {
 		select {
 		case <-ticker.C:
-			stat, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", childPid))
+			zombie, err := isZombie(childPid)
 			c.Assert(err, IsNil)
-			statFields := strings.Fields(string(stat))
-			c.Assert(len(statFields) >= 3, Equals, true)
-			if statFields[2] == "Z" {
+			if zombie {
 				break zombi
 			}
 
@@ -2227,15 +2223,6 @@ func (s *S) waitUntilService(c *C, service string, f func(svc *servstate.Service
 		time.Sleep(10 * time.Millisecond)
 	}
 	c.Fatalf("timed out waiting for service")
-}
-
-func getChildSubreaper() (bool, error) {
-	var i uintptr
-	err := unix.Prctl(unix.PR_GET_CHILD_SUBREAPER, uintptr(unsafe.Pointer(&i)), 0, 0, 0)
-	if err != nil {
-		return false, err
-	}
-	return i != 0, nil
 }
 
 func createZombie() error {

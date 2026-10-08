@@ -12,8 +12,22 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsutil
+package daemon
 
-import "golang.org/x/sys/unix"
+import (
+	"unsafe"
 
-const pollRDHUP = unix.POLLRDHUP
+	"golang.org/x/sys/unix"
+)
+
+func getPeerCred(fd int) (*ucred, error) {
+	cred, err := unix.GetsockoptXucred(fd, unix.SOL_LOCAL, unix.LOCAL_PEERCRED)
+	if err != nil {
+		return nil, err
+	}
+	// Since FreeBSD 13, struct xucred ends with a pointer-sized union holding
+	// cr_pid. x/sys/unix hides that field behind an unnamed member, so read it
+	// by offset from the end of the struct.
+	pid := *(*int32)(unsafe.Add(unsafe.Pointer(cred), unsafe.Sizeof(*cred)-unsafe.Sizeof(uintptr(0))))
+	return &ucred{Pid: pid, Uid: cred.Uid}, nil
+}

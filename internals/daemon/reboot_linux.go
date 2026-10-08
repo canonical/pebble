@@ -12,8 +12,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package wsutil
+package daemon
 
-import "golang.org/x/sys/unix"
+import "syscall"
 
-const pollRDHUP = unix.POLLRDHUP
+const rebootCmdRestart = syscall.LINUX_REBOOT_CMD_RESTART
+
+func sysReboot(cmd int) error {
+	return syscall.Reboot(cmd)
+}
