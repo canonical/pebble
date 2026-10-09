@@ -46,6 +46,10 @@ func (client *Client) SetGetWebsocket(f getWebsocketFunc) {
 	client.getWebsocket = f
 }
 
+func (client *Client) GetWebsocket(urlPath string) (clientWebsocket, error) {
+	return client.getWebsocket(urlPath)
+}
+
 // WaitStdinDone waits for WebsocketSendStream to be finished calling
 // WriteMessage to avoid a race condition.
 func (p *ExecProcess) WaitStdinDone() {

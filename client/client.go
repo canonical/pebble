@@ -766,7 +766,7 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 	if rq.basicUsername != "" && rq.basicPassword != "" {
 		r.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
-	conn, resp, err := dialer.Dial(url, nil)
+	conn, resp, err := dialer.Dial(url, r.Header)
 	if errors.Is(err, websocket.ErrBadHandshake) {
 		// FIXME: gorilla truncates the response body to 1024 characters.
 		// If parsing fails, the real error should appear in the server logs.
