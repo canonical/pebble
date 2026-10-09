@@ -452,7 +452,7 @@ func isCertActive(cert *x509.Certificate) bool {
 // the signer public key. This confirms the certificate matches the
 // identity key.
 func isCertDerived(cert *x509.Certificate, signer crypto.Signer) bool {
-	signerPublic, ok := signer.Public().(ed25519.PublicKey)
+	signerPublic, ok := signer.Public().(interface{ Equal(crypto.PublicKey) bool })
 	return ok && signerPublic.Equal(cert.PublicKey)
 }
 
