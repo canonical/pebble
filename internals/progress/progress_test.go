@@ -61,3 +61,17 @@ func (ts *ProgressTestSuite) TestTestingNotify(c *C) {
 	ts.testNotify(c, p, "test", "")
 	c.Check(p.Notices, DeepEquals, []string{"blah blah"})
 }
+
+func (ts *ProgressTestSuite) TestTestingMeterWrite(c *C) {
+	p := &progresstest.Meter{}
+	buf := []byte("hello")
+	n, err := p.Write(buf)
+	c.Assert(err, IsNil)
+	c.Assert(n, Equals, len(buf))
+
+	// Mutate buffer to verify Write did not retain caller-owned slice
+	buf[0] = 'X'
+
+	c.Check(p.Written, DeepEquals, [][]byte{[]byte("hello")})
+}
+
