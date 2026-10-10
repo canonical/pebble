@@ -33,7 +33,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/canonical/pebble/internals/wsutil"
 )
@@ -220,12 +220,7 @@ type getWebsocketFunc func(urlPath string) (clientWebsocket, error)
 type clientWebsocket interface {
 	wsutil.MessageReader
 	wsutil.MessageWriter
-	io.Closer
-	jsonWriter
-}
-
-type jsonWriter interface {
-	WriteJSON(v any) error
+	CloseNow() error
 }
 
 func New(config *Config) (*Client, error) {
@@ -749,11 +744,12 @@ func (rq *defaultRequester) Transport() *http.Transport {
 }
 
 func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error) {
-	dialer := websocket.Dialer{
-		NetDialContext:   rq.transport.DialContext,
-		Proxy:            rq.transport.Proxy,
-		TLSClientConfig:  rq.transport.TLSClientConfig,
-		HandshakeTimeout: 5 * time.Second,
+	opts := &websocket.DialOptions{
+		HTTPClient: &http.Client{
+			Transport: rq.transport,
+			// The timeout only applies to the handshake.
+			Timeout: 5 * time.Second,
+		},
 	}
 
 	scheme := "ws"
@@ -766,13 +762,20 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 	if rq.basicUsername != "" && rq.basicPassword != "" {
 		r.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
-	conn, resp, err := dialer.Dial(url, nil)
-	if errors.Is(err, websocket.ErrBadHandshake) {
-		// FIXME: gorilla truncates the response body to 1024 characters.
-		// If parsing fails, the real error should appear in the server logs.
-		return conn, parseError(resp)
+	conn, resp, err := websocket.Dial(context.Background(), url, opts)
+	if err != nil {
+		if resp != nil && resp.StatusCode != http.StatusSwitchingProtocols {
+			// FIXME: the websocket library truncates the response body to 1024
+			// characters. If parsing fails, the real error should appear in
+			// the server logs.
+			return nil, parseError(resp)
+		}
+		return nil, err
 	}
-	return conn, err
+	// Messages are up to 128KiB (see wsutil.ReaderToChannel), so don't limit
+	// the size of messages read.
+	conn.SetReadLimit(-1)
+	return conn, nil
 }
 
 // getIdentityFingerprint extracts the public key from the certificate and
