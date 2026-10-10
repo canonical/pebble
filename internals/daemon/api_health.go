@@ -22,6 +22,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/plan"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 type healthInfo struct {
@@ -57,6 +58,11 @@ func v1Health(c *Command, r *http.Request, _ *UserState) Response {
 			status = http.StatusBadGateway
 		}
 	}
+
+	// Reporting that the system is unhealthy is the endpoint doing its job,
+	// not a failure of the daemon.
+	tracing.SpanFromContext(r.Context()).SetAttributes(tracing.AttrKey(attrHealthy).Bool(healthy))
+	expectedStatus(r)
 
 	return SyncResponse(&resp{
 		Type:   ResponseTypeSync,

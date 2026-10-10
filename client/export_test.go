@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/x509"
 	"fmt"
+	"io"
 )
 
 var (
@@ -73,4 +74,10 @@ func (client *Client) SysInfoWithServerID() (*x509.Certificate, *SysInfo, error)
 	}
 
 	return resp.TLSServerIDCert, &sysInfo, nil
+}
+
+// GetWebsocket opens a websocket to the given path using the default
+// requester, returning the connection as an io.Closer.
+func (client *Client) GetWebsocket(urlPath string) (io.Closer, error) {
+	return client.getWebsocket(urlPath)
 }
