@@ -35,7 +35,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -177,7 +176,7 @@ type Daemon struct {
 	httpListenersClosed     chan struct{}
 	httpListenersClosedOnce sync.Once
 	tomb                    tomb.Tomb
-	router                  *mux.Router
+	router                  *http.ServeMux
 	standbyOpinions         *standby.StandbyOpinions
 
 	// set to what kind of restart was requested (if any)
@@ -515,20 +514,18 @@ func (d *Daemon) SetDegradedMode(err error) {
 }
 
 func (d *Daemon) addRoutes() {
-	d.router = mux.NewRouter()
+	d.router = http.NewServeMux()
 
 	for _, c := range API {
 		c.d = d
-		if c.PathPrefix == "" {
-			d.router.Handle(c.Path, c).Name(c.Path)
-		} else {
-			d.router.PathPrefix(c.PathPrefix).Handler(c).Name(c.PathPrefix)
+		path := c.Path
+		if c.PathPrefix != "" {
+			path = strings.TrimSuffix(c.PathPrefix, "/") + "/"
 		}
+		d.router.Handle(path, c)
 	}
 
-	// also maybe add a /favicon.ico handler...
-
-	d.router.NotFoundHandler = NotFound("invalid API endpoint requested")
+	d.router.Handle("/", NotFound("invalid API endpoint requested"))
 }
 
 type connTracker struct {

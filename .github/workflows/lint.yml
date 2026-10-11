@@ -19,9 +19,19 @@ jobs:
       with:
         go-version-file: 'go.mod'
 
+    # Build against a newer x/tools so it can read Go 1.27.2 export data.
+    # Once staticcheck releases a fix (https://github.com/dominikh/go-tools/issues/1832),
+    # replace this step with: go install honnef.co/go/tools/cmd/staticcheck@<fixed version>
+    - name: Install staticcheck
+      run: |
+        mkdir -p "$RUNNER_TEMP/staticcheck" && cd "$RUNNER_TEMP/staticcheck"
+        go mod init staticcheck
+        go mod edit -go=1.27.2
+        go get honnef.co/go/tools/cmd/staticcheck@v0.8.1 golang.org/x/tools@v0.51.0
+        go build -o "$(go env GOPATH)/bin/staticcheck" honnef.co/go/tools/cmd/staticcheck
+
     - name: Run staticcheck
       run: |
-        go install honnef.co/go/tools/cmd/staticcheck@v0.8.1
         staticcheck ./...
 
     - name: Run govulncheck
