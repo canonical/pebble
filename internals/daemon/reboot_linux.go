@@ -16,8 +16,7 @@ package daemon
 
 import "syscall"
 
-const rebootCmdRestart = syscall.LINUX_REBOOT_CMD_RESTART
-
-func sysReboot(cmd int) error {
-	return syscall.Reboot(cmd)
+// sysReboot restarts the system via the Linux reboot(2) syscall.
+func sysReboot() error {
+	return syscall.Reboot(syscall.LINUX_REBOOT_CMD_RESTART)
 }

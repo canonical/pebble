@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2026 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,9 +12,11 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//go:build !linux
+
 package osutil
 
-// IsMounted is not implemented on darwin
-func IsMounted(baseDir string) (bool, error) {
-	return false, ErrDarwin
+// BootID returns the unique system-generated boot identifier.
+func BootID() (string, error) {
+	return "", ErrNotImplemented
 }

@@ -12,6 +12,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//go:build darwin || dragonfly || freebsd || netbsd || openbsd
+
 package cmdstate
 
 import (
@@ -24,9 +26,11 @@ import (
 // in the pty whose master side is masterFd, that is, until the goroutine
 // mirroring the master has read everything the child wrote.
 //
-// Unlike Linux, FreeBSD discards any output still buffered in a pty when the
-// last descriptor for its slave side is closed, so it must be called before
-// closing our copy of the slave once the child has exited.
+// Unlike Linux, the BSD-derived tty layers (FreeBSD, DragonFly, OpenBSD,
+// NetBSD and Darwin's XNU) flush the output queue when the last descriptor
+// for a pty's slave side is closed, discarding anything the master has not
+// yet read. So this must be called before closing our copy of the slave once
+// the child has exited.
 func waitPtyDrained(masterFd int) {
 	deadline := time.Now().Add(time.Second)
 	for time.Now().Before(deadline) {

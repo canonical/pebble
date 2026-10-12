@@ -1304,10 +1304,8 @@ func (s *daemonSuite) TestRebootExternal(c *C) {
 
 	didFallbackReboot := false
 	defer FakeSyscallSync(func() {})()
-	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == rebootCmdRestart {
-			didFallbackReboot = true
-		}
+	defer FakeSyscallReboot(func() error {
+		didFallbackReboot = true
 		return nil
 	})()
 	SetRebootMode(ExternalMode)
@@ -1762,10 +1760,8 @@ var _ = Suite(&rebootSuite{})
 func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
-	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == rebootCmdRestart {
-			close(wait)
-		}
+	defer FakeSyscallReboot(func() error {
+		close(wait)
 		return nil
 	})()
 
@@ -1784,10 +1780,8 @@ func (s *rebootSuite) TestSyscallPosRebootDelay(c *C) {
 func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
-	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == rebootCmdRestart {
-			close(wait)
-		}
+	defer FakeSyscallReboot(func() error {
+		close(wait)
 		return nil
 	})()
 
@@ -1813,10 +1807,8 @@ func (s *rebootSuite) TestSyscallNegRebootDelay(c *C) {
 func (s *rebootSuite) TestSetSyscall(c *C) {
 	wait := make(chan struct{})
 	defer FakeSyscallSync(func() {})()
-	defer FakeSyscallReboot(func(cmd int) error {
-		if cmd == rebootCmdRestart {
-			close(wait)
-		}
+	defer FakeSyscallReboot(func() error {
+		close(wait)
 		return nil
 	})()
 
@@ -1853,7 +1845,7 @@ func (f *fakeLogger) Debug(msg string) {}
 
 func (s *rebootSuite) TestSyscallRebootError(c *C) {
 	defer FakeSyscallSync(func() {})()
-	defer FakeSyscallReboot(func(cmd int) error {
+	defer FakeSyscallReboot(func() error {
 		return fmt.Errorf("-EPERM")
 	})()
 

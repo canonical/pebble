@@ -12,9 +12,9 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//go:build !freebsd
+//go:build !(darwin || dragonfly || freebsd || netbsd || openbsd)
 
 package cmdstate
 
-// waitPtyDrained is only needed on FreeBSD; see ptydrain_freebsd.go.
+// waitPtyDrained is only needed on the BSDs; see ptydrain_bsd.go.
 func waitPtyDrained(masterFd int) {}

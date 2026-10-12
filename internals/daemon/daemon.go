@@ -941,7 +941,7 @@ func syscallModeReboot(rebootDelay time.Duration) error {
 		// As per the requirements of the reboot syscall, we
 		// have to first call sync.
 		syscallSync()
-		err := syscallReboot(rebootCmdRestart)
+		err := syscallReboot()
 		if err != nil {
 			logger.Noticef("Failed on reboot syscall: %v", err)
 		}

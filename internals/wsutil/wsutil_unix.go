@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-//go:build linux || freebsd
+//go:build linux || freebsd || darwin
 
 package wsutil
 
@@ -157,9 +157,9 @@ func ExecReaderToChannel(r io.Reader, bufferSize int, exited <-chan struct{}, fd
 				read := buf[offset : offset+readSize]
 				nr, err = r.Read(read)
 				if nr == 0 {
-					// Nothing left to read and no writers remain. FreeBSD keeps
-					// reporting POLLIN alongside POLLHUP in this state, so exit
-					// here rather than waiting for a plain POLLHUP.
+					// Nothing left to read and no writers remain. FreeBSD and
+					// Darwin keep reporting POLLIN alongside POLLHUP in this
+					// state, so exit here rather than waiting for a plain POLLHUP.
 					logger.Debugf("Detected poll(POLLHUP) event with no data: exiting.")
 					flushPending()
 					return
