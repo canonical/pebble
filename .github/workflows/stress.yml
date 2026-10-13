@@ -1,0 +1,118 @@
+name: Stress Test
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+    inputs:
+      runs-on:
+        description: "Runner to use"
+        required: false
+        default: "self-hosted-linux-amd64-noble-large"
+
+permissions:
+  contents: read
+
+jobs:
+  stress:
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runs-on || 'self-hosted-linux-amd64-noble-large' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Install stress
+        run: go install github.com/hpidcock/stress@latest
+
+      - name: Run stress tests
+        run: |
+          mkdir -p stress-failures
+          failed=0
+          p=$(( $(nproc) * 4 ))
+          passed_pkgs=()
+          failed_pkgs=()
+          compile_failed_pkgs=()
+          for pkg in $(go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./...); do
+            echo "==> $pkg"
+            if ! GOEXPERIMENT=goroutineleakprofile \
+                go test -race -o pkg.test -c "$pkg"; then
+              echo "COMPILE FAILED: $pkg"
+              compile_failed_pkgs+=("$pkg")
+              failed=1
+              continue
+            fi
+            pkg_slug=$(echo "$pkg" | tr '/' '_')
+            if ! stress -fast \
+                -p "$p" \
+                -count 1000 \
+                -duration 2m \
+                -timeout 3m \
+                -o "stress-failures/${pkg_slug}-" \
+                ./pkg.test -test.timeout 2m; then
+              echo "STRESS FAILED: $pkg"
+              failed_pkgs+=("$pkg")
+              failed=1
+            else
+              passed_pkgs+=("$pkg")
+            fi
+          done
+
+          {
+            if [ $failed -eq 0 ]; then
+              echo "## Stress Tests Passed"
+            else
+              echo "## Stress Tests Failed"
+            fi
+            echo ""
+            echo "| Package | Result |"
+            echo "| ------- | ------ |"
+            for pkg in "${compile_failed_pkgs[@]}"; do
+              echo "| \`$pkg\` | Compile Failed |"
+            done
+            for pkg in "${failed_pkgs[@]}"; do
+              echo "| \`$pkg\` | Failed |"
+            done
+            for pkg in "${passed_pkgs[@]}"; do
+              echo "| \`$pkg\` | Passed |"
+            done
+            if [ ${#compile_failed_pkgs[@]} -gt 0 ] \
+                || [ ${#failed_pkgs[@]} -gt 0 ]; then
+              echo ""
+              echo "## Failure Details"
+              for pkg in "${compile_failed_pkgs[@]}"; do
+                echo ""
+                echo "<details>"
+                echo "<summary><code>$pkg</code> — compile failed</summary>"
+                echo "</details>"
+              done
+              for pkg in "${failed_pkgs[@]}"; do
+                pkg_slug=$(echo "$pkg" | tr '/' '_')
+                echo ""
+                echo "<details>"
+                echo "<summary><code>$pkg</code></summary>"
+                echo ""
+                for f in "stress-failures/${pkg_slug}-"*; do
+                  [ -f "$f" ] || continue
+                  echo "<pre>"
+                  cat "$f"
+                  echo "</pre>"
+                  echo ""
+                done
+                echo "</details>"
+              done
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit $failed
+
+      - name: Upload failure logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stress-failures
+          path: stress-failures/
