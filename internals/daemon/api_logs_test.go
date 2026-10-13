@@ -166,6 +166,28 @@ func (s *logsSuite) TestOneServiceWithN(c *C) {
 	}
 }
 
+func (s *logsSuite) TestOneServiceWithLargeN(c *C) {
+	rb := servicelog.NewRingBuffer(4096)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
+	for i := range 20 {
+		fmt.Fprintf(lw, "message %d\n", i)
+	}
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.RingBuffer{
+			"nginx": rb,
+		},
+	}
+	rec := s.recordResponse(c, "/v1/logs?n=1000000000", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 20)
+	for i := range 20 {
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i))
+	}
+}
+
 func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 	exampleLog := "2021-05-20T16:55:00.000Z [nginx] message 00\n"
 	rb := servicelog.NewRingBuffer(len(exampleLog) * 20)
