@@ -461,7 +461,7 @@ func (c *checkData) writeMetric(writer metrics.Writer) error {
 	}
 
 	err := writer.Write(metrics.Metric{
-		Name:       "pebble_check_success_count",
+		Name:       "pebble_check_success_total",
 		Type:       metrics.TypeCounterInt,
 		ValueInt64: c.successMetric,
 		Comment:    "Number of times the check has succeeded",
@@ -472,7 +472,7 @@ func (c *checkData) writeMetric(writer metrics.Writer) error {
 	}
 
 	err = writer.Write(metrics.Metric{
-		Name:       "pebble_check_failure_count",
+		Name:       "pebble_check_failure_total",
 		Type:       metrics.TypeCounterInt,
 		ValueInt64: c.failureMetric,
 		Comment:    "Number of times the check has failed",

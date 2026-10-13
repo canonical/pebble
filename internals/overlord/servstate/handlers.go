@@ -902,7 +902,7 @@ func (d *serviceData) writeMetric(writer metrics.Writer) error {
 	}
 
 	err = writer.Write(metrics.Metric{
-		Name:       "pebble_service_start_count",
+		Name:       "pebble_service_start_total",
 		Type:       metrics.TypeCounterInt,
 		ValueInt64: d.startCount.Load(),
 		Comment:    "Number of times the service has started",
