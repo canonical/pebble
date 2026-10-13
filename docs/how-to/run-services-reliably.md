@@ -86,21 +86,21 @@ curl -u alice:<password> http://localhost:4000/v1/metrics
 # TYPE pebble_service_active gauge
 pebble_service_active{service="svc1"} 1
 
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="svc1"} 1
+# HELP pebble_service_start_total Number of times the service has started
+# TYPE pebble_service_start_total counter
+pebble_service_start_total{service="svc1"} 1
 
 # HELP pebble_check_up Whether the health check is up (1) or not (0)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="check1"} 1
 
-# HELP pebble_check_success_count Number of times the check has succeeded
-# TYPE pebble_check_success_count counter
-pebble_check_success_count{check="check1"} 2
+# HELP pebble_check_success_total Number of times the check has succeeded
+# TYPE pebble_check_success_total counter
+pebble_check_success_total{check="check1"} 2
 
-# HELP pebble_check_failure_count Number of times the check has failed
-# TYPE pebble_check_failure_count counter
-pebble_check_failure_count{check="check1"} 0
+# HELP pebble_check_failure_total Number of times the check has failed
+# TYPE pebble_check_failure_total counter
+pebble_check_failure_total{check="check1"} 0
 
 ```
 
