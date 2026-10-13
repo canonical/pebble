@@ -194,7 +194,10 @@ func (s *tracingSuite) TestServerSpan(c *C) {
 	attrs := spanAttrs(span)
 	c.Check(attrs["http.request.method"].AsString(), Equals, "GET")
 	c.Check(attrs["http.route"].AsString(), Equals, "/v1/changes/{id}")
-	c.Check(attrs["url.path"].AsString(), Equals, "/v1/changes/42")
+	// The raw path isn't recorded, as it may be high-cardinality or
+	// sensitive; the route is what identifies the endpoint.
+	_, hasPath := attrs["url.path"]
+	c.Check(hasPath, Equals, false)
 	c.Check(attrs["url.scheme"].AsString(), Equals, "http")
 	c.Check(attrs["network.transport"].AsString(), Equals, "unix")
 	c.Check(attrs["user_agent.original"].AsString(), Equals, "pebble/1.0")

@@ -98,22 +98,22 @@ func (s *exporterSuite) TestExporterConfigFromEnvErrors(c *C) {
 		err string
 	}{{
 		env: map[string]string{},
-		err: "no OTLP endpoint configured",
+		err: "cannot find OTLP endpoint: OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT must be set",
 	}, {
 		env: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "collector:4318"},
-		err: `invalid OTLP endpoint "collector:4318/v1/traces": scheme must be http or https`,
+		err: `cannot use OTLP endpoint "collector:4318/v1/traces": scheme must be http or https`,
 	}, {
 		env: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://c", "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"},
-		err: `unsupported OTLP protocol "grpc" \(only http/protobuf and http/json are supported\)`,
+		err: `cannot use OTLP protocol "grpc": only http/protobuf and http/json are supported`,
 	}, {
 		env: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://c", "OTEL_EXPORTER_OTLP_HEADERS": "novalue"},
-		err: `invalid OTLP header "novalue": must be key=value`,
+		err: `cannot parse OTLP header "novalue": must be key=value`,
 	}, {
 		env: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://c", "OTEL_EXPORTER_OTLP_TIMEOUT": "10s"},
-		err: `invalid OTLP timeout "10s": must be a number of milliseconds`,
+		err: `cannot parse OTLP timeout "10s": must be a number of milliseconds`,
 	}, {
 		env: map[string]string{"OTEL_EXPORTER_OTLP_ENDPOINT": "http://c", "OTEL_EXPORTER_OTLP_COMPRESSION": "zstd"},
-		err: `unsupported OTLP compression "zstd"`,
+		err: `cannot use OTLP compression "zstd": only gzip is supported`,
 	}}
 	for _, test := range tests {
 		c.Logf("expecting error %q", test.err)
@@ -283,7 +283,7 @@ func (s *exporterSuite) testExportSpans(c *C, useJSON bool) {
 	c.Check(parent.TraceId, DeepEquals, wantTraceID[:])
 	wantParentID := trace.SpanID{2}
 	c.Check(parent.ParentSpanId, DeepEquals, wantParentID[:])
-	// Sampled, has-is-remote, is-remote.
+	// Sampled, and the parent is known to be remote.
 	c.Check(parent.Flags, Equals, uint32(0x01|0x100|0x200))
 	c.Check(parent.Kind, Equals, tracepb.Span_SPAN_KIND_INTERNAL)
 	c.Check(parent.StartTimeUnixNano, Not(Equals), uint64(0))
@@ -301,6 +301,7 @@ func (s *exporterSuite) testExportSpans(c *C, useJSON bool) {
 	child := spans["scope-b"]
 	c.Assert(child, NotNil)
 	c.Check(child.ParentSpanId, DeepEquals, parent.SpanId)
+	// Sampled, and the parent is known not to be remote.
 	c.Check(child.Flags, Equals, uint32(0x01|0x100))
 	c.Check(child.Status.Code, Equals, tracepb.Status_STATUS_CODE_ERROR)
 	c.Check(child.Status.Message, Equals, "boom")
@@ -384,6 +385,119 @@ func (s *exporterSuite) TestExportSpansTimeout(c *C) {
 	e := newExporter(&exporterConfig{endpoint: server.URL, timeout: 250 * time.Millisecond}, "1")
 	err := e.ExportSpans(context.Background(), recordSpans())
 	c.Check(err, ErrorMatches, `cannot export spans: server returned 503 Service Unavailable: .* \(context deadline exceeded\)`)
+}
+
+func (s *exporterSuite) TestParseRetryAfter(c *C) {
+	now := time.Date(2026, 10, 13, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		value string
+		delay time.Duration
+	}{
+		{"", 0},
+		{"3", 3 * time.Second},
+		{" 3 ", 3 * time.Second},
+		{"0", 0},
+		{"-1", 0},
+		{"soon", 0},
+		// HTTP-dates, in the three formats the standard permits.
+		{"Tue, 13 Oct 2026 12:00:30 GMT", 30 * time.Second},
+		{"Tuesday, 13-Oct-26 12:01:00 GMT", time.Minute},
+		{"Tue Oct 13 12:00:05 2026", 5 * time.Second},
+		// A date that has passed means retry straight away.
+		{"Tue, 13 Oct 2026 11:59:30 GMT", 0},
+		{"Tue, 13 Oct 2026 12:00:00 GMT", 0},
+	}
+	for _, test := range tests {
+		c.Check(parseRetryAfter(test.value, now), Equals, test.delay, Commentf("value %q", test.value))
+	}
+}
+
+func (s *exporterSuite) TestShutdownWaitsForExport(c *C) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started <- struct{}{}
+		<-release
+	}))
+	defer server.Close()
+
+	e := newExporter(&exporterConfig{endpoint: server.URL, timeout: 10 * time.Second}, "1")
+	exported := make(chan error, 1)
+	go func() {
+		exported <- e.ExportSpans(context.Background(), recordSpans())
+	}()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for export to start")
+	}
+
+	// Shutdown waits for the export in progress to finish...
+	done := make(chan error, 1)
+	go func() {
+		done <- e.Shutdown(context.Background())
+	}()
+	select {
+	case err := <-done:
+		c.Fatalf("shutdown returned before export finished: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case err := <-done:
+		c.Check(err, IsNil)
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for shutdown")
+	}
+	c.Check(<-exported, IsNil)
+
+	// ...and shutting down again is a no-op.
+	c.Check(e.Shutdown(context.Background()), IsNil)
+}
+
+func (s *exporterSuite) TestShutdownAbandonsBlockedExport(c *C) {
+	// The collector reads the request but never responds. (The body must
+	// be read for the server to notice the client going away.)
+	started := make(chan struct{}, 1)
+	cancelled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		started <- struct{}{}
+		<-r.Context().Done()
+		close(cancelled)
+	}))
+	defer server.Close()
+
+	e := newExporter(&exporterConfig{endpoint: server.URL, timeout: 10 * time.Second}, "1")
+	exported := make(chan error, 1)
+	go func() {
+		exported <- e.ExportSpans(context.Background(), recordSpans())
+	}()
+	select {
+	case <-started:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for export to start")
+	}
+
+	// Shutdown gives up on the export when its context is done, well before
+	// the export timeout, and the export gives up too.
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	err := e.Shutdown(ctx)
+	c.Check(err, ErrorMatches, "cannot wait for trace exports to finish: context deadline exceeded")
+	c.Check(time.Since(start) < 5*time.Second, Equals, true)
+	select {
+	case err := <-exported:
+		c.Check(err, ErrorMatches, `cannot export spans: .*context canceled.*`)
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for export to give up")
+	}
+	select {
+	case <-cancelled:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for request to be cancelled")
+	}
 }
 
 func (s *exporterSuite) TestExportSpansAfterShutdown(c *C) {

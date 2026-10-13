@@ -17,7 +17,12 @@ package tracing_test
 import (
 	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
@@ -56,6 +61,84 @@ func (s *tracingSuite) TestSpanContextFromEnvUnset(c *C) {
 func (s *tracingSuite) TestSpanContextFromEnvInvalid(c *C) {
 	s.Setenv("TRACEPARENT", "garbage")
 	c.Check(tracing.SpanContextFromEnv().IsValid(), Equals, false)
+}
+
+func (s *tracingSuite) TestSetupDisabled(c *C) {
+	s.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	s.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+	shutdown, err := tracing.Setup(context.Background())
+	c.Assert(err, IsNil)
+	c.Check(shutdown(context.Background()), IsNil)
+}
+
+func (s *tracingSuite) TestSetupShutdown(c *C) {
+	// Setup installs a global tracer provider; put the previous one back
+	// for the other tests.
+	s.AddCleanup(func(tp trace.TracerProvider) func() {
+		return func() { otel.SetTracerProvider(tp) }
+	}(otel.GetTracerProvider()))
+
+	requests := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		requests <- struct{}{}
+	}))
+	defer server.Close()
+	s.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", server.URL)
+	s.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+
+	shutdown, err := tracing.Setup(context.Background())
+	c.Assert(err, IsNil)
+	_, span := tracing.Tracer().Start(context.Background(), "test")
+	span.End()
+
+	// Shutting down exports the span before returning.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c.Check(shutdown(ctx), IsNil)
+	select {
+	case <-requests:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for export")
+	}
+}
+
+func (s *tracingSuite) TestSetupShutdownBlocked(c *C) {
+	s.AddCleanup(func(tp trace.TracerProvider) func() {
+		return func() { otel.SetTracerProvider(tp) }
+	}(otel.GetTracerProvider()))
+
+	// The collector reads the request but never responds, so the final
+	// export can't finish.
+	cancelled := make(chan struct{}, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		<-r.Context().Done()
+		cancelled <- struct{}{}
+	}))
+	defer server.Close()
+	s.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", server.URL)
+	s.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+	// Much longer than shutdown is given, so retrying doesn't hold it up.
+	s.Setenv("OTEL_EXPORTER_OTLP_TIMEOUT", "60000")
+
+	shutdown, err := tracing.Setup(context.Background())
+	c.Assert(err, IsNil)
+	_, span := tracing.Tracer().Start(context.Background(), "test")
+	span.End()
+
+	// Shutdown gives up when its context is done, abandoning the export
+	// rather than leaving it retrying in the background.
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	c.Check(shutdown(ctx), ErrorMatches, "context deadline exceeded")
+	c.Check(time.Since(start) < 5*time.Second, Equals, true)
+	select {
+	case <-cancelled:
+	case <-time.After(10 * time.Second):
+		c.Fatal("timed out waiting for export to be abandoned")
+	}
 }
 
 func (s *tracingSuite) TestAttrKey(c *C) {

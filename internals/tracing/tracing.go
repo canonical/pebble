@@ -92,7 +92,18 @@ func Setup(ctx context.Context) (shutdown func(context.Context) error, err error
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-	return tp.Shutdown, nil
+
+	shutdown = func(ctx context.Context) error {
+		// Shutting down the tracer provider exports the spans still queued
+		// before it shuts down the exporter, and that export retries until
+		// the export timeout, which may be longer than ctx allows. Abandon
+		// it when ctx is done, so that shutdown finishes when ctx does
+		// rather than leaving the export retrying in the background.
+		stop := context.AfterFunc(ctx, exporter.abandon)
+		defer stop()
+		return tp.Shutdown(ctx)
+	}
+	return shutdown, nil
 }
 
 // SpanContextFromEnv returns the span context described by the TRACEPARENT

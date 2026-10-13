@@ -354,6 +354,55 @@ func (cs *clientSuite) TestTraceContextFromConfig(c *C) {
 	c.Check(cs.req.Header.Get("tracestate"), Equals, "")
 }
 
+func (cs *clientSuite) TestTraceContextHeaderOverride(c *C) {
+	sc := tracing.ParseTraceParent("00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", "foo=bar")
+	c.Assert(sc.IsValid(), Equals, true)
+	cli, err := client.New(&client.Config{SpanContext: sc})
+	c.Assert(err, IsNil)
+	cli.SetDoer(cs)
+
+	// A traceparent header given in the request options takes precedence
+	// over the client's span context, and no tracestate is sent with it.
+	headers := map[string]string{"Traceparent": "00-01000000000000000000000000000000-0200000000000000-00"}
+	_, err = cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:    client.RawRequest,
+		Method:  "GET",
+		Path:    "/",
+		Headers: headers,
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-01000000000000000000000000000000-0200000000000000-00")
+	c.Check(cs.req.Header.Values("tracestate"), HasLen, 0)
+
+	// It also takes precedence over a span carried by the request context.
+	ctxSC := tracing.NewSpanContext(tracing.SpanContextConfig{
+		TraceID:    tracing.TraceID{3},
+		SpanID:     tracing.SpanID{4},
+		TraceFlags: tracing.FlagsSampled,
+	})
+	_, err = cli.Requester().Do(tracing.ContextWithSpanContext(context.Background(), ctxSC), &client.RequestOptions{
+		Type:    client.RawRequest,
+		Method:  "GET",
+		Path:    "/",
+		Headers: headers,
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-01000000000000000000000000000000-0200000000000000-00")
+	c.Check(cs.req.Header.Values("tracestate"), HasLen, 0)
+
+	// Other headers don't affect the propagated trace context.
+	_, err = cli.Requester().Do(context.Background(), &client.RequestOptions{
+		Type:    client.RawRequest,
+		Method:  "GET",
+		Path:    "/",
+		Headers: map[string]string{"X-Custom": "value"},
+	})
+	c.Assert(err, IsNil)
+	c.Check(cs.req.Header.Get("traceparent"), Equals, "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+	c.Check(cs.req.Header.Get("tracestate"), Equals, "foo=bar")
+	c.Check(cs.req.Header.Get("X-Custom"), Equals, "value")
+}
+
 func (cs *clientSuite) TestNoTraceContext(c *C) {
 	_, err := cs.cli.Requester().Do(context.Background(), &client.RequestOptions{
 		Type:   client.RawRequest,

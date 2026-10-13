@@ -145,7 +145,6 @@ func (s *httpSuite) TestHTTPServerSpan(c *C) {
 	c.Check(attrs, DeepEquals, map[string]any{
 		"http.request.method":       "GET",
 		"http.route":                "/v1/changes/{id}",
-		"url.path":                  "/v1/changes/42",
 		"url.scheme":                "https",
 		"network.transport":         "tcp",
 		"client.address":            "10.0.0.1",
