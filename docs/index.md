@@ -80,6 +80,15 @@ Pebble is useful for developers who are building {external+operator:ref}`Juju ch
 ```
 ````
 
+## How this documentation is organised
+
+This documentation uses the [Diátaxis documentation structure](https://diataxis.fr/).
+
+- {doc}`Tutorials <tutorial/getting-started>`
+- {doc}`How-to guides <how-to/index>`
+- {doc}`Reference <reference/index>`
+- {doc}`Explanation <explanation/index>`
+
 ## Releases
 
 [Read the release notes](https://github.com/canonical/pebble/releases)
