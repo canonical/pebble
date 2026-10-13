@@ -2531,6 +2531,29 @@ func (s *S) TestReadDirBasePlanValidation(c *C) {
 	c.Assert(err, ErrorMatches, `plan must define "command" for service "broken-svc"`)
 }
 
+func (s *S) TestCheckNonPositiveDurations(c *C) {
+	for _, test := range []struct {
+		name     string
+		field    string
+		duration string
+		error    string
+	}{
+		{name: "zero period", field: "period", duration: "0s", error: `cannot use non-positive period for plan check "check"`},
+		{name: "negative period", field: "period", duration: "-1s", error: `cannot use non-positive period for plan check "check"`},
+		{name: "zero timeout", field: "timeout", duration: "0s", error: `cannot use non-positive timeout for plan check "check"`},
+		{name: "negative timeout", field: "timeout", duration: "-1s", error: `cannot use non-positive timeout for plan check "check"`},
+	} {
+		c.Logf(test.name)
+		_, err := plan.ParseLayer(1, "layer-1", reindent(fmt.Sprintf(`
+		checks:
+			check:
+				override: replace
+				%s: %s
+		`, test.field, test.duration)))
+		c.Assert(err, ErrorMatches, test.error)
+	}
+}
+
 func (s *S) TestHTTPCheckHostHeader(c *C) {
 	for _, header := range []string{"Host", "host", "HOST"} {
 		layer, err := plan.ParseLayer(1, "layer-1", reindent(fmt.Sprintf(`

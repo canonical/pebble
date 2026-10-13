@@ -941,14 +941,14 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf(`plan check %q startup must be "enabled" or "disabled"`, name),
 			}
 		}
-		if check.Period.IsSet && check.Period.Value == 0 {
+		if check.Period.IsSet && check.Period.Value <= 0 {
 			return &FormatError{
-				Message: fmt.Sprintf("plan check %q period must not be zero", name),
+				Message: fmt.Sprintf("cannot use non-positive period for plan check %q", name),
 			}
 		}
-		if check.Timeout.IsSet && check.Timeout.Value == 0 {
+		if check.Timeout.IsSet && check.Timeout.Value <= 0 {
 			return &FormatError{
-				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
+				Message: fmt.Sprintf("cannot use non-positive timeout for plan check %q", name),
 			}
 		}
 
