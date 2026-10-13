@@ -188,6 +188,55 @@ func (s *logsSuite) TestOneServiceWithLargeN(c *C) {
 	}
 }
 
+func (s *logsSuite) TestOneServiceNEdgeCases(c *C) {
+	for _, test := range []struct {
+		n    string
+		want int
+	}{
+		{n: "0", want: 0},
+		{n: "1", want: 1},
+		{n: "2", want: 2},
+		{n: "10", want: 5},
+		{n: "-1", want: 5},
+		{n: "2000", want: 5},
+		{n: "9223372036854775807", want: 5},
+	} {
+		c.Logf("testing n=%s", test.n)
+		rb := servicelog.NewRingBuffer(4096)
+		lw := servicelog.NewFormatWriter(rb, "nginx")
+		for i := range 5 {
+			fmt.Fprintf(lw, "message %d\n", i)
+		}
+
+		svcMgr := testServiceManager{buffers: map[string]*servicelog.RingBuffer{"nginx": rb}}
+		rec := s.recordResponse(c, "/v1/logs?n="+test.n, svcMgr)
+		c.Assert(rec.Code, Equals, http.StatusOK)
+		logs := decodeLogs(c, rec.Body)
+		c.Assert(logs, HasLen, test.want)
+		start := 5 - test.want
+		for i := range test.want {
+			checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", start+i))
+		}
+	}
+}
+
+func (s *logsSuite) TestOneServiceLargeLogSet(c *C) {
+	rb := servicelog.NewRingBuffer(256 * 1024)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
+	for i := range 1500 {
+		fmt.Fprintf(lw, "message %d %s\n", i, strings.Repeat("x", 80))
+	}
+
+	svcMgr := testServiceManager{buffers: map[string]*servicelog.RingBuffer{"nginx": rb}}
+	rec := s.recordResponse(c, "/v1/logs?n=2000", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 1500)
+	for i := range logs {
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d %s", i, strings.Repeat("x", 80)))
+	}
+}
+
 func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 	exampleLog := "2021-05-20T16:55:00.000Z [nginx] message 00\n"
 	rb := servicelog.NewRingBuffer(len(exampleLog) * 20)
@@ -397,7 +446,24 @@ func (r *responseRecorder) WriteHeader(status int) {
 	r.status = status
 }
 
-func (s *logsSuite) TestMultipleServicesFollow(c *C) {
+func (s *logsSuite) TestOneServiceNBufferEviction(c *C) {
+	rb := servicelog.NewRingBuffer(128 * 1024)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
+	for i := range 1200 {
+		fmt.Fprintf(lw, "message %d\n", i)
+	}
+
+	svcMgr := testServiceManager{buffers: map[string]*servicelog.RingBuffer{"nginx": rb}}
+	rec := s.recordResponse(c, "/v1/logs?n=500", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 500)
+	for i := range logs {
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", 700+i))
+	}
+}
+
+func (s *logsSuite) TestFollowWithN(c *C) {
 	rb1 := servicelog.NewRingBuffer(4096)
 	rb2 := servicelog.NewRingBuffer(4096)
 	lw1 := servicelog.NewFormatWriter(rb1, "one")

@@ -177,9 +177,18 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				// Push through FIFO so we only output the most recent "n"
 				// across all services.
 				if len(fifo) == cap(fifo) {
-					// FIFO channel full, discard oldest log entry before
-					// writing new one so it doesn't block.
-					<-fifo
+					if numLogs > maxLogBuffer {
+						// For requests larger than the bounded FIFO, stream the
+						// buffered logs before continuing so records are not
+						// discarded solely because the channel is bounded.
+						if !flushFifo() {
+							return
+						}
+					} else {
+						// FIFO channel full, discard oldest log entry before
+						// writing new one so it doesn't block.
+						<-fifo
+					}
 				}
 				fifo <- log
 				continue
