@@ -62,10 +62,14 @@ const (
 )
 
 type RequestOptions struct {
-	Type    RequestType
-	Method  string
-	Path    string
-	Query   url.Values
+	Type   RequestType
+	Method string
+	Path   string
+	Query  url.Values
+	// Headers are set on the request, overriding any the client sets itself,
+	// including the trace context headers (traceparent and tracestate): if
+	// traceparent is given, no trace context is propagated from the client's
+	// span context or the request context.
 	Headers map[string]string
 	Body    io.Reader
 }
@@ -208,7 +212,9 @@ type Config struct {
 	// SpanContext, if valid, is the trace span that requests are made on
 	// behalf of. It is sent to the daemon using the W3C Trace Context
 	// headers (traceparent and tracestate), unless the context passed to
-	// Requester.Do carries a span of its own, which takes precedence.
+	// Requester.Do carries a span of its own, which takes precedence. A
+	// traceparent header given in RequestOptions.Headers takes precedence
+	// over both.
 	SpanContext tracing.SpanContext
 }
 
@@ -346,15 +352,19 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 		req.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
 
-	// Propagate the trace span, preferring one carried by ctx.
-	traceCtx := ctx
-	if !tracing.SpanContextFromContext(ctx).IsValid() {
-		traceCtx = tracing.ContextWithSpanContext(ctx, rq.client.spanContext)
-	}
-	tracing.InjectHTTPHeaders(traceCtx, req.Header)
-
 	for key, value := range headers {
 		req.Header.Set(key, value)
+	}
+
+	// Propagate the trace span, preferring one carried by ctx. A traceparent
+	// header given in the request options takes precedence over both, like
+	// any other header set explicitly.
+	if req.Header.Get("traceparent") == "" {
+		traceCtx := ctx
+		if !tracing.SpanContextFromContext(ctx).IsValid() {
+			traceCtx = tracing.ContextWithSpanContext(ctx, rq.client.spanContext)
+		}
+		tracing.InjectHTTPHeaders(traceCtx, req.Header)
 	}
 
 	rsp, err := rq.doer.Do(req)

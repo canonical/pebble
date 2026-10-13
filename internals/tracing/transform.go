@@ -128,7 +128,7 @@ func (c *converter) span(buf *spanBuf, span sdktrace.ReadOnlySpan) *tracepb.Span
 		TraceId:                buf.traceID[:],
 		SpanId:                 buf.spanID[:],
 		TraceState:             sc.TraceState().String(),
-		Flags:                  spanFlags(sc.TraceFlags(), parent.IsRemote()),
+		Flags:                  spanFlags(sc.TraceFlags(), parent),
 		Name:                   span.Name(),
 		Kind:                   tracepb.Span_SpanKind(span.SpanKind()),
 		StartTimeUnixNano:      unixNano(span.StartTime()),
@@ -169,7 +169,7 @@ func (c *converter) span(buf *spanBuf, span sdktrace.ReadOnlySpan) *tracepb.Span
 				TraceId:                buf.traceID[:],
 				SpanId:                 buf.spanID[:],
 				TraceState:             link.SpanContext.TraceState().String(),
-				Flags:                  spanFlags(link.SpanContext.TraceFlags(), link.SpanContext.IsRemote()),
+				Flags:                  spanFlags(link.SpanContext.TraceFlags(), link.SpanContext),
 				Attributes:             c.keyValues(link.Attributes),
 				DroppedAttributesCount: uint32(link.DroppedAttributeCount),
 			}
@@ -187,12 +187,18 @@ type linkBuf struct {
 	spanID  trace.SpanID
 }
 
-// spanFlags returns the OTLP span flags: the W3C trace flags in the low
-// byte, plus whether the parent (or linked) span context is remote.
-func spanFlags(tf trace.TraceFlags, isRemote bool) uint32 {
-	flags := uint32(tf) | uint32(tracepb.SpanFlags_SPAN_FLAGS_CONTEXT_HAS_IS_REMOTE_MASK)
-	if isRemote {
-		flags |= uint32(tracepb.SpanFlags_SPAN_FLAGS_CONTEXT_IS_REMOTE_MASK)
+// spanFlags returns the OTLP span flags: the W3C trace flags tf in the low
+// byte, plus whether the parent (or linked) span context sc is remote. The
+// latter is a three-state value: it's only known (and so only flagged as
+// such) when there is a parent or linked span context, so a root span
+// doesn't claim to have a local parent.
+func spanFlags(tf trace.TraceFlags, sc trace.SpanContext) uint32 {
+	flags := uint32(tf)
+	if sc.IsValid() {
+		flags |= uint32(tracepb.SpanFlags_SPAN_FLAGS_CONTEXT_HAS_IS_REMOTE_MASK)
+		if sc.IsRemote() {
+			flags |= uint32(tracepb.SpanFlags_SPAN_FLAGS_CONTEXT_IS_REMOTE_MASK)
+		}
 	}
 	return flags
 }

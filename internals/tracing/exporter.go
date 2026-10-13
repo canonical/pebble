@@ -74,7 +74,7 @@ func exporterConfigFromEnv() (*exporterConfig, error) {
 	case "http/json":
 		config.json = true
 	default:
-		return nil, fmt.Errorf("unsupported OTLP protocol %q (only http/protobuf and http/json are supported)", protocol)
+		return nil, fmt.Errorf("cannot use OTLP protocol %q: only http/protobuf and http/json are supported", protocol)
 	}
 
 	// The signal-specific endpoint is used as-is, whereas the general one
@@ -84,14 +84,14 @@ func exporterConfigFromEnv() (*exporterConfig, error) {
 	} else if endpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); endpoint != "" {
 		config.endpoint = strings.TrimSuffix(endpoint, "/") + "/v1/traces"
 	} else {
-		return nil, errors.New("no OTLP endpoint configured")
+		return nil, errors.New("cannot find OTLP endpoint: OTEL_EXPORTER_OTLP_ENDPOINT or OTEL_EXPORTER_OTLP_TRACES_ENDPOINT must be set")
 	}
 	u, err := url.Parse(config.endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("invalid OTLP endpoint: %w", err)
+		return nil, fmt.Errorf("cannot parse OTLP endpoint: %w", err)
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("invalid OTLP endpoint %q: scheme must be http or https", config.endpoint)
+		return nil, fmt.Errorf("cannot use OTLP endpoint %q: scheme must be http or https", config.endpoint)
 	}
 
 	config.headers, err = parseHeaders(otlpEnv("HEADERS"))
@@ -102,7 +102,7 @@ func exporterConfigFromEnv() (*exporterConfig, error) {
 	if timeout := otlpEnv("TIMEOUT"); timeout != "" {
 		ms, err := strconv.Atoi(timeout)
 		if err != nil || ms < 0 {
-			return nil, fmt.Errorf("invalid OTLP timeout %q: must be a number of milliseconds", timeout)
+			return nil, fmt.Errorf("cannot parse OTLP timeout %q: must be a number of milliseconds", timeout)
 		}
 		config.timeout = time.Duration(ms) * time.Millisecond
 	}
@@ -112,7 +112,7 @@ func exporterConfigFromEnv() (*exporterConfig, error) {
 	case "gzip":
 		config.gzip = true
 	default:
-		return nil, fmt.Errorf("unsupported OTLP compression %q", compression)
+		return nil, fmt.Errorf("cannot use OTLP compression %q: only gzip is supported", compression)
 	}
 
 	config.tls, err = tlsConfigFromEnv()
@@ -133,11 +133,11 @@ func parseHeaders(s string) (map[string]string, error) {
 		key, value, ok := strings.Cut(pair, "=")
 		key = strings.TrimSpace(key)
 		if !ok || key == "" {
-			return nil, fmt.Errorf("invalid OTLP header %q: must be key=value", pair)
+			return nil, fmt.Errorf("cannot parse OTLP header %q: must be key=value", pair)
 		}
 		value, err := url.PathUnescape(strings.TrimSpace(value))
 		if err != nil {
-			return nil, fmt.Errorf("invalid OTLP header %q: %w", key, err)
+			return nil, fmt.Errorf("cannot parse OTLP header %q: %w", key, err)
 		}
 		headers[key] = value
 	}
@@ -184,8 +184,18 @@ type exporter struct {
 	client    *http.Client
 	userAgent string
 
+	// ctx is the lifetime of the exporter: cancelling it abandons the
+	// exports in progress, including any retries (see abandon).
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	mu       sync.Mutex
 	shutdown bool
+	// exporting counts the ExportSpans calls in progress, and idle is closed
+	// by the last of them to finish after Shutdown is called (or by Shutdown
+	// itself if there are none), so that Shutdown can wait for them.
+	exporting int
+	idle      chan struct{}
 }
 
 var _ sdktrace.SpanExporter = (*exporter)(nil)
@@ -193,19 +203,38 @@ var _ sdktrace.SpanExporter = (*exporter)(nil)
 func newExporter(config *exporterConfig, version string) *exporter {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = config.tls
+	ctx, cancel := context.WithCancel(context.Background())
 	return &exporter{
 		config:    config,
 		client:    &http.Client{Transport: transport},
 		userAgent: fmt.Sprintf("%s/%s", cmd.ProgramName, version),
+		ctx:       ctx,
+		cancel:    cancel,
+		idle:      make(chan struct{}),
 	}
 }
 
-// ExportSpans implements sdktrace.SpanExporter.
+// ExportSpans implements sdktrace.SpanExporter. It returns once the spans
+// have been accepted by the collector, or when ctx is done, the export
+// timeout passes or the exporter is shut down (see Shutdown), whichever
+// comes first.
 func (e *exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
 	e.mu.Lock()
-	shutdown := e.shutdown
+	if e.shutdown {
+		e.mu.Unlock()
+		return nil
+	}
+	e.exporting++
 	e.mu.Unlock()
-	if shutdown || len(spans) == 0 {
+	defer func() {
+		e.mu.Lock()
+		e.exporting--
+		if e.shutdown && e.exporting == 0 {
+			close(e.idle)
+		}
+		e.mu.Unlock()
+	}()
+	if len(spans) == 0 {
 		return nil
 	}
 
@@ -233,6 +262,9 @@ func (e *exporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpa
 
 	ctx, cancel := context.WithTimeout(ctx, e.config.timeout)
 	defer cancel()
+	// Give up when the exporter is shut down or abandoned, too.
+	stop := context.AfterFunc(e.ctx, cancel)
+	defer stop()
 
 	backoff := 100 * time.Millisecond
 	for {
@@ -296,22 +328,65 @@ func (e *exporter) send(ctx context.Context, body []byte) (retryAfter time.Durat
 	case http.StatusTooManyRequests, http.StatusBadGateway,
 		http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		// Retryable, per the OTLP/HTTP specification.
-		if secs, convErr := strconv.Atoi(resp.Header.Get("Retry-After")); convErr == nil && secs > 0 {
-			return time.Duration(secs) * time.Second, err
-		}
-		return 0, err
+		return parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()), err
 	default:
 		return -1, err
 	}
 }
 
-// Shutdown implements sdktrace.SpanExporter.
+// parseRetryAfter returns the delay requested by a Retry-After header value,
+// which is either a number of seconds or an HTTP-date, or 0 if the value is
+// empty, malformed or already passed.
+func parseRetryAfter(value string, now time.Time) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(value); err == nil {
+		return max(time.Duration(secs)*time.Second, 0)
+	}
+	if t, err := http.ParseTime(value); err == nil {
+		return max(t.Sub(now), 0)
+	}
+	return 0
+}
+
+// Shutdown implements sdktrace.SpanExporter. It waits for the exports in
+// progress to finish, abandoning them if ctx is done first, and then releases
+// the exporter's connections. Exports started after Shutdown is called are
+// dropped.
 func (e *exporter) Shutdown(ctx context.Context) error {
 	e.mu.Lock()
-	e.shutdown = true
+	if !e.shutdown {
+		e.shutdown = true
+		if e.exporting == 0 {
+			close(e.idle)
+		}
+	}
 	e.mu.Unlock()
-	e.client.CloseIdleConnections()
-	return nil
+	defer e.cancel()
+	defer e.client.CloseIdleConnections()
+
+	select {
+	case <-e.idle:
+		return nil
+	default:
+	}
+	select {
+	case <-e.idle:
+		return nil
+	case <-ctx.Done():
+		e.abandon()
+		<-e.idle
+		return fmt.Errorf("cannot wait for trace exports to finish: %w", ctx.Err())
+	}
+}
+
+// abandon makes the exports in progress give up, including any retries
+// waiting to be made, without waiting for them. It's used when there's no
+// longer time for them to finish, such as when the process is exiting.
+func (e *exporter) abandon() {
+	e.cancel()
 }
 
 func gzipBytes(data []byte) ([]byte, error) {

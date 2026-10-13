@@ -63,6 +63,11 @@ const (
 // span is a child of the span described by the request's W3C Trace Context
 // headers (traceparent and tracestate), if any. It returns a copy of r
 // carrying the span's context, which should be passed to the handler.
+//
+// The request's path isn't recorded, as it may contain identifiers (such
+// as change IDs or service names) that make for high-cardinality or
+// sensitive telemetry; the route it matched is recorded by EndHTTPServerSpan
+// instead.
 func StartHTTPServerSpan(r *http.Request, transport ServerTransport) (*http.Request, Span) {
 	ctx := propagation.TraceContext{}.Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
@@ -74,7 +79,6 @@ func StartHTTPServerSpan(r *http.Request, transport ServerTransport) (*http.Requ
 		spanName = "HTTP"
 		attrs = append(attrs, semconv.HTTPRequestMethodOther, semconv.HTTPRequestMethodOriginal(r.Method))
 	}
-	attrs = append(attrs, semconv.URLPath(r.URL.Path))
 	switch transport {
 	case ServerTransportUnixSocket:
 		attrs = append(attrs, semconv.NetworkTransportUnix, semconv.URLScheme("http"))

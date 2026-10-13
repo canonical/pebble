@@ -24,11 +24,15 @@ import (
 // tests.
 type BaseTest struct {
 	cleanupHandlers []func()
+	// savedEnv records the environment variables set by Setenv during the
+	// test, whose original values are restored by its cleanup handlers.
+	savedEnv map[string]bool
 }
 
 // SetUpTest prepares the cleanup
 func (s *BaseTest) SetUpTest(c *check.C) {
 	s.cleanupHandlers = nil
+	s.savedEnv = nil
 }
 
 // TearDownTest cleans up the channel.ini files in case they were changed by
@@ -48,15 +52,22 @@ func (s *BaseTest) AddCleanup(f func()) {
 }
 
 // Setenv sets the environment variable key to value for the duration of the
-// test, restoring its previous value (or unsetting it) during TearDownTest.
+// test, restoring the value it had before the test first set it (or
+// unsetting it) during TearDownTest.
 func (s *BaseTest) Setenv(key, value string) {
-	old, ok := os.LookupEnv(key)
-	s.AddCleanup(func() {
-		if ok {
-			os.Setenv(key, old)
-		} else {
-			os.Unsetenv(key)
+	if !s.savedEnv[key] {
+		if s.savedEnv == nil {
+			s.savedEnv = make(map[string]bool)
 		}
-	})
+		s.savedEnv[key] = true
+		old, ok := os.LookupEnv(key)
+		s.AddCleanup(func() {
+			if ok {
+				os.Setenv(key, old)
+			} else {
+				os.Unsetenv(key)
+			}
+		})
+	}
 	os.Setenv(key, value)
 }

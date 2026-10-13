@@ -25,7 +25,71 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
+	. "gopkg.in/check.v1"
+
+	tracepb "github.com/canonical/pebble/internals/otlp/trace/v1"
 )
+
+type transformSuite struct{}
+
+var _ = Suite(&transformSuite{})
+
+const (
+	flagSampled     = uint32(trace.FlagsSampled)
+	flagHasIsRemote = uint32(tracepb.SpanFlags_SPAN_FLAGS_CONTEXT_HAS_IS_REMOTE_MASK)
+	flagIsRemote    = uint32(tracepb.SpanFlags_SPAN_FLAGS_CONTEXT_IS_REMOTE_MASK)
+)
+
+func (s *transformSuite) TestSpanFlags(c *C) {
+	remote := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: trace.TraceID{1}, SpanID: trace.SpanID{2}, Remote: true,
+	})
+	local := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: trace.TraceID{1}, SpanID: trace.SpanID{3},
+	})
+	// Without a parent or linked context, whether it's remote is unknown.
+	c.Check(spanFlags(0, trace.SpanContext{}), Equals, uint32(0))
+	c.Check(spanFlags(trace.FlagsSampled, trace.SpanContext{}), Equals, flagSampled)
+	c.Check(spanFlags(0, local), Equals, flagHasIsRemote)
+	c.Check(spanFlags(trace.FlagsSampled, remote), Equals, flagSampled|flagHasIsRemote|flagIsRemote)
+}
+
+func (s *transformSuite) TestTracesDataSpanFlags(c *C) {
+	linked := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    trace.TraceID{1},
+		SpanID:     trace.SpanID{2},
+		TraceFlags: trace.FlagsSampled,
+		Remote:     true,
+	})
+	spans := benchSpans(1, func(tp *sdktrace.TracerProvider, i int) {
+		ctx, root := tp.Tracer("test").Start(context.Background(), "root",
+			trace.WithLinks(trace.Link{SpanContext: linked}))
+		_, child := tp.Tracer("test").Start(ctx, "child")
+		child.End()
+		root.End()
+	})
+	data := tracesData(spans)
+	c.Assert(data.ResourceSpans, HasLen, 1)
+	c.Assert(data.ResourceSpans[0].ScopeSpans, HasLen, 1)
+	byName := make(map[string]*tracepb.Span)
+	for _, span := range data.ResourceSpans[0].ScopeSpans[0].Spans {
+		byName[span.Name] = span
+	}
+	c.Assert(byName, HasLen, 2)
+
+	// A root span has no parent context, so it doesn't claim to know
+	// whether its parent is remote.
+	root := byName["root"]
+	c.Check(root.ParentSpanId, HasLen, 0)
+	c.Check(root.Flags, Equals, flagSampled)
+	// Its link's context is remote.
+	c.Assert(root.Links, HasLen, 1)
+	c.Check(root.Links[0].Flags, Equals, flagSampled|flagHasIsRemote|flagIsRemote)
+	// The child's parent is known to be local.
+	child := byName["child"]
+	c.Check(child.ParentSpanId, DeepEquals, root.SpanId)
+	c.Check(child.Flags, Equals, flagSampled|flagHasIsRemote)
+}
 
 // benchSpans records spans using a real tracer provider, the same way the
 // batch span processor hands them to the exporter, and returns the ended
