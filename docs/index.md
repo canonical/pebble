@@ -27,12 +27,15 @@ Pebble is useful for developers who are building {external+operator:ref}`Juju ch
 ### Use Pebble
 
 ````{domain} Use Pebble
-```{slice} CLI
+```{slice} Daemon & client
 {doc}`Overview <explanation/general-model>` slice
 {doc}`Install <how-to/install-pebble>`
-{doc}`Manage a remote system <how-to/manage-a-remote-system>`
 {doc}`Environment variables <reference/environment-variables>`
-{doc}`CLI commands <reference/cli-commands>`
+```
+
+```{slice} CLI
+{doc}`Manage a remote system <how-to/manage-a-remote-system>`
+{doc}`Command reference <reference/cli-commands>`
 ```
 
 ```{slice} Services
