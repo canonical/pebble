@@ -2538,10 +2538,10 @@ func (s *S) TestCheckNonPositiveDurations(c *C) {
 		duration string
 		error    string
 	}{
-		{name: "zero period", field: "period", duration: "0s", error: `cannot use non-positive period for plan check "check"`},
-		{name: "negative period", field: "period", duration: "-1s", error: `cannot use non-positive period for plan check "check"`},
-		{name: "zero timeout", field: "timeout", duration: "0s", error: `cannot use non-positive timeout for plan check "check"`},
-		{name: "negative timeout", field: "timeout", duration: "-1s", error: `cannot use non-positive timeout for plan check "check"`},
+		{name: "zero period", field: "period", duration: "0s", error: `plan check "check" period must not be zero`},
+		{name: "negative period", field: "period", duration: "-1s", error: `plan check "check" period must not be negative`},
+		{name: "zero timeout", field: "timeout", duration: "0s", error: `plan check "check" timeout must not be zero`},
+		{name: "negative timeout", field: "timeout", duration: "-1s", error: `plan check "check" timeout must not be negative`},
 	} {
 		c.Logf(test.name)
 		_, err := plan.ParseLayer(1, "layer-1", reindent(fmt.Sprintf(`
