@@ -183,6 +183,8 @@ func (s *State) MarshalJSON() ([]byte, error) {
 		Tasks:   s.tasks,
 		Notices: s.flattenNotices(nil),
 
+		LegacyIdentities: s.legacyIdentities,
+
 		LastTaskId:   s.lastTaskId,
 		LastChangeId: s.lastChangeId,
 		LastLaneId:   s.lastLaneId,
