@@ -46,7 +46,7 @@ func FakeSyscallSync(f func()) (restore func()) {
 	}
 }
 
-func FakeSyscallReboot(f func(cmd int) error) (restore func()) {
+func FakeSyscallReboot(f func() error) (restore func()) {
 	old := syscallReboot
 	syscallReboot = f
 	return func() {

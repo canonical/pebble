@@ -38,7 +38,7 @@ type FakeCmd struct {
 // we use the following convention:
 // - generate \0 to separate args
 // - generate \0\f\n\r magic sequence to separate commands
-var scriptTpl = `#!/bin/bash
+var scriptTpl = `#!/usr/bin/env bash
 printf "%%s" "$(basename "$0")" >> %[1]q
 printf '\0' >> %[1]q
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2020 Canonical Ltd
+// Copyright (c) 2026 Canonical Ltd
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License version 3 as
@@ -12,9 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package osutil
+package wsutil
 
-// IsMounted is not implemented on darwin
-func IsMounted(baseDir string) (bool, error) {
-	return false, ErrDarwin
-}
+// POLLRDHUP from <sys/poll.h> (FreeBSD 14+); not exported by x/sys/unix.
+const pollRDHUP = 0x4000

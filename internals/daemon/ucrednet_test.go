@@ -19,19 +19,18 @@ import (
 	"io"
 	"net"
 	"path/filepath"
-	sys "syscall"
 
 	"gopkg.in/check.v1"
 )
 
 type ucrednetSuite struct {
-	ucred *sys.Ucred
+	ucred *ucred
 	err   error
 }
 
 var _ = check.Suite(&ucrednetSuite{})
 
-func (s *ucrednetSuite) getUcred(fd, level, opt int) (*sys.Ucred, error) {
+func (s *ucrednetSuite) getUcred(fd int) (*ucred, error) {
 	return s.ucred, s.err
 }
 
@@ -44,11 +43,11 @@ func (s *ucrednetSuite) TearDownTest(c *check.C) {
 	s.err = nil
 }
 func (s *ucrednetSuite) TearDownSuite(c *check.C) {
-	getUcred = sys.GetsockoptUcred
+	getUcred = getPeerCred
 }
 
 func (s *ucrednetSuite) TestAcceptConnRemoteAddrString(c *check.C) {
-	s.ucred = &sys.Ucred{Pid: 100, Uid: 42}
+	s.ucred = &ucred{Pid: 100, Uid: 42}
 	d := c.MkDir()
 	sock := filepath.Join(d, "sock")
 
@@ -103,7 +102,7 @@ func (s *ucrednetSuite) TestNonUnix(c *check.C) {
 }
 
 func (s *ucrednetSuite) TestAcceptErrors(c *check.C) {
-	s.ucred = &sys.Ucred{Pid: 100, Uid: 42}
+	s.ucred = &ucred{Pid: 100, Uid: 42}
 	d := c.MkDir()
 	sock := filepath.Join(d, "sock")
 
@@ -148,7 +147,7 @@ func (s *ucrednetSuite) TestUcredErrors(c *check.C) {
 }
 
 func (s *ucrednetSuite) TestIdempotentClose(c *check.C) {
-	s.ucred = &sys.Ucred{Pid: 100, Uid: 42}
+	s.ucred = &ucred{Pid: 100, Uid: 42}
 	d := c.MkDir()
 	sock := filepath.Join(d, "sock")
 

@@ -16,7 +16,6 @@ package reaper
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -82,22 +81,6 @@ func Stop() error {
 	mutex.Unlock()
 
 	return nil
-}
-
-// setChildSubreaper sets the "child subreaper" attribute of the current
-// process, turning it on if the argument is nonzero, off otherwise.
-//
-// If turning it on, we become the parent of dead child processes rather than
-// PID 1. This allows us to wait for processes that are started by a Pebble
-// service but then die, to "reap" them (see
-// https://unix.stackexchange.com/a/250156/73491).
-func setChildSubreaper(set int) error {
-	err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, uintptr(set), 0, 0, 0)
-	if err == unix.EINVAL {
-		// Not available in kernels before Linux 3.4.
-		return errors.New("child subreaping unavailable on this platform")
-	}
-	return err
 }
 
 // reapChildren "reaps" (waits for) child processes whose parents didn't
@@ -222,7 +205,7 @@ func WaitCommand(cmd *exec.Cmd) (int, error) {
 		logger.Noticef("Internal error: WaitCommand expected error but got nil (exit code %d)", exitCode)
 		return exitCode, nil
 	case *os.SyscallError:
-		if err.Syscall == "wait" || err.Syscall == "waitid" {
+		if err.Syscall == "wait" || err.Syscall == "waitid" || err.Syscall == "wait6" {
 			return exitCode, nil
 		}
 		return -1, err

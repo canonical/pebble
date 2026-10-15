@@ -15,7 +15,6 @@
 package osutil
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -56,23 +55,6 @@ func FakeChown(f func(*os.File, sys.UserID, sys.GroupID) error) (restore func())
 	chown = f
 	return func() {
 		chown = oldChown
-	}
-}
-
-// FakeMountInfo fakes content of /proc/self/mountinfo.
-func FakeMountInfo(text string) (restore func()) {
-	old := procSelfMountInfo
-	f, err := os.CreateTemp("", "mountinfo")
-	if err != nil {
-		panic(fmt.Errorf("cannot open temporary file: %s", err))
-	}
-	if err := os.WriteFile(f.Name(), []byte(text), 0644); err != nil {
-		panic(fmt.Errorf("cannot write mock mountinfo file: %s", err))
-	}
-	procSelfMountInfo = f.Name()
-	return func() {
-		os.Remove(f.Name())
-		procSelfMountInfo = old
 	}
 }
 
