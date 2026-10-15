@@ -18,6 +18,7 @@ package state_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -1316,4 +1317,52 @@ func (ss *stateSuite) TestChangeSetStatusChangedHandler(c *C) {
 			new: state.DoingStatus,
 		},
 	})
+}
+
+func (ss *stateSuite) TestMarshalLegacyIdentities(c *C) {
+	data := []byte(`
+{
+    "data": {"patch-level": 1},
+    "identities": {
+        "bob": {
+            "access": "read",
+            "local": {
+                "user-id": 42
+            }
+        }
+    }
+}`)
+
+	st, err := state.ReadState(nil, bytes.NewReader(data))
+	c.Assert(err, IsNil)
+
+	st.Lock()
+	c.Assert(st.LegacyIdentities(), NotNil)
+	marshalled, err := st.MarshalJSON()
+	c.Assert(err, IsNil)
+	st.Unlock()
+
+	var unmarshalled map[string]any
+	err = json.Unmarshal(marshalled, &unmarshalled)
+	c.Assert(err, IsNil)
+
+	identitiesData, ok := unmarshalled["identities"].(map[string]any)
+	c.Assert(ok, Equals, true)
+	c.Assert(identitiesData["bob"], NotNil)
+
+	// Verify unmarshaling the marshalled state retains the legacy identities
+	st2 := state.New(nil)
+	st2.Lock()
+	defer st2.Unlock()
+	err = st2.UnmarshalJSON(marshalled)
+	c.Assert(err, IsNil)
+	st.Lock()
+	defer st.Unlock()
+
+	var idents1, idents2 map[string]any
+	err = json.Unmarshal(st.LegacyIdentities(), &idents1)
+	c.Assert(err, IsNil)
+	err = json.Unmarshal(st2.LegacyIdentities(), &idents2)
+	c.Assert(err, IsNil)
+	c.Assert(idents2, DeepEquals, idents1)
 }
