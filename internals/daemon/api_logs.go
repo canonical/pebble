@@ -34,6 +34,7 @@ import (
 
 const (
 	defaultNumLogs = 30
+	maxLogBuffer   = 1000
 	logReaderSize  = 4 * 1024
 )
 
@@ -112,10 +113,11 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	encoder.SetEscapeHTML(false)
 
 	// Use a buffered channel as a FIFO for keeping the latest numLogs logs if
-	// request "n" is set (the default).
+	// request "n" is set (the default). Keep its capacity bounded because the
+	// handler discards entries itself when the FIFO is full.
 	var fifo chan servicelog.Entry
 	if numLogs > 0 {
-		fifo = make(chan servicelog.Entry, numLogs)
+		fifo = make(chan servicelog.Entry, min(numLogs, maxLogBuffer))
 	}
 	flushFifo := func() bool { // helper to flush any logs in the FIFO
 		if numLogs <= 0 || len(fifo) == 0 {
@@ -175,9 +177,18 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				// Push through FIFO so we only output the most recent "n"
 				// across all services.
 				if len(fifo) == cap(fifo) {
-					// FIFO channel full, discard oldest log entry before
-					// writing new one so it doesn't block.
-					<-fifo
+					if numLogs > maxLogBuffer {
+						// For requests larger than the bounded FIFO, stream the
+						// buffered logs before continuing so records are not
+						// discarded solely because the channel is bounded.
+						if !flushFifo() {
+							return
+						}
+					} else {
+						// FIFO channel full, discard oldest log entry before
+						// writing new one so it doesn't block.
+						<-fifo
+					}
 				}
 				fifo <- log
 				continue
