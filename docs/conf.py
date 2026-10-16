@@ -227,6 +227,7 @@ extensions = [
     "sphinx_llm.txt",
     "sphinx_related_links",
     "sphinx_roles",
+    "sphinx_structured_toc",
     "sphinx_terminal",
     "sphinx_ubuntu_images",
     "sphinx_youtube_links",
