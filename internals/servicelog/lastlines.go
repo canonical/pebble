@@ -46,7 +46,10 @@ func LastLines(logBuffer *RingBuffer, n int, indent string, stripPrefix bool) (s
 
 	for i, line := range lines {
 		if stripPrefix {
-			line = timestampServiceRegexp.ReplaceAllString(line, "")
+			m := timestampServiceRegexp.FindStringIndex(line)
+			if m != nil {
+				line = line[m[1]:]
+			}
 		}
 		lines[i] = indent + line
 	}
@@ -64,12 +67,29 @@ func ServiceLastLines(logBuffer *RingBuffer, n int, indent string, serviceName s
 		return "", err
 	}
 
+	if len(lines) == 0 {
+		return "", nil
+	}
+
+	length := len(lines)*len(indent) + len(lines) - 1
 	servicePrefix := " [" + serviceName + "] "
+
 	for i, line := range lines {
 		line = stripLogPrefix(line, servicePrefix)
-		lines[i] = indent + line
+		length += len(line)
+		lines[i] = line
 	}
-	return strings.Join(lines, "\n"), nil
+
+	var b strings.Builder
+	b.Grow(length)
+	for i, line := range lines {
+		b.WriteString(indent)
+		b.WriteString(line)
+		if i+1 < len(lines) {
+			b.WriteRune('\n')
+		}
+	}
+	return b.String(), nil
 }
 
 // lastLines reads the last n lines from logBuffer with leading whitespace
