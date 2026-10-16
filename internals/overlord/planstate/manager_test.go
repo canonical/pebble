@@ -15,6 +15,9 @@
 package planstate_test
 
 import (
+	"fmt"
+	"sort"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -673,4 +676,78 @@ workloads:
 	layer = ps.parseLayer(c, 0, "workloads", "workloads: {}")
 	err = ps.planMgr.CombineLayer(layer, false)
 	c.Assert(err, IsNil)
+}
+
+// TestAppendLayerRejectedLeavesPlanUnchanged pins the rollback contract of
+// AppendLayer: a layer that fails plan validation must leave the plan's layer
+// list exactly as it was. The layout matters - the sub-directory layer is
+// first so the insert index is not the end of the list, and there are enough
+// layers for the slice to carry spare capacity, which is what once let
+// slices.Insert shift the live list in place before validation ran.
+func (ps *planSuite) TestAppendLayerRejectedLeavesPlanUnchanged(c *C) {
+	var err error
+	ps.planMgr, err = planstate.NewManager(ps.layersDir)
+	c.Assert(err, IsNil)
+
+	serviceLayer := string(reindent(`
+		services:
+			%s:
+				override: replace
+				command: sleep 1000
+	`))
+
+	appendLabels := []string{"foo/one", "bbb", "ccc", "ddd", "eee"}
+	for _, label := range appendLabels {
+		name := "svc-" + strings.ReplaceAll(label, "/", "-")
+		layer := ps.parseLayer(c, 0, label, fmt.Sprintf(serviceLayer, name))
+		err = ps.planMgr.AppendLayer(layer, true)
+		c.Assert(err, IsNil)
+	}
+
+	before := ps.planMgr.Plan()
+	labelsBefore := layerLabels(before)
+	servicesBefore := serviceNames(before)
+
+	// This layer parses, but fails plan validation because svc-missing is
+	// not defined anywhere.
+	rejected := ps.parseLayer(c, 0, "foo/two", string(reindent(`
+		services:
+			svc-injected:
+				override: replace
+				command: sleep 1000
+				requires: [svc-missing]
+	`)))
+	err = ps.planMgr.AppendLayer(rejected, true)
+	c.Assert(err, ErrorMatches, `service "svc-missing" does not exist`)
+
+	after := ps.planMgr.Plan()
+	c.Assert(layerLabels(after), DeepEquals, labelsBefore)
+	c.Assert(serviceNames(after), DeepEquals, servicesBefore)
+
+	// A later valid append must not resurrect the rejected layer, and must
+	// not have lost a layer either.
+	accepted := ps.parseLayer(c, 0, "later", fmt.Sprintf(serviceLayer, "svc-later"))
+	err = ps.planMgr.AppendLayer(accepted, false)
+	c.Assert(err, IsNil)
+
+	final := ps.planMgr.Plan()
+	c.Assert(layerLabels(final), DeepEquals, append(append([]string(nil), labelsBefore...), "later"))
+	c.Assert(serviceNames(final), DeepEquals, append(append([]string(nil), servicesBefore...), "svc-later"))
+}
+
+func layerLabels(p *plan.Plan) []string {
+	labels := make([]string, 0, len(p.Layers))
+	for _, layer := range p.Layers {
+		labels = append(labels, layer.Label)
+	}
+	return labels
+}
+
+func serviceNames(p *plan.Plan) []string {
+	names := make([]string, 0, len(p.Services))
+	for name := range p.Services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
