@@ -28,6 +28,7 @@ import (
 
 	"github.com/canonical/pebble/internals/overlord/identities"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/tracing"
 )
 
 // Ensure custom keys are in the form "example.com/path" (but somewhat more restrictive).
@@ -111,7 +112,11 @@ func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 
 	var notices []*state.Notice
 
+	// The request's span covers the wait, and records how it ended.
+	span := tracing.SpanFromContext(r.Context())
 	if timeout != 0 {
+		span.SetAttributes(tracing.AttrKey(attrWaitTimeout).String(timeout.String()))
+
 		// Wait up to timeout for notices matching given filter to occur
 		ctx, cancel := context.WithTimeout(r.Context(), timeout)
 		defer cancel()
@@ -119,6 +124,7 @@ func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 		// WaitNotices releases the state lock while waiting.
 		notices, err = st.WaitNotices(ctx, filter)
 		if errors.Is(err, context.Canceled) {
+			span.SetAttributes(tracing.AttrKey(attrWaitOutcome).String("cancelled"))
 			return BadRequest("request canceled")
 		}
 		// DeadlineExceeded will occur if timeout elapses; in that case return
@@ -126,10 +132,16 @@ func v1GetNotices(c *Command, r *http.Request, user *UserState) Response {
 		if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 			return ServerError("cannot wait for notices: %s", err)
 		}
+		if err != nil {
+			span.SetAttributes(tracing.AttrKey(attrWaitOutcome).String("timeout"))
+		} else {
+			span.SetAttributes(tracing.AttrKey(attrWaitOutcome).String("notices"))
+		}
 	} else {
 		// No timeout given, fetch currently-available notices
 		notices = st.Notices(filter)
 	}
+	span.SetAttributes(tracing.AttrKey(attrNoticesCount).Int(len(notices)))
 
 	if notices == nil {
 		notices = []*state.Notice{} // avoid null result
