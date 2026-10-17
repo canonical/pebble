@@ -43,10 +43,10 @@ func (s *PebbleSuite) TestServices(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup  Scheduled   Current   Since
-svc1     enabled  -           inactive  2022-04-28
-svc2     enabled  2030-04-28  inactive  -
-svc3     enabled  -           backoff   -
+Service  Startup  Current   Since       Notes
+svc1     enabled  inactive  2022-04-28  -
+svc2     enabled  inactive  -           schedule
+svc3     enabled  backoff   -           -
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }
@@ -141,9 +141,9 @@ func (s *PebbleSuite) TestServicesNames(c *check.C) {
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
 	c.Check(s.Stdout(), check.Equals, `
-Service  Startup   Scheduled                  Current   Since
-bar      disabled  -                          active    2022-04-28T17:05:23+12:00
-foo      enabled   2030-04-28T17:05:23+12:00  inactive  -
+Service  Startup   Current   Since                      Notes
+bar      disabled  active    2022-04-28T17:05:23+12:00  -
+foo      enabled   inactive  -                          schedule
 `[1:])
 	c.Check(s.Stderr(), check.Equals, "")
 }

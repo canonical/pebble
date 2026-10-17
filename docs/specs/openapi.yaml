@@ -1611,6 +1611,10 @@ components:
           type: string
           format: date-time
           description: "[Time](#time) the service transitioned to the current status."
+        scheduled:
+          type: string
+          format: date-time
+          description: "[Time](#time) of the service's next scheduled start, if it has a schedule configured and is waiting for it."
     changeInfo:
       type: object
       properties:

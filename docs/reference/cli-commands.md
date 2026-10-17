@@ -1111,8 +1111,8 @@ To show status of a single service:
 ```{terminal}
 pebble services srv1       
 
-Service  Startup  Current
-srv1     enabled  active
+Service  Startup  Current  Since  Notes
+srv1     enabled  active   today  -
 ```
 
 To show status of all services:
@@ -1120,9 +1120,9 @@ To show status of all services:
 ```{terminal}
 pebble services
 
-Service  Startup   Current
-srv1     enabled   active
-srv2     disabled  inactive
+Service  Startup   Current   Since  Notes
+srv1     enabled   active    today  -
+srv2     disabled  inactive  -      -
 ```
 
 The "Startup" column shows whether this service is automatically started when Pebble starts ("enabled" means auto-start, "disabled" means don't auto-start).
@@ -1134,6 +1134,7 @@ The "Current" column shows the current status of the service, and can be one of 
 * `backoff`: in a [backoff-restart loop](service-auto-restart.md)
 * `error`: in an error state
 
+The "Notes" column displays flags or notes about the service status (or `-` if none). For example, `schedule` indicates that the service has a [schedule](../how-to/schedule-services.md) configured and is waiting for its next scheduled start.
 
 (reference_pebble_signal_command)=
 ## signal
