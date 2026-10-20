@@ -376,10 +376,8 @@ func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {
 	})
 
 	s.st.Lock()
-	logs := task.Log()
 	taskStatus := task.Status()
 	s.st.Unlock()
-	c.Check(logContains(logs, "Started service"), Equals, true)
 	c.Check(taskStatus, Equals, state.DoneStatus)
 
 	// The same persistent change should be used to track the next

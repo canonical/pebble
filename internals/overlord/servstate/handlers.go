@@ -133,7 +133,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// newScheduledStartTask), decide whether it should actually proceed, and
 	// queue up the following occurrence.
 	m.state.Lock()
-	hasSchedule := task.Has(scheduleDetailsAttr)
 	skip, err := m.prepareScheduledStart(task)
 	m.state.Unlock()
 	if err != nil {
@@ -185,12 +184,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			// Do not remove the service so that Pebble will restart it if the action is restart,
 			// and the logs are still accessible for failed services if the action is ignore.
 			return fmt.Errorf("service start attempt: %w", err)
-		}
-		// Started successfully (ran for small amount of time without exiting).
-		if hasSchedule {
-			m.state.Lock()
-			task.Logf("Started service %q on schedule.", request.Name)
-			m.state.Unlock()
 		}
 		return nil
 	case <-tomb.Dying():
