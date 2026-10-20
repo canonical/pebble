@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+var timeNow = time.Now
+
 // start-of-day
 func sod(t time.Time) time.Time {
 	y, m, d := t.Date()
