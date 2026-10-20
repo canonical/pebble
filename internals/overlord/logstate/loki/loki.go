@@ -91,8 +91,6 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 	c.labels[serviceName] = c.encodeLabels(serviceName, labels)
 }
 
-// encodeLabels returns the JSON stream labels for a service: the given labels
-// plus the Loki-specific default labels.
 func (c *Client) encodeLabels(serviceName string, labels map[string]string) json.RawMessage {
 	// Make a copy to avoid altering the original map
 	newLabels := make(map[string]string, len(labels)+1)
@@ -198,8 +196,7 @@ func (c *Client) buildRequest() lokiRequest {
 	for _, service := range services {
 		labels, ok := c.labels[service]
 		if !ok {
-			// No labels stored (never set, or removed while entries were still
-			// buffered): Loki rejects a null or empty stream, so use the defaults.
+			// Loki rejects a stream with null or no labels, which would drop the batch.
 			labels = c.encodeLabels(service, nil)
 		}
 		entries := bucketedEntries[service]

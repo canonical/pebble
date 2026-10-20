@@ -294,8 +294,6 @@ func (*suite) TestLabels(c *C) {
 	}
 }
 
-// flushAndCheck flushes the client and checks that the server received the
-// expected request body.
 func flushAndCheck(c *C, setup func(client *loki.Client), expected string) {
 	received := make(chan []byte, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -319,8 +317,6 @@ func flushAndCheck(c *C, setup func(client *loki.Client), expected string) {
 }
 
 func (*suite) TestNoLabels(c *C) {
-	// Labels were never set for the service: the stream must still carry the
-	// default labels, never "stream": null, which Loki rejects.
 	flushAndCheck(c, func(client *loki.Client) {
 		err := client.Add(servicelog.Entry{
 			Service: "svc1",
@@ -338,8 +334,6 @@ func (*suite) TestNoLabels(c *C) {
 }
 
 func (*suite) TestLabelsRemoved(c *C) {
-	// The service's labels are removed (as happens when it is removed from the
-	// plan or moved to another target) while its entries are still buffered.
 	flushAndCheck(c, func(client *loki.Client) {
 		client.SetLabels("svc1", map[string]string{"label1": "val1"})
 		err := client.Add(servicelog.Entry{
@@ -359,7 +353,6 @@ func (*suite) TestLabelsRemoved(c *C) {
 }
 
 func (*suite) TestLabelsMixed(c *C) {
-	// One service has labels and one doesn't: each stream gets its own labels.
 	flushAndCheck(c, func(client *loki.Client) {
 		client.SetLabels("svc1", map[string]string{"label1": "val1"})
 		for _, service := range []string{"svc1", "svc2"} {
