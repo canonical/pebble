@@ -83,18 +83,38 @@ func (m *CommandManager) Connect(r *http.Request, w http.ResponseWriter, task *s
 	change := task.Change()
 	st.Unlock()
 
+	changeErr := func() error {
+		st.Lock()
+		defer st.Unlock()
+		return change.Err()
+	}
+
+	// Prefer returning the change error if the change is already ready. The
+	// execution and change channels may both be ready, and select chooses
+	// between ready cases at random.
+	select {
+	case <-change.Ready():
+		return changeErr()
+	default:
+	}
+
 	// Wait till the execution object is ready or the request is cancelled.
 	select {
 	case e := <-executionCh:
+		// The change may have become ready while waiting for the execution.
+		// Check again before attempting the websocket upgrade.
+		select {
+		case <-change.Ready():
+			return changeErr()
+		default:
+		}
 		return e.connect(r, w, websocketID)
 	case <-r.Context().Done():
 		return r.Context().Err()
 	// Change unexpectedly marked ready, probably due to the client not sending
 	// websocket requests in time.
 	case <-change.Ready():
-		st.Lock()
-		defer st.Unlock()
-		return change.Err()
+		return changeErr()
 	}
 }
 

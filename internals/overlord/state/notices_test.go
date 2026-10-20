@@ -76,6 +76,29 @@ func (s *noticesSuite) TestMarshal(c *C) {
 	})
 }
 
+func (s *noticesSuite) TestAddNoticeCopiesInput(c *C) {
+	st := state.New(nil)
+	st.Lock()
+	defer st.Unlock()
+
+	uid := uint32(1000)
+	data := map[string]string{"key": "value"}
+	_, err := st.AddNotice(&uid, state.CustomNotice, "foo.com/copy", &state.AddNoticeOptions{Data: data})
+	c.Assert(err, IsNil)
+
+	uid = 2000
+	data["key"] = "changed"
+	data["new-key"] = "new-value"
+
+	notices := st.Notices(nil)
+	c.Assert(notices, HasLen, 1)
+	userID, isSet := notices[0].UserID()
+	c.Assert(isSet, Equals, true)
+	c.Assert(userID, Equals, uint32(1000))
+	n := noticeToMap(c, notices[0])
+	c.Assert(n["last-data"], DeepEquals, map[string]any{"key": "value"})
+}
+
 func (s *noticesSuite) TestUnmarshal(c *C) {
 	noticeJSON := []byte(`{
 		"id": "1",
@@ -429,6 +452,32 @@ func (s *noticesSuite) TestCheckpoint(c *C) {
 	c.Check(n["user-id"], Equals, nil)
 	c.Check(n["type"], Equals, "custom")
 	c.Check(n["key"], Equals, "foo.com/bar")
+}
+
+func (s *noticesSuite) TestPruneNoticesCheckpoint(c *C) {
+	backend := &fakeStateBackend{}
+	st := state.New(backend)
+	st.Lock()
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/old", nil)
+	time.Sleep(time.Microsecond)
+	addNotice(c, st, nil, state.CustomNotice, "foo.com/new", nil)
+	st.Unlock()
+	c.Assert(backend.checkpoints, HasLen, 1)
+
+	st, err := state.ReadState(backend, bytes.NewReader(backend.checkpoints[0]))
+	c.Assert(err, IsNil)
+	st.Lock()
+	st.Prune(time.Now(), 0, 0, 0, 1)
+	st.Unlock()
+	c.Assert(backend.checkpoints, HasLen, 2)
+
+	st, err = state.ReadState(nil, bytes.NewReader(backend.checkpoints[1]))
+	c.Assert(err, IsNil)
+	st.Lock()
+	defer st.Unlock()
+	c.Assert(st.Notices(nil), HasLen, 1)
+	n := noticeToMap(c, st.Notices(nil)[0])
+	c.Assert(n["key"], Equals, "foo.com/new")
 }
 
 func (s *noticesSuite) TestDeleteExpired(c *C) {

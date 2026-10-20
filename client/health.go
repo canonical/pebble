@@ -36,6 +36,9 @@ type healthInfo struct {
 
 // Health fetches healthy status of specified checks.
 func (client *Client) Health(opts *HealthOptions) (health bool, err error) {
+	if opts == nil {
+		opts = &HealthOptions{}
+	}
 	query := make(url.Values)
 	if opts.Level != UnsetLevel {
 		query.Set("level", string(opts.Level))

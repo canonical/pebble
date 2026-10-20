@@ -239,11 +239,12 @@ func New(opts *Options) (*Overlord, error) {
 	// Tell service manager about plan updates.
 	o.planMgr.AddChangeListener(o.serviceMgr.PlanChanged)
 
-	o.stateEng.AddManager(o.serviceMgr)
 	// The log manager should be stopped after the service manager, because
 	// ServiceManager.Stop closes the service ring buffers, which signals to the
 	// log manager that it's okay to stop log forwarding.
+	// N.B. StateEngine stops managers in reverse order of addition.
 	o.stateEng.AddManager(o.logMgr)
+	o.stateEng.AddManager(o.serviceMgr)
 
 	o.commandMgr = cmdstate.NewManager(o.runner)
 	o.stateEng.AddManager(o.commandMgr)

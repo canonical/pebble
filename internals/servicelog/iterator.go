@@ -48,6 +48,7 @@ type Iterator interface {
 }
 
 type iterator struct {
+	mu           sync.Mutex
 	rb           *RingBuffer
 	index        RingPos
 	trunc        []byte
@@ -66,26 +67,34 @@ var (
 )
 
 func (it *iterator) Close() error {
-	if it.rb == nil {
+	it.mu.Lock()
+	rb := it.rb
+	if rb == nil {
+		it.mu.Unlock()
 		return nil
 	}
-	it.rb.iteratorMutex.Lock()
-	defer it.rb.iteratorMutex.Unlock()
-	it.rb.removeIterator(it)
-	close(it.nextChan)
 	it.rb = nil
+	it.mu.Unlock()
+
+	rb.iteratorMutex.Lock()
+	defer rb.iteratorMutex.Unlock()
+	rb.removeIterator(it)
+	close(it.nextChan)
 	return nil
 }
 
 func (it *iterator) Next(cancel <-chan struct{}) bool {
-	if it.rb == nil {
+	it.mu.Lock()
+	rb := it.rb
+	it.mu.Unlock()
+	if rb == nil {
 		return false
 	}
 	select {
 	case <-it.nextChan:
 	default:
 	}
-	start, end := it.rb.Positions()
+	start, end := rb.Positions()
 	if it.index != TailPosition && it.index < start {
 		it.index = start
 		it.truncated()
@@ -101,12 +110,24 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 		closed := false
 		select {
 		case <-it.closeChan:
-			closed = it.rb.Closed()
+			it.mu.Lock()
+			rb = it.rb
+			it.mu.Unlock()
+			if rb == nil {
+				return false
+			}
+			closed = rb.Closed()
 		case <-cancel:
 			cancel = nil
 		case <-it.nextChan:
 		}
-		start, end := it.rb.Positions()
+		it.mu.Lock()
+		rb = it.rb
+		it.mu.Unlock()
+		if rb == nil {
+			return false
+		}
+		start, end := rb.Positions()
 		if it.index != TailPosition && it.index < start {
 			it.index = start
 			it.truncated()
@@ -126,7 +147,10 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 
 // Read implements io.Reader
 func (it *iterator) Read(dest []byte) (int, error) {
-	if it.rb == nil {
+	it.mu.Lock()
+	rb := it.rb
+	it.mu.Unlock()
+	if rb == nil {
 		return 0, io.EOF
 	}
 	if len(it.trunc) > 0 {
@@ -135,7 +159,7 @@ func (it *iterator) Read(dest []byte) (int, error) {
 		it.truncWritten = true
 		return n, nil
 	}
-	next, n, err := it.rb.Copy(dest, it.index)
+	next, n, err := rb.Copy(dest, it.index)
 	if n > 0 {
 		it.truncWritten = false
 	}
@@ -149,7 +173,10 @@ func (it *iterator) Read(dest []byte) (int, error) {
 
 // WriteTo implements io.WriterTo
 func (it *iterator) WriteTo(writer io.Writer) (int64, error) {
-	if it.rb == nil {
+	it.mu.Lock()
+	rb := it.rb
+	it.mu.Unlock()
+	if rb == nil {
 		return 0, io.EOF
 	}
 	if len(it.trunc) > 0 {
@@ -158,7 +185,7 @@ func (it *iterator) WriteTo(writer io.Writer) (int64, error) {
 		it.truncWritten = true
 		return int64(n), err
 	}
-	next, n, err := it.rb.WriteTo(writer, it.index)
+	next, n, err := rb.WriteTo(writer, it.index)
 	if n > 0 {
 		it.truncWritten = false
 	}
@@ -171,7 +198,13 @@ func (it *iterator) WriteTo(writer io.Writer) (int64, error) {
 }
 
 func (it *iterator) Buffered() int {
-	start, end := it.rb.Positions()
+	it.mu.Lock()
+	rb := it.rb
+	it.mu.Unlock()
+	if rb == nil {
+		return 0
+	}
+	start, end := rb.Positions()
 	if it.index > start {
 		start = it.index
 	}

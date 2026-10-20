@@ -16,6 +16,7 @@ package metrics_test
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -97,13 +98,13 @@ no_comment_metric{env="prod"} 42
 				Comment:    "Metric with special characters",
 				Labels: []metrics.Label{
 					metrics.NewLabel("key_with_underscore", "value_with_underscore"),
-					metrics.NewLabel("key-with-dash", "value-with-dash"),
+					metrics.NewLabel("key2", "value-with-dash"),
 				},
 			},
 			expected: `
 # HELP special_chars Metric with special characters
 # TYPE special_chars gauge
-special_chars{key_with_underscore="value_with_underscore",key-with-dash="value-with-dash"} 42
+special_chars{key_with_underscore="value_with_underscore",key2="value-with-dash"} 42
 
 `[1:],
 		},
@@ -114,6 +115,23 @@ special_chars{key_with_underscore="value_with_underscore",key-with-dash="value-w
 		writer := metrics.NewOpenTelemetryWriter(buf)
 		err := writer.Write(tc.metric)
 		c.Assert(err, IsNil)
+		err = writer.Flush()
+		c.Assert(err, IsNil)
 		c.Assert(buf.String(), Equals, tc.expected)
+	}
+}
+
+func (s *OpenTelemetryWriterSuite) TestWriteInvalidType(c *C) {
+	for _, mt := range []metrics.MetricType{0, -1, 1000} {
+		buf := bytes.Buffer{}
+		w := metrics.NewOpenTelemetryWriter(&buf)
+		err := w.Write(metrics.Metric{
+			Name:       "metric",
+			Type:       mt,
+			ValueInt64: 1,
+		})
+		c.Assert(err, ErrorMatches, fmt.Sprintf("cannot write metric with invalid type %d", mt))
+		c.Assert(w.Flush(), IsNil)
+		c.Assert(buf.String(), Equals, "")
 	}
 }

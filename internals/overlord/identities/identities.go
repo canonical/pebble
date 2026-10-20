@@ -156,7 +156,7 @@ func (d *Identity) Validate(name string) error {
 	}
 
 	if !identityNameRegexp.MatchString(name) {
-		return fmt.Errorf("identity name %q invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen", d.Name)
+		return fmt.Errorf("identity name %q invalid: must start with an alphabetic character and only contain alphanumeric characters, underscore, and hyphen", name)
 	}
 
 	switch d.Access {

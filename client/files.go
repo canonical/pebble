@@ -116,6 +116,9 @@ func (fi *FileInfo) Group() string {
 
 // ListFiles obtains the contents of a directory or glob, or information about a file.
 func (client *Client) ListFiles(opts *ListFilesOptions) ([]*FileInfo, error) {
+	if opts == nil {
+		opts = &ListFilesOptions{}
+	}
 	q := make(url.Values)
 	q.Set("action", "list")
 	q.Set("path", opts.Path)
@@ -168,10 +171,13 @@ type fileInfoResult struct {
 func calculateFileMode(fileType string, permissions string) (mode os.FileMode, err error) {
 	p, err := strconv.ParseUint(permissions, 8, 32)
 	if err != nil {
-		return 0, fmt.Errorf("invalid permission bits: %q", permissions)
+		return 0, fmt.Errorf("cannot parse permissions %q: value must be an octal number", permissions)
+	}
+	if p&^uint64(os.ModePerm) != 0 {
+		return 0, fmt.Errorf("cannot parse permissions %q: value contains bits outside 0777", permissions)
 	}
 
-	mode = os.FileMode(p) & os.ModePerm
+	mode = os.FileMode(p)
 	switch fileType {
 	case "file":
 	case "directory":

@@ -20,33 +20,77 @@ Pebble is useful for developers who are building {external+operator:ref}`Juju ch
 
 ## In this documentation
 
-````{grid} 1 1 2 2
-```{grid-item-card} [Tutorial](tutorial/getting-started)
-**Start here**: a hands-on introduction to Pebble, guiding you through your first steps using the CLI
+### Get started
+
+{doc}`Tutorial <tutorial/getting-started>` — A hands-on introduction to Pebble
+
+### Use Pebble
+
+````{domain} Use Pebble
+```{slice} Daemon & client
+{doc}`Overview <explanation/general-model>` slice
+{doc}`Install <how-to/install-pebble>`
+{doc}`Environment variables <reference/environment-variables>`
 ```
 
-```{grid-item-card} [How-to guides](how-to/index)
-**Step-by-step guides** covering key operations and common tasks
-- [Install Pebble](how-to/install-pebble)
-- [Manage service dependencies](how-to/service-dependencies)
-- [Manage identities](how-to/manage-identities)
+```{slice} CLI
+{doc}`Manage a remote system <how-to/manage-a-remote-system>`
+{doc}`Command reference <reference/cli-commands>`
+```
+
+```{slice} Services
+{doc}`Start order <explanation/service-start-order>`
+{doc}`Service dependencies <explanation/service-dependencies>`
+{doc}`Manage service dependencies <how-to/service-dependencies>`
+{doc}`Auto-restart <reference/service-auto-restart>`
+```
+
+```{slice} HTTP API
+{doc}`Overview <explanation/api-and-clients>` slice
+{doc}`Use the API to manage services <how-to/use-the-pebble-api>`
+{doc}`Reference <reference/api>` slice
+```
+
+```{slice} Layers
+{doc}`Use layers <how-to/use-layers>`
+{doc}`Specification <reference/layer-specification>`
+```
+
+```{slice} Logging
+{doc}`Forward logs to Loki <how-to/forward-logs-to-loki>`
+{doc}`Capture logs from files <how-to/capture-logs-from-files>`
+{doc}`Reference <reference/log-forwarding>` slice
+```
+
+```{slice} Health checks
+{doc}`Run services reliably <how-to/run-services-reliably>`
+{doc}`Check health based on logs <how-to/check-health-based-on-logs>`
+{doc}`Reference <reference/health-checks>` slice
+```
+
+```{slice} Reporting
+{doc}`Changes and tasks <reference/changes-and-tasks>`
+{doc}`Notices <reference/notices>`
+```
+
+```{slice} Access
+{doc}`Manage identities <how-to/manage-identities>`
+{doc}`Reference <reference/identities>` slice
+```
+
+```{slice} Security
+{doc}`Overview <explanation/security>` slice
 ```
 ````
 
-````{grid} 1 1 2 2
-:reverse:
-```{grid-item-card} [Reference](reference/index)
-**Technical information**
-- [Layer specification](reference/layer-specification)
-- [CLI commands](reference/cli-commands)
-```
+## How this documentation is organised
 
-```{grid-item-card} [Explanation](explanation/index)
-**Discussion and clarification** of key topics
-- [General model](explanation/general-model.md)
-- [API and clients](explanation/api-and-clients.md)
-```
-````
+This documentation uses the [Diátaxis documentation structure](https://diataxis.fr/).
+
+- {doc}`Tutorials <tutorial/getting-started>`
+- {doc}`How-to guides <how-to/index>`
+- {doc}`Reference <reference/index>`
+- {doc}`Explanation <explanation/index>`
 
 ## Releases
 

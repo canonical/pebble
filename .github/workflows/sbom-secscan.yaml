@@ -35,7 +35,7 @@ jobs:
           TAG: ${{ inputs.release-tag }}
         run: |
           set -eu
-          if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "secscan-report-upload-snap.tar.gz"; then
+          if gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null | grep -qxF "secscan-report.zip"; then
             echo "Secscan report already attached to release $TAG, skipping."
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -52,13 +52,13 @@ jobs:
 
       # sbomber uploads its report as an Actions artifact (named above), but
       # doesn't tell us its on-disk path, so download that artifact back
-      # down (it's available within the same workflow run) and re-upload it
-      # to the release as a single archive.
+      # down (it's available within the same workflow run) and re-zip it for
+      # upload to the release.
       - name: Download secscan report artifact
         if: steps.check.outputs.exists != 'true' && inputs.release-tag != ''
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
         with:
-          name: secscan-report-upload-snap
+          name: secscan-report-upload-snap-reports
           path: secscan-report-upload-snap
 
       - name: Upload report to release
@@ -68,5 +68,5 @@ jobs:
           TAG: ${{ inputs.release-tag }}
         run: |
           set -eu
-          tar -czf secscan-report-upload-snap.tar.gz -C secscan-report-upload-snap .
-          gh release upload "$TAG" secscan-report-upload-snap.tar.gz
+          (cd secscan-report-upload-snap && zip -r ../secscan-report.zip .)
+          gh release upload "$TAG" secscan-report.zip

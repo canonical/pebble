@@ -49,6 +49,7 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
 	clientTLS := createTestClientTLSKeypair(c)
 	httpsClient := &http.Client{
 		Transport: &http.Transport{
+			DisableKeepAlives: true,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 				GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -62,6 +63,7 @@ func (s *daemonSuite) TestHTTPSOpenAccess(c *C) {
 	c.Assert(err, IsNil)
 	response, err := httpsClient.Do(request)
 	c.Assert(err, IsNil)
+	defer response.Body.Close()
 	c.Assert(response.StatusCode, Equals, http.StatusOK)
 	var m map[string]any
 	err = json.NewDecoder(response.Body).Decode(&m)
@@ -104,6 +106,7 @@ func (s *daemonSuite) TestHTTPSUserAccessFail(c *C) {
 	clientTLS := createTestClientTLSKeypair(c)
 	httpsClient := &http.Client{
 		Transport: &http.Transport{
+			DisableKeepAlives: true,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 				GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -117,6 +120,7 @@ func (s *daemonSuite) TestHTTPSUserAccessFail(c *C) {
 	c.Assert(err, IsNil)
 	response, err := httpsClient.Do(request)
 	c.Assert(err, IsNil)
+	defer response.Body.Close()
 
 	// Access fails because the TLS client identity is not known.
 	c.Assert(response.StatusCode, Equals, http.StatusUnauthorized)
@@ -158,6 +162,7 @@ pairing:
 	clientTLS := createTestClientTLSKeypair(c)
 	httpsClient := &http.Client{
 		Transport: &http.Transport{
+			DisableKeepAlives: true,
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 				GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
@@ -178,6 +183,7 @@ pairing:
 	c.Assert(err, IsNil)
 	pairingResponse, err := httpsClient.Do(pairingRequest)
 	c.Assert(err, IsNil)
+	defer pairingResponse.Body.Close()
 	c.Assert(pairingResponse.StatusCode, Equals, http.StatusOK)
 
 	// Now try accessing checks - should succeed
@@ -185,6 +191,7 @@ pairing:
 	c.Assert(err, IsNil)
 	response, err := httpsClient.Do(request)
 	c.Assert(err, IsNil)
+	defer response.Body.Close()
 
 	// Access succeeds because the TLS client identity is now paired
 	c.Assert(response.StatusCode, Equals, http.StatusOK)

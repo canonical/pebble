@@ -167,7 +167,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	select {
 	case err := <-service.started:
 		if err != nil {
-			addLastLogs(task, service.logs)
+			addLastLogs(task, service.logs, config.Name)
 			// Do not remove the service so that Pebble will restart it if the action is restart,
 			// and the logs are still accessible for failed services if the action is ignore.
 			return fmt.Errorf("service start attempt: %w", err)
@@ -229,6 +229,9 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 		// Start allowed when service is backing off, was stopped, or has exited.
 		service.backoffNum = 0
 		service.backoffTime = 0
+		if service.logs == nil || service.logs.Closed() {
+			service.logs = servicelog.NewRingBuffer(maxLogBytes)
+		}
 		service.transition(stateInitial)
 		return service, ""
 	default:
@@ -611,12 +614,12 @@ func (s *serviceData) exited(exitCode int) error {
 }
 
 // addLastLogs adds the last few lines of service output to the task's log.
-func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer) {
+func addLastLogs(task *state.Task, logBuffer *servicelog.RingBuffer, serviceName string) {
 	st := task.State()
 	st.Lock()
 	defer st.Unlock()
 
-	logs, err := servicelog.LastLines(logBuffer, lastLogLines, "    ", true)
+	logs, err := servicelog.ServiceLastLines(logBuffer, lastLogLines, "    ", serviceName)
 	if err != nil {
 		task.Errorf("Cannot read service logs: %v", err)
 	}
@@ -899,7 +902,7 @@ func (d *serviceData) writeMetric(writer metrics.Writer) error {
 	}
 
 	err = writer.Write(metrics.Metric{
-		Name:       "pebble_service_start_count",
+		Name:       "pebble_service_start_total",
 		Type:       metrics.TypeCounterInt,
 		ValueInt64: d.startCount.Load(),
 		Comment:    "Number of times the service has started",

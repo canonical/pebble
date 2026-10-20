@@ -938,18 +938,19 @@ func (s *ManagerSuite) TestMetricsCheckSuccess(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
+	c.Assert(writer.Flush(), IsNil)
 	expectedRegex := `
 # HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
 
-# HELP pebble_check_success_count Number of times the check has succeeded
-# TYPE pebble_check_success_count counter
-pebble_check_success_count{check="chk1"} \d+
+# HELP pebble_check_success_total Number of times the check has succeeded
+# TYPE pebble_check_success_total counter
+pebble_check_success_total{check="chk1"} \d+
 
-# HELP pebble_check_failure_count Number of times the check has failed
-# TYPE pebble_check_failure_count counter
-pebble_check_failure_count{check="chk1"} 0
+# HELP pebble_check_failure_total Number of times the check has failed
+# TYPE pebble_check_failure_total counter
+pebble_check_failure_total{check="chk1"} 0
 
 `[1:]
 	c.Assert(buf.String(), Matches, expectedRegex)
@@ -974,8 +975,8 @@ func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
 		},
 	})
 
-	// After 2 failures, check is still up, pebble_check_success_count counter is 0,
-	// pebble_check_failure_count is 2.
+	// After 2 failures, check is still up, pebble_check_success_total counter is 0,
+	// pebble_check_failure_total is 2.
 	waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
 		return check.Failures == 2
 	})
@@ -983,18 +984,19 @@ func (s *ManagerSuite) TestMetricsCheckFailure(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
+	c.Assert(writer.Flush(), IsNil)
 	expectedRegex := `
 # HELP pebble_check_up Whether the health check is up \(1\) or not \(0\)
 # TYPE pebble_check_up gauge
 pebble_check_up{check="chk1"} 1
 
-# HELP pebble_check_success_count Number of times the check has succeeded
-# TYPE pebble_check_success_count counter
-pebble_check_success_count{check="chk1"} 0
+# HELP pebble_check_success_total Number of times the check has succeeded
+# TYPE pebble_check_success_total counter
+pebble_check_success_total{check="chk1"} 0
 
-# HELP pebble_check_failure_count Number of times the check has failed
-# TYPE pebble_check_failure_count counter
-pebble_check_failure_count{check="chk1"} \d+
+# HELP pebble_check_failure_total Number of times the check has failed
+# TYPE pebble_check_failure_total counter
+pebble_check_failure_total{check="chk1"} \d+
 
 `[1:]
 	c.Assert(buf.String(), Matches, expectedRegex)
@@ -1021,15 +1023,16 @@ func (s *ManagerSuite) TestMetricsInactiveCheck(c *C) {
 	buf := new(bytes.Buffer)
 	writer := metrics.NewOpenTelemetryWriter(buf)
 	s.manager.WriteMetrics(writer)
+	c.Assert(writer.Flush(), IsNil)
 	// Inactive check's pebble_check_up metric is not reported.
 	expected := `
-# HELP pebble_check_success_count Number of times the check has succeeded
-# TYPE pebble_check_success_count counter
-pebble_check_success_count{check="chk1"} 0
+# HELP pebble_check_success_total Number of times the check has succeeded
+# TYPE pebble_check_success_total counter
+pebble_check_success_total{check="chk1"} 0
 
-# HELP pebble_check_failure_count Number of times the check has failed
-# TYPE pebble_check_failure_count counter
-pebble_check_failure_count{check="chk1"} 0
+# HELP pebble_check_failure_total Number of times the check has failed
+# TYPE pebble_check_failure_total counter
+pebble_check_failure_total{check="chk1"} 0
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)

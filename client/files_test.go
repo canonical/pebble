@@ -48,6 +48,19 @@ type makeDirsItem struct {
 	Group       string `json:"group"`
 }
 
+func (cs *clientSuite) TestListFilesNilOptions(c *C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 200,
+		"status": "OK",
+		"result": []
+	}`
+
+	result, err := cs.cli.ListFiles(nil)
+	c.Assert(err, IsNil)
+	c.Assert(result, HasLen, 0)
+	c.Assert(cs.req.URL.Query().Get("path"), Equals, "")
+}
 func (cs *clientSuite) TestListFiles(c *C) {
 	cs.rsp = `{
 		"type": "sync",
@@ -243,9 +256,9 @@ func (cs *clientSuite) TestCalculateFileMode(c *C) {
 }
 
 func (cs *clientSuite) TestCalculateFileModeFails(c *C) {
-	for _, p := range []string{"-1", "x", "778"} {
+	for _, p := range []string{"-1", "-001", "x", "778", "1000", "1777", "7777"} {
 		_, err := client.CalculateFileMode("file", p)
-		c.Check(err, ErrorMatches, `invalid permission bits: ".*"`)
+		c.Check(err, ErrorMatches, `cannot parse permissions ".*": .*`)
 	}
 }
 

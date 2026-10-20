@@ -33,6 +33,7 @@ type serviceInfo struct {
 	Startup      string     `json:"startup"`
 	Current      string     `json:"current"`
 	CurrentSince *time.Time `json:"current-since,omitempty"` // pointer as omitempty doesn't work with time.Time directly
+	Outdated     bool       `json:"outdated,omitempty"`
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
@@ -54,6 +55,7 @@ func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
 		if !svc.CurrentSince.IsZero() {
 			info.CurrentSince = &svc.CurrentSince
 		}
+		info.Outdated = svc.Outdated
 		infos = append(infos, info)
 	}
 	return SyncResponse(infos)
@@ -71,6 +73,12 @@ func v1PostServices(c *Command, r *http.Request, _ *UserState) Response {
 	}
 
 	var err error
+	switch payload.Action {
+	case "start", "stop", "restart", "replan", "autostart":
+	default:
+		return BadRequest("cannot perform service action %q: invalid action", payload.Action)
+	}
+
 	servmgr := overlordServiceManager(c.d.overlord)
 	switch payload.Action {
 	case "replan":

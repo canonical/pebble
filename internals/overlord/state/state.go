@@ -540,6 +540,7 @@ NextChange:
 	for k, n := range s.notices {
 		if n.expired(now) {
 			stats.IncludeNotice(n)
+			s.writing()
 			delete(s.notices, k)
 		} else if n.noticeType == WarningNotice {
 			if n.lastRepeated.After(latestWarningTime) {
@@ -548,6 +549,7 @@ NextChange:
 		} else if n.noticeType == ChangeUpdateNotice {
 			if _, changeExists := s.changes[n.key]; !changeExists {
 				stats.IncludeNotice(n)
+				s.writing()
 				delete(s.notices, k)
 			}
 		}
@@ -633,6 +635,7 @@ func (s *State) pruneMaxNotices(maxNotices int, stats *pruneStats) {
 		userID, hasUserID := flattenUserID(n.userID)
 		uniqueKey := noticeKey{hasUserID, userID, n.noticeType, n.key}
 		stats.IncludeNotice(n)
+		s.writing()
 		delete(s.notices, uniqueKey)
 	}
 }

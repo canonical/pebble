@@ -146,9 +146,14 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 		return err
 	}
 
-	// Save the connection.
+	// Save the connection, unless another connection won the race while this
+	// connection was being upgraded.
 	e.websocketsLock.Lock()
-	defer e.websocketsLock.Unlock()
+	if e.websockets[id] != nil {
+		e.websocketsLock.Unlock()
+		conn.Close()
+		return fmt.Errorf("%s websocket already connected", id)
+	}
 	e.websockets[id] = conn
 
 	// Signal that we're connected.
@@ -157,6 +162,7 @@ func (e *execution) connect(r *http.Request, w http.ResponseWriter, id string) e
 	} else if e.websockets[wsStdio] != nil && (!e.splitStderr || e.websockets[wsStderr] != nil) {
 		close(e.ioConnected)
 	}
+	e.websocketsLock.Unlock()
 	return nil
 }
 

@@ -41,11 +41,11 @@ parts:
     plugin: go
     source: .
     build-snaps:
-      - go/1.26/stable
-    # The snap build relies on the cmd/version*.go files within the source path.
+      - go/1.27/stable
+    # The snap build relies on the cmd/VERSION file within the source path.
     # For proper versioning, run "go generate ./cmd/" before building the snap.
     # If doing a "snapcraft remote-build", ensure you've also run
-    # "git add -f ./cmd/VERSION ./cmd/version_generated.go".
+    # "git add -f ./cmd/VERSION".
     override-build: |
       which go
       go version
@@ -54,7 +54,7 @@ parts:
         export GOARCH=arm
         export GOARM=6
       fi
-      CGO_ENABLED=0 go build -trimpath -ldflags=-w -ldflags=-s -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
+      CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $CRAFT_PART_INSTALL/bin/pebble ./cmd/pebble
 
   pebble-release-data:
     plugin: nil
