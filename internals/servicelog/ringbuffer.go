@@ -15,6 +15,7 @@
 package servicelog
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"sync"
@@ -211,12 +212,17 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (next RingPos, n 
 	if readPos < rb.readIndex || readPos > rb.writeIndex {
 		return start, 0, ErrRange
 	}
-	copyLength := rb.writeIndex - readPos
-	if copyLength == 0 {
+	return rb.writeRange(writer, readPos, rb.writeIndex)
+}
+
+// writeRange writes the bytes from start up to (not including) end to a
+// io.Writer. The caller must hold rb.rwlock (read) and ensure the range is
+// buffered.
+func (rb *RingBuffer) writeRange(writer io.Writer, start, end RingPos) (next RingPos, n int64, err error) {
+	if end == start {
 		return start, 0, nil
 	}
-	end := rb.writeIndex
-	buffers := rb.buffers(readPos, end)
+	buffers := rb.buffers(start, end)
 	written := int64(0)
 	for _, buffer := range buffers {
 		if len(buffer) == 0 {
@@ -225,15 +231,15 @@ func (rb *RingBuffer) WriteTo(writer io.Writer, start RingPos) (next RingPos, n 
 		n, err := writer.Write(buffer)
 		written += int64(n)
 		if err != nil {
-			nextReadPos := readPos + RingPos(written)
+			nextReadPos := start + RingPos(written)
 			return nextReadPos, written, err
 		}
 		if n < len(buffer) {
-			nextReadPos := readPos + RingPos(written)
+			nextReadPos := start + RingPos(written)
 			return nextReadPos, written, io.ErrShortWrite
 		}
 	}
-	nextReadPos := readPos + RingPos(written)
+	nextReadPos := start + RingPos(written)
 	return nextReadPos, written, nil
 }
 
@@ -243,18 +249,7 @@ func (rb *RingBuffer) TailIterator() Iterator {
 	defer rb.rwlock.RUnlock()
 	rb.iteratorMutex.Lock()
 	defer rb.iteratorMutex.Unlock()
-	start := rb.readIndex
-	iter := &iterator{
-		rb:        rb,
-		index:     start,
-		nextChan:  make(chan bool, 1),
-		closeChan: make(chan struct{}),
-	}
-	if rb.writeClosed {
-		close(iter.closeChan)
-	}
-	rb.iteratorList = append(rb.iteratorList, iter)
-	return iter
+	return rb.newIterator(rb.readIndex)
 }
 
 // HeadIterator returns an iterator from the head of the buffer.
@@ -266,9 +261,15 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 	firstLine := rb.reverseLinePosition(lines)
 	rb.iteratorMutex.Lock()
 	defer rb.iteratorMutex.Unlock()
+	return rb.newIterator(firstLine)
+}
+
+// newIterator creates and registers an iterator starting at index. The caller
+// must hold rb.rwlock (read) and rb.iteratorMutex.
+func (rb *RingBuffer) newIterator(index RingPos) *iterator {
 	iter := &iterator{
 		rb:        rb,
-		index:     firstLine,
+		index:     index,
 		nextChan:  make(chan bool, 1),
 		closeChan: make(chan struct{}),
 	}
@@ -277,6 +278,26 @@ func (rb *RingBuffer) HeadIterator(lines int) Iterator {
 	}
 	rb.iteratorList = append(rb.iteratorList, iter)
 	return iter
+}
+
+// lineStart returns the position of the first character of the line whose
+// last character is at last: the position after the previous newline, or
+// RingPos(0) for the very first line. If the start of the line has been
+// discarded, ok is false. The caller must hold rb.rwlock (read).
+func (rb *RingBuffer) lineStart(last RingPos) (first RingPos, ok bool) {
+	if last > rb.readIndex {
+		buffers := rb.buffers(rb.readIndex, last)
+		if i := bytes.LastIndexByte(buffers[1], '\n'); i >= 0 {
+			return rb.readIndex + RingPos(len(buffers[0])+i+1), true
+		}
+		if i := bytes.LastIndexByte(buffers[0], '\n'); i >= 0 {
+			return rb.readIndex + RingPos(i+1), true
+		}
+	}
+	if rb.readIndex == 0 {
+		return 0, true
+	}
+	return 0, false
 }
 
 func (rb *RingBuffer) reverseLinePosition(n int) RingPos {
