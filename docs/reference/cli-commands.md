@@ -1134,7 +1134,7 @@ The "Current" column shows the current status of the service, and can be one of 
 * `backoff`: in a [backoff-restart loop](service-auto-restart.md)
 * `error`: in an error state
 
-The "Notes" column displays comma-separated flags or notes about the service status (or `-` if none). For example, `outdated` indicates that the service was started with an older plan and its configuration has changed since it was started; `schedule` indicates that the service has a [schedule](../how-to/schedule-services.md) configured and is waiting for its next scheduled start.
+The "Notes" column displays comma-separated flags or notes about the service status (or `-` if none). For example, `outdated` indicates that the service was started with an older plan and its configuration has changed since it was started; `schedule` indicates that the service has a [schedule](../how-to/schedule-services.md) configured.
 
 (reference_pebble_signal_command)=
 ## signal

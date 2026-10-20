@@ -118,7 +118,14 @@ type ServiceInfo struct {
 	Current      ServiceStatus
 	CurrentSince time.Time
 	Outdated     bool
-	Scheduled    time.Time
+	// Schedule is the service's configured schedule string, if any.
+	Schedule string
+	// ScheduleLast is the time the schedule last fired, or zero if it
+	// hasn't fired yet (or has no schedule).
+	ScheduleLast time.Time
+	// ScheduleNext is the time the schedule will next fire, or zero if it
+	// won't fire again (or has no schedule).
+	ScheduleNext time.Time
 }
 
 type ServiceStartup string
@@ -151,7 +158,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	currentPlan := m.getPlan()
 
 	m.state.Lock()
-	scheduled := m.scheduledStartTimes()
+	scheduled := m.scheduledStarts()
 	m.state.Unlock()
 
 	m.servicesLock.Lock()
@@ -187,7 +194,11 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 			}
 			info.Outdated = serviceOutdated(config, workload, s)
 		}
-		info.Scheduled = scheduled[name]
+		info.Schedule = config.Schedule
+		if details, ok := scheduled[name]; ok && config.Schedule != "" {
+			info.ScheduleLast = details.Last
+			info.ScheduleNext = details.Next
+		}
 		services = append(services, info)
 	}
 	sort.Slice(services, func(i, j int) bool {

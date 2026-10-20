@@ -33,6 +33,7 @@ type scheduleDetails struct {
 	ServiceName string    `json:"service-name"`
 	Schedule    string    `json:"schedule"`
 	Next        time.Time `json:"next"`
+	Last        time.Time `json:"last,omitzero"`
 }
 
 const scheduleTestLayer = `
@@ -457,6 +458,9 @@ func (s *S) TestEnsureSkipsStartWhenAlreadyRunning(c *C) {
 
 	newTask := s.scheduleTask(c, chg)
 	c.Check(newTask.ID() != task.ID(), Equals, true)
+
+	// The schedule still fired, even though the service was already running.
+	c.Check(s.scheduleDetails(c, chg).Last.IsZero(), Equals, false)
 }
 
 func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
@@ -482,6 +486,8 @@ func (s *S) TestEnsureSkipsFarMissedSchedule(c *C) {
 	// schedule fires daily, so the new Next should be close to now, not
 	// close to the 10-day-old missed time).
 	c.Check(details.Next.After(longAgo.Add(48*time.Hour)), Equals, true)
+	// The skipped occurrence doesn't count as the schedule firing.
+	c.Check(details.Last.IsZero(), Equals, true)
 }
 
 // TestScheduleHistoryPruned checks that a service-schedule change never
@@ -519,4 +525,72 @@ func (s *S) TestScheduleHistoryPruned(c *C) {
 
 	c.Check(pending, Equals, 1)
 	c.Check(finished, Equals, servstate.MaxScheduleHistory)
+}
+
+func (s *S) TestScheduleLastTracksFiring(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	c.Check(s.scheduleDetails(c, chg).Last.IsZero(), Equals, true)
+
+	// Not fired yet: the schedule and next time are reported, but no last.
+	services, err := s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	c.Check(services[0].Schedule, Equals, "9:00-11:00")
+	c.Check(services[0].ScheduleLast.IsZero(), Equals, true)
+	c.Check(services[0].ScheduleNext.Equal(s.scheduleDetails(c, chg).Next), Equals, true)
+
+	task := s.scheduleTask(c, chg)
+	before := time.Now()
+	s.setScheduleNext(c, chg, before.Add(-time.Second))
+	waitTaskReady(c, s.runner, s.st, task)
+	after := time.Now()
+
+	// The task tracking the following occurrence records when it fired.
+	details := s.scheduleDetails(c, chg)
+	c.Check(details.Last.Before(before), Equals, false)
+	c.Check(details.Last.After(after), Equals, false)
+
+	services, err = s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	c.Check(services[0].Schedule, Equals, "9:00-11:00")
+	c.Check(services[0].ScheduleLast.Equal(details.Last), Equals, true)
+	c.Check(services[0].ScheduleNext.Equal(details.Next), Equals, true)
+
+	// Changing the schedule keeps the last time it fired.
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: merge
+        schedule: 13:00-15:00
+`)
+	s.planChanged(c)
+	changed := s.scheduleDetails(c, chg)
+	c.Check(changed.Schedule, Equals, "13:00-15:00")
+	c.Check(changed.Last.Equal(details.Last), Equals, true)
+
+	services, err = s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Check(services[0].Schedule, Equals, "13:00-15:00")
+	c.Check(services[0].ScheduleLast.Equal(details.Last), Equals, true)
+	c.Check(services[0].ScheduleNext.Equal(changed.Next), Equals, true)
+}
+
+func (s *S) TestServicesWithoutSchedule(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planChanged(c)
+
+	services, err := s.manager.Services(nil)
+	c.Assert(err, IsNil)
+	for _, svc := range services {
+		c.Check(svc.Schedule, Equals, "")
+		c.Check(svc.ScheduleLast.IsZero(), Equals, true)
+		c.Check(svc.ScheduleNext.IsZero(), Equals, true)
+	}
 }

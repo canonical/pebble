@@ -1614,10 +1614,17 @@ components:
         outdated:
           type: boolean
           description: True if the service was started with an older plan definition and is now outdated.
-        scheduled:
+        schedule:
+          type: string
+          description: The service's configured schedule, as a [timer string](https://ubuntu.com/docs/pebble/reference/timer-string-format/), if it has one.
+        schedule-last:
           type: string
           format: date-time
-          description: "[Time](#time) of the service's next scheduled start, if it has a schedule configured and is waiting for it."
+          description: "[Time](#time) the service's schedule last fired, if it has a schedule configured and it has fired."
+        schedule-next:
+          type: string
+          format: date-time
+          description: "[Time](#time) the service's schedule will next fire, if it has a schedule configured and it will fire again."
     changeInfo:
       type: object
       properties:
