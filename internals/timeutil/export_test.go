@@ -16,12 +16,7 @@ package timeutil
 
 import "time"
 
-var (
-	ParseClockSpan = parseClockSpan
-	ParseWeekSpan  = parseWeekSpan
-	HumanTimeSince = humanTimeSince
-	MonthNext      = monthNext
-)
+var HumanTimeSince = humanTimeSince
 
 // FakeTimeNow mocks the time.Now() calls used in the timeutil package.
 func FakeTimeNow(f func() time.Time) (restorer func()) {

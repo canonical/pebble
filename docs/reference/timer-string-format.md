@@ -1,147 +1,118 @@
 # Timer string format
 
-Timer strings are used for configuring service `schedule`s.
-
-See this [discourse thread](https://forum.snapcraft.io/t/refresh-scheduling-on-specific-days-of-the-month/1239/6) for details on how the syntax was conceived and evolved over time.
+Timer strings are used for configuring service `schedule`s. They follow the
+[schedule syntax](https://github.com/niemeyer/schedule-syntax), which selects **when** events happen by
+combining three dimensions: days of the year, weekdays, and times of the day.
 
 ## Syntax
 
 ```
-eventlist = eventset *( ",," eventset )
-eventset = wdaylist / timelist / wdaylist "," timelist
+schedule = set *( ",," set )
+set      = element *( "," element )
+element  = months / days / weekdays / clock
 
-wdaylist = wdayset *( "," wdayset )
-wdayset = wday / wdaynumber / wdayspan
-wday =  ( "mon" / "tue" / "wed" / "thu" / "fri" / "sat" / "sun" )
-wdaynumber =  ( "sun" / "mon" / "tue" / "wed" / "thu" / "fri" / "sat" ) DIGIT
-wdayspan = wday "-" wday / wdaynumber "-" wday / wday "-" wdaynumber
-wspec = ( "1" / "2" / "3" / "4" / "5" )
+months   = month [ "-" month ]
+month    = "jan" / "feb" / "mar" / "apr" / "may" / "jun" /
+           "jul" / "aug" / "sep" / "oct" / "nov" / "dec"
+days     = day [ "-" day ]
+day      = 1*2DIGIT                                 ; 1 to 31
 
-timelist = timeset *( "," timeset )
-timeset = time / timespan
-time = 2DIGIT ":" 2DIGIT
-timespan = time ( "-" / "~" ) time [ "/" count ]
-count = n*DIGIT
+weekdays = weekday [ "-" weekday ]
+weekday  = wday [ pos ]
+wday     = "sun" / "mon" / "tue" / "wed" / "thu" / "fri" / "sat"
+pos      = "1" / "2" / "3" / "4" / "5"              ; 5 is the last
+
+clock    = time / time "-" time [ "/" split ]
+time     = 1*2DIGIT ":" 2DIGIT                      ; 0:00 to 24:00
+split    = count [ "s" / "m" / "h" ]
+count    = 1*5DIGIT                                 ; 1 to 99999
 ```
-Clock times are always specified in 24H format.
+
+Clock times are always specified in 24H format, in the system's local time.
 
 ## Examples
 
-* `00:00-24:00/24`</br>
-   Every hour on the hour
+* `0:00`</br>
+  Every day at 0:00
 
-*  `00:00-24:00/48`</br>
-   Every 30 minutes
+* `0:00-24:00/1h`</br>
+  Every hour on the hour
 
-*  `00:00-24:00/96`</br>
-   Every 15 minutes
+* `0:00-24:00/30m`</br>
+  Every 30 minutes
 
-* `12:00-13:00/12`</br>
-   Every 5 minutes from 12:00 to 13:10
+* `12:00-13:00/5m`</br>
+  Every 5 minutes from 12:00 to 12:55
 
-* `23:00`</br>
-   Every day at 23:00
-
-More specific timer examples:
+* `8:00-10:00/3`</br>
+  Every day at 8:00, 8:40 and 9:20
 
 * `mon,10:00,,fri,15:00`</br>
-   Mondays at 10:00, Fridays at 15:10 
+  Mondays at 10:00, Fridays at 15:00
 
 * `mon,fri,10:00,15:00`</br>
   Mondays at 10:00 and 15:00, Fridays at 10:00 and 15:00
 
-* `mon-wed,fri,9:00-11:00/2`</br>
-  Monday to Wednesday and on Friday, twice between 9:00 and 11:00 
+* `mon-fri,8:00-17:00,,sat,sun,10:00,,mon1,9:00`</br>
+  Workdays at 8:00, weekends at 10:00, and the first Monday of each month at 9:00
 
-* `mon,9:00~11:00,,wed,22:00~23:00`</br>
-  Mondays, some time between 9:00 and 11:00, and on Wednesdays, some time between 22:00 and 23:00
+* `mon2-wed,23:00`</br>
+  2nd Monday of the month through the following Wednesday, at 23:00
 
-* `mon,wed`</br>
-  Monday and on Wednesday, at 0:00
+* `fri5,23:00`</br>
+  Last Friday of the month, at 23:00
 
-* `mon2-wed,23:00-24:00`</br>
-  2nd Monday of the month through the following Wednesday, between 23:00 and 24:00
+* `dec-mar,1-14,sat`</br>
+  Saturdays that are among days 1 to 14 of December through March, at 0:00
 
-* `fri5,23:00-01:00`</br>
-  Last Friday of the month, from 23:00 to 1:00 the next day. Even in months with 4 Fridays, this schedule will still trigger on the last Friday.
+* `dec,31,23:55`</br>
+  New Year's Eve at 23:55
 
-##  Semantics
+## Semantics
 
-A timer string is composed of one or more event sets, which are combined by using commas (`,,`) as separators.
+A timer string is composed of one or more sets, separated by a double comma (`,,`). Up to 8 sets are supported. The next event is the earliest one selected by any of the sets.
 
-Each event set defines the weekdays and the time windows in which events may occur. The next event will be scheduled inside the soonest opportunity that matches both one of the provided weekdays and one of the provided time windows. If no weekdays are provided, the default is every day. If no time windows are provided, the default is an arbitrary time in the day.
+Within a set, elements are separated by a single comma. Each element is recognised by its shape, so elements may appear in any order, except that days of the month must follow the months they apply to. Up to 8 weekday spans and 8 clock spans are supported per set.
 
-For example, consider the timer:
+An event happens when a day matches the set's days of the year and one of its weekday spans, at a time selected by one of its clock spans. Anything omitted falls back to a default:
 
-    mon,fri,10:00,15:00
+| Dimension | Default | Meaning |
+| --- | --- | --- |
+| Months/days | all year | every day of every month |
+| Weekdays | `sun-sat` | every weekday |
+| Time | `0:00-0:00` | the whole day, once a day at 0:00 |
 
-Assuming today is Sunday, the next 5 events are, in order:
+### Days of the year
 
-    Monday 10:00
-    Monday 15:00
-    Friday 10:00
-    Friday 15:00
-    Monday 10:00
+Months are three-letter names, and may form ranges that wrap around the year, so `nov-feb` is November through February.
 
-Consider the following timer:
+Days of the month (1 to 31) may follow the months they apply to, either as single days or ranges. Day ranges wrap around the month, so `25-5` is days 25 to 31 and 1 to 5. Days apply to all the months listed right before them:
 
-    mon,10:00,,fri,15:00
+    dec-mar,5-10
 
-The next 3 events in this case are:
+This selects days 5 to 10 of each month from December through March. A month listed after days starts a new group of months, so the following selects January 15th to 20th and the whole of February:
 
-    Monday 10am
-    Friday 15pm
-    Monday 10am
+    jan,15-20,feb
 
-All of these examples work on a weekly basis, but certain events are better scheduled on a monthly basis. To support that, weekdays may be suffixed by `wspec` entry that defines the week number inside the month. As an example, the following timer defines two events every month, on the first and third Mondays at 15:00:
+If no days are given for a month, all its days are selected. Days that don't exist in a month, such as `feb,30`, never match.
 
-    mon1,mon3,15:00
+### Weekdays
 
-As a special case, the 5th week is considered the last one to hold the given day, so that specifying an event on the last Friday of the month, for instance, is done simply as:
+Weekdays may form ranges that wrap around the week, so `fri-mon` is Friday, Saturday, Sunday and Monday.
 
-    fri5
+A digit after a weekday restricts it to a position within the month, with `5` meaning the last one. For example, `mon1,mon3` is the first and third Mondays of each month, and `fri5` is the last Friday of each month, even in months with only four Fridays.
 
-In addition to specifying precise weekdays, an interval may be used to define a larger span:
-
-    mon-fri,15:00
-
-This represents an event per day at 15:00, Monday through Friday, every week.
-
-The same interval syntax also works to define time spans, but the meaning is slightly different. For instance, consider this time span:
-
-    mon,14:00-16:00
-
-It defines an event every Monday that will take place at the earliest chance between 14:100 and 16:00. 
-
-Weekday spans define an event **every day** within the span. In contrast, time spans define a **single event** inside the defined span.
-
-That latter aspect may be changed via an explicit divisor, which may be specified as a `count`. For instance, consider this time span:
-
-    8:00-16:00/2
-
-This represents two events every day, one in the morning between 8:00 and 12:00, and another one between 12:00 and 16:00.
-
-While the following represents an hourly event, every day of the week:
-
-    0:00-24:00/24
-
-All of the time spans defined so far work similarly in the sense that the start of the span defines the earliest chance in which the event may start, and the end of the span defines the latest chance for the event to have started. For various reasons, though, it’s often useful to introduce some level of randomization inside the time span so that events won’t all start at exactly the same time. This may be achieved by replacing the time span dash character (`-`) by a tilde (`~`). Consider the following time span:
-
-    0:00~24:00/4
-
-It represents 4 events that will take place at a random time inside time windows of 6 hours each.
-
-Week spans that need to start or end during a specific week in the month can be defined by appending the week number to either the start or end of a week span. Consider the following schedules:
+Weekday ranges may be positioned at either end:
 
     mon1-fri
     mon-fri1
 
-The first example describes a week span that starts on the first Monday of the month and ends on the following Friday, while the second example defines a week span that starts on the Monday _before_ the first Friday of the month, which is when the span ends. 
+The first example describes a span that starts on the first Monday of the month and ends on the following Friday, while the second example describes a span that starts on the Monday _before_ the first Friday of the month, which is when the span ends.
 
 Consider the following calendar months of July and August 2019:
 
 ```
-        July                  August       
+        July                  August
 Su Mo Tu We Th Fr Sa   Su Mo Tu We Th Fr Sa
     1  2  3  4  5  6                1  2  3
  7  8  9 10 11 12 13    4  5  6  7  8  9 10
@@ -150,4 +121,19 @@ Su Mo Tu We Th Fr Sa   Su Mo Tu We Th Fr Sa
 28 29 30 31            25 26 27 28 29 30 31
 ```
 
-In the above context, `mon1-fri` corresponds describes a span from 5th of August to the 9th of August, while `mon-fri1` covers 29th of July until 2nd of August.
+In the above context, `mon1-fri` describes a span from the 5th of August to the 9th of August, while `mon-fri1` covers the 29th of July until the 2nd of August.
+
+### Times of day
+
+Clock times are `H:MM` or `HH:MM`, with `24:00` accepted as midnight (the same as `0:00`).
+
+Each clock span triggers a single event at its start. A single time is shorthand for a 15 minute span, so `9:45` is the span from 9:45 to 10:00. An explicit span is written with `-`, such as `8:00-17:00`. Spans may cross midnight, so `23:00-1:00` is from 23:00 to 1:00 the next day, and `0:00-0:00` (or `0:00-24:00`) is the whole day.
+
+A span may be split into repeated events by appending `/N`. With no unit, `N` is the number of equal parts the span is divided into, with an event at the start of each part. With a unit (`s`, `m` or `h`), `N` is the period between events in seconds, minutes or hours:
+
+    8:00-10:00/4
+    8:00-10:00/30m
+
+Both of these trigger events at 8:00, 8:30, 9:00 and 9:30. The end of a span is never itself an event.
+
+An event that's due while its span (or part of a span) is still open is picked up straight away. For example, with a schedule of `9:00-11:00`, if a service's schedule is added at 10:00, the service is started straight away rather than at 9:00 the next day.

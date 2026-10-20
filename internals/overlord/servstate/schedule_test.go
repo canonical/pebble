@@ -188,18 +188,15 @@ func (s *S) TestNextScheduleTimeInvalid(c *C) {
 }
 
 // TestNextScheduleTimeAfterAlwaysAdvances guards against a schedule
-// computation getting "stuck": for a schedule with a spread (randomised)
-// window that's currently open, re-deriving the next occurrence from a
-// previous occurrence can otherwise land back inside the same still-open
-// window with a new random offset, so it never actually advances into the
-// future. That would cause a scheduled start's "next" time to be treated as
-// immediately due again and again, spawning an unbounded chain of
-// service-schedule changes.
+// computation getting "stuck": for a split schedule span that's currently
+// open, re-deriving the next occurrence from a previous occurrence can
+// otherwise land on a part of the span that started before now. That would
+// cause a scheduled start's "next" time to be treated as immediately due
+// again and again, spawning an unbounded chain of service-schedule changes.
 func (s *S) TestNextScheduleTimeAfterAlwaysAdvances(c *C) {
 	now := time.Now()
-	// A schedule with a spread window that's open right now: re-evaluating
-	// from a previous occurrence can otherwise land back inside the same
-	// still-open window with a new random offset.
+	// A split span that's open right now: re-evaluating from a previous
+	// occurrence can otherwise land on a part of the span that's in the past.
 	sched := fmt.Sprintf("%02d:%02d-%02d:%02d/2", now.Hour(), now.Minute(), (now.Hour()+1)%24, now.Minute())
 
 	last := now.Add(-24 * time.Hour)
