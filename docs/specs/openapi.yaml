@@ -1614,6 +1614,10 @@ components:
         outdated:
           type: boolean
           description: True if the service was started with an older plan definition and is now outdated.
+        scheduled:
+          type: string
+          format: date-time
+          description: "[Time](#time) of the service's next scheduled start, if it has a schedule configured and is waiting for it."
     changeInfo:
       type: object
       properties:
