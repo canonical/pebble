@@ -87,19 +87,26 @@ func (c *Client) SetLabels(serviceName string, labels map[string]string) {
 		return
 	}
 
+	// Encode labels now to save time later
+	c.labels[serviceName] = c.encodeLabels(serviceName, labels)
+}
+
+// encodeLabels returns the JSON stream labels for a service: the given labels
+// plus the Loki-specific default labels.
+func (c *Client) encodeLabels(serviceName string, labels map[string]string) json.RawMessage {
 	// Make a copy to avoid altering the original map
-	newLabels := maps.Clone(labels)
+	newLabels := make(map[string]string, len(labels)+1)
+	maps.Copy(newLabels, labels)
 
 	// Add Loki-specific default labels
 	newLabels["pebble_service"] = serviceName
 
-	// Encode labels now to save time later
 	marshalledLabels, err := json.Marshal(newLabels)
 	if err != nil {
 		// Can't happen as map[string]string will always be marshallable
 		logger.Panicf("Loki client for %q: cannot marshal labels: %v", c.options.TargetName, err)
 	}
-	c.labels[serviceName] = marshalledLabels
+	return marshalledLabels
 }
 
 func (c *Client) Add(entry servicelog.Entry) error {
@@ -189,9 +196,15 @@ func (c *Client) buildRequest() lokiRequest {
 
 	var req lokiRequest
 	for _, service := range services {
+		labels, ok := c.labels[service]
+		if !ok {
+			// No labels stored (never set, or removed while entries were still
+			// buffered): Loki rejects a null or empty stream, so use the defaults.
+			labels = c.encodeLabels(service, nil)
+		}
 		entries := bucketedEntries[service]
 		stream := lokiStream{
-			Labels:  c.labels[service],
+			Labels:  labels,
 			Entries: entries,
 		}
 		req.Streams = append(req.Streams, stream)
