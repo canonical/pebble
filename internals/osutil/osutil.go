@@ -23,5 +23,5 @@ import (
 	"errors"
 )
 
-// Some things are not implemented on darwin
-var ErrDarwin = errors.New("not implemented on darwin")
+// Some things are not implemented on non-Linux systems.
+var ErrNotImplemented = errors.New("not implemented")

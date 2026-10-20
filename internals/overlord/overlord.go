@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -25,7 +26,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/canonical/x-go/randutil"
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/cmd"
@@ -293,22 +293,24 @@ func (o *Overlord) Extension() Extension {
 }
 
 func getCurrentBootID() (string, error) {
-	curBootID, err := osutil.BootID()
-	if err != nil {
-		return "", fmt.Errorf("fatal: cannot find current boot ID: %v", err)
-	}
+	psuedoBootID := fmt.Sprintf("psuedo-%s", rand.Text())
 	// If pebble is PID 1 we don't care about /proc/sys/kernel/random/boot_id
 	// as we are most likely running in a container. LXD mounts it's own boot_id
 	// to correctly emulate the boot_id behaviour of non-containerized systems.
 	// Within containerd/docker, boot_id is consistent with the host, which provides
-	// us no context of restarts, so instead fallback to /proc/sys/kernel/random/uuid.
+	// us no context of restarts. Since pebble never exec's itself, we can assume
+	// if we've reached here that the system "rebooted".
 	if os.Getpid() == 1 {
-		curBootID, err = randutil.RandomKernelUUID()
-		if err != nil {
-			return "", fmt.Errorf("fatal: cannot generate psuedo boot-id: %v", err)
-		}
+		return psuedoBootID, nil
 	}
 
+	curBootID, err := osutil.BootID()
+	if errors.Is(err, osutil.ErrNotImplemented) {
+		// On systems that don't support boot id, always return a psuedo boot id.
+		return psuedoBootID, nil
+	} else if err != nil {
+		return "", fmt.Errorf("fatal: cannot find current boot ID: %v", err)
+	}
 	return curBootID, nil
 }
 
