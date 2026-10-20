@@ -4,7 +4,7 @@ It can be useful to start a service periodically, either to ensure that a servic
 is no longer stopped or to perform some action.
 
 For example, if you have a service that handles software updates, an administrator
-might manually stop this service while they perform maintainence on a system. If
+might manually stop this service while they perform maintenance on a system. If
 the administrator forgets to start the service again, important software updates
 might be missed. By setting a schedule to start the service, we can ensure it
 is running again.
