@@ -34,7 +34,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
-	"github.com/canonical/pebble/internals/timeutil"
+	"github.com/canonical/pebble/internals/schedule"
 )
 
 // SectionExtension allows the plan layer schema to be extended without
@@ -919,7 +919,7 @@ func (layer *Layer) Validate() error {
 			}
 		}
 		if service.Schedule != "" {
-			_, err := timeutil.ParseSchedule(service.Schedule)
+			_, err := schedule.Parse(service.Schedule)
 			if err != nil {
 				return &FormatError{
 					Message: fmt.Sprintf("plan service %q schedule %q invalid: %v", name, service.Schedule, err),

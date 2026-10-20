@@ -615,8 +615,8 @@ var planTests = []planTest{{
 				command: cmd -v [ foo [ --bar ] ]
 	`},
 }, {
-	summary: `Invalid service schedule: cannot nest [ ... ] groups`,
-	error:   `plan service \"svc1\" schedule \"fry\" invalid: cannot parse \"fry\": \"fry\" is not a valid weekday`,
+	summary: `Invalid service schedule`,
+	error:   `plan service "svc1" schedule "fry" invalid: cannot parse schedule "fry": "fry" is not a valid month, weekday, day or time`,
 	input: []string{`
 		services:
 			"svc1":

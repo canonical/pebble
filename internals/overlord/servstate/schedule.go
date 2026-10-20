@@ -22,7 +22,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
-	"github.com/canonical/pebble/internals/timeutil"
+	"github.com/canonical/pebble/internals/schedule"
 )
 
 const (
@@ -61,10 +61,6 @@ const (
 	// indefinitely).
 	scheduleNoPruneAttr = "service-schedule-no-prune"
 
-	// maxScheduleLookahead bounds how far in the future we search for the next
-	// scheduled start time.
-	maxScheduleLookahead = 366 * 24 * time.Hour
-
 	// scheduleMissThreshold is how overdue a scheduled start has to be before
 	// we call it out explicitly as "missed" in the task log.
 	scheduleMissThreshold = 5 * time.Second
@@ -85,27 +81,33 @@ type scheduleDetails struct {
 	Next        time.Time `json:"next"`
 }
 
-// nextScheduleTime parses the schedule, returning the next time that it fires,
-// according to the current time.
+// nextScheduleTime parses the schedule, returning the next time that it fires
+// given the last time it fired, according to the current time. It returns the
+// zero time if the schedule never fires again.
+//
+// The result may be before the current time, when the current time is inside
+// a span of the schedule which hasn't fired since last.
 func nextScheduleTime(scheduleStr string, last time.Time) (time.Time, error) {
-	schedules, err := timeutil.ParseSchedule(scheduleStr)
+	sched, err := schedule.Parse(scheduleStr)
 	if err != nil {
 		return time.Time{}, err
 	}
-	d := timeutil.Next(schedules, last, maxScheduleLookahead)
-	return timeNow().Add(d), nil
+	next, ok := sched.Next(last, timeNow())
+	if !ok {
+		return time.Time{}, nil
+	}
+	return next, nil
 }
 
 // nextScheduleTimeAfter is like nextScheduleTime, but guarantees that the
 // result (if non-zero) is strictly after the current time.
 //
-// This matters because timeutil.Next can return a time that isn't after now
-// even when "last" is itself a past occurrence: for a schedule with a spread
-// (randomised) window, re-evaluating from a previous occurrence can land back
-// inside the same still-open window with a new random offset. Without this
-// guard, that can result in a scheduled start's "next" time never actually
-// advancing into the future, causing it to be treated as immediately due
-// again and again.
+// This matters because schedule.Next can return a time that isn't after now
+// even when "last" is itself a past occurrence: when "last" is far enough in
+// the past, a span (or split part of a span) that started after "last" but
+// before now is still considered pending. Without this guard, that can
+// result in a scheduled start's "next" time never actually advancing into
+// the future, causing it to be treated as immediately due again and again.
 //
 // Re-deriving from the current time instead forces progress, since "now" is
 // always considered part of whatever window contains it, so that window gets
@@ -372,9 +374,8 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 		if existing[name] || config.Schedule == "" {
 			continue
 		}
-		// Use "yesterday" as the reference point so that a schedule window
-		// that's already open today is picked up immediately, without
-		// having timeutil step forward one day at a time from long ago.
+		// Use "yesterday" as the reference point so that a schedule span
+		// that's already open now is picked up immediately.
 		next, err := nextScheduleTime(config.Schedule, timeNow().Add(-24*time.Hour))
 		if err != nil {
 			logger.Noticef("Cannot parse schedule %q for service %q: %v", config.Schedule, name, err)
