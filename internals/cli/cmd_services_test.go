@@ -34,7 +34,7 @@ func (s *PebbleSuite) TestServices(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
-		{"name": "svc2", "current": "inactive", "startup": "enabled", "scheduled": "2030-04-28T17:05:23+12:00"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled", "schedule": "mon,9:00", "schedule-last": "2030-04-21T09:00:00+12:00", "schedule-next": "2030-04-28T09:00:00+12:00"},
 		{"name": "svc3", "current": "backoff", "startup": "enabled"}
 	]
 }`)
@@ -158,7 +158,7 @@ func (s *PebbleSuite) TestServicesNames(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "bar", "current": "active", "startup": "disabled", "current-since": "2022-04-28T17:05:23+12:00"},
-		{"name": "foo", "current": "inactive", "startup": "enabled", "scheduled": "2030-04-28T17:05:23+12:00"}
+		{"name": "foo", "current": "inactive", "startup": "enabled", "schedule": "0:00"}
 	]
 }`)
 	})
@@ -183,7 +183,7 @@ func (s *PebbleSuite) TestServicesJSON(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
-		{"name": "svc2", "current": "inactive", "startup": "enabled", "scheduled": "2030-04-28T17:05:23+12:00"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled", "schedule": "mon,9:00", "schedule-last": "2030-04-21T09:00:00+12:00", "schedule-next": "2030-04-28T09:00:00+12:00"},
 		{"name": "svc3", "current": "backoff", "startup": "enabled"}
 	]
 }`)
@@ -191,7 +191,7 @@ func (s *PebbleSuite) TestServicesJSON(c *check.C) {
 	rest, err := cli.ParserForTest().ParseArgs([]string{"services", "--format", "json"})
 	c.Assert(err, check.IsNil)
 	c.Assert(rest, check.HasLen, 0)
-	c.Check(s.Stdout(), check.Equals, `{"services":{"svc1":{"name":"svc1","startup":"enabled","current":"inactive","current-since":"2022-04-28T17:05:23+12:00"},"svc2":{"name":"svc2","startup":"enabled","current":"inactive","scheduled":"2030-04-28T17:05:23+12:00"},"svc3":{"name":"svc3","startup":"enabled","current":"backoff"}}}`+"\n")
+	c.Check(s.Stdout(), check.Equals, `{"services":{"svc1":{"name":"svc1","startup":"enabled","current":"inactive","current-since":"2022-04-28T17:05:23+12:00"},"svc2":{"name":"svc2","startup":"enabled","current":"inactive","schedule":"mon,9:00","schedule-last":"2030-04-21T09:00:00+12:00","schedule-next":"2030-04-28T09:00:00+12:00"},"svc3":{"name":"svc3","startup":"enabled","current":"backoff"}}}`+"\n")
 	c.Check(s.Stderr(), check.Equals, "")
 }
 
@@ -205,7 +205,7 @@ func (s *PebbleSuite) TestServicesYAML(c *check.C) {
     "status-code": 200,
     "result": [
 		{"name": "svc1", "current": "inactive", "startup": "enabled", "current-since": "2022-04-28T17:05:23+12:00"},
-		{"name": "svc2", "current": "inactive", "startup": "enabled", "scheduled": "2030-04-28T17:05:23+12:00"},
+		{"name": "svc2", "current": "inactive", "startup": "enabled", "schedule": "mon,9:00", "schedule-last": "2030-04-21T09:00:00+12:00", "schedule-next": "2030-04-28T09:00:00+12:00"},
 		{"name": "svc3", "current": "backoff", "startup": "enabled"}
 	]
 }`)
@@ -224,7 +224,9 @@ services:
         name: svc2
         startup: enabled
         current: inactive
-        scheduled: 2030-04-28T17:05:23+12:00
+        schedule: mon,9:00
+        schedule-last: 2030-04-21T09:00:00+12:00
+        schedule-next: 2030-04-28T09:00:00+12:00
     svc3:
         name: svc3
         startup: enabled

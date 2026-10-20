@@ -106,7 +106,7 @@ func serviceNotes(svc *client.ServiceInfo) string {
 	if svc.Outdated {
 		notes = append(notes, "outdated")
 	}
-	if !svc.Scheduled.IsZero() {
+	if svc.Schedule != "" {
 		notes = append(notes, "schedule")
 	}
 	if len(notes) == 0 {
