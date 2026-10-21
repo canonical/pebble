@@ -15,6 +15,7 @@
 package truststate
 
 import (
+	"bytes"
 	"crypto/x509"
 
 	"github.com/canonical/pebble/internals/logger"
@@ -60,4 +61,16 @@ func loadSystemCAs() (*x509.CertPool, []byte) {
 	}
 
 	return pool, pemBytes
+}
+
+// writePEMPart appends data to buf, ensuring it's separated from any
+// subsequent content by a newline.
+func writePEMPart(buf *bytes.Buffer, data []byte) {
+	if len(data) == 0 {
+		return
+	}
+	buf.Write(data)
+	if data[len(data)-1] != '\n' {
+		buf.WriteByte('\n')
+	}
 }

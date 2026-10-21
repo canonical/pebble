@@ -76,9 +76,10 @@ func (s *gathererSuite) TestPlanChangedPreservesPuller(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	g, err := newLogGathererInternal(
 		&plan.LogTarget{Name: "tgt1", Services: []string{"all"}},
+		nil,
 		&logGathererOptions{
 			bufferTimeout: 1 * time.Millisecond,
-			newClient: func(target *plan.LogTarget) (logClient, error) {
+			newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
 				return &testClient{bufferSize: 5, sendCh: received}, nil
 			},
 		},

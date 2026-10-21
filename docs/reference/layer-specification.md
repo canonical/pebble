@@ -312,7 +312,7 @@ log-targets:
 
     # (Optional) The name of the trust context used to validate the TLS
     # certificate presented by the remote log target. Only applicable to the
-    # "loki" and "opentelemetry" types. If not specified, the default" trust
+    # "loki" and "opentelemetry" types. If not specified, the "default" trust
     # context is used. See the "trust-contexts" section below for details.
     trust-context: <trust context name>
 
@@ -328,9 +328,17 @@ log-targets:
 #   CA certificate pool. This name is reserved and cannot be declared in a
 #   layer.
 # - "default": the trust context used by consumers (services, checks, log
-#   targets) that don't set "trust-context" explicitly. It may be declared
-#   in a layer to change what it includes (via "includes"), but cannot define
-#   trust values of its own. If undefined, "default" only includes "system".
+#   targets and "pebble exec") that don't set "trust-context" explicitly.
+#   If no layer declares it, "default" includes "system". It may be declared
+#   in a layer to change what it includes, but it must use
+#   "override: replace" and cannot define "x509" itself. A declared "default"
+#   without "include" includes nothing, so trusts no CA certificates.
+#
+# When a process (a service, an exec check or "pebble exec") uses a trust
+# context whose effective CA certificates differ from the system CA pool,
+# Pebble writes them to "$PEBBLE/trust/<trust context name>/x509-ca.pem"
+# (with permissions 0644) and points the process's SSL_CERT_FILE environment
+# variable at that file, unless SSL_CERT_FILE is already set explicitly.
 trust-contexts:
 
     <trust context name>:
@@ -341,24 +349,27 @@ trust-contexts:
         # The value 'merge' will ensure that values in this layer specification
         # are merged over existing definitions, whereas 'replace' will entirely
         # override the existing trust context spec in the plan with the same
-        # name.
+        # name. The "default" trust context must use 'replace'.
         override: merge | replace
 
-        # (Optional) A list of other trust context names whose CA
-        # certificates should also be trusted as part of this trust context
-        # (recursively, following further "include" lists). Use the
-        # built-in name "system" to include the host's default CA
-        # certificate pool. When merging, the "include" lists from each
-        # layer are appended together.
-        include:
-            - <other trust context name>
+        # (Optional) The names of other trust contexts whose CA certificates
+        # are trusted as the base of this trust context (recursively,
+        # following their own "include"). Either a single name or a list of
+        # names. Use the built-in name "system" to include the host's default
+        # CA certificate pool. To include nothing, leave it unset or provide
+        # an empty list. When merging, a later layer's "include" replaces the
+        # previous value.
+        include: <other trust context name> | [<other trust context name>, ...]
 
-        # (Optional) Configures the x509 CA certificates trusted directly by
-        # this trust context. Not allowed for the "default" trust context,
-        # which may only use "include".
-        tls:
+        # (Optional) Configures the x509 certificates trusted directly by
+        # this trust context. Not allowed for the "default" trust context.
+        # When merging, the nested fields are merged.
+        x509:
             # (Optional) One or more PEM-encoded CA certificates. When
-            # merging, the certificate data from each layer is concatenated.
+            # merging, the certificates from each layer are appended. The
+            # resolved trust context contains the certificates of all its
+            # included trust contexts (in order), followed by its own. In both
+            # cases, duplicate certificates are dropped, retaining the first.
             ca-cert: |
                 <PEM-encoded CA certificate(s)>
 

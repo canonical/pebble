@@ -285,7 +285,7 @@ func (s *execSuite) TestContextTrustContextSSLCertFile(c *C) {
 		TrustContexts: map[string]*plan.TrustContext{"vendorA": {
 			Name:     "vendorA",
 			Override: "replace",
-			TLS:      &plan.TLSTrustContext{CACert: testCACertPEM},
+			X509:     &plan.X509TrustContext{CACert: testCACertPEM},
 		}},
 		Services: map[string]*plan.Service{"svc1": {
 			Name:         "svc1",
@@ -314,7 +314,7 @@ func (s *execSuite) TestContextTrustContextSSLCertFileNotOverridden(c *C) {
 		TrustContexts: map[string]*plan.TrustContext{"vendorA": {
 			Name:     "vendorA",
 			Override: "replace",
-			TLS:      &plan.TLSTrustContext{CACert: testCACertPEM},
+			X509:     &plan.X509TrustContext{CACert: testCACertPEM},
 		}},
 		Services: map[string]*plan.Service{"svc1": {
 			Name:         "svc1",
@@ -333,6 +333,41 @@ func (s *execSuite) TestContextTrustContextSSLCertFileNotOverridden(c *C) {
 	c.Assert(waitErr, IsNil)
 	c.Check(stderr, Equals, "")
 	c.Check(stdout, Equals, "/custom/path/ca.pem")
+}
+
+// TestDefaultTrustContextSSLCertFile checks that, without a service context,
+// the command uses the "default" trust context.
+func (s *execSuite) TestDefaultTrustContextSSLCertFile(c *C) {
+	stdout, stderr, waitErr := s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "echo -n $SSL_CERT_FILE"},
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stderr, Equals, "")
+	c.Check(stdout, Equals, "")
+
+	err := s.daemon.overlord.PlanManager().AppendLayer(&plan.Layer{
+		Label: "layer1",
+		TrustContexts: map[string]*plan.TrustContext{
+			"vendorA": {
+				Name:     "vendorA",
+				Override: "replace",
+				X509:     &plan.X509TrustContext{CACert: testCACertPEM},
+			},
+			"default": {
+				Name:     "default",
+				Override: "replace",
+				Include:  []string{"system", "vendorA"},
+			},
+		},
+	}, false)
+	c.Assert(err, IsNil)
+
+	stdout, stderr, waitErr = s.exec(c, "", &client.ExecOptions{
+		Command: []string{"/bin/sh", "-c", "cat $SSL_CERT_FILE"},
+	})
+	c.Assert(waitErr, IsNil)
+	c.Check(stderr, Equals, "")
+	c.Check(strings.Contains(stdout, strings.TrimSpace(testCACertPEM)), Equals, true)
 }
 
 func (s *execSuite) TestCurrentUserGroup(c *C) {

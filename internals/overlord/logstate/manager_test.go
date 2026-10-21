@@ -44,7 +44,7 @@ func (*managerSuite) TestPlanChange(c *C) {
 			return &testClient{}, nil
 		},
 	}
-	m := NewLogManager()
+	m := NewLogManager(nil)
 	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
 		return newLogGathererInternal(t, trustMgr, &gathererOptions)
@@ -138,7 +138,7 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 		},
 	}
 
-	m := NewLogManager()
+	m := NewLogManager(nil)
 	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
 		return newLogGathererInternal(t, trustMgr, &gathererOptions)
@@ -221,7 +221,7 @@ func (s *managerSuite) TestLabels(c *C) {
 		notifySetLabels: make(chan struct{}, 2),
 	}
 
-	m := NewLogManager()
+	m := NewLogManager(nil)
 	defer m.Stop()
 	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
 		return newLogGathererInternal(t, trustMgr, &logGathererOptions{

@@ -137,30 +137,21 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 }
 
 // resolveExecTrustContext resolves the trust context configured for the
-// service/workload. If a trust context is returned, it must be closed by the
-// caller.
+// service context, or the default trust context if no service context is
+// given. The returned trust context must be closed by the caller.
 func resolveExecTrustContext(c *Command, p *plan.Plan, serviceContextName string) (*truststate.TrustContext, error) {
-	if serviceContextName == "" {
-		return nil, nil
-	}
-	service, ok := p.Services[serviceContextName]
-	if !ok {
-		return nil, nil
+	var trustContextName string
+	if service, ok := p.Services[serviceContextName]; ok {
+		trustContextName = service.TrustContext
 	}
 
 	trustMgr := c.d.overlord.TrustManager()
 	if trustMgr == nil {
-		return nil, fmt.Errorf(
-			"cannot resolve trust context %q for service context %q: no trust manager",
-			service.TrustContext, serviceContextName,
-		)
+		return nil, fmt.Errorf("cannot resolve trust context %q: no trust manager", trustContextName)
 	}
-	trustContext, err := trustMgr.TrustContext(service.TrustContext)
+	trustContext, err := trustMgr.TrustContext(trustContextName)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"cannot resolve trust context %q for service context %q: %v",
-			service.TrustContext, serviceContextName, err,
-		)
+		return nil, fmt.Errorf("cannot resolve trust context %q: %v", trustContextName, err)
 	}
 
 	return trustContext, nil

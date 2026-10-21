@@ -34,7 +34,9 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -79,11 +81,21 @@ type TrustManager struct {
 	// the in-memory pool always will.
 	systemPEM []byte
 
+	// fileMu serialises writing and removing CA bundle files, and guards
+	// written. When both are needed, fileMu must be acquired before mu.
+	fileMu sync.Mutex
+	// written maps a trust context name to the shortSha of the version whose
+	// CA bundle file is currently on disk.
+	written map[string]string
+
 	mu sync.Mutex
 	// current holds the latest resolved version for every trust context
 	// name currently known to the manager (built-ins plus anything declared
 	// in the plan).
 	current map[string]*trustContextVersion
+	// refs counts the outstanding TrustContext references for each trust
+	// context name, across all versions.
+	refs map[string]int
 }
 
 // NewManager creates a new TrustManager which maintains CA bundle files
@@ -93,7 +105,9 @@ type TrustManager struct {
 func NewManager(trustDir string) *TrustManager {
 	m := &TrustManager{
 		trustDir: trustDir,
+		written:  make(map[string]string),
 		current:  make(map[string]*trustContextVersion),
+		refs:     make(map[string]int),
 	}
 	m.systemPool, m.systemPEM = loadSystemCAs()
 
@@ -114,7 +128,10 @@ func (m *TrustManager) Ensure() error {
 // PlanChanged is called (normally registered as a plan change listener)
 // whenever the plan changes. It re-resolves every trust context declared in
 // the new plan (as well as the "system" and "default" built-ins), updating
-// the CA pool and PEM bundle available to consumers.
+// the CA pool and PEM bundle available to consumers. CA bundle files that
+// have already been written are rewritten with the new content, and those
+// belonging to trust contexts removed from the plan are removed once they
+// are no longer referenced.
 //
 // If a trust context can't be resolved (for example, because it includes an
 // unknown trust context), an error is logged and the trust context's
@@ -138,7 +155,8 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 		resolutions = append(resolutions, resolution{name: name, data: data, err: err})
 	}
 
-	var cleanup []*trustContextVersion
+	m.fileMu.Lock()
+	defer m.fileMu.Unlock()
 
 	m.mu.Lock()
 	newCurrent := make(map[string]*trustContextVersion, len(keep))
@@ -153,44 +171,40 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 			continue
 		}
 		if old != nil && old.shortSha == r.data.shortSha {
-			// Nothing of substance changed, keep the existing version
-			// (and its references, and its file on disk) as-is.
+			// Nothing of substance changed, keep the existing version.
 			newCurrent[r.name] = old
 			continue
 		}
-		v := &trustContextVersion{
+		newCurrent[r.name] = &trustContextVersion{
 			mgr:          m,
 			name:         r.name,
 			shortSha:     r.data.shortSha,
 			pemBundle:    r.data.pemBundle,
 			pool:         r.data.pool,
 			isSystemPool: r.data.isSystemPool,
-			filePath:     bundleFilePath(m.trustDir, r.name, r.data.shortSha),
-		}
-		newCurrent[r.name] = v
-		if old != nil {
-			old.superseded = true
-			if old.maybeCleanupLocked() {
-				cleanup = append(cleanup, old)
-			}
-		}
-	}
-	// Trust contexts that used to exist but are no longer declared anywhere
-	// (removed from the plan).
-	for name, old := range m.current {
-		if keep[name] {
-			continue
-		}
-		old.superseded = true
-		if old.maybeCleanupLocked() {
-			cleanup = append(cleanup, old)
 		}
 	}
 	m.current = newCurrent
+	var rewrite []*trustContextVersion
+	var remove []string
+	for name, sha := range m.written {
+		v, ok := m.current[name]
+		switch {
+		case !ok && m.refs[name] == 0:
+			remove = append(remove, name)
+		case ok && v.shortSha != sha:
+			rewrite = append(rewrite, v)
+		}
+	}
 	m.mu.Unlock()
 
-	for _, v := range cleanup {
-		v.cleanup()
+	for _, v := range rewrite {
+		if err := m.writeFileLocked(v); err != nil {
+			logger.Noticef("Cannot update CA bundle file: %v", err)
+		}
+	}
+	for _, name := range remove {
+		m.removeFileLocked(name)
 	}
 }
 
@@ -205,7 +219,7 @@ func (m *TrustManager) TrustContext(name string) (*TrustContext, error) {
 	m.mu.Lock()
 	v, ok := m.current[name]
 	if ok {
-		v.addRef()
+		m.refs[name]++
 	}
 	m.mu.Unlock()
 	if !ok {
@@ -214,12 +228,88 @@ func (m *TrustManager) TrustContext(name string) (*TrustContext, error) {
 	return &TrustContext{version: v}, nil
 }
 
-func (m *TrustManager) ensureTrustDir() error {
-	return osutil.Mkdir(m.trustDir, 0o755, &osutil.MkdirOptions{
+// release drops a reference previously obtained via TrustContext, removing
+// the trust context's CA bundle file if it has been removed from the plan and
+// this was the last outstanding reference.
+func (m *TrustManager) release(name string) {
+	m.mu.Lock()
+	m.refs[name]--
+	unused := m.refs[name] <= 0
+	if unused {
+		delete(m.refs, name)
+	}
+	_, current := m.current[name]
+	m.mu.Unlock()
+	if unused && !current {
+		m.fileMu.Lock()
+		m.removeFileLocked(name)
+		m.fileMu.Unlock()
+	}
+}
+
+// ensureFile makes sure the CA bundle file for the trust context that v
+// belongs to exists and holds the latest resolved version of that trust
+// context, and returns its path.
+func (m *TrustManager) ensureFile(v *trustContextVersion) (string, error) {
+	m.fileMu.Lock()
+	defer m.fileMu.Unlock()
+	m.mu.Lock()
+	latest, ok := m.current[v.name]
+	m.mu.Unlock()
+	if !ok {
+		// The trust context has been removed from the plan, but v is still
+		// referenced. Serve the file as it was last written (if it was).
+		latest = v
+		if _, written := m.written[v.name]; written {
+			return bundleFilePath(m.trustDir, v.name), nil
+		}
+	}
+	if m.written[latest.name] == latest.shortSha {
+		return bundleFilePath(m.trustDir, latest.name), nil
+	}
+	if err := m.writeFileLocked(latest); err != nil {
+		return "", err
+	}
+	return bundleFilePath(m.trustDir, latest.name), nil
+}
+
+// writeFileLocked writes the CA bundle file for v. It must be called while
+// holding fileMu.
+func (m *TrustManager) writeFileLocked(v *trustContextVersion) error {
+	path := bundleFilePath(m.trustDir, v.name)
+	err := osutil.Mkdir(filepath.Dir(path), 0o755, &osutil.MkdirOptions{
 		MakeParents: true,
 		ExistOK:     true,
 		Chmod:       true,
 	})
+	if err != nil {
+		return fmt.Errorf("cannot create trust directory: %w", err)
+	}
+	if err := osutil.AtomicWriteFile(path, v.pemBundle, 0o644, 0); err != nil {
+		return fmt.Errorf("cannot write CA bundle file for trust context %q: %w", v.name, err)
+	}
+	m.written[v.name] = v.shortSha
+	return nil
+}
+
+// removeFileLocked removes the CA bundle file (and its directory) for the
+// named trust context, unless the trust context is (again) current or still
+// referenced. It must be called while holding fileMu.
+func (m *TrustManager) removeFileLocked(name string) {
+	m.mu.Lock()
+	_, current := m.current[name]
+	inUse := m.refs[name] > 0
+	m.mu.Unlock()
+	if current || inUse {
+		return
+	}
+	if _, ok := m.written[name]; !ok {
+		return
+	}
+	delete(m.written, name)
+	if err := os.RemoveAll(filepath.Dir(bundleFilePath(m.trustDir, name))); err != nil {
+		logger.Noticef("Cannot remove stale CA bundle file for trust context %q: %v", name, err)
+	}
 }
 
 // resolvedTrust holds the trust data for a single trust context.
@@ -231,81 +321,121 @@ type resolvedTrust struct {
 }
 
 // resolve computes the fully-resolved CA pool and PEM bundle for the named
-// trust context, following "include" chains (including through the
-// synthesized "default" trust context). Cycles are broken by tracking which
-// trust contexts have already been visited: since "include" only ever adds
-// to the resulting set of trusted CAs, revisiting an already-included trust
-// context can't change the result, so it's simply skipped.
+// trust context. The certificates of each included trust context (in order,
+// recursively) come first, followed by the trust context's own certificates.
+// Duplicate certificates are dropped, retaining the first. Cycles are broken
+// by tracking which trust contexts have already been visited: since
+// "include" only ever adds to the resulting set of trusted CAs, revisiting an
+// already-included trust context can't change the result, so it's simply
+// skipped.
 func (m *TrustManager) resolve(name string, pl *plan.Plan) (*resolvedTrust, error) {
 	visited := make(map[string]bool)
-	queue := []string{name}
 	includesSystem := false
-	var pemParts [][]byte
+	// parts holds the trust contexts' CA certificate data in order, where a
+	// nil entry marks the position of the system CA certificates.
+	var parts [][]byte
 
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
+	var visit func(cur string) error
+	visit = func(cur string) error {
 		if visited[cur] {
-			continue
+			return nil
 		}
 		visited[cur] = true
 
 		if cur == SystemTrustContext {
 			includesSystem = true
-			continue
+			parts = append(parts, nil)
+			return nil
 		}
 
 		ctx, ok := lookupTrustContext(cur, pl)
 		if !ok {
-			return nil, fmt.Errorf("includes unknown trust context %q", cur)
+			return fmt.Errorf("includes unknown trust context %q", cur)
 		}
-		if ctx.TLS != nil && len(ctx.TLS.CACert) > 0 {
-			pemParts = append(pemParts, []byte(ctx.TLS.CACert))
+		for _, include := range ctx.Include {
+			if err := visit(include); err != nil {
+				return err
+			}
 		}
-		queue = append(queue, ctx.Include...)
+		if ctx.X509 != nil && len(ctx.X509.CACert) > 0 {
+			parts = append(parts, []byte(ctx.X509.CACert))
+		}
+		return nil
+	}
+	if err := visit(name); err != nil {
+		return nil, err
 	}
 
 	var pool *x509.CertPool
-	var bundle bytes.Buffer
 	if includesSystem {
 		pool = m.systemPool.Clone()
-		writePEMPart(&bundle, m.systemPEM)
 	} else {
 		pool = x509.NewCertPool()
 	}
-
-	for _, part := range pemParts {
-		if !pool.AppendCertsFromPEM(part) {
+	var bundle bytes.Buffer
+	seen := make(map[[sha256.Size]byte]bool)
+	for _, part := range parts {
+		if part == nil {
+			// The system CA certificates are already in the pool, but
+			// still need adding to the bundle (and seen).
+			appendCerts(&bundle, nil, seen, m.systemPEM)
+			continue
+		}
+		if appendCerts(&bundle, pool, seen, part) == 0 {
 			return nil, fmt.Errorf("no valid CA certificate found for trust context %q", name)
 		}
-		writePEMPart(&bundle, part)
 	}
 
 	pemBundle := bundle.Bytes()
-	sum := sha256.Sum256(pemBundle)
-	shortSha := hex.EncodeToString(sum[:])[:8]
+	h := sha256.New()
+	if includesSystem {
+		// The system CA pool may not be (fully) represented in the bundle.
+		h.Write([]byte("system\n"))
+	}
+	h.Write(pemBundle)
+	shortSha := hex.EncodeToString(h.Sum(nil))[:8]
 
 	return &resolvedTrust{
 		pemBundle:    pemBundle,
 		pool:         pool,
-		isSystemPool: includesSystem && len(pemParts) == 0,
+		isSystemPool: pool.Equal(m.systemPool),
 		shortSha:     shortSha,
 	}, nil
 }
 
-// writePEMPart appends data to buf, ensuring it's separated from any
-// subsequent content by a newline.
-func writePEMPart(buf *bytes.Buffer, data []byte) {
-	if len(data) == 0 {
-		return
-	}
-	buf.Write(data)
-	if data[len(data)-1] != '\n' {
-		buf.WriteByte('\n')
+// appendCerts parses the PEM encoded certificates in data, and appends each
+// one not yet seen to buf (and pool, if not nil). It returns the number of
+// valid certificates found in data, including duplicates.
+func appendCerts(buf *bytes.Buffer, pool *x509.CertPool, seen map[[sha256.Size]byte]bool, data []byte) int {
+	count := 0
+	for {
+		var block *pem.Block
+		block, data = pem.Decode(data)
+		if block == nil {
+			return count
+		}
+		if block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			continue
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			continue
+		}
+		count++
+		sum := sha256.Sum256(block.Bytes)
+		if seen[sum] {
+			continue
+		}
+		seen[sum] = true
+		if pool != nil {
+			pool.AddCert(cert)
+		}
+		pem.Encode(buf, block)
 	}
 }
 
-// lookupTrustContext returns the trust context configuration for name.
+// lookupTrustContext returns the trust context configuration for name. When
+// "default" isn't declared in the plan, it implicitly includes "system".
 func lookupTrustContext(name string, pl *plan.Plan) (*plan.TrustContext, bool) {
 	ctx, ok := pl.TrustContexts[name]
 	if !ok && name == DefaultTrustContext {
@@ -319,7 +449,7 @@ func lookupTrustContext(name string, pl *plan.Plan) (*plan.TrustContext, bool) {
 }
 
 // bundleFilePath returns the path of the maintained CA bundle file for the
-// named trust context's given content hash.
-func bundleFilePath(trustDir, name, shortSha string) string {
-	return filepath.Join(trustDir, fmt.Sprintf("%s-%s-tls-ca-bundle.pem", name, shortSha))
+// named trust context.
+func bundleFilePath(trustDir, name string) string {
+	return filepath.Join(trustDir, name, "x509-ca.pem")
 }

@@ -22,7 +22,7 @@ Trust contexts are declared in the plan's top-level `trust-contexts` section:
 trust-contexts:
     vendorA:
         override: merge
-        tls:
+        x509:
             ca-cert: |
                 -----BEGIN CERTIFICATE-----
                 ...
@@ -52,7 +52,7 @@ with that CA certificate:
 trust-contexts:
     vendorA:
         override: merge
-        tls:
+        x509:
             ca-cert: |
                 -----BEGIN CERTIFICATE-----
                 MIIDXTCCAkWgAwIBAgIJAJC1H...
@@ -87,7 +87,9 @@ services:
 
 When `myservice` starts, the `vendorA` trust context is resolved and sets the
 `SSL_CERT_FILE` environment variable to point at a PEM bundle containing
-`vendorA`'s CA certificate(s). Most TLS libraries (including Go's `crypto/x509`
+`vendorA`'s CA certificate(s). Pebble writes this bundle to
+`$PEBBLE/trust/vendorA/x509-ca.pem`. If the trust context resolves to exactly
+the system CA pool, `SSL_CERT_FILE` isn't set. Most TLS libraries (including Go's `crypto/x509`
 and OpenSSL-based stacks) honor `SSL_CERT_FILE` automatically, so `myservice`
 should trust `https://api.internal.example.com` without any code changes.
 
@@ -169,18 +171,22 @@ you add it to `default` (see below).
 If most things in your plan need to trust `vendorA`, it may be simpler to add
 it to the `default` trust context instead of setting `trust-context` everywhere.
 The `default` trust context can only use `include` (i.e. it can't declare its
-own `tls.ca-cert` directly):
+own `x509.ca-cert` directly), and it must use `override: replace`:
 
 ```yaml
 trust-contexts:
     default:
-        override: merge
+        override: replace
         include: [system, vendorA]
 ```
 
 With this in place, any service, check, log target or `pebble exec` that doesn't
 set `trust-context` explicitly will trust `vendorA`'s CA in addition to the
 system CA pool.
+
+Because `default` is replaced, the `include` list must name everything it should
+trust. If you declare `default` without `include`, it trusts no CA certificates
+at all, not even the system CA pool.
 
 ## Combine multiple CAs
 
@@ -191,14 +197,14 @@ set of trusted CAs. For example, to trust both `vendorA` and `vendorB`:
 trust-contexts:
     vendorA:
         override: merge
-        tls:
+        x509:
             ca-cert: |
                 -----BEGIN CERTIFICATE-----
                 ...
                 -----END CERTIFICATE-----
     vendorB:
         override: merge
-        tls:
+        x509:
             ca-cert: |
                 -----BEGIN CERTIFICATE-----
                 ...
@@ -213,6 +219,10 @@ services:
         command: /usr/bin/myservice
         trust-context: combined
 ```
+
+The CA certificates of the included trust contexts come first, in order,
+followed by the trust context's own `x509.ca-cert`. Duplicate certificates are
+dropped. `include` can also be a single name, such as `include: vendorA`.
 
 Use the built-in name `system` in an `include` list to add the host's system CA
 pool alongside your custom CAs:

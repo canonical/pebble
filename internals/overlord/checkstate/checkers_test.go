@@ -55,7 +55,7 @@ func newTestTrustManager(c *C, caCertPEM string) *truststate.TrustManager {
 		TrustContexts: map[string]*plan.TrustContext{
 			"vendorA": {
 				Name: "vendorA",
-				TLS:  &plan.TLSTrustContext{CACert: caCertPEM},
+				X509: &plan.X509TrustContext{CACert: caCertPEM},
 			},
 		},
 	})

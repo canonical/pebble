@@ -18,7 +18,6 @@ import (
 	"crypto/x509"
 	"os"
 	"path/filepath"
-	"strings"
 
 	. "gopkg.in/check.v1"
 
@@ -65,7 +64,7 @@ func (s *trustSuite) TestCustomTrustContextPoolAndFile(c *C) {
 		TrustContexts: map[string]*plan.TrustContext{
 			"vendorA": {
 				Name: "vendorA",
-				TLS:  &plan.TLSTrustContext{CACert: string(caPEM)},
+				X509: &plan.X509TrustContext{CACert: string(caPEM)},
 			},
 		},
 	})
@@ -81,12 +80,17 @@ func (s *trustSuite) TestCustomTrustContextPoolAndFile(c *C) {
 
 	path, err := tc.CABundleFile()
 	c.Assert(err, IsNil)
-	c.Assert(strings.HasPrefix(filepath.Base(path), "vendorA-"), Equals, true)
-	c.Assert(strings.HasSuffix(filepath.Base(path), "-tls-ca-bundle.pem"), Equals, true)
+	c.Assert(filepath.Base(path), Equals, "x509-ca.pem")
+	c.Assert(filepath.Base(filepath.Dir(path)), Equals, "vendorA")
+	c.Assert(filepath.Base(filepath.Dir(filepath.Dir(path))), Equals, "trust")
+
+	st, err := os.Stat(path)
+	c.Assert(err, IsNil)
+	c.Assert(st.Mode().Perm(), Equals, os.FileMode(0o644))
 
 	data, err := os.ReadFile(path)
 	c.Assert(err, IsNil)
-	c.Assert(data, DeepEquals, caPEM)
+	c.Assert(string(data), Equals, string(caPEM))
 }
 
 func (s *trustSuite) TestIncludeCyclesAreBroken(c *C) {
@@ -99,8 +103,8 @@ func (s *trustSuite) TestIncludeCyclesAreBroken(c *C) {
 
 	mgr.PlanChanged(&plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
-			"a": {Name: "a", Include: []string{"b"}, TLS: &plan.TLSTrustContext{CACert: string(aPEM)}},
-			"b": {Name: "b", Include: []string{"a"}, TLS: &plan.TLSTrustContext{CACert: string(bPEM)}},
+			"a": {Name: "a", Include: []string{"b"}, X509: &plan.X509TrustContext{CACert: string(aPEM)}},
+			"b": {Name: "b", Include: []string{"a"}, X509: &plan.X509TrustContext{CACert: string(bPEM)}},
 		},
 	})
 
@@ -125,7 +129,7 @@ func (s *trustSuite) TestDefaultIncludesSystemAndCustom(c *C) {
 
 	mgr.PlanChanged(&plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
-			"vendorA": {Name: "vendorA", TLS: &plan.TLSTrustContext{CACert: string(caPEM)}},
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
 			"default": {Name: "default", Include: []string{"vendorA"}},
 		},
 	})
@@ -148,7 +152,7 @@ func (s *trustSuite) TestUnknownIncludeRetainsPreviousGoodState(c *C) {
 
 	mgr.PlanChanged(&plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
-			"vendorA": {Name: "vendorA", TLS: &plan.TLSTrustContext{CACert: string(caPEM)}},
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
 		},
 	})
 
@@ -179,7 +183,7 @@ func (s *trustSuite) TestUnknownIncludeRetainsPreviousGoodState(c *C) {
 	c.Assert(err, IsNil)
 }
 
-func (s *trustSuite) TestFileLifecycleAcrossUpdatesAndRelease(c *C) {
+func (s *trustSuite) TestFileUpdatedInPlace(c *C) {
 	mgr := newTestManager(c)
 
 	pem1, _, _ := generateCACert(c, "vendorA-v1")
@@ -187,43 +191,64 @@ func (s *trustSuite) TestFileLifecycleAcrossUpdatesAndRelease(c *C) {
 
 	mgr.PlanChanged(&plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
-			"vendorA": {Name: "vendorA", TLS: &plan.TLSTrustContext{CACert: string(pem1)}},
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(pem1)}},
 		},
 	})
 
 	tcOld, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	oldPath, err := tcOld.CABundleFile()
+	defer tcOld.Close()
+	path, err := tcOld.CABundleFile()
 	c.Assert(err, IsNil)
-	_, err = os.Stat(oldPath)
+	data, err := os.ReadFile(path)
 	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, string(pem1))
 
 	mgr.PlanChanged(&plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
-			"vendorA": {Name: "vendorA", TLS: &plan.TLSTrustContext{CACert: string(pem2)}},
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(pem2)}},
 		},
 	})
 
-	// The old version's file must still be present: tcOld hasn't been
-	// released yet, even though it's now superseded.
-	_, err = os.Stat(oldPath)
+	// The file, having already been written, is updated with the new
+	// content straight away.
+	data, err = os.ReadFile(path)
 	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, string(pem2))
 
 	tcNew, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
+	defer tcNew.Close()
+	c.Assert(tcNew.Version(), Not(Equals), tcOld.Version())
 	newPath, err := tcNew.CABundleFile()
 	c.Assert(err, IsNil)
-	c.Assert(newPath, Not(Equals), oldPath)
+	c.Assert(newPath, Equals, path)
+}
 
-	// Releasing the superseded reference should now clean up its file.
-	tcOld.Close()
-	_, err = os.Stat(oldPath)
-	c.Assert(os.IsNotExist(err), Equals, true)
+func (s *trustSuite) TestRemovedTrustContextFileKeptWhileReferenced(c *C) {
+	mgr := newTestManager(c)
 
-	// The new (current) version's file must remain until it's released.
-	_, err = os.Stat(newPath)
+	caPEM, _, _ := generateCACert(c, "vendorA")
+	mgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
+		},
+	})
+
+	tc, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	tcNew.Close()
+	path, err := tc.CABundleFile()
+	c.Assert(err, IsNil)
+
+	mgr.PlanChanged(&plan.Plan{})
+
+	// Still referenced, so the file remains.
+	_, err = os.Stat(path)
+	c.Assert(err, IsNil)
+
+	tc.Close()
+	_, err = os.Stat(filepath.Dir(path))
+	c.Assert(os.IsNotExist(err), Equals, true)
 }
 
 func (s *trustSuite) TestRemovedTrustContextCleanup(c *C) {
@@ -232,7 +257,7 @@ func (s *trustSuite) TestRemovedTrustContextCleanup(c *C) {
 	caPEM, _, _ := generateCACert(c, "vendorA")
 	mgr.PlanChanged(&plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
-			"vendorA": {Name: "vendorA", TLS: &plan.TLSTrustContext{CACert: string(caPEM)}},
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
 		},
 	})
 
@@ -253,7 +278,7 @@ func (s *trustSuite) TestRemovedTrustContextCleanup(c *C) {
 	_, err = mgr.TrustContext("vendorA")
 	c.Assert(err, ErrorMatches, `trust context "vendorA" not found`)
 
-	_, err = os.Stat(path)
+	_, err = os.Stat(filepath.Dir(path))
 	c.Assert(os.IsNotExist(err), Equals, true)
 }
 
@@ -277,7 +302,7 @@ func (s *trustSuite) TestSameContentKeepsSameVersion(c *C) {
 	caPEM, _, _ := generateCACert(c, "vendorA")
 	pl := &plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
-			"vendorA": {Name: "vendorA", TLS: &plan.TLSTrustContext{CACert: string(caPEM)}},
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
 		},
 	}
 	mgr.PlanChanged(pl)
@@ -301,4 +326,91 @@ func (s *trustSuite) TestSameContentKeepsSameVersion(c *C) {
 
 	_, err = os.Stat(path1)
 	c.Assert(err, IsNil)
+}
+
+func (s *trustSuite) TestIncludedCertsFirstAndDuplicatesDropped(c *C) {
+	mgr := newTestManager(c)
+
+	aPEM, _, _ := generateCACert(c, "A")
+	bPEM, _, _ := generateCACert(c, "B")
+	cPEM, _, _ := generateCACert(c, "C")
+
+	mgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"a": {Name: "a", X509: &plan.X509TrustContext{CACert: string(aPEM)}},
+			"b": {Name: "b", Include: []string{"a"}, X509: &plan.X509TrustContext{CACert: string(bPEM)}},
+			"c": {
+				Name:    "c",
+				Include: []string{"b", "a"},
+				X509:    &plan.X509TrustContext{CACert: string(cPEM) + string(aPEM)},
+			},
+		},
+	})
+
+	tc, err := mgr.TrustContext("c")
+	c.Assert(err, IsNil)
+	defer tc.Close()
+	path, err := tc.CABundleFile()
+	c.Assert(err, IsNil)
+	data, err := os.ReadFile(path)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, string(aPEM)+string(bPEM)+string(cPEM))
+}
+
+func (s *trustSuite) TestDefaultWithoutIncludeTrustsNothing(c *C) {
+	mgr := newTestManager(c)
+
+	def, err := mgr.TrustContext("default")
+	c.Assert(err, IsNil)
+	c.Assert(def.IsSystemCA(), Equals, true)
+	def.Close()
+
+	mgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"default": {Name: "default", Override: plan.ReplaceOverride},
+		},
+	})
+
+	def, err = mgr.TrustContext("default")
+	c.Assert(err, IsNil)
+	defer def.Close()
+	c.Assert(def.IsSystemCA(), Equals, false)
+	pool, err := def.CAPool()
+	c.Assert(err, IsNil)
+	c.Assert(pool.Equal(x509.NewCertPool()), Equals, true)
+	path, err := def.CABundleFile()
+	c.Assert(err, IsNil)
+	data, err := os.ReadFile(path)
+	c.Assert(err, IsNil)
+	c.Assert(data, HasLen, 0)
+}
+
+func (s *trustSuite) TestSystemEquivalence(c *C) {
+	mgr := newTestManager(c)
+
+	caPEM, _, _ := generateCACert(c, "vendorA")
+	mgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"onlysystem": {Name: "onlysystem", Include: []string{"system"}},
+			"viadefault": {Name: "viadefault", Include: []string{"default"}},
+			"extra": {
+				Name:    "extra",
+				Include: []string{"system"},
+				X509:    &plan.X509TrustContext{CACert: string(caPEM)},
+			},
+		},
+	})
+
+	for name, expected := range map[string]bool{
+		"system":     true,
+		"default":    true,
+		"onlysystem": true,
+		"viadefault": true,
+		"extra":      false,
+	} {
+		tc, err := mgr.TrustContext(name)
+		c.Assert(err, IsNil)
+		c.Check(tc.IsSystemCA(), Equals, expected, Commentf("trust context %q", name))
+		tc.Close()
+	}
 }

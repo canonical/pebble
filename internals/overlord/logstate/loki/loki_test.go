@@ -312,7 +312,7 @@ func (*suite) TestTrustContext(c *C) {
 		TrustContexts: map[string]*plan.TrustContext{
 			"vendorA": {
 				Name: "vendorA",
-				TLS:  &plan.TLSTrustContext{CACert: caCertPEM},
+				X509: &plan.X509TrustContext{CACert: caCertPEM},
 			},
 		},
 	})

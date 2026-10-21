@@ -16,6 +16,9 @@ package plan
 
 import (
 	"bytes"
+	"crypto/x509"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -708,54 +711,133 @@ func (t *LogTarget) Merge(other *LogTarget) {
 // domains or scopes that can be consumed by services, checks and log-targets to
 // establish trust with an exogenous entity.
 type TrustContext struct {
-	Name     string   `yaml:"-"`
-	Override Override `yaml:"override,omitempty"`
-	Include  []string `yaml:"include,omitempty"`
+	Name     string               `yaml:"-"`
+	Override Override             `yaml:"override,omitempty"`
+	Include  TrustContextIncludes `yaml:"include,omitempty"`
 
-	TLS *TLSTrustContext `yaml:"tls"`
+	X509 *X509TrustContext `yaml:"x509,omitempty"`
 }
 
 // Copy returns a deep copy of the trust context configuration.
 func (t *TrustContext) Copy() *TrustContext {
 	copied := *t
 	copied.Include = slices.Clone(t.Include)
-	if t.TLS != nil {
-		copied.TLS = t.TLS.Copy()
+	if t.X509 != nil {
+		copied.X509 = t.X509.Copy()
 	}
 	return &copied
 }
 
 // Merge merges the fields set in other into t.
 func (t *TrustContext) Merge(other *TrustContext) {
-	t.Include = slices.Concat(t.Include, other.Include)
-	if other.TLS != nil {
-		if t.TLS == nil {
-			t.TLS = other.TLS.Copy()
+	// A non-nil include (including an explicitly empty list) replaces the
+	// previous value.
+	if other.Include != nil {
+		t.Include = slices.Clone(other.Include)
+	}
+	if other.X509 != nil {
+		if t.X509 == nil {
+			t.X509 = other.X509.Copy()
 		} else {
-			t.TLS.Merge(other.TLS)
+			t.X509.Merge(other.X509)
 		}
 	}
 }
 
-// TLSTrustContext establishes x509 certificates that are trusted by the trust
-// context consumer.
-type TLSTrustContext struct {
-	CACert string `yaml:"ca-cert"`
+// TrustContextIncludes holds the names of the trust contexts included by a
+// trust context. In YAML, it may be given as either a single string or a list
+// of strings. A nil value means include was not specified, whereas an empty
+// (non-nil) value means it was explicitly set to an empty list.
+type TrustContextIncludes []string
+
+func (i *TrustContextIncludes) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		var name string
+		if err := value.Decode(&name); err != nil {
+			return err
+		}
+		*i = TrustContextIncludes{name}
+	case yaml.SequenceNode:
+		names := []string{}
+		if err := value.Decode(&names); err != nil {
+			return err
+		}
+		*i = names
+	default:
+		return errors.New("include must be a string or a list of strings")
+	}
+	return nil
 }
 
-// Copy returns a deep copy of the TLS trust context configuration.
-func (t *TLSTrustContext) Copy() *TLSTrustContext {
+// X509TrustContext establishes x509 certificates that are trusted by the trust
+// context consumer.
+type X509TrustContext struct {
+	CACert string `yaml:"ca-cert,omitempty"`
+}
+
+// Copy returns a deep copy of the x509 trust context configuration.
+func (t *X509TrustContext) Copy() *X509TrustContext {
 	copied := *t
 	return &copied
 }
 
-// Merge merges the fields set in other into t.
-func (t *TLSTrustContext) Merge(other *TLSTrustContext) {
+// Merge merges the fields set in other into t. The certificates in other are
+// appended to those in t, dropping any duplicates (retaining the first).
+func (t *X509TrustContext) Merge(other *X509TrustContext) {
+	if len(other.CACert) == 0 {
+		return
+	}
 	if len(t.CACert) == 0 {
 		t.CACert = other.CACert
-	} else if len(other.CACert) > 0 {
-		t.CACert = strings.Join([]string{t.CACert, other.CACert}, "\n")
+		return
 	}
+	var buf bytes.Buffer
+	seen := make(map[string]bool)
+	for _, data := range []string{t.CACert, other.CACert} {
+		rest := []byte(data)
+		for {
+			var block *pem.Block
+			block, rest = pem.Decode(rest)
+			if block == nil {
+				break
+			}
+			if seen[string(block.Bytes)] {
+				continue
+			}
+			seen[string(block.Bytes)] = true
+			pem.Encode(&buf, block)
+		}
+	}
+	t.CACert = buf.String()
+}
+
+// validateCACert checks that data is a bundle of one or more PEM encoded x509
+// certificates.
+func validateCACert(data string) error {
+	rest := []byte(data)
+	count := 0
+	for {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+		if block.Type != "CERTIFICATE" {
+			return fmt.Errorf("unexpected PEM block type %q", block.Type)
+		}
+		if _, err := x509.ParseCertificate(block.Bytes); err != nil {
+			return fmt.Errorf("cannot parse certificate: %w", err)
+		}
+		count++
+	}
+	if len(bytes.TrimSpace(rest)) > 0 {
+		return errors.New("unexpected data that is not PEM encoded")
+	}
+	if count == 0 {
+		return errors.New("no PEM encoded certificates found")
+	}
+	return nil
 }
 
 // FormatError is the error returned when a layer has a format error, such as
@@ -1129,9 +1211,28 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("trust context name %q is reserved", name),
 			}
 		case "default":
-			if context.TLS != nil {
+			if context.Override != ReplaceOverride {
 				return &FormatError{
-					Message: fmt.Sprintf("trust context %s cannot define tls context directly", name),
+					Message: fmt.Sprintf(`trust context %q must use "override: replace"`, name),
+				}
+			}
+			if context.X509 != nil {
+				return &FormatError{
+					Message: fmt.Sprintf(`trust context %q cannot define "x509" directly, only "include"`, name),
+				}
+			}
+		}
+		for _, include := range context.Include {
+			if include == "" {
+				return &FormatError{
+					Message: fmt.Sprintf("trust context %q cannot include an empty trust context name", name),
+				}
+			}
+		}
+		if context.X509 != nil && context.X509.CACert != "" {
+			if err := validateCACert(context.X509.CACert); err != nil {
+				return &FormatError{
+					Message: fmt.Sprintf(`trust context %q has invalid "ca-cert": %v`, name, err),
 				}
 			}
 		}
@@ -1238,6 +1339,43 @@ func (p *Plan) Validate() error {
 		}
 	}
 
+	// Validate trust context references.
+	for name, context := range p.TrustContexts {
+		for _, include := range context.Include {
+			if !p.trustContextExists(include) {
+				return &FormatError{
+					Message: fmt.Sprintf(`trust context %q includes unknown trust context %q`, name, include),
+				}
+			}
+		}
+	}
+	for name, service := range p.Services {
+		if service.TrustContext != "" && !p.trustContextExists(service.TrustContext) {
+			return &FormatError{
+				Message: fmt.Sprintf(`service %q specifies unknown trust context %q`, name, service.TrustContext),
+			}
+		}
+	}
+	for name, check := range p.Checks {
+		if check.HTTP != nil && check.HTTP.TrustContext != "" && !p.trustContextExists(check.HTTP.TrustContext) {
+			return &FormatError{
+				Message: fmt.Sprintf(`check %q specifies unknown trust context %q`, name, check.HTTP.TrustContext),
+			}
+		}
+		if check.Exec != nil && check.Exec.TrustContext != "" && !p.trustContextExists(check.Exec.TrustContext) {
+			return &FormatError{
+				Message: fmt.Sprintf(`check %q specifies unknown trust context %q`, name, check.Exec.TrustContext),
+			}
+		}
+	}
+	for name, target := range p.LogTargets {
+		if target.TrustContext != "" && !p.trustContextExists(target.TrustContext) {
+			return &FormatError{
+				Message: fmt.Sprintf(`log target %q specifies unknown trust context %q`, name, target.TrustContext),
+			}
+		}
+	}
+
 	// Ensure combined layers don't have cycles.
 	err := p.checkCycles()
 	if err != nil {
@@ -1253,6 +1391,16 @@ func (p *Plan) Validate() error {
 	}
 
 	return nil
+}
+
+// trustContextExists reports whether name refers to a built-in trust context
+// or one defined in the plan.
+func (p *Plan) trustContextExists(name string) bool {
+	if name == "system" || name == "default" {
+		return true
+	}
+	_, ok := p.TrustContexts[name]
+	return ok
 }
 
 // StartOrder returns the required services that must be started for the named
@@ -1512,6 +1660,11 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	for name, target := range layer.LogTargets {
 		if target != nil {
 			target.Name = name
+		}
+	}
+	for name, context := range layer.TrustContexts {
+		if context != nil {
+			context.Name = name
 		}
 	}
 

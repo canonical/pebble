@@ -61,9 +61,9 @@ func (c *httpChecker) check(ctx context.Context) error {
 	// validate the server's certificate, unless it resolves to the system CA
 	// pool, in which case the default HTTP client behaviour is used.
 	if c.trustMgr == nil {
-		logger.Noticef("Check %q (exec): cannot resolve trust context %q: no trust manager", c.name, c.trustContext)
+		logger.Noticef("Check %q (http): cannot resolve trust context %q: no trust manager", c.name, c.trustContext)
 	} else if trustContext, err := c.trustMgr.TrustContext(c.trustContext); err != nil {
-		logger.Noticef("Check %q (exec): cannot resolve trust context %q: %v", c.name, c.trustContext, err)
+		logger.Noticef("Check %q (http): cannot resolve trust context %q: %v", c.name, c.trustContext, err)
 	} else if trustContext.IsSystemCA() {
 		trustContext.Close()
 	} else {

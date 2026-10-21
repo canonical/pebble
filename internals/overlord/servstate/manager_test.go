@@ -532,7 +532,7 @@ func (s *S) TestReplanTrustContextChanged(c *C) {
 trust-contexts:
     base:
         override: replace
-        tls:
+        x509:
             ca-cert: |
 %s
     vendorA:
@@ -992,7 +992,7 @@ func (s *S) TestTrustContextSetsSSLCertFile(c *C) {
 trust-contexts:
     vendorA:
         override: replace
-        tls:
+        x509:
             ca-cert: |
 %s
 

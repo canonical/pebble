@@ -321,9 +321,7 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 			}
 			// Update service config, workload and trust context version.
 			s.config = config.Copy()
-			if workload != nil {
-				s.workload = workload
-			}
+			s.workload = workload
 			s.trustContextVersion = trustContextVersion
 		}
 		needsRestart[name] = true
