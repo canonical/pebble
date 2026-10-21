@@ -62,6 +62,18 @@ func (s *lastLinesSuite) TestLastLinesStripPrefix(c *C) {
 	c.Assert(lines, Equals, "foo\nbar\nlog msg")
 }
 
+func (s *lastLinesSuite) TestServiceLastLinesStripPrefix(c *C) {
+	buffer := servicelog.NewRingBuffer(1024)
+	defer buffer.Close()
+
+	fmt.Fprintf(buffer, "foo\n")
+	fmt.Fprintf(buffer, "2000-01-01T00:00:00.000Z [close]bracket] bar\n")
+
+	lines, err := servicelog.ServiceLastLines(buffer, 10, "", "close]bracket")
+	c.Assert(err, IsNil)
+	c.Assert(lines, Equals, "foo\nbar")
+}
+
 func (s *lastLinesSuite) TestLastLinesWhitespace(c *C) {
 	buffer := servicelog.NewRingBuffer(1024)
 	defer buffer.Close()
