@@ -227,6 +227,7 @@ extensions = [
     "sphinx_llm.txt",
     "sphinx_related_links",
     "sphinx_roles",
+    "sphinx_structured_toc",
     "sphinx_terminal",
     "sphinx_ubuntu_images",
     "sphinx_youtube_links",
@@ -290,6 +291,6 @@ html_js_files = [
 intersphinx_mapping = {
     "operator": ("https://canonical.com/juju/docs/ops/latest/", None),
     "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
-    "rockcraft": ("https://documentation.ubuntu.com/rockcraft/latest/", None),
+    "rockcraft": ("https://ubuntu.com/containers/rockcraft/docs/latest/", None),
     "chisel": ("https://ubuntu.com/chisel/docs/latest/", None),
 }
