@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
@@ -100,9 +100,9 @@ func (s *managerSuite) TestConnectRejectsDuplicateAfterUpgrade(c *C) {
 	defer server.Close()
 
 	wsURL := "ws" + server.URL[len("http"):] + "/"
-	first, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	first, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	c.Assert(err, IsNil)
-	defer first.Close()
+	defer first.CloseNow()
 
 	err = <-errors
 	c.Assert(err, IsNil)
@@ -110,9 +110,9 @@ func (s *managerSuite) TestConnectRejectsDuplicateAfterUpgrade(c *C) {
 	connected := mgr.ExecutionWebsocket(task.ID(), "control")
 	c.Assert(connected, NotNil)
 
-	second, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	second, _, err := websocket.Dial(context.Background(), wsURL, nil)
 	if err == nil {
-		second.Close()
+		second.CloseNow()
 	}
 	c.Assert(err, NotNil)
 

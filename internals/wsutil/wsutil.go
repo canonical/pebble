@@ -15,22 +15,25 @@
 package wsutil
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 
-	"github.com/gorilla/websocket"
+	"github.com/coder/websocket"
 
 	"github.com/canonical/pebble/internals/logger"
 )
 
 // MessageReader is an interface that wraps websocket message reading.
 type MessageReader interface {
-	NextReader() (messageType int, r io.Reader, err error)
+	Reader(ctx context.Context) (websocket.MessageType, io.Reader, error)
 }
 
 // MessageWriter is an interface that wraps websocket message writing.
 type MessageWriter interface {
-	WriteMessage(messageType int, data []byte) error
+	Write(ctx context.Context, typ websocket.MessageType, p []byte) error
 }
 
 // MessageReadWriter is an interface that wraps websocket message reading and
@@ -38,6 +41,13 @@ type MessageWriter interface {
 type MessageReadWriter interface {
 	MessageReader
 	MessageWriter
+}
+
+// MessageWriteCloser is an interface that wraps websocket message writing
+// and closing.
+type MessageWriteCloser interface {
+	MessageWriter
+	Close(code websocket.StatusCode, reason string) error
 }
 
 var endCommandJSON = []byte(`{"command":"end"}`)
@@ -61,13 +71,13 @@ func WebsocketSendStream(conn MessageWriter, r io.Reader, bufferSize int) chan b
 				break
 			}
 
-			err := conn.WriteMessage(websocket.BinaryMessage, buf)
+			err := conn.Write(context.Background(), websocket.MessageBinary, buf)
 			if err != nil {
 				logger.Debugf("Got err writing %s", err)
 				break
 			}
 		}
-		conn.WriteMessage(websocket.TextMessage, endCommandJSON)
+		conn.Write(context.Background(), websocket.MessageText, endCommandJSON)
 		close(ch) // NOTE(benhoyt): this was "ch <- true", but that can block
 	}(conn, r)
 
@@ -89,20 +99,18 @@ func recvLoop(w io.Writer, conn MessageReader) {
 	buf := make([]byte, 32*1024) // only allocate once per websocket, not once per loop
 
 	for {
-		mt, r, err := conn.NextReader()
+		mt, r, err := conn.Reader(context.Background())
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseAbnormalClosure) {
+			if websocket.CloseStatus(err) != -1 {
+				logger.Debugf("Got close message for reader")
+			} else if !IsAbnormalClosure(err) {
 				logger.Debugf("Cannot get next reader: %v", err)
 			}
 			return
 		}
 
 		switch mt {
-		case websocket.CloseMessage:
-			logger.Debugf("Got close message for reader")
-			return
-
-		case websocket.TextMessage:
+		case websocket.MessageText:
 			// A TEXT message is an out-of-band "command".
 			payload, err := io.ReadAll(r)
 			if err != nil {
@@ -125,7 +133,7 @@ func recvLoop(w io.Writer, conn MessageReader) {
 				logger.Noticef("Invalid I/O command %q", command.Command)
 			}
 
-		case websocket.BinaryMessage:
+		case websocket.MessageBinary:
 			// A BINARY message is actual I/O data.
 			_, err := io.CopyBuffer(w, r, buf)
 			if err != nil {
@@ -137,6 +145,15 @@ func recvLoop(w io.Writer, conn MessageReader) {
 			logger.Noticef("Invalid message type %d", mt)
 		}
 	}
+}
+
+// IsAbnormalClosure reports whether err indicates that the peer dropped the
+// connection without sending a close frame (close code 1006 in RFC 6455).
+func IsAbnormalClosure(err error) bool {
+	if err == nil || websocket.CloseStatus(err) != -1 || errors.Is(err, net.ErrClosed) {
+		return false
+	}
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 func ReaderToChannel(r io.Reader, bufferSize int, stop <-chan struct{}) <-chan []byte {

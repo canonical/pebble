@@ -23,6 +23,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/coder/websocket"
+
 	"github.com/canonical/pebble/internals/wsutil"
 )
 
@@ -106,7 +108,7 @@ type ExecProcess struct {
 	client      *Client
 	timeout     time.Duration
 	writesDone  chan struct{}
-	controlConn jsonWriter
+	controlConn wsutil.MessageWriter
 	stdinDone   chan bool // only used by tests
 }
 
@@ -202,11 +204,11 @@ func (client *Client) Exec(opts *ExecOptions) (*ExecProcess, error) {
 		}
 
 		// Try to close websocket connections gracefully, but ignore errors.
-		_ = ioConn.Close()
+		_ = ioConn.CloseNow()
 		if stderrConn != nil {
-			_ = stderrConn.Close()
+			_ = stderrConn.CloseNow()
 		}
-		_ = controlConn.Close()
+		_ = controlConn.CloseNow()
 
 		// Tell ExecProcess.Wait we're done writing to stdout/stderr.
 		close(writesDone)
@@ -298,7 +300,7 @@ func (p *ExecProcess) SendResize(width, height int) error {
 			Height: height,
 		},
 	}
-	return p.controlConn.WriteJSON(msg)
+	return p.writeControl(msg)
 }
 
 // SendSignal sends a signal to the running process.
@@ -309,5 +311,13 @@ func (p *ExecProcess) SendSignal(signal string) error {
 			Name: signal,
 		},
 	}
-	return p.controlConn.WriteJSON(msg)
+	return p.writeControl(msg)
+}
+
+func (p *ExecProcess) writeControl(msg execCommand) error {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	return p.controlConn.Write(context.Background(), websocket.MessageText, data)
 }
