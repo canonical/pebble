@@ -294,6 +294,89 @@ func (*suite) TestLabels(c *C) {
 	}
 }
 
+func flushAndCheck(c *C, setup func(client *loki.Client), expected string) {
+	received := make(chan []byte, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqBody, err := io.ReadAll(r.Body)
+		c.Check(err, IsNil)
+		received <- reqBody
+	}))
+	defer server.Close()
+
+	client := loki.NewClient(&loki.ClientOptions{Location: server.URL})
+	setup(client)
+
+	err := client.Flush(context.Background())
+	c.Assert(err, IsNil)
+	select {
+	case reqBody := <-received:
+		c.Assert(string(reqBody), Equals, string(compactJSON(expected)))
+	case <-time.After(1 * time.Second):
+		c.Fatal("timed out waiting for request")
+	}
+}
+
+func (*suite) TestNoLabels(c *C) {
+	flushAndCheck(c, func(client *loki.Client) {
+		err := client.Add(servicelog.Entry{
+			Service: "svc1",
+			Time:    time.Date(2023, 10, 3, 4, 20, 33, 0, time.UTC),
+			Message: "hello",
+		})
+		c.Assert(err, IsNil)
+	}, `
+{"streams": [{
+	"stream": {"pebble_service": "svc1"},
+	"values": [
+		[ "1696306833000000000", "hello" ]
+	]
+}]}`)
+}
+
+func (*suite) TestLabelsRemoved(c *C) {
+	flushAndCheck(c, func(client *loki.Client) {
+		client.SetLabels("svc1", map[string]string{"label1": "val1"})
+		err := client.Add(servicelog.Entry{
+			Service: "svc1",
+			Time:    time.Date(2023, 10, 3, 4, 20, 33, 0, time.UTC),
+			Message: "hello",
+		})
+		c.Assert(err, IsNil)
+		client.SetLabels("svc1", nil)
+	}, `
+{"streams": [{
+	"stream": {"pebble_service": "svc1"},
+	"values": [
+		[ "1696306833000000000", "hello" ]
+	]
+}]}`)
+}
+
+func (*suite) TestLabelsMixed(c *C) {
+	flushAndCheck(c, func(client *loki.Client) {
+		client.SetLabels("svc1", map[string]string{"label1": "val1"})
+		for _, service := range []string{"svc1", "svc2"} {
+			err := client.Add(servicelog.Entry{
+				Service: service,
+				Time:    time.Date(2023, 10, 3, 4, 20, 33, 0, time.UTC),
+				Message: "hello " + service,
+			})
+			c.Assert(err, IsNil)
+		}
+	}, `
+{"streams": [{
+	"stream": {"label1": "val1", "pebble_service": "svc1"},
+	"values": [
+		[ "1696306833000000000", "hello svc1" ]
+	]
+}, {
+	"stream": {"pebble_service": "svc2"},
+	"values": [
+		[ "1696306833000000000", "hello svc2" ]
+	]
+}]}`)
+}
+
 // Strips all extraneous whitespace from JSON
 func compactJSON(s string) []byte {
 	var buf bytes.Buffer
