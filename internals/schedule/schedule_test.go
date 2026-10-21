@@ -207,55 +207,66 @@ func (s *scheduleSuite) TestParseErrors(c *C) {
 		text string
 		err  string
 	}{
-		{"", `cannot parse schedule: schedule is empty`},
-		{",,", `cannot parse schedule ",,": empty set`},
-		{"mon,,", `cannot parse schedule "mon,,": empty set`},
-		{",,mon", `cannot parse schedule ",,mon": empty set`},
-		{"mon,,,tue", `cannot parse schedule "mon,,,tue": empty element`},
-		{"mon,", `cannot parse schedule "mon,": empty element`},
-		{",mon", `cannot parse schedule ",mon": empty element`},
-		{"fry", `cannot parse schedule "fry": "fry" is not a valid month, weekday, day or time`},
-		{"mon-fry", `cannot parse schedule "mon-fry": "fry" is not a valid month, weekday, day or time`},
-		{"mon0", `cannot parse schedule "mon0": "mon0" is not a valid month, weekday, day or time`},
-		{"mon6", `cannot parse schedule "mon6": "mon6" is not a valid month, weekday, day or time`},
-		{"MON", `cannot parse schedule "MON": "MON" is not a valid month, weekday, day or time`},
-		{"jan-foo", `cannot parse schedule "jan-foo": "foo" is not a valid month`},
-		{"janx", `cannot parse schedule "janx": "janx" is not a valid month`},
-		{"5", `cannot parse schedule "5": days "5" must follow a month`},
-		{"mon,5", `cannot parse schedule "mon,5": days "5" must follow a month`},
-		{"jan,0", `cannot parse schedule "jan,0": "0" is not a valid day`},
-		{"jan,05", `cannot parse schedule "jan,05": "05" is not a valid day`},
-		{"jan,32", `cannot parse schedule "jan,32": "32" is not a valid day`},
-		{"jan,123", `cannot parse schedule "jan,123": "123" is not a valid day`},
-		{"jan,1-32", `cannot parse schedule "jan,1-32": "32" is not a valid day`},
-		{"jan,1-", `cannot parse schedule "jan,1-": "" is not a valid day`},
-		{"9", `cannot parse schedule "9": days "9" must follow a month`},
-		{"9:0", `cannot parse schedule "9:0": "9:0" is not a valid time`},
-		{"9:000", `cannot parse schedule "9:000": "9:000" is not a valid time`},
-		{"123:00", `cannot parse schedule "123:00": "123:00" is not a valid time`},
-		{"25:00", `cannot parse schedule "25:00": "25:00" is not a valid time`},
-		{"24:01", `cannot parse schedule "24:01": "24:01" is not a valid time`},
-		{"9:60", `cannot parse schedule "9:60": "9:60" is not a valid time`},
-		{"9:00-", `cannot parse schedule "9:00-": "" is not a valid time`},
-		{"9:00-10", `cannot parse schedule "9:00-10": "10" is not a valid time`},
-		{"9:00~10:00", `cannot parse schedule "9:00~10:00": "9:00~10:00" is not a valid time`},
-		{"9:00/2", `cannot parse schedule "9:00/2": "9:00/2" is not a valid time`},
-		{"9:00-10:00/", `cannot parse schedule "9:00-10:00/": "/" is not a valid clock span split`},
-		{"9:00-10:00/0", `cannot parse schedule "9:00-10:00/0": "/0" is not a valid clock span split`},
-		{"9:00-10:00/05", `cannot parse schedule "9:00-10:00/05": "/05" is not a valid clock span split`},
-		{"9:00-10:00/100000", `cannot parse schedule "9:00-10:00/100000": "/100000" is not a valid clock span split`},
-		{"9:00-10:00/5d", `cannot parse schedule "9:00-10:00/5d": "/5d" is not a valid clock span split`},
-		{"9:00-10:00/5ms", `cannot parse schedule "9:00-10:00/5ms": "/5ms" is not a valid clock span split`},
-		{"9:00-10:00/m", `cannot parse schedule "9:00-10:00/m": "/m" is not a valid clock span split`},
+		{"", `cannot parse empty schedule`},
+		{",,", `cannot parse schedule ",," due to empty set`},
+		{"mon,,", `cannot parse schedule "mon,," due to empty set`},
+		{",,mon", `cannot parse schedule ",,mon" due to empty set`},
+		{"mon,,,tue", `cannot parse schedule "mon,,,tue" due to empty element`},
+		{"mon,", `cannot parse schedule "mon," due to empty element`},
+		{",mon", `cannot parse schedule ",mon" due to empty element`},
+		{"fry", `cannot parse schedule "fry" due to unknown month, weekday, day or time "fry"`},
+		{"mon-fry", `cannot parse schedule "mon-fry" due to unknown month, weekday, day or time "fry"`},
+		{"mon0", `cannot parse schedule "mon0" due to unknown month, weekday, day or time "mon0"`},
+		{"mon6", `cannot parse schedule "mon6" due to unknown month, weekday, day or time "mon6"`},
+		{"MON", `cannot parse schedule "MON" due to unknown month, weekday, day or time "MON"`},
+		{"jan-foo", `cannot parse schedule "jan-foo" due to invalid month "foo"`},
+		{"janx", `cannot parse schedule "janx" due to invalid month "janx"`},
+		{"5", `cannot parse schedule "5" due to days "5" before a month`},
+		{"mon,5", `cannot parse schedule "mon,5" due to days "5" before a month`},
+		{"jan,0", `cannot parse schedule "jan,0" due to invalid day "0"`},
+		{"jan,05", `cannot parse schedule "jan,05" due to invalid day "05"`},
+		{"jan,32", `cannot parse schedule "jan,32" due to invalid day "32"`},
+		{"jan,123", `cannot parse schedule "jan,123" due to invalid day "123"`},
+		{"jan,1-32", `cannot parse schedule "jan,1-32" due to invalid day "32"`},
+		{"jan,1-", `cannot parse schedule "jan,1-" due to invalid day ""`},
+		{"9", `cannot parse schedule "9" due to days "9" before a month`},
+		{"9:0", `cannot parse schedule "9:0" due to invalid time "9:0"`},
+		{"9:000", `cannot parse schedule "9:000" due to invalid time "9:000"`},
+		{"123:00", `cannot parse schedule "123:00" due to invalid time "123:00"`},
+		{"25:00", `cannot parse schedule "25:00" due to invalid time "25:00"`},
+		{"24:01", `cannot parse schedule "24:01" due to invalid time "24:01"`},
+		{"9:60", `cannot parse schedule "9:60" due to invalid time "9:60"`},
+		{"9:00-", `cannot parse schedule "9:00-" due to invalid time ""`},
+		{"9:00-10", `cannot parse schedule "9:00-10" due to invalid time "10"`},
+		{"9:00~10:00", `cannot parse schedule "9:00~10:00" due to invalid time "9:00~10:00"`},
+		{"9:00/2", `cannot parse schedule "9:00/2" due to invalid time "9:00/2"`},
+		// Whitespace is never allowed, not even around the schedule.
+		{" ", `cannot parse schedule " " due to unknown month, weekday, day or time " "`},
+		{" mon", `cannot parse schedule " mon" due to unknown month, weekday, day or time " mon"`},
+		{"mon ", `cannot parse schedule "mon " due to unknown month, weekday, day or time "mon "`},
+		{"mon, tue", `cannot parse schedule "mon, tue" due to unknown month, weekday, day or time " tue"`},
+		{"jan, 5", `cannot parse schedule "jan, 5" due to unknown month, weekday, day or time " 5"`},
+		{"9:00 -10:00", `cannot parse schedule "9:00 -10:00" due to invalid time "9:00 "`},
+		{"9:00-10:00/5 m", `cannot parse schedule "9:00-10:00/5 m" due to invalid clock span split "/5 m"`},
+		{"9:00-10:00/", `cannot parse schedule "9:00-10:00/" due to invalid clock span split "/"`},
+		{"9:00-10:00/0", `cannot parse schedule "9:00-10:00/0" due to invalid clock span split "/0"`},
+		{"9:00-10:00/05", `cannot parse schedule "9:00-10:00/05" due to invalid clock span split "/05"`},
+		{"9:00-10:00/100000", `cannot parse schedule "9:00-10:00/100000" due to invalid clock span split "/100000"`},
+		{"9:00-10:00/5d", `cannot parse schedule "9:00-10:00/5d" due to invalid clock span split "/5d"`},
+		{"9:00-10:00/5ms", `cannot parse schedule "9:00-10:00/5ms" due to invalid clock span split "/5ms"`},
+		{"9:00-10:00/0s", `cannot parse schedule "9:00-10:00/0s" due to invalid clock span split "/0s"`},
+		{"9:00-10:00/0m", `cannot parse schedule "9:00-10:00/0m" due to invalid clock span split "/0m"`},
+		{"9:00-10:00/0h", `cannot parse schedule "9:00-10:00/0h" due to invalid clock span split "/0h"`},
+		{"9:00-10:00/m", `cannot parse schedule "9:00-10:00/m" due to invalid clock span split "/m"`},
 		{
 			"mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon",
-			`cannot parse schedule "mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon": too many sets \(maximum is 8\)`,
+			`cannot parse schedule "mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon" due to more than 8 sets`,
 		}, {
 			"mon,mon,mon,mon,mon,mon,mon,mon,mon",
-			`cannot parse schedule "mon,mon,mon,mon,mon,mon,mon,mon,mon": too many week spans \(maximum is 8\)`,
+			`cannot parse schedule "mon,mon,mon,mon,mon,mon,mon,mon,mon" due to more than 8 week spans in a set`,
 		}, {
 			"1:00,2:00,3:00,4:00,5:00,6:00,7:00,8:00,9:00",
-			`cannot parse schedule "1:00,2:00,3:00,4:00,5:00,6:00,7:00,8:00,9:00": too many clock spans \(maximum is 8\)`,
+			`cannot parse schedule "1:00,2:00,3:00,4:00,5:00,6:00,7:00,8:00,9:00" due to more than 8 clock spans in a set`,
 		},
 	} {
 		_, err := schedule.Parse(test.text)
@@ -492,6 +503,30 @@ var nextTests = []nextTest{
 		now:      "2019-12-31 23:59:57",
 		next:     "2020-01-01 00:00:15",
 	}, {
+		comment:  "now exactly at the end of the span, so the span is over",
+		schedule: "8:00-9:00",
+		last:     "2020-01-10 00:00:00",
+		now:      "2020-01-10 09:00:00",
+		next:     "2020-01-11 08:00:00",
+	}, {
+		comment:  "now just before the end of the span",
+		schedule: "8:00-9:00",
+		last:     "2020-01-10 00:00:00",
+		now:      "2020-01-10 08:59:59",
+		next:     "2020-01-10 08:00:00",
+	}, {
+		comment:  "now and last exactly at the start of the span",
+		schedule: "8:00-9:00",
+		last:     "2020-01-10 08:00:00",
+		now:      "2020-01-10 08:00:00",
+		next:     "2020-01-11 08:00:00",
+	}, {
+		comment:  "now exactly at the end of a split span crossing midnight",
+		schedule: "23:00-1:00/30m",
+		last:     "2020-01-10 23:30:00",
+		now:      "2020-01-11 01:00:00",
+		next:     "2020-01-11 23:00:00",
+	}, {
 		comment:  "whole day span",
 		schedule: "0:00-0:00",
 		last:     "2020-01-10 00:00:00",
@@ -708,7 +743,7 @@ var nextTests = []nextTest{
 		now:      "2020-03-01 08:45:00",
 		next:     "2044-02-29 00:00:00",
 	}, {
-		comment:  "day that doesn't exist in the month",
+		comment:  "day that doesn't exist in the month, so the search limit is hit",
 		schedule: "feb,30",
 		last:     "2020-01-01 00:00:00",
 		now:      "2020-01-01 08:45:00",
@@ -759,12 +794,12 @@ func (s *scheduleSuite) TestNext(c *C) {
 		now, err := time.ParseInLocation(timeLayout, test.now, time.UTC)
 		c.Assert(err, IsNil)
 
-		next, ok := sched.Next(last, now)
+		next, err := sched.Next(last, now)
 		if test.next == "" {
-			c.Check(ok, Equals, false, comment)
+			c.Check(err, Equals, schedule.ErrNoNext, comment)
 			continue
 		}
-		c.Assert(ok, Equals, true, comment)
+		c.Assert(err, IsNil, comment)
 		c.Check(next.Format(timeLayout), Equals, test.next, comment)
 		c.Check(next.Location(), Equals, time.UTC, comment)
 	}
@@ -777,8 +812,8 @@ func (s *scheduleSuite) TestNextUsesNowLocation(c *C) {
 
 	// 2020-01-10 08:00 in UTC+10.
 	now := time.Date(2020, 1, 9, 22, 0, 0, 0, time.UTC).In(loc)
-	next, ok := sched.Next(now, now)
-	c.Assert(ok, Equals, true)
+	next, err := sched.Next(now, now)
+	c.Assert(err, IsNil)
 	c.Check(next.Equal(time.Date(2020, 1, 10, 9, 0, 0, 0, loc)), Equals, true)
 	c.Check(next.Location(), Equals, loc)
 }
@@ -791,10 +826,171 @@ func (s *scheduleSuite) TestNextAcrossDST(c *C) {
 
 	// Clocks go forward on 2020-03-29, at 1:00 GMT.
 	now := time.Date(2020, 3, 28, 12, 0, 0, 0, loc)
-	next, ok := sched.Next(now, now)
-	c.Assert(ok, Equals, true)
+	next, err := sched.Next(now, now)
+	c.Assert(err, IsNil)
 	c.Check(next.Equal(time.Date(2020, 3, 29, 9, 0, 0, 0, loc)), Equals, true)
 	c.Check(next.Format("15:04 MST"), Equals, "09:00 BST")
+}
+
+func (s *scheduleSuite) TestNextMixedLocations(c *C) {
+	loc := time.FixedZone("UTC+10", 10*60*60)
+	sched, err := schedule.Parse("9:00-10:00/30m")
+	c.Assert(err, IsNil)
+
+	// last is 09:15 in UTC+10, but given in UTC.
+	last := time.Date(2020, 1, 9, 23, 15, 0, 0, time.UTC)
+	now := last.In(loc)
+	next, err := sched.Next(last, now)
+	c.Assert(err, IsNil)
+	c.Check(next.Equal(time.Date(2020, 1, 10, 9, 30, 0, 0, loc)), Equals, true)
+	c.Check(next.Location(), Equals, loc)
+
+	// now's location is used, whatever last's location.
+	next, err = sched.Next(last.In(loc), last)
+	c.Assert(err, IsNil)
+	c.Check(next.Equal(time.Date(2020, 1, 10, 9, 0, 0, 0, time.UTC)), Equals, true)
+	c.Check(next.Location(), Equals, time.UTC)
+}
+
+func (s *scheduleSuite) TestNextAcrossDSTSequences(c *C) {
+	loc, err := time.LoadLocation("Europe/London")
+	c.Assert(err, IsNil)
+
+	for _, test := range []struct {
+		comment  string
+		schedule string
+		start    time.Time
+		events   []string
+	}{{
+		// Clocks go forward on 2020-03-29, from 1:00 GMT to 2:00 BST.
+		comment:  "clocks go forward inside the span",
+		schedule: "0:30-3:00/30m",
+		start:    time.Date(2020, 3, 29, 0, 0, 0, 0, loc),
+		events: []string{
+			"03-29 00:30 GMT",
+			"03-29 02:00 BST", // 01:00 and 01:30 GMT were skipped.
+			"03-29 02:30 BST",
+			"03-30 00:30 BST",
+		},
+	}, {
+		comment:  "clocks go forward inside a span crossing midnight, ending in skipped time",
+		schedule: "23:30-1:30/30m",
+		start:    time.Date(2020, 3, 28, 12, 0, 0, 0, loc),
+		events: []string{
+			"03-28 23:30 GMT",
+			"03-29 00:00 GMT",
+			"03-29 00:30 GMT",
+			"03-29 02:00 BST", // 01:00 GMT was skipped.
+			"03-29 23:30 BST",
+		},
+	}, {
+		comment:  "clocks go forward over a whole span",
+		schedule: "1:15",
+		start:    time.Date(2020, 3, 28, 12, 0, 0, 0, loc),
+		events: []string{
+			"03-29 02:00 BST", // 01:15 GMT was skipped.
+			"03-30 01:15 BST",
+		},
+	}, {
+		// Clocks go back on 2020-10-25, from 2:00 BST to 1:00 GMT.
+		comment:  "clocks go back inside the span",
+		schedule: "0:30-3:00/30m",
+		start:    time.Date(2020, 10, 25, 0, 0, 0, 0, loc),
+		events: []string{
+			"10-25 00:30 BST",
+			"10-25 01:00 BST",
+			"10-25 01:30 BST",
+			"10-25 02:00 GMT", // 01:00 and 01:30 GMT aren't repeated.
+			"10-25 02:30 GMT",
+			"10-26 00:30 GMT",
+		},
+	}, {
+		comment:  "clocks go back inside a span crossing midnight",
+		schedule: "23:30-1:30/30m",
+		start:    time.Date(2020, 10, 24, 12, 0, 0, 0, loc),
+		events: []string{
+			"10-24 23:30 BST",
+			"10-25 00:00 BST",
+			"10-25 00:30 BST",
+			"10-25 01:00 BST", // Span ends at 01:30 BST, so 01:00 GMT isn't repeated.
+			"10-25 23:30 GMT",
+		},
+	}, {
+		comment:  "clocks go back over a whole span",
+		schedule: "1:15",
+		start:    time.Date(2020, 10, 24, 12, 0, 0, 0, loc),
+		events: []string{
+			"10-25 01:15 BST",
+			"10-26 01:15 GMT",
+		},
+	}} {
+		sched, err := schedule.Parse(test.schedule)
+		c.Assert(err, IsNil)
+
+		// Pretend every event fires exactly on time.
+		last := test.start
+		var events []string
+		for range test.events {
+			next, err := sched.Next(last, last)
+			c.Assert(err, IsNil)
+			c.Assert(next.After(last), Equals, true, Commentf(test.comment))
+			events = append(events, next.Format("01-02 15:04 MST"))
+			last = next
+		}
+		c.Check(events, DeepEquals, test.events, Commentf(test.comment))
+	}
+}
+
+func (s *scheduleSuite) TestNextAcrossDSTLateTrigger(c *C) {
+	loc, err := time.LoadLocation("Europe/London")
+	c.Assert(err, IsNil)
+	sched, err := schedule.Parse("0:30-3:00/30m")
+	c.Assert(err, IsNil)
+
+	// The 01:30 BST trigger happened, and now the clocks have gone back to
+	// 01:10 GMT: the wall-clock 01:30 isn't repeated, so 02:00 GMT is next.
+	last := time.Date(2020, 10, 25, 0, 30, 0, 0, time.UTC) // 01:30 BST
+	now := time.Date(2020, 10, 25, 1, 10, 0, 0, time.UTC)  // 01:10 GMT
+	next, err := sched.Next(last.In(loc), now.In(loc))
+	c.Assert(err, IsNil)
+	c.Check(next.Format("15:04 MST"), Equals, "02:00 GMT")
+
+	// The skipped 01:00 GMT trigger is due exactly when clocks go forward.
+	last = time.Date(2020, 3, 29, 0, 30, 0, 0, loc)
+	now = time.Date(2020, 3, 29, 1, 0, 0, 0, time.UTC) // 02:00 BST
+	next, err = sched.Next(last, now.In(loc))
+	c.Assert(err, IsNil)
+	c.Check(next.Format("15:04 MST"), Equals, "02:00 BST")
+}
+
+func (s *scheduleSuite) TestNextInvalidSchedule(c *C) {
+	now := time.Date(2020, 1, 10, 9, 15, 0, 0, time.UTC)
+	for _, test := range []struct {
+		set schedule.Set
+		err string
+	}{{
+		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(9, 0, 10, 0, 0)}},
+		err: "cannot evaluate schedule due to invalid clock span period 0s",
+	}, {
+		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(9, 0, 10, 0, -time.Minute)}},
+		err: "cannot evaluate schedule due to invalid clock span period -1m0s",
+	}, {
+		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(24, 0, 10, 0, time.Minute)}},
+		err: "cannot evaluate schedule due to invalid clock 24:00",
+	}, {
+		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(9, 0, 10, 60, time.Minute)}},
+		err: "cannot evaluate schedule due to invalid clock 10:60",
+	}, {
+		set: schedule.Set{WeekSpans: []schedule.WeekSpan{weekSpan(7, 0, time.Monday, 0)}},
+		err: "cannot evaluate schedule due to invalid weekday 7",
+	}, {
+		set: schedule.Set{WeekSpans: []schedule.WeekSpan{weekSpan(time.Monday, 0, time.Monday, 6)}},
+		err: "cannot evaluate schedule due to invalid weekday position 6",
+	}} {
+		sched := &schedule.Schedule{Sets: []schedule.Set{test.set}}
+		_, err := sched.Next(now, now)
+		c.Check(err, ErrorMatches, test.err)
+	}
 }
 
 func (s *scheduleSuite) TestNextSequence(c *C) {
@@ -805,8 +1001,8 @@ func (s *scheduleSuite) TestNextSequence(c *C) {
 	last := time.Date(2020, 1, 5, 0, 0, 0, 0, time.UTC)
 	var events []string
 	for range 5 {
-		next, ok := sched.Next(last, last)
-		c.Assert(ok, Equals, true)
+		next, err := sched.Next(last, last)
+		c.Assert(err, IsNil)
 		events = append(events, next.Format("Mon 15:04"))
 		last = next
 	}
@@ -826,8 +1022,8 @@ func (s *scheduleSuite) TestNextSplitSequence(c *C) {
 	last := time.Date(2020, 1, 10, 0, 0, 0, 0, time.UTC)
 	var events []string
 	for range 4 {
-		next, ok := sched.Next(last, last)
-		c.Assert(ok, Equals, true)
+		next, err := sched.Next(last, last)
+		c.Assert(err, IsNil)
 		events = append(events, next.Format("2006-01-02 15:04"))
 		last = next
 	}

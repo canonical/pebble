@@ -23,9 +23,18 @@
 //	mon-fri,8:00-17:00,,sat,sun,10:00,,mon1,9:00
 //	dec-mar,1-14,sat
 //	mon,8:00-10:00/30s
+//
+// Whitespace is not allowed anywhere in a schedule, including around it,
+// and is deliberately not trimmed or skipped: it is rejected by the grammar
+// like any other unexpected character.
+//
+// Clock spans are evaluated in wall-clock time, in the location of the
+// current time passed to [Schedule.Next]. See its documentation for how
+// daylight saving time transitions are handled.
 package schedule
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -129,6 +138,9 @@ type Set struct {
 }
 
 // Schedule is a parsed schedule string.
+//
+// A Schedule returned by Parse must be treated as immutable: it may then be
+// shared between goroutines, as Next only reads it.
 type Schedule struct {
 	Sets []Set
 	text string
@@ -138,24 +150,28 @@ func (s *Schedule) String() string {
 	return s.text
 }
 
+// ErrNoNext is returned by Schedule.Next when the schedule has no further
+// triggers.
+var ErrNoNext = errors.New("schedule has no further triggers")
+
 var weekdayNames = []string{"sun", "mon", "tue", "wed", "thu", "fri", "sat"}
 var monthNames = []string{"jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"}
 
 const allDays = uint32(1<<32-1) &^ 1
 
-// Parse parses a schedule string.
+// Parse parses a schedule string. Whitespace is not allowed anywhere in it.
 func Parse(text string) (*Schedule, error) {
 	if text == "" {
-		return nil, fmt.Errorf("cannot parse schedule: schedule is empty")
+		return nil, fmt.Errorf("cannot parse empty schedule")
 	}
 	sched := &Schedule{text: text}
 	for setText := range strings.SplitSeq(text, ",,") {
 		if len(sched.Sets) == MaxSets {
-			return nil, fmt.Errorf("cannot parse schedule %q: too many sets (maximum is %d)", text, MaxSets)
+			return nil, fmt.Errorf("cannot parse schedule %q due to more than %d sets", text, MaxSets)
 		}
 		set, err := parseSet(setText)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse schedule %q: %w", text, err)
+			return nil, fmt.Errorf("cannot parse schedule %q due to %w", text, err)
 		}
 		sched.Sets = append(sched.Sets, set)
 	}
@@ -196,7 +212,7 @@ func parseSet(text string) (Set, error) {
 			return set, fmt.Errorf("empty element")
 		case isClockElem(elem):
 			if len(set.ClockSpans) == MaxClockSpans {
-				return set, fmt.Errorf("too many clock spans (maximum is %d)", MaxClockSpans)
+				return set, fmt.Errorf("more than %d clock spans in a set", MaxClockSpans)
 			}
 			cspan, err := parseClockSpan(elem)
 			if err != nil {
@@ -205,7 +221,7 @@ func parseSet(text string) (Set, error) {
 			set.ClockSpans = append(set.ClockSpans, cspan)
 		case isDigit(elem[0]):
 			if months == 0 {
-				return set, fmt.Errorf("days %q must follow a month", elem)
+				return set, fmt.Errorf("days %q before a month", elem)
 			}
 			d, err := parseDays(elem)
 			if err != nil {
@@ -226,7 +242,7 @@ func parseSet(text string) (Set, error) {
 				continue
 			}
 			if len(set.WeekSpans) == MaxWeekSpans {
-				return set, fmt.Errorf("too many week spans (maximum is %d)", MaxWeekSpans)
+				return set, fmt.Errorf("more than %d week spans in a set", MaxWeekSpans)
 			}
 			wspan, err := parseWeekSpan(elem)
 			if err != nil {
@@ -277,13 +293,13 @@ func parseMonths(elem string) (uint16, error) {
 	startText, endText, isRange := strings.Cut(elem, "-")
 	start, ok := lookupName(monthNames, startText)
 	if !ok {
-		return 0, fmt.Errorf("%q is not a valid month", startText)
+		return 0, fmt.Errorf("invalid month %q", startText)
 	}
 	end := start
 	if isRange {
 		end, ok = lookupName(monthNames, endText)
 		if !ok {
-			return 0, fmt.Errorf("%q is not a valid month", endText)
+			return 0, fmt.Errorf("invalid month %q", endText)
 		}
 	}
 	var months uint16
@@ -324,11 +340,11 @@ func parseDays(elem string) (uint32, error) {
 
 func parseDay(s string) (int, error) {
 	if len(s) < 1 || len(s) > 2 || s[0] == '0' || !isDigit(s[0]) || (len(s) == 2 && !isDigit(s[1])) {
-		return 0, fmt.Errorf("%q is not a valid day", s)
+		return 0, fmt.Errorf("invalid day %q", s)
 	}
 	d, _ := strconv.Atoi(s)
 	if d > 31 {
-		return 0, fmt.Errorf("%q is not a valid day", s)
+		return 0, fmt.Errorf("invalid day %q", s)
 	}
 	return d, nil
 }
@@ -360,7 +376,7 @@ func parseWeekday(s string) (WeekdayPos, error) {
 	}
 	wd, ok := lookupName(weekdayNames, name)
 	if !ok {
-		return WeekdayPos{}, fmt.Errorf("%q is not a valid month, weekday, day or time", s)
+		return WeekdayPos{}, fmt.Errorf("unknown month, weekday, day or time %q", s)
 	}
 	return WeekdayPos{Weekday: time.Weekday(wd), Pos: pos}, nil
 }
@@ -410,7 +426,7 @@ func parseClock(s string) (Clock, error) {
 	if !ok || len(hourText) < 1 || len(hourText) > 2 || len(minText) != 2 ||
 		!isDigit(hourText[0]) || (len(hourText) == 2 && !isDigit(hourText[1])) ||
 		!isDigit(minText[0]) || !isDigit(minText[1]) {
-		return Clock{}, fmt.Errorf("%q is not a valid time", s)
+		return Clock{}, fmt.Errorf("invalid time %q", s)
 	}
 	hour, _ := strconv.Atoi(hourText)
 	minute, _ := strconv.Atoi(minText)
@@ -418,7 +434,7 @@ func parseClock(s string) (Clock, error) {
 		hour = 0
 	}
 	if hour > 23 || minute > 59 {
-		return Clock{}, fmt.Errorf("%q is not a valid time", s)
+		return Clock{}, fmt.Errorf("invalid time %q", s)
 	}
 	return Clock{Hour: hour, Minute: minute}, nil
 }
@@ -430,16 +446,16 @@ func parseSplit(s string, span time.Duration) (time.Duration, error) {
 	numText := strings.TrimRight(s, "smh")
 	unitText := s[len(numText):]
 	if len(numText) < 1 || len(numText) > 5 || numText[0] == '0' || len(unitText) > 1 {
-		return 0, fmt.Errorf("%q is not a valid clock span split", "/"+s)
+		return 0, fmt.Errorf("invalid clock span split %q", "/"+s)
 	}
 	for i := range len(numText) {
 		if !isDigit(numText[i]) {
-			return 0, fmt.Errorf("%q is not a valid clock span split", "/"+s)
+			return 0, fmt.Errorf("invalid clock span split %q", "/"+s)
 		}
 	}
 	n, _ := strconv.Atoi(numText)
 	if n > maxSplit {
-		return 0, fmt.Errorf("%q is not a valid clock span split", "/"+s)
+		return 0, fmt.Errorf("invalid clock span split %q", "/"+s)
 	}
 	switch unitText {
 	case "s":
@@ -460,8 +476,19 @@ func parseSplit(s string, span time.Duration) (time.Duration, error) {
 // contains it, but may be before now when now is inside a clock span
 // whose trigger hasn't happened since last. The search uses now's location.
 //
-// The boolean result is false if the schedule has no further triggers.
-func (s *Schedule) Next(last, now time.Time) (time.Time, bool) {
+// Triggers are at wall-clock times in that location, so a span split
+// "/30m" triggers at :00 and :30 past the hour even across a daylight saving
+// time transition. When the clocks go forward, a trigger at a skipped
+// wall-clock time happens at the instant the clocks skip to. When the clocks
+// go back, a trigger at a repeated wall-clock time happens only once, at the
+// earlier of the two instants.
+//
+// Next returns ErrNoNext if the schedule has no further triggers, or
+// another error if the schedule is invalid.
+func (s *Schedule) Next(last, now time.Time) (time.Time, error) {
+	if err := s.validate(); err != nil {
+		return time.Time{}, fmt.Errorf("cannot evaluate schedule due to %w", err)
+	}
 	var next time.Time
 	found := false
 	for i := range s.Sets {
@@ -471,7 +498,37 @@ func (s *Schedule) Next(last, now time.Time) (time.Time, bool) {
 			found = true
 		}
 	}
-	return next, found
+	if !found {
+		return time.Time{}, ErrNoNext
+	}
+	return next, nil
+}
+
+// validate checks the invariants that Parse guarantees and Next relies on.
+func (s *Schedule) validate() error {
+	for _, set := range s.Sets {
+		for _, wspan := range set.WeekSpans {
+			for _, wp := range []WeekdayPos{wspan.Start, wspan.End} {
+				if wp.Weekday < time.Sunday || wp.Weekday > time.Saturday {
+					return fmt.Errorf("invalid weekday %d", wp.Weekday)
+				}
+				if wp.Pos < PosAny || wp.Pos > PosLast {
+					return fmt.Errorf("invalid weekday position %d", wp.Pos)
+				}
+			}
+		}
+		for _, cspan := range set.ClockSpans {
+			for _, clock := range []Clock{cspan.Start, cspan.End} {
+				if clock.Hour < 0 || clock.Hour > 23 || clock.Minute < 0 || clock.Minute > 59 {
+					return fmt.Errorf("invalid clock %d:%02d", clock.Hour, clock.Minute)
+				}
+			}
+			if cspan.Period <= 0 {
+				return fmt.Errorf("invalid clock span period %v", cspan.Period)
+			}
+		}
+	}
+	return nil
 }
 
 func (set *Set) next(last, now time.Time) (time.Time, bool) {
@@ -516,14 +573,18 @@ func (set *Set) skipDay(day time.Time) time.Time {
 
 // next returns the earliest trigger of the clock span starting on day that
 // is after last and whose span hasn't ended by now.
+//
+// Triggers are worked out as wall-clock (civil) times, kept in UTC so the
+// arithmetic isn't affected by DST, and only then converted to loc.
 func (cs ClockSpan) next(day, last, now time.Time, loc *time.Location) (time.Time, bool) {
-	y, m, d := day.Date()
-	start := time.Date(y, m, d, cs.Start.Hour, cs.Start.Minute, 0, 0, loc)
-	endDay := d
-	if cs.End.duration() <= cs.Start.duration() {
-		endDay++
+	civilStart := day.Add(cs.Start.duration())
+	start, _ := wallTime(civilStart, loc)
+	end, skipped := wallTime(civilStart.Add(cs.Duration()), loc)
+	if skipped {
+		// The span ends in skipped wall-clock time, so its triggers in the
+		// skipped time all happen at end. Keep the span open until then.
+		end = end.Add(time.Nanosecond)
 	}
-	end := time.Date(y, m, endDay, cs.End.Hour, cs.End.Minute, 0, 0, loc)
 
 	if !end.After(now) || !end.After(last) {
 		// Span is entirely in the past.
@@ -533,12 +594,58 @@ func (cs ClockSpan) next(day, last, now time.Time, loc *time.Location) (time.Tim
 		return start, true
 	}
 	// The last event happened inside this span, so find the following part.
-	part := last.Sub(start)/cs.Period + 1
-	offset := part * cs.Period
-	if offset >= cs.Duration() {
-		return time.Time{}, false
+	// The wall clock of last can be before civilStart when the clocks went
+	// back, or when start was skipped forward, so begin at the first part.
+	part := max(civil(last.In(loc)).Sub(civilStart)/cs.Period+1, 1)
+	for ; part*cs.Period < cs.Duration(); part++ {
+		// Normally the first part tried is after last, but when the clocks
+		// go back, wall-clock triggers already passed may come round again.
+		t, _ := wallTime(civilStart.Add(part*cs.Period), loc)
+		if t.After(last) {
+			return t, true
+		}
 	}
-	return start.Add(offset), true
+	return time.Time{}, false
+}
+
+// civil returns the wall-clock time of t as the same wall-clock time in UTC.
+func civil(t time.Time) time.Time {
+	y, m, d := t.Date()
+	hour, minute, second := t.Clock()
+	return time.Date(y, m, d, hour, minute, second, t.Nanosecond(), time.UTC)
+}
+
+// wallTime returns the instant at which the wall clock in loc shows the
+// civil time c (see civil). When the wall clock skips over c, as when DST
+// starts, it returns the instant the clock skips to, and skipped is true.
+// When the wall clock shows c twice, as when DST ends, it returns the
+// earlier instant.
+func wallTime(c time.Time, loc *time.Location) (t time.Time, skipped bool) {
+	y, m, d := c.Date()
+	hour, minute, second := c.Clock()
+	t = time.Date(y, m, d, hour, minute, second, c.Nanosecond(), loc)
+	zoneStart, zoneEnd := t.ZoneBounds()
+	switch wall := civil(t); {
+	case wall.After(c):
+		// Skipped, and t is in the zone after the transition.
+		return zoneStart, true
+	case wall.Before(c):
+		// Skipped, and t is in the zone before the transition.
+		return zoneEnd, true
+	}
+	if !zoneStart.IsZero() {
+		// If the clocks went back at the start of t's zone, c may also have
+		// been shown before then.
+		_, offset := t.Zone()
+		_, prevOffset := zoneStart.Add(-time.Nanosecond).Zone()
+		if prevOffset > offset {
+			earlier := t.Add(-time.Duration(prevOffset-offset) * time.Second)
+			if civil(earlier).Equal(c) {
+				return earlier, false
+			}
+		}
+	}
+	return t, false
 }
 
 // civilDate returns midnight UTC of the given date, normalised. Dates are
