@@ -234,6 +234,52 @@ func (s *apiSuite) TestServicesGet(c *C) {
 	})
 }
 
+func (s *apiSuite) TestServicesGetSchedule(c *C) {
+	writeTestLayer(s.pebbleDir, `
+services:
+    sched1:
+        override: replace
+        command: /bin/sh -c "sleep 300"
+        schedule: mon,9:00
+    plain1:
+        override: replace
+        command: /bin/sh -c "sleep 300"
+`)
+	s.daemon(c)
+
+	req, err := http.NewRequest("GET", "/v1/services", nil)
+	c.Assert(err, IsNil)
+	rsp := v1GetServices(apiCmd("/v1/services"), req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+
+	c.Assert(rec.Code, Equals, 200)
+	var body map[string]any
+	err = json.Unmarshal(rec.Body.Bytes(), &body)
+	c.Assert(err, IsNil)
+	result, ok := body["result"].([]any)
+	c.Assert(ok, Equals, true)
+	c.Assert(result, HasLen, 2)
+
+	plain := result[0].(map[string]any)
+	c.Check(plain["name"], Equals, "plain1")
+	c.Check(plain["schedule"], IsNil)
+	c.Check(plain["schedule-last"], IsNil)
+	c.Check(plain["schedule-next"], IsNil)
+
+	// The schedule hasn't fired yet, so there's no schedule-last.
+	sched := result[1].(map[string]any)
+	c.Check(sched["name"], Equals, "sched1")
+	c.Check(sched["schedule"], Equals, "mon,9:00")
+	c.Check(sched["schedule-last"], IsNil)
+	nextStr, ok := sched["schedule-next"].(string)
+	c.Assert(ok, Equals, true)
+	next, err := time.Parse(time.RFC3339, nextStr)
+	c.Assert(err, IsNil)
+	c.Check(next.Local().Weekday(), Equals, time.Monday)
+	c.Check(next.Local().Format("15:04"), Equals, "09:00")
+}
+
 func (s *apiSuite) TestServicesGetNotes(c *C) {
 	writeTestLayer(s.pebbleDir, servicesLayer)
 	d := s.daemon(c)
