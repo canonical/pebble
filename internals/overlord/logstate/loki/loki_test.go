@@ -339,10 +339,10 @@ func (*suite) TestTrustContext(c *C) {
 	err = addAndFlush(newClient("vendorA"))
 	c.Assert(err, IsNil)
 
-	// An unknown trust context logs an error and falls back to the default
-	// HTTP client behaviour, so the flush still fails.
+	// An explicit trust context that can't be resolved fails the flush,
+	// rather than falling back to the system CA pool.
 	err = addAndFlush(newClient("unknown"))
-	c.Assert(err, ErrorMatches, ".*(certificate|x509).*")
+	c.Assert(err, ErrorMatches, `cannot resolve trust context "unknown": .*not found`)
 }
 
 // Strips all extraneous whitespace from JSON

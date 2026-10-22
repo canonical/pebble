@@ -156,7 +156,11 @@ func (s *CheckersSuite) TestHTTPTrustContext(c *C) {
 	}))
 	defer server.Close()
 
-	trustMgr := newTestTrustManager(c, testCACertPEM(c))
+	caCertPEM := string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: server.Certificate().Raw,
+	}))
+	trustMgr := newTestTrustManager(c, caCertPEM)
 
 	// Without a trust context, the server's self-signed certificate isn't
 	// trusted by the system pool, so the check fails.
@@ -173,15 +177,15 @@ func (s *CheckersSuite) TestHTTPTrustContext(c *C) {
 	err = chk.check(context.Background())
 	c.Assert(err, IsNil)
 
-	// An unknown trust context logs an error and falls back to the default
-	// HTTP client behaviour, so the check still fails.
+	// An explicit trust context that can't be resolved fails the check,
+	// rather than falling back to the system CA pool.
 	chk = &httpChecker{
 		url:          server.URL,
 		trustContext: "unknown",
 		trustMgr:     trustMgr,
 	}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, ".*(certificate|x509).*")
+	c.Assert(err, ErrorMatches, `cannot resolve trust context "unknown": .*not found`)
 }
 
 func (s *CheckersSuite) TestTCP(c *C) {
@@ -364,17 +368,15 @@ func (s *CheckersSuite) TestExecTrustContext(c *C) {
 	c.Assert(ok, Equals, true)
 	c.Assert(detailsErr.Details(), Equals, "/custom/path")
 
-	// An unknown trust context logs an error and leaves SSL_CERT_FILE unset.
+	// An explicit trust context that can't be resolved fails the check
+	// without running the command.
 	chk = &execChecker{
 		command:      "/bin/sh -c 'echo -n $SSL_CERT_FILE; exit 1'",
 		trustContext: "unknown",
 		trustMgr:     trustMgr,
 	}
 	err = chk.check(context.Background())
-	c.Assert(err, ErrorMatches, "exit status 1")
-	detailsErr, ok = err.(*detailsError)
-	c.Assert(ok, Equals, true)
-	c.Assert(detailsErr.Details(), Equals, "")
+	c.Assert(err, ErrorMatches, `cannot resolve trust context "unknown": .*not found`)
 }
 
 func (s *CheckersSuite) TestNewChecker(c *C) {

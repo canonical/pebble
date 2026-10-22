@@ -16,7 +16,6 @@ package checkstate
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
@@ -33,6 +32,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -50,33 +50,25 @@ type httpChecker struct {
 	headers      map[string]string
 	trustContext string
 	trustMgr     TrustManager
+	transport    *truststate.HTTPTransport
 }
 
 func (c *httpChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
 	client := &http.Client{}
 
-	// Resolve the trust context configured for this check (falling back to
-	// the "default" trust context if none is set), and use its CA bundle to
-	// validate the server's certificate, unless it resolves to the system CA
-	// pool, in which case the default HTTP client behaviour is used.
-	if c.trustMgr == nil {
-		logger.Noticef("Check %q (http): cannot resolve trust context %q: no trust manager", c.name, c.trustContext)
-	} else if trustContext, err := c.trustMgr.TrustContext(c.trustContext); err != nil {
-		logger.Noticef("Check %q (http): cannot resolve trust context %q: %v", c.name, c.trustContext, err)
-	} else if trustContext.IsSystemCA() {
-		trustContext.Close()
-	} else {
-		defer trustContext.Close()
-		pool, err := trustContext.CAPool()
-		if err != nil {
-			logger.Noticef("Check %q (http): cannot get CA pool for trust context %q: %v", c.name, c.trustContext, err)
-		} else {
-			client.Transport = &http.Transport{
-				TLSClientConfig: &tls.Config{RootCAs: pool},
-			}
-		}
+	// Use the trust context configured for this check (falling back to the
+	// "default" trust context if none is set) to validate the server's
+	// certificate. An explicitly configured trust context that can't be
+	// resolved fails the check rather than falling back to the system CAs.
+	if c.transport == nil {
+		c.transport = &truststate.HTTPTransport{Provider: c.trustMgr, Name: c.trustContext}
 	}
+	transport, err := c.transport.RoundTripper()
+	if err != nil {
+		return err
+	}
+	client.Transport = transport
 
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
@@ -155,6 +147,31 @@ type execChecker struct {
 	trustMgr     TrustManager
 }
 
+// caBundleFile returns the CA bundle file of the check's trust context, or ""
+// if the trust context resolves to the system CA pool (or no trust context
+// is set and there's no trust manager).
+func (c *execChecker) caBundleFile() (string, error) {
+	if c.trustMgr == nil {
+		if c.trustContext == "" {
+			return "", nil
+		}
+		return "", fmt.Errorf("cannot resolve trust context %q: no trust manager", c.trustContext)
+	}
+	trustContext, err := c.trustMgr.TrustContext(c.trustContext)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve trust context %q: %w", c.trustContext, err)
+	}
+	defer trustContext.Close()
+	if trustContext.IsSystemCA() {
+		return "", nil
+	}
+	caBundleFile, err := trustContext.CABundleFile()
+	if err != nil {
+		return "", fmt.Errorf("cannot get CA bundle file for trust context %q: %w", c.trustContext, err)
+	}
+	return caBundleFile, nil
+}
+
 func (c *execChecker) check(ctx context.Context) error {
 	args, err := shlex.Split(c.command)
 	if err != nil {
@@ -169,22 +186,18 @@ func (c *execChecker) check(ctx context.Context) error {
 	// Resolve the trust context configured for this check (falling back to
 	// the "default" trust context if none is set), and provide its CA bundle
 	// via SSL_CERT_FILE, unless the check has set that environment variable
-	// itself, or the trust context resolves to the system CA pool.
-	if c.trustMgr == nil {
-		logger.Noticef("Check %q (exec): cannot resolve trust context %q: no trust manager", c.name, c.trustContext)
-	} else if trustContext, err := c.trustMgr.TrustContext(c.trustContext); err != nil {
-		logger.Noticef("Check %q (exec): cannot resolve trust context %q: %v", c.name, c.trustContext, err)
-	} else if trustContext.IsSystemCA() || c.environment["SSL_CERT_FILE"] != "" {
-		trustContext.Close()
-	} else {
-		defer trustContext.Close()
-		caBundleFile, err := trustContext.CABundleFile()
+	// itself, or the trust context resolves to the system CA pool. An
+	// explicitly configured trust context that can't be resolved fails the
+	// check.
+	if c.environment["SSL_CERT_FILE"] == "" {
+		caBundleFile, err := c.caBundleFile()
 		if err != nil {
-			logger.Noticef(
-				"Check %q (exec): cannot get CA bundle file for trust context %q: %v",
-				c.name, c.trustContext, err,
-			)
-		} else {
+			if c.trustContext != "" {
+				return err
+			}
+			logger.Noticef("Check %q (exec): %v", c.name, err)
+		}
+		if caBundleFile != "" {
 			environment["SSL_CERT_FILE"] = caBundleFile
 		}
 	}

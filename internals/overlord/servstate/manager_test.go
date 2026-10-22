@@ -574,6 +574,30 @@ trust-contexts:
 	c.Check(lanesContain(starts, "ssltest"), Equals, true)
 }
 
+// TestReplanServiceWithoutWorkload checks that Replan handles services with
+// no workload (a nil *workloads.Workload) without restarting them.
+func (s *S) TestReplanServiceWithoutWorkload(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, `
+services:
+    noworkload:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+`)
+	s.planChanged(c)
+
+	s.startServices(c, [][]string{{"noworkload"}})
+	defer s.stopServices(c, [][]string{{"noworkload"}})
+
+	for range 2 {
+		stops, starts, err := s.manager.Replan()
+		c.Assert(err, IsNil)
+		c.Check(lanesContain(stops, "noworkload"), Equals, false)
+		c.Check(lanesContain(starts, "noworkload"), Equals, false)
+	}
+}
+
 // lanesContain reports whether name appears in any lane of lanes.
 func lanesContain(lanes [][]string, name string) bool {
 	for _, lane := range lanes {

@@ -251,6 +251,10 @@ func (m *TrustManager) release(name string) {
 // belongs to exists and holds the latest resolved version of that trust
 // context, and returns its path.
 func (m *TrustManager) ensureFile(v *trustContextVersion) (string, error) {
+	path, err := bundleFilePath(m.trustDir, v.name)
+	if err != nil {
+		return "", err
+	}
 	m.fileMu.Lock()
 	defer m.fileMu.Unlock()
 	m.mu.Lock()
@@ -261,23 +265,26 @@ func (m *TrustManager) ensureFile(v *trustContextVersion) (string, error) {
 		// referenced. Serve the file as it was last written (if it was).
 		latest = v
 		if _, written := m.written[v.name]; written {
-			return bundleFilePath(m.trustDir, v.name), nil
+			return path, nil
 		}
 	}
 	if m.written[latest.name] == latest.shortSha {
-		return bundleFilePath(m.trustDir, latest.name), nil
+		return path, nil
 	}
 	if err := m.writeFileLocked(latest); err != nil {
 		return "", err
 	}
-	return bundleFilePath(m.trustDir, latest.name), nil
+	return path, nil
 }
 
 // writeFileLocked writes the CA bundle file for v. It must be called while
 // holding fileMu.
 func (m *TrustManager) writeFileLocked(v *trustContextVersion) error {
-	path := bundleFilePath(m.trustDir, v.name)
-	err := osutil.Mkdir(filepath.Dir(path), 0o755, &osutil.MkdirOptions{
+	path, err := bundleFilePath(m.trustDir, v.name)
+	if err != nil {
+		return err
+	}
+	err = osutil.Mkdir(filepath.Dir(path), 0o755, &osutil.MkdirOptions{
 		MakeParents: true,
 		ExistOK:     true,
 		Chmod:       true,
@@ -307,8 +314,18 @@ func (m *TrustManager) removeFileLocked(name string) {
 		return
 	}
 	delete(m.written, name)
-	if err := os.RemoveAll(filepath.Dir(bundleFilePath(m.trustDir, name))); err != nil {
+	path, err := bundleFilePath(m.trustDir, name)
+	if err != nil {
+		logger.Noticef("Cannot remove stale CA bundle file: %v", err)
+		return
+	}
+	// Remove only the file and its (then empty) directory, never recursively.
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		logger.Noticef("Cannot remove stale CA bundle file for trust context %q: %v", name, err)
+		return
+	}
+	if err := os.Remove(filepath.Dir(path)); err != nil && !os.IsNotExist(err) {
+		logger.Noticef("Cannot remove stale CA bundle directory for trust context %q: %v", name, err)
 	}
 }
 
@@ -449,7 +466,11 @@ func lookupTrustContext(name string, pl *plan.Plan) (*plan.TrustContext, bool) {
 }
 
 // bundleFilePath returns the path of the maintained CA bundle file for the
-// named trust context.
-func bundleFilePath(trustDir, name string) string {
-	return filepath.Join(trustDir, name, "x509-ca.pem")
+// named trust context. It returns an error if name isn't a valid trust context
+// name, which guarantees the path stays inside trustDir.
+func bundleFilePath(trustDir, name string) (string, error) {
+	if !plan.ValidTrustContextName(name) {
+		return "", fmt.Errorf("cannot use invalid trust context name %q", name)
+	}
+	return filepath.Join(trustDir, name, "x509-ca.pem"), nil
 }

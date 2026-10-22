@@ -217,7 +217,7 @@ trust-contexts:
         override: replace
         include: missing
 `,
-		error: `trust context "ctx" includes unknown trust context "missing"`,
+		error: `layer "layer-0" trust context "ctx" includes unknown trust context "missing"`,
 	}, {
 		summary: "unknown service trust context",
 		layer: `
@@ -227,7 +227,7 @@ services:
         command: cmd
         trust-context: missing
 `,
-		error: `service "srv" specifies unknown trust context "missing"`,
+		error: `layer "layer-0" service "srv" specifies unknown trust context "missing"`,
 	}, {
 		summary: "unknown check trust context",
 		layer: `
@@ -238,7 +238,7 @@ checks:
             url: https://example.com
             trust-context: missing
 `,
-		error: `check "chk" specifies unknown trust context "missing"`,
+		error: `layer "layer-0" check "chk" specifies unknown trust context "missing"`,
 	}, {
 		summary: "unknown log target trust context",
 		layer: `
@@ -250,7 +250,18 @@ log-targets:
         services: []
         trust-context: missing
 `,
-		error: `log target "tgt" specifies unknown trust context "missing"`,
+		error: `layer "layer-0" log target "tgt" specifies unknown trust context "missing"`,
+	}, {
+		summary: "trust-context is accepted (and ignored) for syslog log targets",
+		layer: `
+log-targets:
+    tgt:
+        override: replace
+        type: syslog
+        location: tcp://example.com:514
+        services: []
+        trust-context: default
+`,
 	}, {
 		summary: "default without include is valid",
 		layer: `
@@ -272,5 +283,172 @@ services:
 		} else {
 			c.Check(err, ErrorMatches, test.error)
 		}
+	}
+}
+
+func (s *S) TestTrustContextInvalidNames(c *C) {
+	for _, name := range []string{"..", ".", "../outside", "foo/bar", `foo\bar`, "/abs", ".hidden", "-dash", "dash-", "a b", "a.b", "a_b", "a..b"} {
+		c.Logf("name: %q", name)
+		_, err := combineTrustLayers(c, fmt.Sprintf(`
+trust-contexts:
+    %q:
+        override: replace
+`, name))
+		c.Assert(err, NotNil)
+		c.Check(err.Error(), Equals, fmt.Sprintf(`cannot use invalid trust context name %q`, name))
+	}
+	for _, name := range []string{"vendorA", "vendor-a", "vendor--a", "1ca", "a", "9"} {
+		c.Logf("name: %q", name)
+		_, err := combineTrustLayers(c, fmt.Sprintf(`
+trust-contexts:
+    %q:
+        override: replace
+`, name))
+		c.Check(err, IsNil)
+	}
+}
+
+func (s *S) TestPlanValidateNilTrustContext(c *C) {
+	p := &plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{"ctx": nil},
+	}
+	err := p.Validate()
+	c.Assert(err, ErrorMatches, `trust context object cannot be null for trust context "ctx"`)
+}
+
+func (s *S) TestTrustContextReferencesMustBeDefinedInOrder(c *C) {
+	// Defined in the same layer as the reference.
+	_, err := combineTrustLayers(c, `
+trust-contexts:
+    base:
+        override: replace
+    ctx:
+        override: replace
+        include: base
+services:
+    srv:
+        override: replace
+        command: cmd
+        trust-context: ctx
+`)
+	c.Assert(err, IsNil)
+
+	// Defined in an earlier layer.
+	_, err = combineTrustLayers(c, `
+trust-contexts:
+    ctx:
+        override: replace
+`, `
+trust-contexts:
+    other:
+        override: replace
+        include: ctx
+services:
+    srv:
+        override: replace
+        command: cmd
+        trust-context: ctx
+checks:
+    chk:
+        override: replace
+        exec:
+            command: cmd
+            trust-context: ctx
+log-targets:
+    tgt:
+        override: replace
+        type: loki
+        location: https://example.com
+        services: []
+        trust-context: ctx
+`)
+	c.Assert(err, IsNil)
+
+	// A later merge layer that doesn't set trust-context is fine.
+	_, err = combineTrustLayers(c, `
+trust-contexts:
+    ctx:
+        override: replace
+services:
+    srv:
+        override: replace
+        command: cmd
+        trust-context: ctx
+`, `
+services:
+    srv:
+        override: merge
+        environment:
+            FOO: bar
+`)
+	c.Assert(err, IsNil)
+
+	// Defined only in a later layer.
+	tests := []struct {
+		summary string
+		layer   string
+		error   string
+	}{{
+		summary: "include",
+		layer: `
+trust-contexts:
+    other:
+        override: replace
+        include: ctx
+`,
+		error: `layer "layer-0" trust context "other" includes unknown trust context "ctx"`,
+	}, {
+		summary: "service",
+		layer: `
+services:
+    srv:
+        override: replace
+        command: cmd
+        trust-context: ctx
+`,
+		error: `layer "layer-0" service "srv" specifies unknown trust context "ctx"`,
+	}, {
+		summary: "http check",
+		layer: `
+checks:
+    chk:
+        override: replace
+        http:
+            url: https://example.com
+            trust-context: ctx
+`,
+		error: `layer "layer-0" check "chk" specifies unknown trust context "ctx"`,
+	}, {
+		summary: "exec check",
+		layer: `
+checks:
+    chk:
+        override: replace
+        exec:
+            command: cmd
+            trust-context: ctx
+`,
+		error: `layer "layer-0" check "chk" specifies unknown trust context "ctx"`,
+	}, {
+		summary: "log target",
+		layer: `
+log-targets:
+    tgt:
+        override: replace
+        type: loki
+        location: https://example.com
+        services: []
+        trust-context: ctx
+`,
+		error: `layer "layer-0" log target "tgt" specifies unknown trust context "ctx"`,
+	}}
+	for _, test := range tests {
+		c.Logf(test.summary)
+		_, err := combineTrustLayers(c, test.layer, `
+trust-contexts:
+    ctx:
+        override: replace
+`)
+		c.Check(err, ErrorMatches, test.error)
 	}
 }

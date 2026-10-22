@@ -980,6 +980,16 @@ func CombineLayers(layers ...*Layer) (*Layer, error) {
 				}
 			}
 		}
+
+		// Trust contexts referenced by this layer must be defined in this
+		// layer or an earlier one.
+		err := validateTrustContextRefs(combined.TrustContexts,
+			layer.Services, layer.Checks, layer.LogTargets, layer.TrustContexts)
+		if err != nil {
+			return nil, &FormatError{
+				Message: fmt.Sprintf("layer %q %v", layer.Label, err),
+			}
+		}
 	}
 
 	// Set defaults where required.
@@ -1205,6 +1215,11 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("trust context object cannot be null for trust context %q", name),
 			}
 		}
+		if !ValidTrustContextName(name) {
+			return &FormatError{
+				Message: fmt.Sprintf("cannot use invalid trust context name %q", name),
+			}
+		}
 		switch name {
 		case "system", "internal", cmd.ProgramName:
 			return &FormatError{
@@ -1341,43 +1356,19 @@ func (p *Plan) Validate() error {
 
 	// Validate trust context references.
 	for name, context := range p.TrustContexts {
-		for _, include := range context.Include {
-			if !p.trustContextExists(include) {
-				return &FormatError{
-					Message: fmt.Sprintf(`trust context %q includes unknown trust context %q`, name, include),
-				}
+		if context == nil {
+			return &FormatError{
+				Message: fmt.Sprintf("trust context object cannot be null for trust context %q", name),
 			}
 		}
 	}
-	for name, service := range p.Services {
-		if service.TrustContext != "" && !p.trustContextExists(service.TrustContext) {
-			return &FormatError{
-				Message: fmt.Sprintf(`service %q specifies unknown trust context %q`, name, service.TrustContext),
-			}
-		}
-	}
-	for name, check := range p.Checks {
-		if check.HTTP != nil && check.HTTP.TrustContext != "" && !p.trustContextExists(check.HTTP.TrustContext) {
-			return &FormatError{
-				Message: fmt.Sprintf(`check %q specifies unknown trust context %q`, name, check.HTTP.TrustContext),
-			}
-		}
-		if check.Exec != nil && check.Exec.TrustContext != "" && !p.trustContextExists(check.Exec.TrustContext) {
-			return &FormatError{
-				Message: fmt.Sprintf(`check %q specifies unknown trust context %q`, name, check.Exec.TrustContext),
-			}
-		}
-	}
-	for name, target := range p.LogTargets {
-		if target.TrustContext != "" && !p.trustContextExists(target.TrustContext) {
-			return &FormatError{
-				Message: fmt.Sprintf(`log target %q specifies unknown trust context %q`, name, target.TrustContext),
-			}
-		}
+	err := validateTrustContextRefs(p.TrustContexts, p.Services, p.Checks, p.LogTargets, p.TrustContexts)
+	if err != nil {
+		return &FormatError{Message: err.Error()}
 	}
 
 	// Ensure combined layers don't have cycles.
-	err := p.checkCycles()
+	err = p.checkCycles()
 	if err != nil {
 		return err
 	}
@@ -1393,14 +1384,58 @@ func (p *Plan) Validate() error {
 	return nil
 }
 
-// trustContextExists reports whether name refers to a built-in trust context
-// or one defined in the plan.
-func (p *Plan) trustContextExists(name string) bool {
-	if name == "system" || name == "default" {
-		return true
+var trustContextNameRegexp = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$`)
+
+// ValidTrustContextName reports whether name is a valid trust context name.
+// Valid names start and end with a letter or digit and contain only letters,
+// digits and "-", so they're always safe to use as a single path element.
+func ValidTrustContextName(name string) bool {
+	return trustContextNameRegexp.MatchString(name)
+}
+
+// validateTrustContextRefs checks that every trust context referenced by the
+// given services, checks, log targets and trust contexts (via include) is
+// either a built-in trust context or one of the known trust contexts.
+func validateTrustContextRefs(
+	known map[string]*TrustContext,
+	services map[string]*Service,
+	checks map[string]*Check,
+	logTargets map[string]*LogTarget,
+	trustContexts map[string]*TrustContext,
+) error {
+	exists := func(name string) bool {
+		if name == "system" || name == "default" {
+			return true
+		}
+		_, ok := known[name]
+		return ok
 	}
-	_, ok := p.TrustContexts[name]
-	return ok
+	for name, context := range trustContexts {
+		for _, include := range context.Include {
+			if !exists(include) {
+				return fmt.Errorf(`trust context %q includes unknown trust context %q`, name, include)
+			}
+		}
+	}
+	for name, service := range services {
+		if service.TrustContext != "" && !exists(service.TrustContext) {
+			return fmt.Errorf(`service %q specifies unknown trust context %q`, name, service.TrustContext)
+		}
+	}
+	for name, check := range checks {
+		if check.HTTP != nil && check.HTTP.TrustContext != "" && !exists(check.HTTP.TrustContext) {
+			return fmt.Errorf(`check %q specifies unknown trust context %q`, name, check.HTTP.TrustContext)
+		}
+		if check.Exec != nil && check.Exec.TrustContext != "" && !exists(check.Exec.TrustContext) {
+			return fmt.Errorf(`check %q specifies unknown trust context %q`, name, check.Exec.TrustContext)
+		}
+	}
+	for name, target := range logTargets {
+		if target.TrustContext != "" && !exists(target.TrustContext) {
+			return fmt.Errorf(`log target %q specifies unknown trust context %q`, name, target.TrustContext)
+		}
+	}
+	return nil
 }
 
 // StartOrder returns the required services that must be started for the named

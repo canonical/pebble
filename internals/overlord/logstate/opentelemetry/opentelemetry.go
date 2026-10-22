@@ -17,7 +17,6 @@ package opentelemetry
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -125,6 +124,7 @@ type logRecord struct {
 type Client struct {
 	options    *ClientOptions
 	httpClient *http.Client
+	transport  *truststate.HTTPTransport
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
 	// sliding window "entries" of size MaxRequestEntries.
@@ -139,8 +139,12 @@ func NewClient(options *ClientOptions) *Client {
 	opts := *options
 	fillDefaultOptions(&opts)
 	c := &Client{
-		options:            &opts,
-		httpClient:         &http.Client{Timeout: opts.RequestTimeout},
+		options:    &opts,
+		httpClient: &http.Client{Timeout: opts.RequestTimeout},
+		transport: &truststate.HTTPTransport{
+			Provider: opts.TrustManager,
+			Name:     opts.TrustContext,
+		},
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}
@@ -311,12 +315,15 @@ func (c *Client) sendBatch(ctx context.Context, payload payload) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.options.UserAgent)
 
-	// Resolve the trust context configured for this log target (falling
-	// back to the "default" trust context if none is set), and use its CA
-	// bundle to validate the server's certificate, unless it resolves to
-	// the system CA pool, in which case the default HTTP client behaviour
-	// is used.
-	c.httpClient.Transport = c.resolveTransport()
+	// Use the trust context configured for this log target (falling back to
+	// the "default" trust context if none is set) to validate the server's
+	// certificate. An explicitly configured trust context that can't be
+	// resolved fails the request rather than falling back to the system CAs.
+	transport, err := c.transport.RoundTripper()
+	if err != nil {
+		return err
+	}
+	c.httpClient.Transport = transport
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -324,37 +331,6 @@ func (c *Client) sendBatch(ctx context.Context, payload payload) error {
 	}
 
 	return c.handleServerResponse(resp)
-}
-
-// resolveTransport resolves the trust context configured for this log
-// target, and returns an *http.Transport configured to validate the
-// server's certificate against it. It returns nil (meaning the default HTTP
-// client behaviour should be used) if there's no trust manager, the trust
-// context can't be resolved, or it resolves to the system CA pool.
-func (c *Client) resolveTransport() http.RoundTripper {
-	if c.options.TrustManager == nil {
-		logger.Noticef("Log target %q (opentelemetry): cannot resolve trust context %q: no trust manager",
-			c.options.TargetName, c.options.TrustContext)
-		return nil
-	}
-	trustContext, err := c.options.TrustManager.TrustContext(c.options.TrustContext)
-	if err != nil {
-		logger.Noticef("Log target %q (opentelemetry): cannot resolve trust context %q: %v",
-			c.options.TargetName, c.options.TrustContext, err)
-		return nil
-	}
-	if trustContext.IsSystemCA() {
-		trustContext.Close()
-		return nil
-	}
-	defer trustContext.Close()
-	pool, err := trustContext.CAPool()
-	if err != nil {
-		logger.Noticef("Log target %q (opentelemetry): cannot get CA pool for trust context %q: %v",
-			c.options.TargetName, c.options.TrustContext, err)
-		return nil
-	}
-	return &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool}}
 }
 
 // resetBuffer drops all buffered logs (in the case of a successful send, or an unrecoverable error).

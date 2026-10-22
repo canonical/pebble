@@ -312,8 +312,9 @@ log-targets:
 
     # (Optional) The name of the trust context used to validate the TLS
     # certificate presented by the remote log target. Only applicable to the
-    # "loki" and "opentelemetry" types. If not specified, the "default" trust
-    # context is used. See the "trust-contexts" section below for details.
+    # "loki" and "opentelemetry" types; specifying it for "syslog" is ineffective.
+    # If not specified, the "default" trust context is used. See the
+    # "trust-contexts" section below for details.
     trust-context: <trust context name>
 
 # (Optional) A list of named trust contexts, each holding a set of trusted CA
@@ -334,6 +335,10 @@ log-targets:
 #   "override: replace" and cannot define "x509" itself. A declared "default"
 #   without "include" includes nothing, so trusts no CA certificates.
 #
+# Every reference to a trust context (a "trust-context" field in a service,
+# check or log target, or an entry in "include") must name a built-in trust
+# context, or one defined in the same layer or an earlier layer.
+#
 # When a process (a service, an exec check or "pebble exec") uses a trust
 # context whose effective CA certificates differ from the system CA pool,
 # Pebble writes them to "$PEBBLE/trust/<trust context name>/x509-ca.pem"
@@ -341,6 +346,8 @@ log-targets:
 # variable at that file, unless SSL_CERT_FILE is already set explicitly.
 trust-contexts:
 
+    # Trust context names must start and end with a letter or digit, and contain
+    # only letters, digits, and "-".
     <trust context name>:
 
         # (Required) Control how this trust context definition is combined with
