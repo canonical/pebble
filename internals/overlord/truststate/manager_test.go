@@ -414,3 +414,42 @@ func (s *trustSuite) TestSystemEquivalence(c *C) {
 		tc.Close()
 	}
 }
+
+func (s *trustSuite) TestBundleFileFailsWithoutSystemPEM(c *C) {
+	mgr := newTestManager(c)
+	mgr.FakeSystemPEM(nil)
+
+	caPEM, caCert, caKey := generateCACert(c, "vendorA")
+	leaf := generateLeafCert(c, caCert, caKey, "leaf")
+	mgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
+			"withsystem": {
+				Name:    "withsystem",
+				Include: []string{"system", "vendorA"},
+			},
+		},
+	})
+
+	// A file that includes "system" can't be created, rather than being
+	// silently created without the system CA certificates.
+	tc, err := mgr.TrustContext("withsystem")
+	c.Assert(err, IsNil)
+	defer tc.Close()
+	_, err = tc.CABundleFile()
+	c.Assert(err, ErrorMatches, `cannot write CA bundle file for trust context "withsystem": `+
+		`it includes "system", but no system CA bundle was found on disk`)
+
+	// The in-memory pool is unaffected.
+	pool, err := tc.CAPool()
+	c.Assert(err, IsNil)
+	_, err = leaf.Verify(x509.VerifyOptions{Roots: pool})
+	c.Assert(err, IsNil)
+
+	// Trust contexts that don't include "system" are unaffected.
+	tcA, err := mgr.TrustContext("vendorA")
+	c.Assert(err, IsNil)
+	defer tcA.Close()
+	_, err = tcA.CABundleFile()
+	c.Assert(err, IsNil)
+}

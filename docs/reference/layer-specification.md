@@ -312,9 +312,14 @@ log-targets:
 
     # (Optional) The name of the trust context used to validate the TLS
     # certificate presented by the remote log target. Only applicable to the
-    # "loki" and "opentelemetry" types; specifying it for "syslog" is ineffective.
-    # If not specified, the "default" trust context is used. See the
-    # "trust-contexts" section below for details.
+    # "loki" and "opentelemetry" types. If not specified, the "default" trust
+    # context is used. See the "trust-contexts" section below for details.
+    #
+    # Syslog targets send logs over plain TCP or UDP, without TLS, so they
+    # don't use a trust context. Specifying "trust-context" for a "syslog"
+    # target is ineffective, but it is not an error: the trust context must
+    # still exist, but it is ignored. This is expected behaviour, and does not
+    # mean the syslog connection is protected by TLS.
     trust-context: <trust context name>
 
 # (Optional) A list of named trust contexts, each holding a set of trusted CA

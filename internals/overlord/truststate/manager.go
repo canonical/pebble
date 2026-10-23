@@ -77,8 +77,8 @@ type TrustManager struct {
 	// locations on disk. It may be nil if no such file can be found (for
 	// example, in minimal container images, or on platforms where the
 	// system trust store isn't backed by a single PEM file), in which case
-	// file-based bundles won't include the system trust anchors even though
-	// the in-memory pool always will.
+	// CA bundle files can't be created for trust contexts that include
+	// "system" (though their in-memory pools are still available).
 	systemPEM []byte
 
 	// fileMu serialises writing and removing CA bundle files, and guards
@@ -176,12 +176,13 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 			continue
 		}
 		newCurrent[r.name] = &trustContextVersion{
-			mgr:          m,
-			name:         r.name,
-			shortSha:     r.data.shortSha,
-			pemBundle:    r.data.pemBundle,
-			pool:         r.data.pool,
-			isSystemPool: r.data.isSystemPool,
+			mgr:            m,
+			name:           r.name,
+			shortSha:       r.data.shortSha,
+			pemBundle:      r.data.pemBundle,
+			pool:           r.data.pool,
+			isSystemPool:   r.data.isSystemPool,
+			includesSystem: r.data.includesSystem,
 		}
 	}
 	m.current = newCurrent
@@ -284,6 +285,12 @@ func (m *TrustManager) writeFileLocked(v *trustContextVersion) error {
 	if err != nil {
 		return err
 	}
+	if v.includesSystem && len(m.systemPEM) == 0 {
+		// The system CA pool is available in memory, but the certificates
+		// can't be written to a file, which would silently drop them.
+		return fmt.Errorf("cannot write CA bundle file for trust context %q: "+
+			"it includes %q, but no system CA bundle was found on disk", v.name, SystemTrustContext)
+	}
 	err = osutil.Mkdir(filepath.Dir(path), 0o755, &osutil.MkdirOptions{
 		MakeParents: true,
 		ExistOK:     true,
@@ -331,10 +338,11 @@ func (m *TrustManager) removeFileLocked(name string) {
 
 // resolvedTrust holds the trust data for a single trust context.
 type resolvedTrust struct {
-	pemBundle    []byte
-	pool         *x509.CertPool
-	isSystemPool bool
-	shortSha     string
+	pemBundle      []byte
+	pool           *x509.CertPool
+	isSystemPool   bool
+	includesSystem bool
+	shortSha       string
 }
 
 // resolve computes the fully-resolved CA pool and PEM bundle for the named
@@ -413,10 +421,11 @@ func (m *TrustManager) resolve(name string, pl *plan.Plan) (*resolvedTrust, erro
 	shortSha := hex.EncodeToString(h.Sum(nil))[:8]
 
 	return &resolvedTrust{
-		pemBundle:    pemBundle,
-		pool:         pool,
-		isSystemPool: pool.Equal(m.systemPool),
-		shortSha:     shortSha,
+		pemBundle:      pemBundle,
+		pool:           pool,
+		isSystemPool:   pool.Equal(m.systemPool),
+		includesSystem: includesSystem,
+		shortSha:       shortSha,
 	}, nil
 }
 

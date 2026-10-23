@@ -111,8 +111,9 @@ type trustContextVersion struct {
 	mgr  *TrustManager
 	name string
 
-	shortSha     string
-	pemBundle    []byte
-	pool         *x509.CertPool
-	isSystemPool bool
+	shortSha       string
+	pemBundle      []byte
+	pool           *x509.CertPool
+	isSystemPool   bool
+	includesSystem bool
 }

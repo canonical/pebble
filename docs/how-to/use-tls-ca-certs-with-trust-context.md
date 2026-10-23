@@ -147,7 +147,11 @@ log-targets:
         trust-context: vendorA
 ```
 
-`trust-context` is only supported for `loki` and `opentelemetry` log targets.
+`trust-context` is only used by `loki` and `opentelemetry` log targets.
+`syslog` targets send logs over plain TCP or UDP without TLS, so they don't use
+a trust context. Setting `trust-context` on a `syslog` target is accepted (the
+named trust context must still exist), but it has no effect. This is expected
+behaviour: it doesn't mean the syslog connection is protected by TLS.
 
 ## Use a trust context with `pebble exec`
 

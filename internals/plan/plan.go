@@ -1431,6 +1431,9 @@ func validateTrustContextRefs(
 		}
 	}
 	for name, target := range logTargets {
+		// A trust context is accepted for any log target type, but only
+		// "loki" and "opentelemetry" targets use it. Syslog targets don't
+		// use TLS, so it's ignored for them (as documented).
 		if target.TrustContext != "" && !exists(target.TrustContext) {
 			return fmt.Errorf(`log target %q specifies unknown trust context %q`, name, target.TrustContext)
 		}

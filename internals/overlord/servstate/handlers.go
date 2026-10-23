@@ -374,6 +374,50 @@ func logError(err error) {
 	}
 }
 
+// applyTrustContext resolves the service's trust context (or the "default"
+// trust context if none is set), and sets SSL_CERT_FILE in environment to its
+// CA bundle file, unless SSL_CERT_FILE is already set or the trust context
+// resolves to the system CA pool. If an explicitly configured trust context
+// can't be resolved, an error is returned so the service isn't started with
+// the system CA pool instead. On success, s.trustContext holds a reference to
+// the trust context if its CA bundle file is in use.
+func (s *serviceData) applyTrustContext(environment map[string]string) error {
+	s.trustContext = nil
+	name := s.config.TrustContext
+
+	if s.manager.trustMgr == nil {
+		if name == "" {
+			return nil
+		}
+		return fmt.Errorf("cannot use trust context %q: no trust manager", name)
+	}
+	trustContext, err := s.manager.trustMgr.TrustContext(name)
+	if err != nil {
+		if name == "" {
+			logger.Noticef("Cannot use default trust context for service %q: %v", s.config.Name, err)
+			return nil
+		}
+		return fmt.Errorf("cannot use trust context %q: %w", name, err)
+	}
+	s.trustContextVersion = trustContext.Version()
+	if trustContext.IsSystemCA() || environment["SSL_CERT_FILE"] != "" {
+		trustContext.Close()
+		return nil
+	}
+	caBundleFile, err := trustContext.CABundleFile()
+	if err != nil {
+		trustContext.Close()
+		if name == "" {
+			logger.Noticef("Cannot use default trust context for service %q: %v", s.config.Name, err)
+			return nil
+		}
+		return fmt.Errorf("cannot use trust context %q: %w", name, err)
+	}
+	s.trustContext = trustContext
+	environment["SSL_CERT_FILE"] = caBundleFile
+	return nil
+}
+
 // startInternal is an internal helper used to actually start (or restart) the
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
@@ -451,29 +495,12 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
-	// Resolve the trust context configured for this service (falling back
-	// to the "default" trust context if none is set), and hold on to a
-	// reference to it for as long as the service process is running, so its
-	// CA bundle file remains valid. The reference is released once the
-	// process has finished (see the goroutine below).
-	hasCertFileEnv := s.config.Environment["SSL_CERT_FILE"] != "" ||
-		s.workload != nil && s.workload.Environment["SSL_CERT_FILE"] != ""
-	if s.manager.trustMgr == nil {
-		logger.Noticef("Cannot resolve trust context %q for service %q: no trust manager", s.config.TrustContext, serviceName)
-	} else if trustContext, err := s.manager.trustMgr.TrustContext(s.config.TrustContext); err != nil {
-		logger.Noticef("Cannot resolve trust context %q for service %q: %v", s.config.TrustContext, serviceName, err)
-	} else if trustContext.IsSystemCA() || hasCertFileEnv {
-		s.trustContextVersion = trustContext.Version()
-		trustContext.Close()
-	} else {
-		s.trustContext = trustContext
-		s.trustContextVersion = trustContext.Version()
-		caBundleFile, err := trustContext.CABundleFile()
-		if err != nil {
-			logger.Noticef("Cannot get CA bundle file for trust context %q: %v", s.config.TrustContext, err)
-		} else {
-			environment["SSL_CERT_FILE"] = caBundleFile
-		}
+	// Resolve the trust context configured for this service, and hold on to
+	// a reference to it for as long as the service process is running. The
+	// reference is released once the process has finished (see the goroutine
+	// below).
+	if err := s.applyTrustContext(environment); err != nil {
+		return err
 	}
 
 	// Pass service description's environment variables to child process.

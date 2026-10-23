@@ -16,14 +16,19 @@ package logstate
 
 import (
 	"context"
+	"encoding/pem"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -337,4 +342,87 @@ func (l *labelStore) waitLabels(c *C) {
 	case <-time.After(1 * time.Second):
 		c.Fatal("timed out waiting for labels to be set")
 	}
+}
+
+// TestExplicitTrustContextFailsClosed checks that logs aren't sent to a target
+// whose explicit trust context can't be resolved, while a target with a
+// resolvable trust context still receives them.
+func (s *managerSuite) TestExplicitTrustContextFailsClosed(c *C) {
+	var unresolvedRequests atomic.Int32
+	resolved := make(chan struct{}, 10)
+	newServer := func(f func()) *httptest.Server {
+		return httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			f()
+			w.WriteHeader(http.StatusOK)
+		}))
+	}
+	resolvedServer := newServer(func() { resolved <- struct{}{} })
+	defer resolvedServer.Close()
+	unresolvedLoki := newServer(func() { unresolvedRequests.Add(1) })
+	defer unresolvedLoki.Close()
+	unresolvedOtel := newServer(func() { unresolvedRequests.Add(1) })
+	defer unresolvedOtel.Close()
+
+	caCertPEM := string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: resolvedServer.Certificate().Raw,
+	}))
+	trustMgr := truststate.NewManager(c.MkDir())
+	trustMgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"known": {Name: "known", X509: &plan.X509TrustContext{CACert: caCertPEM}},
+		},
+	})
+
+	m := NewLogManager(trustMgr)
+	defer m.Stop()
+	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+		return newLogGathererInternal(t, trustMgr, &logGathererOptions{
+			bufferTimeout:     time.Millisecond,
+			timeoutFinalFlush: 100 * time.Millisecond,
+		})
+	}
+
+	svc := newTestService("svc1")
+	m.PlanChanged(&plan.Plan{
+		Services: map[string]*plan.Service{"svc1": svc.config},
+		LogTargets: map[string]*plan.LogTarget{
+			"resolved": {
+				Name:         "resolved",
+				Type:         plan.LokiTarget,
+				Location:     resolvedServer.URL,
+				Services:     []string{"all"},
+				TrustContext: "known",
+			},
+			"unresolved-loki": {
+				Name:         "unresolved-loki",
+				Type:         plan.LokiTarget,
+				Location:     unresolvedLoki.URL,
+				Services:     []string{"all"},
+				TrustContext: "unknown",
+			},
+			"unresolved-otel": {
+				Name:         "unresolved-otel",
+				Type:         plan.OpenTelemetryTarget,
+				Location:     unresolvedOtel.URL,
+				Services:     []string{"all"},
+				TrustContext: "unknown",
+			},
+		},
+	})
+	m.ServiceStarted(svc.config, svc.ringBuffer)
+	svc.writeLog("log line #1")
+
+	select {
+	case <-resolved:
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for logs to reach target with resolved trust context")
+	}
+
+	// Give the other gatherers several flush attempts, then stop them (which
+	// makes a final flush attempt).
+	time.Sleep(50 * time.Millisecond)
+	c.Assert(svc.stop(), IsNil)
+	m.Stop()
+	c.Check(unresolvedRequests.Load(), Equals, int32(0))
 }

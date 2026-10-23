@@ -574,6 +574,72 @@ trust-contexts:
 	c.Check(lanesContain(starts, "ssltest"), Equals, true)
 }
 
+// TestStartUnresolvedTrustContextFailsClosed checks that a service with an
+// explicit trust context that can't be resolved isn't started (with the
+// system CA pool instead).
+func (s *S) TestStartUnresolvedTrustContextFailsClosed(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, testPlanLayer)
+	marker := filepath.Join(s.dir, "started")
+	s.planAddLayer(c, fmt.Sprintf(`
+trust-contexts:
+    vendorA:
+        override: replace
+        x509:
+            ca-cert: |
+%s
+services:
+    ssltest:
+        override: replace
+        command: /bin/sh -c "touch %s; sleep 10"
+        trust-context: vendorA
+`, indentPEM(testCACertPEM, 16), marker))
+	// Only tell the service manager about the plan, so the trust manager
+	// can't resolve "vendorA".
+	s.manager.PlanChanged(s.plan)
+	s.planPropagated = true
+
+	chg := s.startServices(c, [][]string{{"ssltest"}})
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.ErrorStatus)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*cannot use trust context "vendorA": trust context "vendorA" not found.*`)
+	s.st.Unlock()
+
+	svc := s.serviceByName(c, "ssltest")
+	c.Check(svc.Current, Equals, servstate.StatusInactive)
+	_, err := os.Stat(marker)
+	c.Check(os.IsNotExist(err), Equals, true)
+}
+
+// TestStartTrustContextNoTrustManagerFailsClosed checks that a service with
+// an explicit trust context isn't started when there's no trust manager.
+func (s *S) TestStartTrustContextNoTrustManagerFailsClosed(c *C) {
+	var err error
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{}, nil)
+	c.Assert(err, IsNil)
+	s.planAddLayer(c, testPlanLayer)
+	s.planAddLayer(c, `
+trust-contexts:
+    vendorA:
+        override: replace
+services:
+    ssltest:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        trust-context: vendorA
+`)
+	s.planChanged(c)
+
+	chg := s.startServices(c, [][]string{{"ssltest"}})
+
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.ErrorStatus)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*cannot use trust context "vendorA": no trust manager.*`)
+	s.st.Unlock()
+	c.Check(s.serviceByName(c, "ssltest").Current, Equals, servstate.StatusInactive)
+}
+
 // TestReplanServiceWithoutWorkload checks that Replan handles services with
 // no workload (a nil *workloads.Workload) without restarting them.
 func (s *S) TestReplanServiceWithoutWorkload(c *C) {

@@ -47,9 +47,9 @@ func loadSystemCAs() (*x509.CertPool, []byte) {
 
 	replicaPool, pemBytes := loadSystemCABundle()
 	if replicaPool == nil {
-		logger.Debugf(`Cannot locate a system CA certificate bundle on disk; ` +
-			`file-based CA bundles that include the "system" trust context ` +
-			`will not contain the system trust anchors`)
+		logger.Noticef(`Cannot locate a system CA certificate bundle on disk; ` +
+			`CA bundle files cannot be created for trust contexts that ` +
+			`include the "system" trust context`)
 		return pool, nil
 	}
 
