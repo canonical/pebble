@@ -21,3 +21,4 @@ NSS
 SSSD
 LDAP
 CAs
+syslog
