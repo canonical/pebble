@@ -71,7 +71,6 @@ func (t *HTTPTransport) RoundTripper() (http.RoundTripper, error) {
 	if trustContext == nil {
 		return base, nil
 	}
-	defer trustContext.Close()
 	if trustContext.IsSystemCA() {
 		return base, nil
 	}
@@ -82,10 +81,7 @@ func (t *HTTPTransport) RoundTripper() (http.RoundTripper, error) {
 	if t.transport != nil && t.version == version {
 		return t.transport, nil
 	}
-	pool, err := trustContext.CAPool()
-	if err != nil {
-		return nil, fmt.Errorf("cannot get CA pool for trust context %q: %w", t.displayName(), err)
-	}
+	pool := trustContext.CAPool()
 	baseTransport, ok := base.(*http.Transport)
 	if !ok || baseTransport == nil {
 		baseTransport = http.DefaultTransport.(*http.Transport)

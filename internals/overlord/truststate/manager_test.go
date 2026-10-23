@@ -38,16 +38,12 @@ func (s *trustSuite) TestBuiltinContexts(c *C) {
 
 	sys, err := mgr.TrustContext("system")
 	c.Assert(err, IsNil)
-	defer sys.Close()
-	sysPool, err := sys.CAPool()
-	c.Assert(err, IsNil)
+	sysPool := sys.CAPool()
 	c.Assert(sysPool, NotNil)
 
 	def, err := mgr.TrustContext("default")
 	c.Assert(err, IsNil)
-	defer def.Close()
-	defPool, err := def.CAPool()
-	c.Assert(err, IsNil)
+	defPool := def.CAPool()
 	c.Assert(defPool, NotNil)
 
 	_, err = mgr.TrustContext("unknown")
@@ -71,10 +67,8 @@ func (s *trustSuite) TestCustomTrustContextPoolAndFile(c *C) {
 
 	tc, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tc.Close()
 
-	pool, err := tc.CAPool()
-	c.Assert(err, IsNil)
+	pool := tc.CAPool()
 	_, err = leaf.Verify(x509.VerifyOptions{Roots: pool})
 	c.Assert(err, IsNil)
 
@@ -110,10 +104,8 @@ func (s *trustSuite) TestIncludeCyclesAreBroken(c *C) {
 
 	tc, err := mgr.TrustContext("a")
 	c.Assert(err, IsNil)
-	defer tc.Close()
 
-	pool, err := tc.CAPool()
-	c.Assert(err, IsNil)
+	pool := tc.CAPool()
 
 	_, err = leafA.Verify(x509.VerifyOptions{Roots: pool})
 	c.Assert(err, IsNil)
@@ -136,10 +128,8 @@ func (s *trustSuite) TestDefaultIncludesSystemAndCustom(c *C) {
 
 	tc, err := mgr.TrustContext("default")
 	c.Assert(err, IsNil)
-	defer tc.Close()
 
-	pool, err := tc.CAPool()
-	c.Assert(err, IsNil)
+	pool := tc.CAPool()
 	_, err = leaf.Verify(x509.VerifyOptions{Roots: pool})
 	c.Assert(err, IsNil)
 }
@@ -158,7 +148,6 @@ func (s *trustSuite) TestUnknownIncludeRetainsPreviousGoodState(c *C) {
 
 	tc1, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tc1.Close()
 	path1, err := tc1.CABundleFile()
 	c.Assert(err, IsNil)
 
@@ -172,13 +161,11 @@ func (s *trustSuite) TestUnknownIncludeRetainsPreviousGoodState(c *C) {
 
 	tc2, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tc2.Close()
 	path2, err := tc2.CABundleFile()
 	c.Assert(err, IsNil)
 	c.Assert(path2, Equals, path1)
 
-	pool, err := tc2.CAPool()
-	c.Assert(err, IsNil)
+	pool := tc2.CAPool()
 	_, err = leaf.Verify(x509.VerifyOptions{Roots: pool})
 	c.Assert(err, IsNil)
 }
@@ -197,7 +184,6 @@ func (s *trustSuite) TestFileUpdatedInPlace(c *C) {
 
 	tcOld, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tcOld.Close()
 	path, err := tcOld.CABundleFile()
 	c.Assert(err, IsNil)
 	data, err := os.ReadFile(path)
@@ -218,14 +204,72 @@ func (s *trustSuite) TestFileUpdatedInPlace(c *C) {
 
 	tcNew, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tcNew.Close()
 	c.Assert(tcNew.Version(), Not(Equals), tcOld.Version())
 	newPath, err := tcNew.CABundleFile()
 	c.Assert(err, IsNil)
 	c.Assert(newPath, Equals, path)
 }
 
-func (s *trustSuite) TestRemovedTrustContextFileKeptWhileReferenced(c *C) {
+func (s *trustSuite) TestStartUpRemovesStaleFiles(c *C) {
+	trustDir := filepath.Join(c.MkDir(), "trust")
+	writeFile := func(path string) {
+		c.Assert(os.MkdirAll(filepath.Dir(path), 0o755), IsNil)
+		c.Assert(os.WriteFile(path, []byte("stale"), 0o644), IsNil)
+	}
+	// Left over from a previous run.
+	writeFile(filepath.Join(trustDir, "gone", "x509-ca.pem"))
+	writeFile(filepath.Join(trustDir, "vendorA", "x509-ca.pem"))
+	writeFile(filepath.Join(trustDir, "vendorA", "x509-ca.pem.1234~"))
+	writeFile(filepath.Join(trustDir, "vendorB", "x509-ca.pem"))
+	writeFile(filepath.Join(trustDir, "old-1234abcd-tls-ca-bundle.pem"))
+
+	mgr := truststate.NewManager(trustDir)
+	pemA, _, _ := generateCACert(c, "vendorA")
+	pemB, _, _ := generateCACert(c, "vendorB")
+	mgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(pemA)}},
+			"vendorB": {Name: "vendorB", X509: &plan.X509TrustContext{CACert: string(pemB)}},
+		},
+	})
+	// A file written by this run is kept.
+	tcB, err := mgr.TrustContext("vendorB")
+	c.Assert(err, IsNil)
+	pathB, err := tcB.CABundleFile()
+	c.Assert(err, IsNil)
+
+	c.Assert(mgr.StartUp(), IsNil)
+
+	entries, err := os.ReadDir(trustDir)
+	c.Assert(err, IsNil)
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	c.Check(names, DeepEquals, []string{"vendorA", "vendorB"})
+	entries, err = os.ReadDir(filepath.Join(trustDir, "vendorA"))
+	c.Assert(err, IsNil)
+	c.Check(entries, HasLen, 0)
+	data, err := os.ReadFile(pathB)
+	c.Assert(err, IsNil)
+	c.Check(string(data), Equals, string(pemB))
+
+	// The stale file is recreated on demand.
+	tcA, err := mgr.TrustContext("vendorA")
+	c.Assert(err, IsNil)
+	pathA, err := tcA.CABundleFile()
+	c.Assert(err, IsNil)
+	data, err = os.ReadFile(pathA)
+	c.Assert(err, IsNil)
+	c.Check(string(data), Equals, string(pemA))
+}
+
+func (s *trustSuite) TestStartUpWithoutTrustDir(c *C) {
+	mgr := newTestManager(c)
+	c.Assert(mgr.StartUp(), IsNil)
+}
+
+func (s *trustSuite) TestPlanChangeNeverRemovesFiles(c *C) {
 	mgr := newTestManager(c)
 
 	caPEM, _, _ := generateCACert(c, "vendorA")
@@ -234,66 +278,14 @@ func (s *trustSuite) TestRemovedTrustContextFileKeptWhileReferenced(c *C) {
 			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
 		},
 	})
-
 	tc, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
 	path, err := tc.CABundleFile()
 	c.Assert(err, IsNil)
 
 	mgr.PlanChanged(&plan.Plan{})
-
-	// Still referenced, so the file remains.
 	_, err = os.Stat(path)
 	c.Assert(err, IsNil)
-
-	tc.Close()
-	_, err = os.Stat(filepath.Dir(path))
-	c.Assert(os.IsNotExist(err), Equals, true)
-}
-
-func (s *trustSuite) TestRemovedTrustContextCleanup(c *C) {
-	mgr := newTestManager(c)
-
-	caPEM, _, _ := generateCACert(c, "vendorA")
-	mgr.PlanChanged(&plan.Plan{
-		TrustContexts: map[string]*plan.TrustContext{
-			"vendorA": {Name: "vendorA", X509: &plan.X509TrustContext{CACert: string(caPEM)}},
-		},
-	})
-
-	tc, err := mgr.TrustContext("vendorA")
-	c.Assert(err, IsNil)
-	path, err := tc.CABundleFile()
-	c.Assert(err, IsNil)
-
-	// Release the only outstanding reference before removing the trust
-	// context. Since nothing has superseded it yet, the file must remain.
-	tc.Close()
-	_, err = os.Stat(path)
-	c.Assert(err, IsNil)
-
-	// Now remove vendorA from the plan entirely.
-	mgr.PlanChanged(&plan.Plan{})
-
-	_, err = mgr.TrustContext("vendorA")
-	c.Assert(err, ErrorMatches, `trust context "vendorA" not found`)
-
-	_, err = os.Stat(filepath.Dir(path))
-	c.Assert(os.IsNotExist(err), Equals, true)
-}
-
-func (s *trustSuite) TestReleaseIdempotentAndUseAfterRelease(c *C) {
-	mgr := newTestManager(c)
-
-	tc, err := mgr.TrustContext("system")
-	c.Assert(err, IsNil)
-	tc.Close()
-	tc.Close() // must not panic
-
-	_, err = tc.CAPool()
-	c.Assert(err, Equals, truststate.ErrClosed)
-	_, err = tc.CABundleFile()
-	c.Assert(err, Equals, truststate.ErrClosed)
 }
 
 func (s *trustSuite) TestSameContentKeepsSameVersion(c *C) {
@@ -309,7 +301,6 @@ func (s *trustSuite) TestSameContentKeepsSameVersion(c *C) {
 
 	tc1, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tc1.Close()
 	path1, err := tc1.CABundleFile()
 	c.Assert(err, IsNil)
 
@@ -319,7 +310,6 @@ func (s *trustSuite) TestSameContentKeepsSameVersion(c *C) {
 
 	tc2, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tc2.Close()
 	path2, err := tc2.CABundleFile()
 	c.Assert(err, IsNil)
 	c.Assert(path2, Equals, path1)
@@ -349,7 +339,6 @@ func (s *trustSuite) TestIncludedCertsFirstAndDuplicatesDropped(c *C) {
 
 	tc, err := mgr.TrustContext("c")
 	c.Assert(err, IsNil)
-	defer tc.Close()
 	path, err := tc.CABundleFile()
 	c.Assert(err, IsNil)
 	data, err := os.ReadFile(path)
@@ -363,7 +352,6 @@ func (s *trustSuite) TestDefaultWithoutIncludeTrustsNothing(c *C) {
 	def, err := mgr.TrustContext("default")
 	c.Assert(err, IsNil)
 	c.Assert(def.IsSystemCA(), Equals, true)
-	def.Close()
 
 	mgr.PlanChanged(&plan.Plan{
 		TrustContexts: map[string]*plan.TrustContext{
@@ -373,10 +361,8 @@ func (s *trustSuite) TestDefaultWithoutIncludeTrustsNothing(c *C) {
 
 	def, err = mgr.TrustContext("default")
 	c.Assert(err, IsNil)
-	defer def.Close()
 	c.Assert(def.IsSystemCA(), Equals, false)
-	pool, err := def.CAPool()
-	c.Assert(err, IsNil)
+	pool := def.CAPool()
 	c.Assert(pool.Equal(x509.NewCertPool()), Equals, true)
 	path, err := def.CABundleFile()
 	c.Assert(err, IsNil)
@@ -411,7 +397,6 @@ func (s *trustSuite) TestSystemEquivalence(c *C) {
 		tc, err := mgr.TrustContext(name)
 		c.Assert(err, IsNil)
 		c.Check(tc.IsSystemCA(), Equals, expected, Commentf("trust context %q", name))
-		tc.Close()
 	}
 }
 
@@ -435,21 +420,18 @@ func (s *trustSuite) TestBundleFileFailsWithoutSystemPEM(c *C) {
 	// silently created without the system CA certificates.
 	tc, err := mgr.TrustContext("withsystem")
 	c.Assert(err, IsNil)
-	defer tc.Close()
 	_, err = tc.CABundleFile()
 	c.Assert(err, ErrorMatches, `cannot write CA bundle file for trust context "withsystem": `+
 		`it includes "system", but no system CA bundle was found on disk`)
 
 	// The in-memory pool is unaffected.
-	pool, err := tc.CAPool()
-	c.Assert(err, IsNil)
+	pool := tc.CAPool()
 	_, err = leaf.Verify(x509.VerifyOptions{Roots: pool})
 	c.Assert(err, IsNil)
 
 	// Trust contexts that don't include "system" are unaffected.
 	tcA, err := mgr.TrustContext("vendorA")
 	c.Assert(err, IsNil)
-	defer tcA.Close()
 	_, err = tcA.CABundleFile()
 	c.Assert(err, IsNil)
 }

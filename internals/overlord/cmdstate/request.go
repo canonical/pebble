@@ -56,18 +56,17 @@ type ExecMetadata struct {
 
 // execSetup is stored on a task to specify the args for an execution.
 type execSetup struct {
-	Command      []string
-	Environment  map[string]string
-	Timeout      time.Duration
-	Terminal     bool
-	Interactive  bool
-	SplitStderr  bool
-	Width        int
-	Height       int
-	UserID       *int
-	GroupID      *int
-	WorkingDir   string
-	TrustContext *truststate.TrustContext
+	Command     []string
+	Environment map[string]string
+	Timeout     time.Duration
+	Terminal    bool
+	Interactive bool
+	SplitStderr bool
+	Width       int
+	Height      int
+	UserID      *int
+	GroupID     *int
+	WorkingDir  string
 }
 
 // Exec creates a task that will execute the command with the given arguments.
@@ -143,18 +142,17 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	// Create a task for this execution (though it's not started here).
 	task := st.NewTask("exec", fmt.Sprintf("Execute command %q", args.Command[0]))
 	setup := execSetup{
-		Command:      args.Command,
-		Environment:  environment,
-		Timeout:      args.Timeout,
-		Terminal:     args.Terminal,
-		Interactive:  args.Interactive,
-		SplitStderr:  args.SplitStderr,
-		Width:        args.Width,
-		Height:       args.Height,
-		UserID:       args.UserID,
-		GroupID:      args.GroupID,
-		WorkingDir:   workingDir,
-		TrustContext: args.TrustContext,
+		Command:     args.Command,
+		Environment: environment,
+		Timeout:     args.Timeout,
+		Terminal:    args.Terminal,
+		Interactive: args.Interactive,
+		SplitStderr: args.SplitStderr,
+		Width:       args.Width,
+		Height:      args.Height,
+		UserID:      args.UserID,
+		GroupID:     args.GroupID,
+		WorkingDir:  workingDir,
 	}
 	st.Cache(execSetupKey{task.ID()}, &setup)
 

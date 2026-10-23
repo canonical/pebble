@@ -161,7 +161,6 @@ func (c *execChecker) caBundleFile() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot resolve trust context %q: %w", c.trustContext, err)
 	}
-	defer trustContext.Close()
 	if trustContext.IsSystemCA() {
 		return "", nil
 	}

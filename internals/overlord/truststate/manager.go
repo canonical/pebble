@@ -91,11 +91,9 @@ type TrustManager struct {
 	mu sync.Mutex
 	// current holds the latest resolved version for every trust context
 	// name currently known to the manager (built-ins plus anything declared
-	// in the plan).
-	current map[string]*trustContextVersion
-	// refs counts the outstanding TrustContext references for each trust
-	// context name, across all versions.
-	refs map[string]int
+	// in the plan). Trust contexts can't be removed from the plan, as layers
+	// are only ever appended or combined.
+	current map[string]*TrustContext
 }
 
 // NewManager creates a new TrustManager which maintains CA bundle files
@@ -106,8 +104,7 @@ func NewManager(trustDir string) *TrustManager {
 	m := &TrustManager{
 		trustDir: trustDir,
 		written:  make(map[string]string),
-		current:  make(map[string]*trustContextVersion),
-		refs:     make(map[string]int),
+		current:  make(map[string]*TrustContext),
 	}
 	m.systemPool, m.systemPEM = loadSystemCAs()
 
@@ -116,6 +113,65 @@ func NewManager(trustDir string) *TrustManager {
 	// "default".
 	m.PlanChanged(plan.NewPlan())
 	return m
+}
+
+// StartUp implements overlord.StateStarterUp. It runs once the initial plan
+// has been loaded, and removes CA bundle files left on disk by a previous
+// run: the directories of trust contexts that no longer exist (or any other
+// entries in the trust directory), and any CA bundle files that haven't been
+// written by this run. Files are recreated on demand, as they are needed.
+func (m *TrustManager) StartUp() error {
+	entries, err := os.ReadDir(m.trustDir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		logger.Noticef("Cannot read trust directory: %v", err)
+		return nil
+	}
+
+	m.fileMu.Lock()
+	defer m.fileMu.Unlock()
+	m.mu.Lock()
+	exists := make(map[string]bool, len(m.current))
+	for name := range m.current {
+		exists[name] = true
+	}
+	m.mu.Unlock()
+
+	for _, entry := range entries {
+		path := filepath.Join(m.trustDir, entry.Name())
+		if !entry.IsDir() || !exists[entry.Name()] {
+			if err := os.RemoveAll(path); err != nil {
+				logger.Noticef("Cannot remove stale trust directory entry %q: %v", path, err)
+			}
+			continue
+		}
+		m.removeStaleFilesLocked(entry.Name())
+	}
+	return nil
+}
+
+// removeStaleFilesLocked removes everything in the named trust context's
+// directory, except a CA bundle file written by this run. It must be called
+// while holding fileMu.
+func (m *TrustManager) removeStaleFilesLocked(name string) {
+	dir := filepath.Join(m.trustDir, name)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		logger.Noticef("Cannot read trust directory %q: %v", dir, err)
+		return
+	}
+	_, written := m.written[name]
+	for _, entry := range entries {
+		if written && entry.Name() == bundleFileName {
+			continue
+		}
+		path := filepath.Join(dir, entry.Name())
+		if err := os.RemoveAll(path); err != nil {
+			logger.Noticef("Cannot remove stale trust directory entry %q: %v", path, err)
+		}
+	}
 }
 
 // Ensure implements overlord.StateManager. All of the TrustManager's work is
@@ -129,9 +185,7 @@ func (m *TrustManager) Ensure() error {
 // whenever the plan changes. It re-resolves every trust context declared in
 // the new plan (as well as the "system" and "default" built-ins), updating
 // the CA pool and PEM bundle available to consumers. CA bundle files that
-// have already been written are rewritten with the new content, and those
-// belonging to trust contexts removed from the plan are removed once they
-// are no longer referenced.
+// have already been written are rewritten with the new content.
 //
 // If a trust context can't be resolved (for example, because it includes an
 // unknown trust context), an error is logged and the trust context's
@@ -159,7 +213,7 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 	defer m.fileMu.Unlock()
 
 	m.mu.Lock()
-	newCurrent := make(map[string]*trustContextVersion, len(keep))
+	newCurrent := make(map[string]*TrustContext, len(keep))
 	for _, r := range resolutions {
 		old := m.current[r.name]
 		if r.err != nil {
@@ -175,7 +229,7 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 			newCurrent[r.name] = old
 			continue
 		}
-		newCurrent[r.name] = &trustContextVersion{
+		newCurrent[r.name] = &TrustContext{
 			mgr:            m,
 			name:           r.name,
 			shortSha:       r.data.shortSha,
@@ -186,88 +240,52 @@ func (m *TrustManager) PlanChanged(pl *plan.Plan) {
 		}
 	}
 	m.current = newCurrent
-	var rewrite []*trustContextVersion
-	var remove []string
+	var rewrite []*TrustContext
 	for name, sha := range m.written {
-		v, ok := m.current[name]
-		switch {
-		case !ok && m.refs[name] == 0:
-			remove = append(remove, name)
-		case ok && v.shortSha != sha:
-			rewrite = append(rewrite, v)
+		if t, ok := m.current[name]; ok && t.shortSha != sha {
+			rewrite = append(rewrite, t)
 		}
 	}
 	m.mu.Unlock()
 
-	for _, v := range rewrite {
-		if err := m.writeFileLocked(v); err != nil {
+	for _, t := range rewrite {
+		if err := m.writeFileLocked(t); err != nil {
 			logger.Noticef("Cannot update CA bundle file: %v", err)
 		}
 	}
-	for _, name := range remove {
-		m.removeFileLocked(name)
-	}
 }
 
-// TrustContext returns a reference to the current resolved state of the
-// named trust context. The caller must call Close on the returned
-// TrustContext once it is no longer needed. If passed a trust context name that
-// is an empty string, the default trust context is returned.
+// TrustContext returns the current resolved state of the named trust
+// context. If passed a trust context name that is an empty string, the
+// default trust context is returned.
 func (m *TrustManager) TrustContext(name string) (*TrustContext, error) {
 	if name == "" {
 		name = DefaultTrustContext
 	}
 	m.mu.Lock()
-	v, ok := m.current[name]
-	if ok {
-		m.refs[name]++
-	}
+	t, ok := m.current[name]
 	m.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("trust context %q not found", name)
 	}
-	return &TrustContext{version: v}, nil
+	return t, nil
 }
 
-// release drops a reference previously obtained via TrustContext, removing
-// the trust context's CA bundle file if it has been removed from the plan and
-// this was the last outstanding reference.
-func (m *TrustManager) release(name string) {
-	m.mu.Lock()
-	m.refs[name]--
-	unused := m.refs[name] <= 0
-	if unused {
-		delete(m.refs, name)
-	}
-	_, current := m.current[name]
-	m.mu.Unlock()
-	if unused && !current {
-		m.fileMu.Lock()
-		m.removeFileLocked(name)
-		m.fileMu.Unlock()
-	}
-}
-
-// ensureFile makes sure the CA bundle file for the trust context that v
+// ensureFile makes sure the CA bundle file for the trust context that t
 // belongs to exists and holds the latest resolved version of that trust
 // context, and returns its path.
-func (m *TrustManager) ensureFile(v *trustContextVersion) (string, error) {
-	path, err := bundleFilePath(m.trustDir, v.name)
+func (m *TrustManager) ensureFile(t *TrustContext) (string, error) {
+	path, err := bundleFilePath(m.trustDir, t.name)
 	if err != nil {
 		return "", err
 	}
 	m.fileMu.Lock()
 	defer m.fileMu.Unlock()
 	m.mu.Lock()
-	latest, ok := m.current[v.name]
+	latest, ok := m.current[t.name]
 	m.mu.Unlock()
 	if !ok {
-		// The trust context has been removed from the plan, but v is still
-		// referenced. Serve the file as it was last written (if it was).
-		latest = v
-		if _, written := m.written[v.name]; written {
-			return path, nil
-		}
+		latest = t
 	}
 	if m.written[latest.name] == latest.shortSha {
 		return path, nil
@@ -280,7 +298,7 @@ func (m *TrustManager) ensureFile(v *trustContextVersion) (string, error) {
 
 // writeFileLocked writes the CA bundle file for v. It must be called while
 // holding fileMu.
-func (m *TrustManager) writeFileLocked(v *trustContextVersion) error {
+func (m *TrustManager) writeFileLocked(v *TrustContext) error {
 	path, err := bundleFilePath(m.trustDir, v.name)
 	if err != nil {
 		return err
@@ -304,36 +322,6 @@ func (m *TrustManager) writeFileLocked(v *trustContextVersion) error {
 	}
 	m.written[v.name] = v.shortSha
 	return nil
-}
-
-// removeFileLocked removes the CA bundle file (and its directory) for the
-// named trust context, unless the trust context is (again) current or still
-// referenced. It must be called while holding fileMu.
-func (m *TrustManager) removeFileLocked(name string) {
-	m.mu.Lock()
-	_, current := m.current[name]
-	inUse := m.refs[name] > 0
-	m.mu.Unlock()
-	if current || inUse {
-		return
-	}
-	if _, ok := m.written[name]; !ok {
-		return
-	}
-	delete(m.written, name)
-	path, err := bundleFilePath(m.trustDir, name)
-	if err != nil {
-		logger.Noticef("Cannot remove stale CA bundle file: %v", err)
-		return
-	}
-	// Remove only the file and its (then empty) directory, never recursively.
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		logger.Noticef("Cannot remove stale CA bundle file for trust context %q: %v", name, err)
-		return
-	}
-	if err := os.Remove(filepath.Dir(path)); err != nil && !os.IsNotExist(err) {
-		logger.Noticef("Cannot remove stale CA bundle directory for trust context %q: %v", name, err)
-	}
 }
 
 // resolvedTrust holds the trust data for a single trust context.
@@ -474,6 +462,10 @@ func lookupTrustContext(name string, pl *plan.Plan) (*plan.TrustContext, bool) {
 	return ctx, ok
 }
 
+// bundleFileName is the name of the CA bundle file within a trust context's
+// directory.
+const bundleFileName = "x509-ca.pem"
+
 // bundleFilePath returns the path of the maintained CA bundle file for the
 // named trust context. It returns an error if name isn't a valid trust context
 // name, which guarantees the path stays inside trustDir.
@@ -481,5 +473,5 @@ func bundleFilePath(trustDir, name string) (string, error) {
 	if !plan.ValidTrustContextName(name) {
 		return "", fmt.Errorf("cannot use invalid trust context name %q", name)
 	}
-	return filepath.Join(trustDir, name, "x509-ca.pem"), nil
+	return filepath.Join(trustDir, name, bundleFileName), nil
 }

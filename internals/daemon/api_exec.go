@@ -88,9 +88,6 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 	// Convert User/UserID and Group/GroupID combinations into raw uid/gid.
 	uid, gid, err := osutil.NormalizeUidGid(merged.UserID, merged.GroupID, merged.User, merged.Group)
 	if err != nil {
-		if trustContext != nil {
-			trustContext.Close()
-		}
 		return BadRequest("%v", err)
 	}
 
@@ -114,9 +111,6 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 	}
 	task, metadata, err := cmdstate.Exec(st, args)
 	if err != nil {
-		if trustContext != nil {
-			trustContext.Close()
-		}
 		return ServerError("cannot call exec: %v", err)
 	}
 
@@ -138,7 +132,7 @@ func v1PostExec(c *Command, req *http.Request, user *UserState) Response {
 
 // resolveExecTrustContext resolves the trust context configured for the
 // service context, or the default trust context if no service context is
-// given. The returned trust context must be closed by the caller.
+// given.
 func resolveExecTrustContext(c *Command, p *plan.Plan, serviceContextName string) (*truststate.TrustContext, error) {
 	var trustContextName string
 	if service, ok := p.Services[serviceContextName]; ok {

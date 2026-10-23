@@ -363,7 +363,6 @@ func (m *ServiceManager) currentTrustContextVersion(name string) string {
 	if err != nil {
 		return ""
 	}
-	defer trustContext.Close()
 	return trustContext.Version()
 }
 

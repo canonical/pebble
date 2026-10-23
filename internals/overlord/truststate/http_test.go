@@ -157,7 +157,6 @@ func (s *httpTransportSuite) TestInvalidNameNeverWritesOutsideTrustDir(c *C) {
 
 	tc, err := mgr.TrustContext("../outside")
 	c.Assert(err, IsNil)
-	defer tc.Close()
 	_, err = tc.CABundleFile()
 	c.Assert(err, ErrorMatches, `cannot use invalid trust context name "../outside"`)
 	_, err = os.Stat(filepath.Join(dir, "outside"))
