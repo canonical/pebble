@@ -47,7 +47,7 @@ func (s *httpTransportSuite) TestPreservesBaseTransport(c *C) {
 		MaxIdleConns:    7,
 		TLSClientConfig: &tls.Config{ServerName: "example.com"},
 	}
-	t := &truststate.HTTPTransport{Provider: mgr, Name: "vendorA", Base: base}
+	t := &truststate.HTTPTransport{TrustManager: mgr, Name: "vendorA", Base: base}
 
 	rt, err := t.RoundTripper()
 	c.Assert(err, IsNil)
@@ -75,7 +75,7 @@ func (s *httpTransportSuite) TestDefaultBaseKeepsProxyFromEnvironment(c *C) {
 		},
 	})
 
-	t := &truststate.HTTPTransport{Provider: mgr, Name: "vendorA"}
+	t := &truststate.HTTPTransport{TrustManager: mgr, Name: "vendorA"}
 	rt, err := t.RoundTripper()
 	c.Assert(err, IsNil)
 	transport := rt.(*http.Transport)
@@ -94,7 +94,7 @@ func (s *httpTransportSuite) TestCachedUntilTrustContextChanges(c *C) {
 		},
 	})
 
-	t := &truststate.HTTPTransport{Provider: mgr, Name: "vendorA"}
+	t := &truststate.HTTPTransport{TrustManager: mgr, Name: "vendorA"}
 	rt1, err := t.RoundTripper()
 	c.Assert(err, IsNil)
 	rt2, err := t.RoundTripper()
@@ -115,12 +115,12 @@ func (s *httpTransportSuite) TestSystemUsesBase(c *C) {
 	mgr := newTestManager(c)
 	base := &http.Transport{}
 
-	t := &truststate.HTTPTransport{Provider: mgr, Base: base}
+	t := &truststate.HTTPTransport{TrustManager: mgr, Base: base}
 	rt, err := t.RoundTripper()
 	c.Assert(err, IsNil)
 	c.Assert(rt, Equals, base)
 
-	t = &truststate.HTTPTransport{Provider: mgr, Name: "system"}
+	t = &truststate.HTTPTransport{TrustManager: mgr, Name: "system"}
 	rt, err = t.RoundTripper()
 	c.Assert(err, IsNil)
 	c.Assert(rt, Equals, http.DefaultTransport)
@@ -129,7 +129,7 @@ func (s *httpTransportSuite) TestSystemUsesBase(c *C) {
 func (s *httpTransportSuite) TestFailsClosed(c *C) {
 	mgr := newTestManager(c)
 
-	t := &truststate.HTTPTransport{Provider: mgr, Name: "unknown"}
+	t := &truststate.HTTPTransport{TrustManager: mgr, Name: "unknown"}
 	_, err := t.RoundTripper()
 	c.Assert(err, ErrorMatches, `cannot resolve trust context "unknown": trust context "unknown" not found`)
 

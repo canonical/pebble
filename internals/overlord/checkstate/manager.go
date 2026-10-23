@@ -44,7 +44,7 @@ const (
 type CheckManager struct {
 	state    *state.State
 	planMgr  *planstate.PlanManager
-	trustMgr TrustManager
+	trustMgr *truststate.TrustManager
 
 	failureHandlers []FailureFunc
 
@@ -55,13 +55,8 @@ type CheckManager struct {
 // FailureFunc is the type of function called when a failure action is triggered.
 type FailureFunc func(name string)
 
-// TrustManager provides access to the trust context.
-type TrustManager interface {
-	TrustContext(name string) (*truststate.TrustContext, error)
-}
-
 // NewManager creates a new check manager.
-func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager, trustMgr TrustManager) *CheckManager {
+func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager, trustMgr *truststate.TrustManager) *CheckManager {
 	manager := &CheckManager{
 		state:    s,
 		checks:   make(map[string]*checkData),
@@ -262,7 +257,7 @@ func checkType(config *plan.Check) string {
 
 // newChecker creates a new checker of the configured type. Assumes
 // mergeServiceContext has already been called.
-func newChecker(config *plan.Check, trustMgr TrustManager) checker {
+func newChecker(config *plan.Check, trustMgr *truststate.TrustManager) checker {
 	switch {
 	case config.HTTP != nil:
 		return &httpChecker{

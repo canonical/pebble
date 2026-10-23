@@ -49,7 +49,7 @@ type httpChecker struct {
 	url          string
 	headers      map[string]string
 	trustContext string
-	trustMgr     TrustManager
+	trustMgr     *truststate.TrustManager
 	transport    *truststate.HTTPTransport
 }
 
@@ -62,7 +62,7 @@ func (c *httpChecker) check(ctx context.Context) error {
 	// certificate. An explicitly configured trust context that can't be
 	// resolved fails the check rather than falling back to the system CAs.
 	if c.transport == nil {
-		c.transport = &truststate.HTTPTransport{Provider: c.trustMgr, Name: c.trustContext}
+		c.transport = &truststate.HTTPTransport{TrustManager: c.trustMgr, Name: c.trustContext}
 	}
 	transport, err := c.transport.RoundTripper()
 	if err != nil {
@@ -144,7 +144,7 @@ type execChecker struct {
 	group        string
 	workingDir   string
 	trustContext string
-	trustMgr     TrustManager
+	trustMgr     *truststate.TrustManager
 }
 
 // caBundleFile returns the CA bundle file of the check's trust context, or ""

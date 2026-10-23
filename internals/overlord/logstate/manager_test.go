@@ -45,13 +45,13 @@ func (*managerSuite) SetUpSuite(c *C) {
 
 func (*managerSuite) TestPlanChange(c *C) {
 	gathererOptions := logGathererOptions{
-		newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 			return &testClient{}, nil
 		},
 	}
 	m := NewLogManager(nil)
 	defer m.Stop()
-	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+	m.newGatherer = func(t *plan.LogTarget, trustMgr *truststate.TrustManager) (*logGatherer, error) {
 		return newLogGathererInternal(t, trustMgr, &gathererOptions)
 	}
 
@@ -138,14 +138,14 @@ func (s *managerSuite) TestTimelyShutdown(c *C) {
 	gathererOptions := logGathererOptions{
 		timeoutCurrentFlush: 5 * time.Millisecond,
 		timeoutFinalFlush:   5 * time.Millisecond,
-		newClient: func(_ *plan.LogTarget, _ TrustManager) (logClient, error) {
+		newClient: func(_ *plan.LogTarget, _ *truststate.TrustManager) (logClient, error) {
 			return client, nil
 		},
 	}
 
 	m := NewLogManager(nil)
 	defer m.Stop()
-	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+	m.newGatherer = func(t *plan.LogTarget, trustMgr *truststate.TrustManager) (*logGatherer, error) {
 		return newLogGathererInternal(t, trustMgr, &gathererOptions)
 	}
 
@@ -228,9 +228,9 @@ func (s *managerSuite) TestLabels(c *C) {
 
 	m := NewLogManager(nil)
 	defer m.Stop()
-	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+	m.newGatherer = func(t *plan.LogTarget, trustMgr *truststate.TrustManager) (*logGatherer, error) {
 		return newLogGathererInternal(t, trustMgr, &logGathererOptions{
-			newClient: func(_ *plan.LogTarget, _ TrustManager) (logClient, error) { return fakeClient, nil },
+			newClient: func(_ *plan.LogTarget, _ *truststate.TrustManager) (logClient, error) { return fakeClient, nil },
 		})
 	}
 
@@ -376,7 +376,7 @@ func (s *managerSuite) TestExplicitTrustContextFailsClosed(c *C) {
 
 	m := NewLogManager(trustMgr)
 	defer m.Stop()
-	m.newGatherer = func(t *plan.LogTarget, trustMgr TrustManager) (*logGatherer, error) {
+	m.newGatherer = func(t *plan.LogTarget, trustMgr *truststate.TrustManager) (*logGatherer, error) {
 		return newLogGathererInternal(t, trustMgr, &logGathererOptions{
 			bufferTimeout:     time.Millisecond,
 			timeoutFinalFlush: 100 * time.Millisecond,

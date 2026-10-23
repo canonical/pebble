@@ -37,13 +37,6 @@ const (
 	maxRequestEntries = 100
 )
 
-// TrustManager provides access to the trust context, so that the client can
-// validate the Loki server's certificate against the trust context
-// configured for the log target.
-type TrustManager interface {
-	TrustContext(name string) (*truststate.TrustContext, error)
-}
-
 type Client struct {
 	options    *ClientOptions
 	httpClient *http.Client
@@ -65,8 +58,8 @@ func NewClient(options *ClientOptions) *Client {
 		options:    &opts,
 		httpClient: &http.Client{Timeout: opts.RequestTimeout},
 		transport: &truststate.HTTPTransport{
-			Provider: opts.TrustManager,
-			Name:     opts.TrustContext,
+			TrustManager: opts.TrustManager,
+			Name:         opts.TrustContext,
 		},
 		buffer: make([]entryWithService, 2*opts.MaxRequestEntries),
 		labels: make(map[string]json.RawMessage),
@@ -90,7 +83,7 @@ type ClientOptions struct {
 	TrustContext string
 	// TrustManager provides access to the trust context named by
 	// TrustContext. If nil, the default HTTP client behaviour is used.
-	TrustManager TrustManager
+	TrustManager *truststate.TrustManager
 }
 
 func fillDefaultOptions(options *ClientOptions) {

@@ -23,12 +23,6 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 )
 
-// Provider provides access to resolved trust contexts, as implemented by
-// TrustManager.
-type Provider interface {
-	TrustContext(name string) (*TrustContext, error)
-}
-
 // HTTPTransport maintains an HTTP transport that validates server
 // certificates against a named trust context. The transport is only rebuilt
 // when the resolved trust context changes, so connections are reused between
@@ -39,9 +33,9 @@ type Provider interface {
 // trust context is named, the "default" trust context is used, falling back
 // to the base transport (with a notice logged) if it cannot be resolved.
 type HTTPTransport struct {
-	// Provider resolves trust contexts. If nil, only an unnamed trust
+	// TrustManager resolves trust contexts. If nil, only an unnamed trust
 	// context can be used, and the base transport is always returned.
-	Provider Provider
+	TrustManager *TrustManager
 	// Name is the name of the trust context, or "" for "default".
 	Name string
 	// Base is the transport used for the system CA pool, and cloned for
@@ -111,16 +105,16 @@ func (t *HTTPTransport) CloseIdleConnections() {
 	}
 }
 
-// resolve returns the trust context, or nil if there is no provider and no
+// resolve returns the trust context, or nil if there is no trust manager and no
 // trust context is named.
 func (t *HTTPTransport) resolve() (*TrustContext, error) {
-	if t.Provider == nil {
+	if t.TrustManager == nil {
 		if t.Name == "" {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("cannot resolve trust context %q: no trust manager", t.Name)
 	}
-	trustContext, err := t.Provider.TrustContext(t.Name)
+	trustContext, err := t.TrustManager.TrustContext(t.Name)
 	if err != nil {
 		return nil, fmt.Errorf("cannot resolve trust context %q: %w", t.displayName(), err)
 	}

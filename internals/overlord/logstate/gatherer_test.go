@@ -26,6 +26,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -38,7 +39,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		maxBufferedEntries: 5,
-		newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
 				sendCh:     received,
@@ -79,7 +80,7 @@ func (s *gathererSuite) TestPlanChangedPreservesPuller(c *C) {
 		nil,
 		&logGathererOptions{
 			bufferTimeout: 1 * time.Millisecond,
-			newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
+			newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 				return &testClient{bufferSize: 5, sendCh: received}, nil
 			},
 		},
@@ -116,7 +117,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Millisecond,
-		newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
 				sendCh:     received,
@@ -144,7 +145,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Microsecond,
-		newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
 				sendCh:     received,
@@ -204,7 +205,7 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 		&logGathererOptions{
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
-			newClient: func(target *plan.LogTarget, trustMgr TrustManager) (logClient, error) {
+			newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 				return loki.NewClient(&loki.ClientOptions{
 					TargetName:        target.Name,
 					Location:          target.Location,

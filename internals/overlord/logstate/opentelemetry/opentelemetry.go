@@ -36,13 +36,6 @@ const (
 	maxRequestEntries = 100
 )
 
-// TrustManager provides access to the trust context, so that the client can
-// validate the OpenTelemetry collector's certificate against the trust
-// context configured for the log target.
-type TrustManager interface {
-	TrustContext(name string) (*truststate.TrustContext, error)
-}
-
 // A collection of ScopeLogs from a Resource.
 // Refer to `type ResourceLogs struct` in
 // https://github.com/open-telemetry/opentelemetry-collector/blob/3c0fd3946f70a0b1fa97813c39dbc4d91d95afa6/pdata/internal/data/protogen/logs/v1/logs.pb.go#L223
@@ -142,8 +135,8 @@ func NewClient(options *ClientOptions) *Client {
 		options:    &opts,
 		httpClient: &http.Client{Timeout: opts.RequestTimeout},
 		transport: &truststate.HTTPTransport{
-			Provider: opts.TrustManager,
-			Name:     opts.TrustContext,
+			TrustManager: opts.TrustManager,
+			Name:         opts.TrustContext,
 		},
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
@@ -168,7 +161,7 @@ type ClientOptions struct {
 	TrustContext string
 	// TrustManager provides access to the trust context named by
 	// TrustContext. If nil, the default HTTP client behaviour is used.
-	TrustManager TrustManager
+	TrustManager *truststate.TrustManager
 }
 
 func fillDefaultOptions(options *ClientOptions) {

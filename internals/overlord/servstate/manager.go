@@ -38,24 +38,18 @@ type ServiceManager struct {
 	rand     *rand.Rand
 
 	logMgr   LogManager
-	trustMgr TrustManager
+	trustMgr *truststate.TrustManager
 }
 
 type LogManager interface {
 	ServiceStarted(service *plan.Service, logs *servicelog.RingBuffer)
 }
 
-// TrustManager provides access to the CA trust contexts declared in the
-// plan, as maintained by truststate.TrustManager.
-type TrustManager interface {
-	TrustContext(name string) (*truststate.TrustContext, error)
-}
-
 type Restarter interface {
 	HandleRestart(t restart.RestartType)
 }
 
-func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager, trustMgr TrustManager) (*ServiceManager, error) {
+func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager, trustMgr *truststate.TrustManager) (*ServiceManager, error) {
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),

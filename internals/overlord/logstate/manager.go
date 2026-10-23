@@ -23,24 +23,17 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
-// TrustManager provides access to the trust context, so that log targets
-// (such as loki and opentelemetry) can validate the remote server's
-// certificate against the trust context configured for the log target.
-type TrustManager interface {
-	TrustContext(name string) (*truststate.TrustContext, error)
-}
-
 type LogManager struct {
 	mu        sync.Mutex
 	gatherers map[string]*logGatherer
 	buffers   map[string]*servicelog.RingBuffer
 	plan      *plan.Plan
-	trustMgr  TrustManager
+	trustMgr  *truststate.TrustManager
 
-	newGatherer func(*plan.LogTarget, TrustManager) (*logGatherer, error)
+	newGatherer func(*plan.LogTarget, *truststate.TrustManager) (*logGatherer, error)
 }
 
-func NewLogManager(trustMgr TrustManager) *LogManager {
+func NewLogManager(trustMgr *truststate.TrustManager) *LogManager {
 	return &LogManager{
 		gatherers:   map[string]*logGatherer{},
 		buffers:     map[string]*servicelog.RingBuffer{},
