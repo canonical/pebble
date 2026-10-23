@@ -26,6 +26,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/logstate/loki"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -38,7 +39,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		maxBufferedEntries: 5,
-		newClient: func(target *plan.LogTarget) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
 				sendCh:     received,
@@ -46,7 +47,7 @@ func (s *gathererSuite) TestGatherer(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, nil, &gathererOptions)
 	c.Assert(err, IsNil)
 	defer g.Stop()
 
@@ -76,9 +77,10 @@ func (s *gathererSuite) TestPlanChangedPreservesPuller(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	g, err := newLogGathererInternal(
 		&plan.LogTarget{Name: "tgt1", Services: []string{"all"}},
+		nil,
 		&logGathererOptions{
 			bufferTimeout: 1 * time.Millisecond,
-			newClient: func(target *plan.LogTarget) (logClient, error) {
+			newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 				return &testClient{bufferSize: 5, sendCh: received}, nil
 			},
 		},
@@ -115,7 +117,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Millisecond,
-		newClient: func(target *plan.LogTarget) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
 				sendCh:     received,
@@ -123,7 +125,7 @@ func (s *gathererSuite) TestGathererTimeout(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, nil, &gathererOptions)
 	c.Assert(err, IsNil)
 	defer g.Stop()
 
@@ -143,7 +145,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 	received := make(chan []servicelog.Entry, 1)
 	gathererOptions := logGathererOptions{
 		bufferTimeout: 1 * time.Microsecond,
-		newClient: func(target *plan.LogTarget) (logClient, error) {
+		newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 			return &testClient{
 				bufferSize: 5,
 				sendCh:     received,
@@ -151,7 +153,7 @@ func (s *gathererSuite) TestGathererShutdown(c *C) {
 		},
 	}
 
-	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, &gathererOptions)
+	g, err := newLogGathererInternal(&plan.LogTarget{Name: "tgt1"}, nil, &gathererOptions)
 	c.Assert(err, IsNil)
 	defer g.Stop()
 
@@ -199,10 +201,11 @@ func (s *gathererSuite) TestRetryLoki(c *C) {
 
 	g, err := newLogGathererInternal(
 		logTarget,
+		nil,
 		&logGathererOptions{
 			bufferTimeout:      1 * time.Millisecond,
 			maxBufferedEntries: 5,
-			newClient: func(target *plan.LogTarget) (logClient, error) {
+			newClient: func(target *plan.LogTarget, trustMgr *truststate.TrustManager) (logClient, error) {
 				return loki.NewClient(&loki.ClientOptions{
 					TargetName:        target.Name,
 					Location:          target.Location,
@@ -284,7 +287,7 @@ func (s *gathererSuite) TestConcurrency(c *C) {
 		Labels:   map[string]string{"foo": "bar-$SECRET-$SECRET2", "baz": "foo"},
 	}
 
-	g, err := newLogGathererInternal(target, &logGathererOptions{
+	g, err := newLogGathererInternal(target, nil, &logGathererOptions{
 		maxBufferedEntries: 2,
 	})
 	c.Assert(err, IsNil)

@@ -17,6 +17,7 @@ package checkstate
 import (
 	"bytes"
 	"context"
+	"encoding/pem"
 	"fmt"
 	"net"
 	"net/http"
@@ -24,12 +25,42 @@ import (
 	"os"
 	"os/user"
 	"strconv"
+	"strings"
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/reaper"
 )
+
+// testCACertPEM returns a self-signed certificate (PEM-encoded), suitable
+// for use as CA certificate data in a trust context. It's the certificate
+// httptest.NewTLSServer presents by default, so it can also be used to
+// establish trust with a server created that way.
+func testCACertPEM(c *C) string {
+	server := httptest.NewTLSServer(http.NotFoundHandler())
+	defer server.Close()
+	return string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: server.Certificate().Raw,
+	}))
+}
+
+// newTestTrustManager creates a truststate.TrustManager with a single named
+// trust context ("vendorA") backed by caCertPEM.
+func newTestTrustManager(c *C, caCertPEM string) *truststate.TrustManager {
+	trustMgr := truststate.NewManager(c.MkDir())
+	trustMgr.PlanChanged(&plan.Plan{
+		TrustContexts: map[string]*plan.TrustContext{
+			"vendorA": {
+				Name: "vendorA",
+				X509: &plan.X509TrustContext{CACert: caCertPEM},
+			},
+		},
+	})
+	return trustMgr
+}
 
 type CheckersSuite struct{}
 
@@ -117,6 +148,44 @@ func (s *CheckersSuite) TestHTTP(c *C) {
 	chk = &httpChecker{url: "#!@$%@#@"}
 	err = chk.check(ctx)
 	c.Assert(err, ErrorMatches, "cannot build request: .*")
+}
+
+func (s *CheckersSuite) TestHTTPTrustContext(c *C) {
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "ok")
+	}))
+	defer server.Close()
+
+	caCertPEM := string(pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: server.Certificate().Raw,
+	}))
+	trustMgr := newTestTrustManager(c, caCertPEM)
+
+	// Without a trust context, the server's self-signed certificate isn't
+	// trusted by the system pool, so the check fails.
+	chk := &httpChecker{url: server.URL}
+	err := chk.check(context.Background())
+	c.Assert(err, ErrorMatches, ".*(certificate|x509).*")
+
+	// With the matching trust context configured, the check succeeds.
+	chk = &httpChecker{
+		url:          server.URL,
+		trustContext: "vendorA",
+		trustMgr:     trustMgr,
+	}
+	err = chk.check(context.Background())
+	c.Assert(err, IsNil)
+
+	// An explicit trust context that can't be resolved fails the check,
+	// rather than falling back to the system CA pool.
+	chk = &httpChecker{
+		url:          server.URL,
+		trustContext: "unknown",
+		trustMgr:     trustMgr,
+	}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, `cannot resolve trust context "unknown": .*not found`)
 }
 
 func (s *CheckersSuite) TestTCP(c *C) {
@@ -259,19 +328,72 @@ func (s *CheckersSuite) TestExec(c *C) {
 	c.Assert(detailsErr.Details(), Equals, currentUser.Username)
 }
 
+func (s *CheckersSuite) TestExecTrustContext(c *C) {
+	err := reaper.Start()
+	c.Assert(err, IsNil)
+	defer reaper.Stop()
+
+	caCertPEM := testCACertPEM(c)
+	trustMgr := newTestTrustManager(c, caCertPEM)
+
+	// With a trust context configured, SSL_CERT_FILE is set to the resolved
+	// CA bundle file's path, which contains the trust context's CA cert.
+	var sslCertFile string
+	chk := &execChecker{
+		command:      "/bin/sh -c 'echo -n $SSL_CERT_FILE; exit 1'",
+		trustContext: "vendorA",
+		trustMgr:     trustMgr,
+	}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, "exit status 1")
+	detailsErr, ok := err.(*detailsError)
+	c.Assert(ok, Equals, true)
+	sslCertFile = detailsErr.Details()
+	c.Assert(sslCertFile, Not(Equals), "")
+
+	bundle, err := os.ReadFile(sslCertFile)
+	c.Assert(err, IsNil)
+	c.Assert(strings.Contains(string(bundle), strings.TrimSpace(caCertPEM)), Equals, true)
+
+	// SSL_CERT_FILE is left untouched if the check has set it explicitly.
+	chk = &execChecker{
+		command:      "/bin/sh -c 'echo -n $SSL_CERT_FILE; exit 1'",
+		environment:  map[string]string{"SSL_CERT_FILE": "/custom/path"},
+		trustContext: "vendorA",
+		trustMgr:     trustMgr,
+	}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, "exit status 1")
+	detailsErr, ok = err.(*detailsError)
+	c.Assert(ok, Equals, true)
+	c.Assert(detailsErr.Details(), Equals, "/custom/path")
+
+	// An explicit trust context that can't be resolved fails the check
+	// without running the command.
+	chk = &execChecker{
+		command:      "/bin/sh -c 'echo -n $SSL_CERT_FILE; exit 1'",
+		trustContext: "unknown",
+		trustMgr:     trustMgr,
+	}
+	err = chk.check(context.Background())
+	c.Assert(err, ErrorMatches, `cannot resolve trust context "unknown": .*not found`)
+}
+
 func (s *CheckersSuite) TestNewChecker(c *C) {
 	chk := newChecker(&plan.Check{
 		Name: "http",
 		HTTP: &plan.HTTPCheck{
-			URL:     "https://example.com/foo",
-			Headers: map[string]string{"k": "v"},
+			URL:          "https://example.com/foo",
+			Headers:      map[string]string{"k": "v"},
+			TrustContext: "vendorA",
 		},
-	})
+	}, nil)
 	http, ok := chk.(*httpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(http.name, Equals, "http")
 	c.Check(http.url, Equals, "https://example.com/foo")
 	c.Check(http.headers, DeepEquals, map[string]string{"k": "v"})
+	c.Check(http.trustContext, Equals, "vendorA")
 
 	chk = newChecker(&plan.Check{
 		Name: "tcp",
@@ -279,7 +401,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 			Port: 80,
 			Host: "localhost",
 		},
-	})
+	}, nil)
 	tcp, ok := chk.(*tcpChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(tcp.name, Equals, "tcp")
@@ -290,15 +412,16 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 	chk = newChecker(&plan.Check{
 		Name: "exec",
 		Exec: &plan.ExecCheck{
-			Command:     "sleep 1",
-			Environment: map[string]string{"k": "v"},
-			UserID:      &userID,
-			User:        "user",
-			GroupID:     &groupID,
-			Group:       "group",
-			WorkingDir:  "/working/dir",
+			Command:      "sleep 1",
+			Environment:  map[string]string{"k": "v"},
+			UserID:       &userID,
+			User:         "user",
+			GroupID:      &groupID,
+			Group:        "group",
+			WorkingDir:   "/working/dir",
+			TrustContext: "vendorA",
 		},
-	})
+	}, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Assert(exec.name, Equals, "exec")
@@ -308,6 +431,7 @@ func (s *CheckersSuite) TestNewChecker(c *C) {
 	c.Assert(exec.user, Equals, "user")
 	c.Assert(exec.groupID, Equals, &groupID)
 	c.Assert(exec.workingDir, Equals, "/working/dir")
+	c.Assert(exec.trustContext, Equals, "vendorA")
 }
 
 func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
@@ -329,7 +453,7 @@ func (s *CheckersSuite) TestExecContextNoOverride(c *C) {
 			ServiceContext: "svc1",
 		},
 	})
-	chk := newChecker(config)
+	chk := newChecker(config, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")
@@ -367,7 +491,7 @@ func (s *CheckersSuite) TestExecContextOverride(c *C) {
 			WorkingDir:     "/working/dir",
 		},
 	})
-	chk := newChecker(config)
+	chk := newChecker(config, nil)
 	exec, ok := chk.(*execChecker)
 	c.Assert(ok, Equals, true)
 	c.Check(exec.name, Equals, "exec")

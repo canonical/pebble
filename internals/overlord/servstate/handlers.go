@@ -110,6 +110,13 @@ type serviceData struct {
 	restarting   bool
 	currentSince time.Time
 	startCount   atomic.Int64
+	// trustContextVersion is the resolved content version (see
+	// truststate.TrustContext.Version) of the trust context configured for
+	// this service, as of the last time it was (re)started. It's used by
+	// Replan to detect changes to the trust context (or a trust context it
+	// transitively includes) that require the service to be restarted, even
+	// if the service's own configuration hasn't changed.
+	trustContextVersion string
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -361,6 +368,45 @@ func logError(err error) {
 	}
 }
 
+// applyTrustContext resolves the service's trust context (or the "default"
+// trust context if none is set), and sets SSL_CERT_FILE in environment to its
+// CA bundle file, unless SSL_CERT_FILE is already set or the trust context
+// resolves to the system CA pool. If an explicitly configured trust context
+// can't be resolved, an error is returned so the service isn't started with
+// the system CA pool instead.
+func (s *serviceData) applyTrustContext(environment map[string]string) error {
+	name := s.config.TrustContext
+
+	if s.manager.trustMgr == nil {
+		if name == "" {
+			return nil
+		}
+		return fmt.Errorf("cannot use trust context %q: no trust manager", name)
+	}
+	trustContext, err := s.manager.trustMgr.TrustContext(name)
+	if err != nil {
+		if name == "" {
+			logger.Noticef("Cannot use default trust context for service %q: %v", s.config.Name, err)
+			return nil
+		}
+		return fmt.Errorf("cannot use trust context %q: %w", name, err)
+	}
+	s.trustContextVersion = trustContext.Version()
+	if trustContext.IsSystemCA() || environment["SSL_CERT_FILE"] != "" {
+		return nil
+	}
+	caBundleFile, err := trustContext.CABundleFile()
+	if err != nil {
+		if name == "" {
+			logger.Noticef("Cannot use default trust context for service %q: %v", s.config.Name, err)
+			return nil
+		}
+		return fmt.Errorf("cannot use trust context %q: %w", name, err)
+	}
+	environment["SSL_CERT_FILE"] = caBundleFile
+	return nil
+}
+
 // startInternal is an internal helper used to actually start (or restart) the
 // command. It assumes the caller has ensures the service is in a valid state,
 // and it sets s.cmd and other relevant fields.
@@ -370,6 +416,7 @@ func (s *serviceData) startInternal() error {
 		return err
 	}
 	args := append(base, extra...)
+	serviceName := s.config.Name
 	s.cmd = exec.Command(args[0], args[1:]...)
 	s.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
@@ -437,6 +484,11 @@ func (s *serviceData) startInternal() error {
 		}
 	}
 
+	// Provide the CA bundle of the trust context configured for this service.
+	if err := s.applyTrustContext(environment); err != nil {
+		return err
+	}
+
 	// Pass service description's environment variables to child process.
 	s.cmd.Env = os.Environ()
 	for k, v := range environment {
@@ -450,7 +502,6 @@ func (s *serviceData) startInternal() error {
 		// started (previous logs have already been copied).
 		outputIterator = s.logs.HeadIterator(0)
 	}
-	serviceName := s.config.Name
 	logWriter := servicelog.NewFormatWriter(s.logs, serviceName)
 	s.cmd.Stdout = logWriter
 	s.cmd.Stderr = logWriter

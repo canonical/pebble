@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
@@ -116,6 +117,7 @@ type logRecord struct {
 type Client struct {
 	options    *ClientOptions
 	httpClient *http.Client
+	transport  *truststate.HTTPTransport
 
 	// To store log entries, keep a buffer of size 2*MaxRequestEntries with a
 	// sliding window "entries" of size MaxRequestEntries.
@@ -130,8 +132,12 @@ func NewClient(options *ClientOptions) *Client {
 	opts := *options
 	fillDefaultOptions(&opts)
 	c := &Client{
-		options:            &opts,
-		httpClient:         &http.Client{Timeout: opts.RequestTimeout},
+		options:    &opts,
+		httpClient: &http.Client{Timeout: opts.RequestTimeout},
+		transport: &truststate.HTTPTransport{
+			TrustManager: opts.TrustManager,
+			Name:         opts.TrustContext,
+		},
 		buffer:             make([]entryWithService, 2*opts.MaxRequestEntries),
 		resourceAttributes: make(map[string][]keyValue),
 	}
@@ -148,6 +154,14 @@ type ClientOptions struct {
 	ScopeName         string
 	TargetName        string
 	Location          string
+
+	// TrustContext is the name of the trust context to use to validate the
+	// OpenTelemetry collector's certificate (falling back to the "default"
+	// trust context if empty).
+	TrustContext string
+	// TrustManager provides access to the trust context named by
+	// TrustContext. If nil, the default HTTP client behaviour is used.
+	TrustManager *truststate.TrustManager
 }
 
 func fillDefaultOptions(options *ClientOptions) {
@@ -293,6 +307,16 @@ func (c *Client) sendBatch(ctx context.Context, payload payload) error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", c.options.UserAgent)
+
+	// Use the trust context configured for this log target (falling back to
+	// the "default" trust context if none is set) to validate the server's
+	// certificate. An explicitly configured trust context that can't be
+	// resolved fails the request rather than falling back to the system CAs.
+	transport, err := c.transport.RoundTripper()
+	if err != nil {
+		return err
+	}
+	c.httpClient.Transport = transport
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {

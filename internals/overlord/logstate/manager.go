@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/canonical/pebble/internals/logger"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -27,14 +28,16 @@ type LogManager struct {
 	gatherers map[string]*logGatherer
 	buffers   map[string]*servicelog.RingBuffer
 	plan      *plan.Plan
+	trustMgr  *truststate.TrustManager
 
-	newGatherer func(*plan.LogTarget) (*logGatherer, error)
+	newGatherer func(*plan.LogTarget, *truststate.TrustManager) (*logGatherer, error)
 }
 
-func NewLogManager() *LogManager {
+func NewLogManager(trustMgr *truststate.TrustManager) *LogManager {
 	return &LogManager{
 		gatherers:   map[string]*logGatherer{},
 		buffers:     map[string]*servicelog.RingBuffer{},
+		trustMgr:    trustMgr,
 		newGatherer: newLogGatherer,
 	}
 }
@@ -54,7 +57,7 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 		if gatherer == nil {
 			// Create new gatherer
 			var err error
-			gatherer, err = m.newGatherer(target)
+			gatherer, err = m.newGatherer(target, m.trustMgr)
 			if err != nil {
 				logger.Noticef("Internal error: cannot create gatherer for target %q: %v",
 					target.Name, err)
