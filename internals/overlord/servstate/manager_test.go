@@ -2340,10 +2340,10 @@ func (s *S) TestMetrics(c *C) {
 pebble_service_active{service="test1"} 1
 pebble_service_active{service="test2"} 1
 
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 1
-pebble_service_start_count{service="test2"} 1
+# HELP pebble_service_start_total Number of times the service has started
+# TYPE pebble_service_start_total counter
+pebble_service_start_total{service="test1"} 1
+pebble_service_start_total{service="test2"} 1
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
@@ -2358,10 +2358,10 @@ pebble_service_start_count{service="test2"} 1
 pebble_service_active{service="test1"} 0
 pebble_service_active{service="test2"} 0
 
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 1
-pebble_service_start_count{service="test2"} 1
+# HELP pebble_service_start_total Number of times the service has started
+# TYPE pebble_service_start_total counter
+pebble_service_start_total{service="test1"} 1
+pebble_service_start_total{service="test2"} 1
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
@@ -2379,10 +2379,10 @@ pebble_service_start_count{service="test2"} 1
 pebble_service_active{service="test1"} 1
 pebble_service_active{service="test2"} 1
 
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 2
-pebble_service_start_count{service="test2"} 2
+# HELP pebble_service_start_total Number of times the service has started
+# TYPE pebble_service_start_total counter
+pebble_service_start_total{service="test1"} 2
+pebble_service_start_total{service="test2"} 2
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
@@ -2397,10 +2397,10 @@ pebble_service_start_count{service="test2"} 2
 pebble_service_active{service="test1"} 0
 pebble_service_active{service="test2"} 0
 
-# HELP pebble_service_start_count Number of times the service has started
-# TYPE pebble_service_start_count counter
-pebble_service_start_count{service="test1"} 2
-pebble_service_start_count{service="test2"} 2
+# HELP pebble_service_start_total Number of times the service has started
+# TYPE pebble_service_start_total counter
+pebble_service_start_total{service="test1"} 2
+pebble_service_start_total{service="test2"} 2
 
 `[1:]
 	c.Assert(buf.String(), Equals, expected)
