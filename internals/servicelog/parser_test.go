@@ -192,3 +192,27 @@ func (s *parserSuite) TestNewDataAfterEOF(c *C) {
 	c.Check(parser.Next(), Equals, false)
 	c.Check(parser.Err(), IsNil)
 }
+
+func (s *parserSuite) TestLogLineInsideMessage(c *C) {
+	r := strings.NewReader("2021-05-26T12:37:00Z [s] foo ")
+	parser := servicelog.NewParser(r, 1024)
+	c.Check(parser.Next(), Equals, true)
+	checkEntry(c, parser.Entry(), servicelog.Entry{
+		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
+		Service: "s",
+		Message: "foo ",
+	})
+	c.Check(parser.Next(), Equals, false)
+
+	// The rest of the line looks like a log line from another service, but
+	// is still the output of the first.
+	r.Reset("2021-05-26T12:37:01Z [other] bar\n")
+	c.Check(parser.Next(), Equals, true)
+	checkEntry(c, parser.Entry(), servicelog.Entry{
+		Time:    time.Date(2021, 5, 26, 12, 37, 0, 0, time.UTC),
+		Service: "s",
+		Message: "2021-05-26T12:37:01Z [other] bar\n",
+	})
+	c.Check(parser.Next(), Equals, false)
+	c.Check(parser.Err(), IsNil)
+}

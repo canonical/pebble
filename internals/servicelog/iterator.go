@@ -99,7 +99,7 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 		it.index = start
 		it.truncated()
 	}
-	if end != 0 && it.index < end {
+	if it.readPos(start) < end {
 		return true
 	}
 	if len(it.trunc) > 0 {
@@ -132,13 +132,13 @@ func (it *iterator) Next(cancel <-chan struct{}) bool {
 			it.index = start
 			it.truncated()
 		}
-		if end != 0 && it.index < end {
+		if it.readPos(start) < end {
 			return true
 		}
 		if len(it.trunc) > 0 {
 			return true
 		}
-		if it.index == end && closed {
+		if it.readPos(start) == end && closed {
 			cancel = nil
 		}
 	}
@@ -215,6 +215,15 @@ func (it *iterator) Notify(ch chan bool) {
 	it.notifyLock.Lock()
 	defer it.notifyLock.Unlock()
 	it.notifyChan = ch
+}
+
+// readPos returns the position the next read will start from, given the
+// ring buffer's current start position.
+func (it *iterator) readPos(start RingPos) RingPos {
+	if it.index == TailPosition {
+		return start
+	}
+	return it.index
 }
 
 func (it *iterator) truncated() {

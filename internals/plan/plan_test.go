@@ -1282,6 +1282,15 @@ var planTests = []planTest{{
 				override: merge
 `},
 }, {
+	summary: "Service name can't contain whitespace",
+	error:   `cannot use service name "svc 1": whitespace not allowed`,
+	input: []string{`
+		services:
+			svc 1:
+				command: foo
+				override: merge
+`},
+}, {
 	summary: "OpenTelemetry log target cannot specify service.name label",
 	error:   `cannot specify "service.name" label for opentelemetry log target "tgt1"`,
 	input: []string{`
