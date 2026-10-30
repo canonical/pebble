@@ -35,6 +35,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
+	"github.com/canonical/pebble/internals/tracing"
 	"github.com/canonical/pebble/internals/wsutil"
 )
 
@@ -61,10 +62,14 @@ const (
 )
 
 type RequestOptions struct {
-	Type    RequestType
-	Method  string
-	Path    string
-	Query   url.Values
+	Type   RequestType
+	Method string
+	Path   string
+	Query  url.Values
+	// Headers are set on the request, overriding any the client sets itself,
+	// including the trace context headers (traceparent and tracestate): if
+	// traceparent is given, no trace context is propagated from the client's
+	// span context or the request context.
 	Headers map[string]string
 	Body    io.Reader
 }
@@ -203,6 +208,14 @@ type Config struct {
 
 	// UserAgent is the User-Agent header sent to the Pebble daemon.
 	UserAgent string
+
+	// SpanContext, if valid, is the trace span that requests are made on
+	// behalf of. It is sent to the daemon using the W3C Trace Context
+	// headers (traceparent and tracestate), unless the context passed to
+	// Requester.Do carries a span of its own, which takes precedence. A
+	// traceparent header given in RequestOptions.Headers takes precedence
+	// over both.
+	SpanContext tracing.SpanContext
 }
 
 // A Client knows how to talk to the Pebble daemon.
@@ -213,6 +226,10 @@ type Client struct {
 	latestWarning time.Time
 
 	getWebsocket getWebsocketFunc
+
+	// spanContext is the trace span that requests are made on behalf of
+	// (see Config.SpanContext and SetSpanContext).
+	spanContext tracing.SpanContext
 }
 
 type getWebsocketFunc func(urlPath string) (clientWebsocket, error)
@@ -250,7 +267,7 @@ func New(config *Config) (*Client, error) {
 		localConfig = *config
 	}
 
-	client := &Client{}
+	client := &Client{spanContext: localConfig.SpanContext}
 	requester, err := newDefaultRequester(client, &localConfig)
 	if err != nil {
 		return nil, err
@@ -266,6 +283,14 @@ func New(config *Config) (*Client, error) {
 
 func (client *Client) Requester() Requester {
 	return client.requester
+}
+
+// SetSpanContext sets the trace span that the client's requests are made on
+// behalf of, replacing the one given in Config.SpanContext. If sc is not
+// valid, requests carry no trace context (unless the context passed to
+// Requester.Do carries a span).
+func (client *Client) SetSpanContext(sc tracing.SpanContext) {
+	client.spanContext = sc
 }
 
 func (client *Client) getTaskWebsocket(taskID, websocketID string) (clientWebsocket, error) {
@@ -329,6 +354,17 @@ func (rq *defaultRequester) dispatch(ctx context.Context, method, urlpath string
 
 	for key, value := range headers {
 		req.Header.Set(key, value)
+	}
+
+	// Propagate the trace span, preferring one carried by ctx. A traceparent
+	// header given in the request options takes precedence over both, like
+	// any other header set explicitly.
+	if req.Header.Get("traceparent") == "" {
+		traceCtx := ctx
+		if !tracing.SpanContextFromContext(ctx).IsValid() {
+			traceCtx = tracing.ContextWithSpanContext(ctx, rq.client.spanContext)
+		}
+		tracing.InjectHTTPHeaders(traceCtx, req.Header)
 	}
 
 	rsp, err := rq.doer.Do(req)
@@ -766,7 +802,10 @@ func (rq *defaultRequester) getWebsocket(urlPath string) (clientWebsocket, error
 	if rq.basicUsername != "" && rq.basicPassword != "" {
 		r.SetBasicAuth(rq.basicUsername, rq.basicPassword)
 	}
-	conn, resp, err := dialer.Dial(url, nil)
+	// Propagate the trace span, so the websocket request is part of the same
+	// trace as the exec request.
+	tracing.InjectHTTPHeaders(tracing.ContextWithSpanContext(context.Background(), rq.client.spanContext), r.Header)
+	conn, resp, err := dialer.Dial(url, r.Header)
 	if errors.Is(err, websocket.ErrBadHandshake) {
 		// FIXME: gorilla truncates the response body to 1024 characters.
 		// If parsing fails, the real error should appear in the server logs.
