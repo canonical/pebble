@@ -2,6 +2,8 @@ module github.com/canonical/pebble
 
 go 1.27.3
 
+godebug multipathtcp=0
+
 require (
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5
 	github.com/canonical/go-flags v0.0.0-20230403090104-105d09a091b8
