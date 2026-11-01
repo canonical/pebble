@@ -946,9 +946,19 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("plan check %q period must not be zero", name),
 			}
 		}
+		if check.Period.IsSet && check.Period.Value < 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q period must not be negative", name),
+			}
+		}
 		if check.Timeout.IsSet && check.Timeout.Value == 0 {
 			return &FormatError{
 				Message: fmt.Sprintf("plan check %q timeout must not be zero", name),
+			}
+		}
+		if check.Timeout.IsSet && check.Timeout.Value < 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q timeout must not be negative", name),
 			}
 		}
 

@@ -32,6 +32,7 @@ type MetricType int
 const (
 	TypeCounterInt MetricType = iota + 1
 	TypeGaugeInt
+	metricTypeEnd // sentinel, must stay last
 )
 
 func (mt MetricType) String() string {
@@ -43,6 +44,10 @@ func (mt MetricType) String() string {
 	default:
 		panic(fmt.Sprintf("internal error: invalid metric type %d", mt))
 	}
+}
+
+func (mt MetricType) valid() bool {
+	return mt > 0 && mt < metricTypeEnd
 }
 
 // Metric represents a single metric.
@@ -123,6 +128,9 @@ func (otw *OpenTelemetryWriter) Flush() error {
 }
 
 func validateMetric(m Metric) error {
+	if !m.Type.valid() {
+		return fmt.Errorf("cannot write metric with invalid type %d", m.Type)
+	}
 	if !metricNameRegex.MatchString(m.Name) {
 		return fmt.Errorf("cannot write metric with invalid name %q", m.Name)
 	}

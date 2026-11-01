@@ -15,9 +15,15 @@
 package tlsstate_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/ed25519"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/pem"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
@@ -133,6 +139,45 @@ func (ts *tlsSuite) TestInvalidIDCertPerm(c *C) {
 	mgr = tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
 	_, err = mgr.GetCertificate(nil)
 	c.Assert(err, ErrorMatches, ".*expected permission.*")
+}
+
+// TestNonEd25519IDCert checks that a certificate with a non-Ed25519 public key
+// is replaced with a new certificate matching the identity key.
+func (ts *tlsSuite) TestNonEd25519IDCert(c *C) {
+	tlsDir := filepath.Join(c.MkDir(), "tls")
+	err := os.MkdirAll(tlsDir, 0700)
+	c.Assert(err, IsNil)
+
+	ecdsaKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	c.Assert(err, IsNil)
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, ecdsaKey.Public(), ecdsaKey)
+	c.Assert(err, IsNil)
+	idPath := filepath.Join(tlsDir, "identity.pem")
+	err = os.WriteFile(idPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600)
+	c.Assert(err, IsNil)
+
+	key := newIDKey(c)
+	mgr := tlsstate.NewManager(&tlsstate.Options{TLSDir: tlsDir, Signer: key})
+	tlsCert, err := mgr.GetCertificate(nil)
+	c.Assert(err, IsNil)
+
+	idCert, err := x509.ParseCertificate(tlsCert.Certificate[1])
+	c.Assert(err, IsNil)
+	c.Assert(key.Public().(ed25519.PublicKey).Equal(idCert.PublicKey), Equals, true)
+
+	pemData, err := os.ReadFile(idPath)
+	c.Assert(err, IsNil)
+	block, _ := pem.Decode(pemData)
+	c.Assert(block, NotNil)
+	c.Assert(block.Bytes, DeepEquals, idCert.Raw)
 }
 
 // TestTLSServerClient checks if the identity certificate works as the root CA

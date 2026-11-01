@@ -18,6 +18,8 @@ import (
 	"math"
 	"os"
 
+	"golang.org/x/sys/unix"
+
 	. "gopkg.in/check.v1"
 )
 
@@ -86,4 +88,47 @@ func (s *ptyutilSuite) TestSetSizeBounds(c *C) {
 		err := SetSize(int(ptx.Fd()), tc.width, tc.height)
 		c.Check(err, ErrorMatches, "cannot set terminal size: dimension out of range")
 	}
+}
+
+func (s *ptyutilSuite) TestOpenPtyTermiosFlags(c *C) {
+	// The OpenPtyInDevpts function would typically be passed a file descriptor
+	// to a devpts file system in a mount namespace created by the container
+	// runtime. The host's devpts is usually mounted with ptmxmode=0000, so
+	// opening its ptmx would require root. The test uses a file descriptor to
+	// /dev instead, in which the `ptmx` file has 0666 permissions.
+	dev, err := os.Open("/dev")
+	c.Assert(err, IsNil)
+	defer dev.Close()
+
+	ptm, pts, err := OpenPtyInDevpts(int(dev.Fd()), int64(os.Getuid()), int64(os.Getgid()))
+	c.Assert(err, IsNil, Commentf("open pty pair"))
+	defer pts.Close()
+	defer ptm.Close()
+
+	wantIflag := uint32(unix.IMAXBEL | unix.IUTF8 | unix.BRKINT | unix.IXANY)
+	wantCflag := uint32(unix.HUPCL)
+
+	for _, f := range []*os.File{ptm, pts} {
+		tio, err := unix.IoctlGetTermios(int(f.Fd()), unix.TCGETS)
+		c.Assert(err, IsNil)
+
+		if tio.Iflag&wantIflag != wantIflag {
+			c.Errorf("Iflag: actual = %#x, expected = %#x", tio.Iflag, wantIflag)
+		}
+		if tio.Cflag&wantCflag != wantCflag {
+			c.Errorf("Cflag: actual = %#x, expected = %#x", tio.Cflag, wantCflag)
+		}
+	}
+
+	// Test writing a VERASE (0x7f) character after a 2-byte UTF-8 character.
+	// Without the IUTF8 Iflag set, only one byte will be deleted, leaving
+	// garbage in the buffer.
+	_, err = ptm.Write([]byte("é\x7f\n"))
+	c.Assert(err, IsNil)
+
+	buf := make([]byte, 8)
+	l, err := pts.Read(buf)
+	c.Assert(err, IsNil)
+
+	c.Assert(buf[:l], DeepEquals, []byte("\n"))
 }

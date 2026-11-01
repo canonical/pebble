@@ -16,6 +16,7 @@ package metrics_test
 
 import (
 	"bytes"
+	"fmt"
 	"testing"
 
 	. "gopkg.in/check.v1"
@@ -117,5 +118,20 @@ special_chars{key_with_underscore="value_with_underscore",key2="value-with-dash"
 		err = writer.Flush()
 		c.Assert(err, IsNil)
 		c.Assert(buf.String(), Equals, tc.expected)
+	}
+}
+
+func (s *OpenTelemetryWriterSuite) TestWriteInvalidType(c *C) {
+	for _, mt := range []metrics.MetricType{0, -1, 1000} {
+		buf := bytes.Buffer{}
+		w := metrics.NewOpenTelemetryWriter(&buf)
+		err := w.Write(metrics.Metric{
+			Name:       "metric",
+			Type:       mt,
+			ValueInt64: 1,
+		})
+		c.Assert(err, ErrorMatches, fmt.Sprintf("cannot write metric with invalid type %d", mt))
+		c.Assert(w.Flush(), IsNil)
+		c.Assert(buf.String(), Equals, "")
 	}
 }
