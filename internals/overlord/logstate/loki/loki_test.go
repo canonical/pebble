@@ -295,11 +295,14 @@ func (*suite) TestLabels(c *C) {
 }
 
 func flushAndCheck(c *C, setup func(client *loki.Client), expected string) {
-	received := make(chan []byte, 1)
+	type request struct {
+		body []byte
+		err  error
+	}
+	received := make(chan request, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		reqBody, err := io.ReadAll(r.Body)
-		c.Check(err, IsNil)
-		received <- reqBody
+		body, err := io.ReadAll(r.Body)
+		received <- request{body, err}
 	}))
 	defer server.Close()
 
@@ -309,8 +312,9 @@ func flushAndCheck(c *C, setup func(client *loki.Client), expected string) {
 	err := client.Flush(context.Background())
 	c.Assert(err, IsNil)
 	select {
-	case reqBody := <-received:
-		c.Assert(string(reqBody), Equals, string(compactJSON(expected)))
+	case req := <-received:
+		c.Assert(req.err, IsNil)
+		c.Assert(string(req.body), Equals, string(compactJSON(expected)))
 	case <-time.After(1 * time.Second):
 		c.Fatal("timed out waiting for request")
 	}
