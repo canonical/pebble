@@ -490,14 +490,17 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *C) {
 func (cs *clientSuite) TestGetWebsocketBasicAuth(c *C) {
 	testUsername := "foo"
 	testPassword := "bar"
+	type requestInfo struct {
+		path     string
+		username string
+		password string
+		hasAuth  bool
+	}
+	gotRequest := make(chan requestInfo, 1)
 	upgrader := websocket.Upgrader{}
 	handler := func(w http.ResponseWriter, r *http.Request) {
-		c.Check(r.URL.Path, Equals, "/v1/tasks/T1/websocket/stdio")
-		// Verify Basic Authentication.
 		u, p, ok := r.BasicAuth()
-		c.Check(ok, Equals, true)
-		c.Check(u, Equals, testUsername)
-		c.Check(p, Equals, testPassword)
+		gotRequest <- requestInfo{path: r.URL.Path, username: u, password: p, hasAuth: ok}
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -517,6 +520,17 @@ func (cs *clientSuite) TestGetWebsocketBasicAuth(c *C) {
 	ws, err := cli.GetWebsocket("/v1/tasks/T1/websocket/stdio")
 	c.Assert(err, IsNil)
 	c.Assert(ws.Close(), IsNil)
+
+	var got requestInfo
+	select {
+	case got = <-gotRequest:
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for WebSocket handshake request")
+	}
+	c.Check(got.path, Equals, "/v1/tasks/T1/websocket/stdio")
+	c.Check(got.hasAuth, Equals, true)
+	c.Check(got.username, Equals, testUsername)
+	c.Check(got.password, Equals, testPassword)
 }
 
 func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
