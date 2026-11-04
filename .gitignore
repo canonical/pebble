@@ -8,3 +8,4 @@ cmd/pebble/pebble
 dist/
 *.test
 .workshop.lock
+.hegel/
