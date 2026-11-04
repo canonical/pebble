@@ -34,6 +34,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorilla/websocket"
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/client"
@@ -484,6 +485,52 @@ func (cs *clientSuite) TestClientIntegrationHTTP(c *C) {
 	si, err := cli.SysInfo()
 	c.Check(err, IsNil)
 	c.Check(si.Version, Equals, "1")
+}
+
+func (cs *clientSuite) TestGetWebsocketBasicAuth(c *C) {
+	testUsername := "foo"
+	testPassword := "bar"
+	type requestInfo struct {
+		path     string
+		username string
+		password string
+		hasAuth  bool
+	}
+	gotRequest := make(chan requestInfo, 1)
+	upgrader := websocket.Upgrader{}
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		gotRequest <- requestInfo{path: r.URL.Path, username: u, password: p, hasAuth: ok}
+
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		conn.Close()
+	}
+	srv := httptest.NewServer(http.HandlerFunc(handler))
+	defer srv.Close()
+
+	cli, err := client.New(&client.Config{
+		BaseURL:       srv.URL,
+		BasicUsername: testUsername,
+		BasicPassword: testPassword,
+	})
+	c.Assert(err, IsNil)
+	ws, err := cli.GetWebsocket("/v1/tasks/T1/websocket/stdio")
+	c.Assert(err, IsNil)
+	c.Assert(ws.Close(), IsNil)
+
+	var got requestInfo
+	select {
+	case got = <-gotRequest:
+	case <-time.After(time.Second):
+		c.Fatal("timed out waiting for WebSocket handshake request")
+	}
+	c.Check(got.path, Equals, "/v1/tasks/T1/websocket/stdio")
+	c.Check(got.hasAuth, Equals, true)
+	c.Check(got.username, Equals, testUsername)
+	c.Check(got.password, Equals, testPassword)
 }
 
 func (cs *clientSuite) TestClientIntegrationHTTPS(c *C) {
