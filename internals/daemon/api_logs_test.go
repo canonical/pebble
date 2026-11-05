@@ -182,10 +182,12 @@ func (s *logsSuite) TestOneServiceAllLogs(c *C) {
 	rec := s.recordResponse(c, "/v1/logs?n=-1", svcMgr)
 	c.Assert(rec.Code, Equals, http.StatusOK)
 
+	// The buffer holds exactly 20 lines, but the newline before the oldest
+	// has been discarded, so it isn't known to be a complete line.
 	logs := decodeLogs(c, rec.Body)
-	c.Assert(logs, HasLen, 20)
-	for i := range 20 {
-		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+20))
+	c.Assert(logs, HasLen, 19)
+	for i := range 19 {
+		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+21))
 	}
 }
 
@@ -452,6 +454,61 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 		c.Fatalf("timed out waiting for request to be finished")
 	}
 	c.Assert(rec.status, Equals, http.StatusOK)
+}
+
+func (s *logsSuite) TestFollowPartialLine(c *C) {
+	rb := servicelog.NewRingBuffer(4096)
+	lw := servicelog.NewFormatWriter(rb, "svc")
+	fmt.Fprintf(lw, "message 1\n")
+	fmt.Fprintf(lw, "partial")
+
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.RingBuffer{
+			"svc": rb,
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true&n=2", nil)
+	c.Assert(err, IsNil)
+	rsp := logsResponse{svcMgr: svcMgr}
+	logChan := make(chan string)
+	rec := &followRecorder{logChan: logChan}
+	done := make(chan struct{})
+	go func() {
+		rsp.ServeHTTP(rec, req)
+		done <- struct{}{}
+	}()
+
+	waitLogs := func() []testLogEntry {
+		select {
+		case logsStr := <-logChan:
+			return decodeLogs(c, strings.NewReader(logsStr))
+		case <-time.After(1 * time.Second):
+			c.Fatalf("timed out waiting for log")
+			return nil
+		}
+	}
+
+	logs := waitLogs()
+	logs = append(logs, waitLogs()...)
+	c.Assert(logs, HasLen, 2)
+	checkLog(c, logs[0], "svc", "message 1")
+	checkLog(c, logs[1], "svc", "partial")
+
+	// The rest of the line keeps the partial line's timestamp and service.
+	fmt.Fprintf(lw, " line\n")
+	rest := waitLogs()
+	c.Assert(rest, HasLen, 1)
+	checkLog(c, rest[0], "svc", " line")
+	c.Check(rest[0].Time, Equals, logs[1].Time)
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		c.Fatalf("timed out waiting for request to be finished")
+	}
 }
 
 type followRecorder struct {

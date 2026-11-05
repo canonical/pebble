@@ -15,12 +15,14 @@
 package daemon
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -97,7 +99,9 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	itsByName, err := r.svcMgr.ServiceLogs(services, numLogs)
+	// Start at the head of each service's logs, the backscroll is read by
+	// stepping back from there.
+	itsByName, err := r.svcMgr.ServiceLogs(services, 0)
 	if err != nil {
 		response := ServerError("cannot fetch log iterators: %v", err)
 		response.ServeHTTP(w, req)
@@ -111,103 +115,21 @@ func (r logsResponse) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	encoder := json.NewEncoder(w)
 	encoder.SetEscapeHTML(false)
 
-	// Use a buffered channel as a FIFO for keeping the latest numLogs logs if
-	// request "n" is set (the default).
-	var fifo chan servicelog.Entry
-	if numLogs > 0 {
-		fifo = make(chan servicelog.Entry, numLogs)
-	}
-	flushFifo := func() bool { // helper to flush any logs in the FIFO
-		if numLogs <= 0 || len(fifo) == 0 {
-			return true
-		}
-		var err error
-		for len(fifo) > 0 && err == nil {
-			err = encoder.Encode(newJSONLog(<-fifo))
-		}
-		if err != nil {
-			logger.Noticef("Cannot write logs: %v", err)
-			return false
-		}
-		flushWriter(w)
-		return true
-	}
-
-	// Background goroutine to stream ordered logs: it sends parsed logs on
-	// logs channel, any error on errorChan channel, and stops when the request
-	// is cancelled or this handler returns.
-	logs := make(chan servicelog.Entry)
-	errorChan := make(chan error, 1)
-	ctx, cancel := context.WithCancel(req.Context())
-	defer cancel()
-	go func() {
-		errorChan <- streamLogs(itsByName, logs, ctx.Done())
-	}()
-
-	// Main loop: output earliest log per iteration. Stop when request
-	// cancelled or there are no more logs (in non-follow mode).
-	requestStarted := time.Now().UTC()
-	for {
-		select {
-		case log := <-logs:
-			if log.Time.IsZero() {
-				// Zero-time log means we've consumed all buffered logs
-				if !flushFifo() {
-					return
-				}
-				if follow {
-					// Following, wait for more
-					numLogs = 0 // so we don't use the FIFO from here on
-					continue
-				}
-				// Not following, we're done
-				return
-			}
-
-			// Logs are coming faster than we can send them (probably a slow
-			// client), so stop now.
-			if !follow && log.Time.After(requestStarted) {
-				_ = flushFifo()
-				return
-			}
-
-			if numLogs > 0 {
-				// Push through FIFO so we only output the most recent "n"
-				// across all services.
-				if len(fifo) == cap(fifo) {
-					// FIFO channel full, discard oldest log entry before
-					// writing new one so it doesn't block.
-					<-fifo
-				}
-				fifo <- log
-				continue
-			}
-
-			// Otherwise encode and output log directly.
-			err := encoder.Encode(newJSONLog(log))
-			if err != nil {
-				logger.Noticef("Cannot write logs: %v", err)
-				return
-			}
-			if follow {
-				flushWriter(w)
-			}
-
-		case err := <-errorChan:
-			logger.Noticef("%s", err)
-			return
-
-		case <-req.Context().Done():
-			return
-		}
+	err = streamLogs(req.Context(), w, encoder, itsByName, numLogs, follow)
+	if err != nil {
+		logger.Noticef("%s", err)
 	}
 }
 
-// streamLogs reads and parses logs from the given services, merging the
-// log streams and ordering by timestamp. It sends the parsed logs to the
-// logs channel, and returns when the done channel is closed.
-func streamLogs(itsByName map[string]servicelog.Iterator, logs chan<- servicelog.Entry, done <-chan struct{}) error {
-	// Need to close iterators in same goroutine we're reading them from.
+// streamLogs writes the most recent numLogs logs (all logs if numLogs is
+// negative) from the given services to the encoder, merging the log streams
+// and ordering by timestamp. If follow is true, it then writes new logs as
+// they arrive until ctx is done.
+func streamLogs(
+	ctx context.Context, w io.Writer, enc *json.Encoder,
+	itsByName map[string]servicelog.Iterator,
+	numLogs int, follow bool,
+) error {
 	defer func() {
 		for _, it := range itsByName {
 			_ = it.Close()
@@ -223,11 +145,7 @@ func streamLogs(itsByName map[string]servicelog.Iterator, logs chan<- servicelog
 	}
 
 	// Make sorted list of service names we have iterators for.
-	var services []string
-	for name := range itsByName {
-		services = append(services, name)
-	}
-	sort.Strings(services)
+	services := slices.Sorted(maps.Keys(itsByName))
 
 	// Create an iterator and log parser for each service.
 	iterators := make([]servicelog.Iterator, len(services))
@@ -237,10 +155,14 @@ func streamLogs(itsByName map[string]servicelog.Iterator, logs chan<- servicelog
 		parsers[i] = servicelog.NewParser(iterators[i], logReaderSize)
 	}
 
+	stepBack(iterators, numLogs)
+
 	// Slice of next entries for each service
 	nexts := make([]servicelog.Entry, len(services))
 
-	// Main loop: output earliest log per iteration. Stop when done is closed.
+	// Main loop: output earliest log per iteration. Stop when ctx is done or
+	// there are no more logs (in non-follow mode).
+	requestStarted := time.Now().UTC()
 	for {
 		// Try to fetch next log from each service (parser/iterator combo).
 		for i, parser := range parsers {
@@ -270,29 +192,89 @@ func streamLogs(itsByName map[string]servicelog.Iterator, logs chan<- servicelog
 			}
 		}
 
-		// No more logs: send empty log to caller, then wait for more logs
-		// or done signal.
+		// No more logs: if not following we're done, otherwise wait for more
+		// logs or ctx done.
 		if earliest < 0 {
-			select {
-			case logs <- servicelog.Entry{}:
-			case <-done:
+			if !follow {
 				return nil
 			}
 			select {
 			case <-notification:
-			case <-done:
+			case <-ctx.Done():
 				return nil
 			}
 			continue
 		}
 
-		// Send log to caller.
-		select {
-		case logs <- nexts[earliest]:
-		case <-done:
+		// Logs are coming faster than we can send them (probably a slow
+		// client), so stop now.
+		if !follow && nexts[earliest].Time.After(requestStarted) {
 			return nil
 		}
+
+		err := enc.Encode(newJSONLog(nexts[earliest]))
+		if err != nil {
+			return fmt.Errorf("cannot write logs: %w", err)
+		}
+		if follow {
+			flushWriter(w)
+		}
 		nexts[earliest].Time = time.Time{} // so corresponding iterator is fetched next loop
+
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+	}
+}
+
+// stepBack moves the iterators back line by line, so that when read forwards
+// again they start at the most recent numLogs lines across all of them (all
+// lines if numLogs is negative).
+func stepBack(iterators []servicelog.Iterator, numLogs int) {
+	if numLogs == 0 {
+		return
+	}
+
+	// The current line read backwards from each iterator, or empty if there
+	// are no more lines.
+	lines := make([]bytes.Buffer, len(iterators))
+	previousLine := func(i int) {
+		lines[i].Reset()
+		if iterators[i].Next(nil) {
+			// Each read ends with io.EOF at the end of the line.
+			_, _ = lines[i].ReadFrom(iterators[i])
+		}
+	}
+
+	for i, it := range iterators {
+		it.Reverse()
+		previousLine(i)
+	}
+
+	for n := 0; numLogs < 0 || n < numLogs; n++ {
+		// Lines start with a fixed width UTC timestamp, so the most recent
+		// line is the lexicographically largest.
+		latest := -1
+		for i := range lines {
+			if lines[i].Len() == 0 {
+				continue
+			}
+			if latest < 0 || bytes.Compare(lines[i].Bytes(), lines[latest].Bytes()) > 0 {
+				latest = i
+			}
+		}
+		if latest < 0 {
+			break
+		}
+		// Step back past the latest line, so it's included when reading
+		// forwards.
+		previousLine(latest)
+	}
+
+	for _, it := range iterators {
+		it.Forward()
 	}
 }
 
