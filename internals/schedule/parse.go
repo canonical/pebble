@@ -16,6 +16,7 @@ package schedule
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -119,7 +120,7 @@ func parseSet(text string) (set, error) {
 			}
 			days |= d
 		default:
-			if _, isMonth := lookupName(monthNames, elem[:min(len(elem), 3)]); isMonth {
+			if idx := slices.Index(monthNames, elem[:min(len(elem), 3)]); idx != -1 {
 				m, err := parseMonths(elem)
 				if err != nil {
 					return set{}, err
@@ -168,27 +169,18 @@ func isClockElem(elem string) bool {
 	return strings.Contains(elem, ":")
 }
 
-func lookupName(names []string, s string) (int, bool) {
-	for i, name := range names {
-		if s == name {
-			return i, true
-		}
-	}
-	return 0, false
-}
-
 // parseMonths parses a month ("jan") or month range ("dec-mar"), returning
 // a bitmask with bit N set for month N (0 is January).
 func parseMonths(elem string) (uint16, error) {
 	startText, endText, isRange := strings.Cut(elem, "-")
-	start, ok := lookupName(monthNames, startText)
-	if !ok {
+	start := slices.Index(monthNames, startText)
+	if start == -1 {
 		return 0, fmt.Errorf("invalid month %q", startText)
 	}
 	end := start
 	if isRange {
-		end, ok = lookupName(monthNames, endText)
-		if !ok {
+		end = slices.Index(monthNames, endText)
+		if end == -1 {
 			return 0, fmt.Errorf("invalid month %q", endText)
 		}
 	}
@@ -267,8 +259,8 @@ func parseWeekday(s string) (weekdayPos, error) {
 		name = s[:3]
 		pos = nthday(s[3] - '0')
 	}
-	wd, ok := lookupName(weekdayNames, name)
-	if !ok {
+	wd := slices.Index(weekdayNames, name)
+	if wd == -1 {
 		return weekdayPos{}, fmt.Errorf("unknown month, weekday, day or time %q", s)
 	}
 	return weekdayPos{weekday: time.Weekday(wd), pos: pos}, nil
