@@ -307,14 +307,14 @@ func clockAfter(c clock, d time.Duration) clock {
 
 // parseClock parses "H:MM" or "HH:MM". "24:00" is accepted as midnight.
 func parseClock(s string) (clock, error) {
-	hourText, minText, ok := strings.Cut(s, ":")
-	if !ok || len(hourText) < 1 || len(hourText) > 2 || len(minText) != 2 ||
+	hourText, minuteText, ok := strings.Cut(s, ":")
+	if !ok || len(hourText) < 1 || len(hourText) > 2 || len(minuteText) != 2 ||
 		!isDigit(hourText[0]) || (len(hourText) == 2 && !isDigit(hourText[1])) ||
-		!isDigit(minText[0]) || !isDigit(minText[1]) {
+		!isDigit(minuteText[0]) || !isDigit(minuteText[1]) {
 		return clock{}, fmt.Errorf("invalid time %q", s)
 	}
 	hour, _ := strconv.Atoi(hourText)
-	minute, _ := strconv.Atoi(minText)
+	minute, _ := strconv.Atoi(minuteText)
 	if hour == 24 && minute == 0 {
 		hour = 0
 	}
