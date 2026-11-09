@@ -129,6 +129,19 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		return err
 	}
 
+	// If this task is tracking a scheduled occurrence (see
+	// newScheduledStartTask), decide whether it should actually proceed, and
+	// queue up the following occurrence.
+	m.state.Lock()
+	skip, err := m.prepareScheduledStart(task)
+	m.state.Unlock()
+	if err != nil {
+		return err
+	}
+	if skip {
+		return nil
+	}
+
 	currentPlan := m.getPlan()
 	config, ok := currentPlan.Services[request.Name]
 	if !ok {
@@ -172,7 +185,6 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 			// and the logs are still accessible for failed services if the action is ignore.
 			return fmt.Errorf("service start attempt: %w", err)
 		}
-		// Started successfully (ran for small amount of time without exiting).
 		return nil
 	case <-tomb.Dying():
 		// User tried to abort the start, sending SIGKILL to process is about

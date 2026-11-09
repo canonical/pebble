@@ -60,14 +60,22 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 	runner.AddHandler("start", manager.doStart, nil)
 	runner.AddHandler("stop", manager.doStop, nil)
 
+	// Schedule changes persist for as long as a service has a schedule
+	// configured. This ensures they don't get pruned.
+	s.RegisterPendingChangeByAttr(scheduleNoPruneAttr, func(*state.Change) bool {
+		return true
+	})
+
 	return manager, nil
 }
 
 // PlanChanged informs the service manager that the plan has been updated.
 func (m *ServiceManager) PlanChanged(plan *plan.Plan) {
 	m.planLock.Lock()
-	defer m.planLock.Unlock()
 	m.plan = plan
+	m.planLock.Unlock()
+
+	m.scheduleChanged(plan)
 }
 
 // getPlan returns the current plan pointer in a concurrency-safe way. The
@@ -110,6 +118,14 @@ type ServiceInfo struct {
 	Current      ServiceStatus
 	CurrentSince time.Time
 	Outdated     bool
+	// Schedule is the service's configured schedule string, if any.
+	Schedule string
+	// ScheduleLast is the time the schedule last fired, or zero if it
+	// hasn't fired yet (or has no schedule).
+	ScheduleLast time.Time
+	// ScheduleNext is the time the schedule will next fire, or zero if it
+	// won't fire again (or has no schedule).
+	ScheduleNext time.Time
 }
 
 type ServiceStartup string
@@ -140,6 +156,11 @@ func serviceOutdated(config *plan.Service, workload *workloads.Workload, s *serv
 // by service name. Filter by the specified service names if provided.
 func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 	currentPlan := m.getPlan()
+
+	m.state.Lock()
+	scheduled := m.scheduledStarts()
+	m.state.Unlock()
+
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
 
@@ -172,6 +193,11 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 				workload = ws.Entries[s.config.Workload]
 			}
 			info.Outdated = serviceOutdated(config, workload, s)
+		}
+		info.Schedule = config.Schedule
+		if details, ok := scheduled[name]; ok && config.Schedule != "" {
+			info.ScheduleLast = details.Last
+			info.ScheduleNext = details.Next
 		}
 		services = append(services, info)
 	}
