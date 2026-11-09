@@ -12,7 +12,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-package schedule_test
+package schedule
 
 import (
 	"testing"
@@ -20,7 +20,6 @@ import (
 
 	. "gopkg.in/check.v1"
 
-	"github.com/canonical/pebble/internals/schedule"
 	"github.com/canonical/pebble/internals/testutil"
 )
 
@@ -32,255 +31,25 @@ type scheduleSuite struct{}
 
 var _ = Suite(&scheduleSuite{})
 
-var (
-	anyWeek = schedule.WeekSpan{
-		Start: schedule.WeekdayPos{Weekday: time.Sunday},
-		End:   schedule.WeekdayPos{Weekday: time.Saturday},
-	}
-	wholeDay = schedule.ClockSpan{Period: 24 * time.Hour}
-)
-
-func weekSpan(start time.Weekday, startPos schedule.Pos, end time.Weekday, endPos schedule.Pos) schedule.WeekSpan {
-	return schedule.WeekSpan{
-		Start: schedule.WeekdayPos{Weekday: start, Pos: startPos},
-		End:   schedule.WeekdayPos{Weekday: end, Pos: endPos},
+func newWeekSpan(start time.Weekday, startPos nthday, end time.Weekday, endPos nthday) weekSpan {
+	return weekSpan{
+		start: weekdayPos{weekday: start, pos: startPos},
+		end:   weekdayPos{weekday: end, pos: endPos},
 	}
 }
 
-func clockSpan(startHour, startMinute, endHour, endMinute int, period time.Duration) schedule.ClockSpan {
-	return schedule.ClockSpan{
-		Start:  schedule.Clock{Hour: startHour, Minute: startMinute},
-		End:    schedule.Clock{Hour: endHour, Minute: endMinute},
-		Period: period,
+func newClockSpan(startHour, startMinute, endHour, endMinute int, period time.Duration) clockSpan {
+	return clockSpan{
+		start:  clock{hour: startHour, minute: startMinute},
+		end:    clock{hour: endHour, minute: endMinute},
+		period: period,
 	}
-}
-
-func allYear() [12]uint32 {
-	var days [12]uint32
-	for m := range days {
-		days[m] = 0xFFFFFFFE
-	}
-	return days
-}
-
-func (s *scheduleSuite) TestParseWeekSpans(c *C) {
-	sched, err := schedule.Parse("mon-fri,tue3,sat,,wed5-sun")
-	c.Assert(err, IsNil)
-	c.Assert(sched.Sets, HasLen, 2)
-
-	c.Check(sched.Sets[0].WeekSpans, DeepEquals, []schedule.WeekSpan{
-		weekSpan(time.Monday, 0, time.Friday, 0),
-		weekSpan(time.Tuesday, 3, time.Tuesday, 3),
-		weekSpan(time.Saturday, 0, time.Saturday, 0),
-	})
-	c.Check(sched.Sets[0].ClockSpans, DeepEquals, []schedule.ClockSpan{wholeDay})
-	c.Check(sched.Sets[0].Days, Equals, allYear())
-
-	c.Check(sched.Sets[1].WeekSpans, DeepEquals, []schedule.WeekSpan{
-		weekSpan(time.Wednesday, schedule.PosLast, time.Sunday, 0),
-	})
-	c.Check(sched.Sets[1].ClockSpans, DeepEquals, []schedule.ClockSpan{wholeDay})
-	c.Check(sched.Sets[1].Days, Equals, allYear())
-}
-
-func (s *scheduleSuite) TestParseClockSpans(c *C) {
-	sched, err := schedule.Parse("10:05-20:35/126,0:00-0:00,24:00,,12:34,1:00-2:00/30s,3:00-4:00/10m,5:00-7:00/1h,23:55")
-	c.Assert(err, IsNil)
-	c.Assert(sched.Sets, HasLen, 2)
-
-	c.Check(sched.Sets[0].ClockSpans, DeepEquals, []schedule.ClockSpan{
-		clockSpan(10, 5, 20, 35, 300*time.Second),
-		clockSpan(0, 0, 0, 0, 24*time.Hour),
-		clockSpan(0, 0, 0, 15, 15*time.Minute),
-	})
-	c.Check(sched.Sets[0].WeekSpans, DeepEquals, []schedule.WeekSpan{anyWeek})
-
-	c.Check(sched.Sets[1].ClockSpans, DeepEquals, []schedule.ClockSpan{
-		clockSpan(12, 34, 12, 49, 15*time.Minute),
-		clockSpan(1, 0, 2, 0, 30*time.Second),
-		clockSpan(3, 0, 4, 0, 10*time.Minute),
-		clockSpan(5, 0, 7, 0, time.Hour),
-		clockSpan(23, 55, 0, 10, 15*time.Minute),
-	})
-	c.Check(sched.Sets[1].WeekSpans, DeepEquals, []schedule.WeekSpan{anyWeek})
-}
-
-func (s *scheduleSuite) TestParseClockSpanSplit(c *C) {
-	for _, test := range []struct {
-		text   string
-		period time.Duration
-	}{
-		{"8:00-10:00/3", 40 * time.Minute},
-		{"8:00-10:00/5", 24 * time.Minute},
-		{"8:00-10:00/30s", 30 * time.Second},
-		{"8:00-10:00/15m", 15 * time.Minute},
-		{"8:00-10:00/1h", time.Hour},
-		{"8:00-10:00/7", 1028 * time.Second}, // Truncated to whole seconds.
-		{"8:00-8:01/99999", time.Second},     // At least one second.
-		{"23:00-1:00/4", 30 * time.Minute},   // Crossing midnight.
-		{"0:00-0:00/24", time.Hour},          // Whole day.
-	} {
-		sched, err := schedule.Parse(test.text)
-		c.Assert(err, IsNil, Commentf("schedule %q", test.text))
-		c.Check(sched.Sets[0].ClockSpans[0].Period, Equals, test.period, Commentf("schedule %q", test.text))
-	}
-}
-
-func (s *scheduleSuite) TestParseMonthSpans(c *C) {
-	sched, err := schedule.Parse("dec-mar,may,5-10,jan,15-20,,jan,1-31,feb")
-	c.Assert(err, IsNil)
-	c.Assert(sched.Sets, HasLen, 2)
-
-	var expected [12]uint32
-	expected[0] = 0x1F87E0 // 5-10,15-20
-	expected[1] = 0x07E0   // 5-10
-	expected[2] = 0x07E0
-	expected[4] = 0x07E0
-	expected[11] = 0x07E0
-	c.Check(sched.Sets[0].Days, Equals, expected)
-
-	expected = [12]uint32{}
-	expected[0] = 0xFFFFFFFE // 1-31, explicit
-	expected[1] = 0xFFFFFFFE // 1-31, implicit
-	c.Check(sched.Sets[1].Days, Equals, expected)
-}
-
-func (s *scheduleSuite) TestParseDayRanges(c *C) {
-	sched, err := schedule.Parse("mar,29-31,apr,1-2,,jun,25-5")
-	c.Assert(err, IsNil)
-	c.Assert(sched.Sets, HasLen, 2)
-
-	var expected [12]uint32
-	expected[2] = 0xE0000000 // 29-31
-	expected[3] = 0x06       // 1-2
-	c.Check(sched.Sets[0].Days, Equals, expected)
-
-	expected = [12]uint32{}
-	expected[5] = 0xFE00003E // 25-31,1-5
-	c.Check(sched.Sets[1].Days, Equals, expected)
-}
-
-func (s *scheduleSuite) TestParseMixedSets(c *C) {
-	sched, err := schedule.Parse("jan,10-15,5,mon-wed2,fri,09:45,13:00-17:00/5,,feb,sat,12:34")
-	c.Assert(err, IsNil)
-	c.Assert(sched.Sets, HasLen, 2)
-
-	var expected [12]uint32
-	expected[0] = 0xFC20 // 5,10-15
-	c.Check(sched.Sets[0].Days, Equals, expected)
-	c.Check(sched.Sets[0].WeekSpans, DeepEquals, []schedule.WeekSpan{
-		weekSpan(time.Monday, 0, time.Wednesday, 2),
-		weekSpan(time.Friday, 0, time.Friday, 0),
-	})
-	c.Check(sched.Sets[0].ClockSpans, DeepEquals, []schedule.ClockSpan{
-		clockSpan(9, 45, 10, 0, 15*time.Minute),
-		clockSpan(13, 0, 17, 0, 48*time.Minute),
-	})
-
-	expected = [12]uint32{}
-	expected[1] = 0xFFFFFFFE
-	c.Check(sched.Sets[1].Days, Equals, expected)
-	c.Check(sched.Sets[1].WeekSpans, DeepEquals, []schedule.WeekSpan{
-		weekSpan(time.Saturday, 0, time.Saturday, 0),
-	})
-	c.Check(sched.Sets[1].ClockSpans, DeepEquals, []schedule.ClockSpan{
-		clockSpan(12, 34, 12, 49, 15*time.Minute),
-	})
-}
-
-func (s *scheduleSuite) TestParseAnyOrder(c *C) {
-	ordered, err := schedule.Parse("jan,10-15,mon-wed2,09:45,13:00-17:00/5")
-	c.Assert(err, IsNil)
-	shuffled, err := schedule.Parse("09:45,mon-wed2,13:00-17:00/5,jan,10-15")
-	c.Assert(err, IsNil)
-	c.Check(shuffled.Sets, DeepEquals, ordered.Sets)
 }
 
 func (s *scheduleSuite) TestString(c *C) {
-	sched, err := schedule.Parse("mon-fri,8:00-17:00,,sat,sun,10:00")
+	sched, err := Parse("mon-fri,8:00-17:00,,sat,sun,10:00")
 	c.Assert(err, IsNil)
 	c.Check(sched.String(), Equals, "mon-fri,8:00-17:00,,sat,sun,10:00")
-}
-
-func (s *scheduleSuite) TestParseErrors(c *C) {
-	for _, test := range []struct {
-		text string
-		err  string
-	}{
-		{"", `cannot parse empty schedule`},
-		{",,", `cannot parse schedule ",," due to empty set`},
-		{"mon,,", `cannot parse schedule "mon,," due to empty set`},
-		{",,mon", `cannot parse schedule ",,mon" due to empty set`},
-		{"mon,,,tue", `cannot parse schedule "mon,,,tue" due to empty element`},
-		{"mon,", `cannot parse schedule "mon," due to empty element`},
-		{",mon", `cannot parse schedule ",mon" due to empty element`},
-		{"fry", `cannot parse schedule "fry" due to unknown month, weekday, day or time "fry"`},
-		{"mon-fry", `cannot parse schedule "mon-fry" due to unknown month, weekday, day or time "fry"`},
-		{"mon0", `cannot parse schedule "mon0" due to unknown month, weekday, day or time "mon0"`},
-		{"mon6", `cannot parse schedule "mon6" due to unknown month, weekday, day or time "mon6"`},
-		{"MON", `cannot parse schedule "MON" due to unknown month, weekday, day or time "MON"`},
-		{"jan-foo", `cannot parse schedule "jan-foo" due to invalid month "foo"`},
-		{"janx", `cannot parse schedule "janx" due to invalid month "janx"`},
-		{"5", `cannot parse schedule "5" due to days "5" before a month`},
-		{"mon,5", `cannot parse schedule "mon,5" due to days "5" before a month`},
-		{"jan,0", `cannot parse schedule "jan,0" due to invalid day "0"`},
-		{"jan,05", `cannot parse schedule "jan,05" due to invalid day "05"`},
-		{"jan,32", `cannot parse schedule "jan,32" due to invalid day "32"`},
-		{"jan,123", `cannot parse schedule "jan,123" due to invalid day "123"`},
-		{"jan,1-32", `cannot parse schedule "jan,1-32" due to invalid day "32"`},
-		{"jan,1-", `cannot parse schedule "jan,1-" due to invalid day ""`},
-		{"9", `cannot parse schedule "9" due to days "9" before a month`},
-		{"9:0", `cannot parse schedule "9:0" due to invalid time "9:0"`},
-		{"9:000", `cannot parse schedule "9:000" due to invalid time "9:000"`},
-		{"123:00", `cannot parse schedule "123:00" due to invalid time "123:00"`},
-		{"25:00", `cannot parse schedule "25:00" due to invalid time "25:00"`},
-		{"24:01", `cannot parse schedule "24:01" due to invalid time "24:01"`},
-		{"9:60", `cannot parse schedule "9:60" due to invalid time "9:60"`},
-		{"9:00-", `cannot parse schedule "9:00-" due to invalid time ""`},
-		{"9:00-10", `cannot parse schedule "9:00-10" due to invalid time "10"`},
-		{"9:00~10:00", `cannot parse schedule "9:00~10:00" due to invalid time "9:00~10:00"`},
-		{"9:00/2", `cannot parse schedule "9:00/2" due to invalid time "9:00/2"`},
-		// Whitespace is never allowed, not even around the schedule.
-		{" ", `cannot parse schedule " " due to unknown month, weekday, day or time " "`},
-		{" mon", `cannot parse schedule " mon" due to unknown month, weekday, day or time " mon"`},
-		{"mon ", `cannot parse schedule "mon " due to unknown month, weekday, day or time "mon "`},
-		{"mon, tue", `cannot parse schedule "mon, tue" due to unknown month, weekday, day or time " tue"`},
-		{"jan, 5", `cannot parse schedule "jan, 5" due to unknown month, weekday, day or time " 5"`},
-		{"9:00 -10:00", `cannot parse schedule "9:00 -10:00" due to invalid time "9:00 "`},
-		{"9:00-10:00/5 m", `cannot parse schedule "9:00-10:00/5 m" due to invalid clock span split "/5 m"`},
-		{"9:00-10:00/", `cannot parse schedule "9:00-10:00/" due to invalid clock span split "/"`},
-		{"9:00-10:00/0", `cannot parse schedule "9:00-10:00/0" due to invalid clock span split "/0"`},
-		{"9:00-10:00/05", `cannot parse schedule "9:00-10:00/05" due to invalid clock span split "/05"`},
-		{"9:00-10:00/100000", `cannot parse schedule "9:00-10:00/100000" due to invalid clock span split "/100000"`},
-		{"9:00-10:00/5d", `cannot parse schedule "9:00-10:00/5d" due to invalid clock span split "/5d"`},
-		{"9:00-10:00/5ms", `cannot parse schedule "9:00-10:00/5ms" due to invalid clock span split "/5ms"`},
-		{"9:00-10:00/0s", `cannot parse schedule "9:00-10:00/0s" due to invalid clock span split "/0s"`},
-		{"9:00-10:00/0m", `cannot parse schedule "9:00-10:00/0m" due to invalid clock span split "/0m"`},
-		{"9:00-10:00/0h", `cannot parse schedule "9:00-10:00/0h" due to invalid clock span split "/0h"`},
-		{"9:00-10:00/m", `cannot parse schedule "9:00-10:00/m" due to invalid clock span split "/m"`},
-		{
-			"mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon",
-			`cannot parse schedule "mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon" due to more than 8 sets`,
-		}, {
-			"mon,mon,mon,mon,mon,mon,mon,mon,mon",
-			`cannot parse schedule "mon,mon,mon,mon,mon,mon,mon,mon,mon" due to more than 8 week spans in a set`,
-		}, {
-			"1:00,2:00,3:00,4:00,5:00,6:00,7:00,8:00,9:00",
-			`cannot parse schedule "1:00,2:00,3:00,4:00,5:00,6:00,7:00,8:00,9:00" due to more than 8 clock spans in a set`,
-		},
-	} {
-		_, err := schedule.Parse(test.text)
-		c.Check(err, ErrorMatches, test.err, Commentf("schedule %q", test.text))
-	}
-}
-
-func (s *scheduleSuite) TestParseLimits(c *C) {
-	_, err := schedule.Parse("mon,,mon,,mon,,mon,,mon,,mon,,mon,,mon")
-	c.Check(err, IsNil)
-	_, err = schedule.Parse("mon,mon,mon,mon,mon,mon,mon,mon")
-	c.Check(err, IsNil)
-	_, err = schedule.Parse("1:00,2:00,3:00,4:00,5:00,6:00,7:00,8:00")
-	c.Check(err, IsNil)
 }
 
 const timeLayout = "2006-01-02 15:04:05"
@@ -786,7 +555,7 @@ var nextTests = []nextTest{
 func (s *scheduleSuite) TestNext(c *C) {
 	for _, test := range nextTests {
 		comment := Commentf("%s: schedule %q", test.comment, test.schedule)
-		sched, err := schedule.Parse(test.schedule)
+		sched, err := Parse(test.schedule)
 		c.Assert(err, IsNil, comment)
 
 		last, err := time.ParseInLocation(timeLayout, test.last, time.UTC)
@@ -796,7 +565,7 @@ func (s *scheduleSuite) TestNext(c *C) {
 
 		next, err := sched.Next(last, now)
 		if test.next == "" {
-			c.Check(err, Equals, schedule.ErrNoNext, comment)
+			c.Check(err, Equals, ErrNoNext, comment)
 			continue
 		}
 		c.Assert(err, IsNil, comment)
@@ -807,7 +576,7 @@ func (s *scheduleSuite) TestNext(c *C) {
 
 func (s *scheduleSuite) TestNextUsesNowLocation(c *C) {
 	loc := time.FixedZone("UTC+10", 10*60*60)
-	sched, err := schedule.Parse("9:00")
+	sched, err := Parse("9:00")
 	c.Assert(err, IsNil)
 
 	// 2020-01-10 08:00 in UTC+10.
@@ -821,7 +590,7 @@ func (s *scheduleSuite) TestNextUsesNowLocation(c *C) {
 func (s *scheduleSuite) TestNextAcrossDST(c *C) {
 	loc, err := time.LoadLocation("Europe/London")
 	c.Assert(err, IsNil)
-	sched, err := schedule.Parse("sun,9:00")
+	sched, err := Parse("sun,9:00")
 	c.Assert(err, IsNil)
 
 	// Clocks go forward on 2020-03-29, at 1:00 GMT.
@@ -834,7 +603,7 @@ func (s *scheduleSuite) TestNextAcrossDST(c *C) {
 
 func (s *scheduleSuite) TestNextMixedLocations(c *C) {
 	loc := time.FixedZone("UTC+10", 10*60*60)
-	sched, err := schedule.Parse("9:00-10:00/30m")
+	sched, err := Parse("9:00-10:00/30m")
 	c.Assert(err, IsNil)
 
 	// last is 09:15 in UTC+10, but given in UTC.
@@ -924,7 +693,7 @@ func (s *scheduleSuite) TestNextAcrossDSTSequences(c *C) {
 			"10-26 01:15 GMT",
 		},
 	}} {
-		sched, err := schedule.Parse(test.schedule)
+		sched, err := Parse(test.schedule)
 		c.Assert(err, IsNil)
 
 		// Pretend every event fires exactly on time.
@@ -944,7 +713,7 @@ func (s *scheduleSuite) TestNextAcrossDSTSequences(c *C) {
 func (s *scheduleSuite) TestNextAcrossDSTLateTrigger(c *C) {
 	loc, err := time.LoadLocation("Europe/London")
 	c.Assert(err, IsNil)
-	sched, err := schedule.Parse("0:30-3:00/30m")
+	sched, err := Parse("0:30-3:00/30m")
 	c.Assert(err, IsNil)
 
 	// The 01:30 BST trigger happened, and now the clocks have gone back to
@@ -966,35 +735,35 @@ func (s *scheduleSuite) TestNextAcrossDSTLateTrigger(c *C) {
 func (s *scheduleSuite) TestNextInvalidSchedule(c *C) {
 	now := time.Date(2020, 1, 10, 9, 15, 0, 0, time.UTC)
 	for _, test := range []struct {
-		set schedule.Set
+		set set
 		err string
 	}{{
-		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(9, 0, 10, 0, 0)}},
+		set: set{clockSpans: []clockSpan{newClockSpan(9, 0, 10, 0, 0)}},
 		err: "cannot evaluate schedule due to invalid clock span period 0s",
 	}, {
-		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(9, 0, 10, 0, -time.Minute)}},
+		set: set{clockSpans: []clockSpan{newClockSpan(9, 0, 10, 0, -time.Minute)}},
 		err: "cannot evaluate schedule due to invalid clock span period -1m0s",
 	}, {
-		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(24, 0, 10, 0, time.Minute)}},
+		set: set{clockSpans: []clockSpan{newClockSpan(24, 0, 10, 0, time.Minute)}},
 		err: "cannot evaluate schedule due to invalid clock 24:00",
 	}, {
-		set: schedule.Set{ClockSpans: []schedule.ClockSpan{clockSpan(9, 0, 10, 60, time.Minute)}},
+		set: set{clockSpans: []clockSpan{newClockSpan(9, 0, 10, 60, time.Minute)}},
 		err: "cannot evaluate schedule due to invalid clock 10:60",
 	}, {
-		set: schedule.Set{WeekSpans: []schedule.WeekSpan{weekSpan(7, 0, time.Monday, 0)}},
+		set: set{weekSpans: []weekSpan{newWeekSpan(7, 0, time.Monday, 0)}},
 		err: "cannot evaluate schedule due to invalid weekday 7",
 	}, {
-		set: schedule.Set{WeekSpans: []schedule.WeekSpan{weekSpan(time.Monday, 0, time.Monday, 6)}},
+		set: set{weekSpans: []weekSpan{newWeekSpan(time.Monday, 0, time.Monday, 6)}},
 		err: "cannot evaluate schedule due to invalid weekday position 6",
 	}} {
-		sched := &schedule.Schedule{Sets: []schedule.Set{test.set}}
+		sched := &Schedule{sets: []set{test.set}}
 		_, err := sched.Next(now, now)
 		c.Check(err, ErrorMatches, test.err)
 	}
 }
 
 func (s *scheduleSuite) TestNextSequence(c *C) {
-	sched, err := schedule.Parse("mon,fri,10:00,15:00")
+	sched, err := Parse("mon,fri,10:00,15:00")
 	c.Assert(err, IsNil)
 
 	// Starting on a Sunday, and pretending every event fires exactly on time.
@@ -1016,7 +785,7 @@ func (s *scheduleSuite) TestNextSequence(c *C) {
 }
 
 func (s *scheduleSuite) TestNextSplitSequence(c *C) {
-	sched, err := schedule.Parse("8:00-10:00/3")
+	sched, err := Parse("8:00-10:00/3")
 	c.Assert(err, IsNil)
 
 	last := time.Date(2020, 1, 10, 0, 0, 0, 0, time.UTC)
