@@ -32,6 +32,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/reaper"
 	"github.com/canonical/pebble/internals/servicelog"
 )
@@ -44,14 +45,31 @@ const (
 
 // httpChecker is a checker that ensures an HTTP GET at a specified URL returns 2xx.
 type httpChecker struct {
-	name    string
-	url     string
-	headers map[string]string
+	name         string
+	url          string
+	headers      map[string]string
+	trustContext string
+	trustMgr     *truststate.TrustManager
+	transport    *truststate.HTTPTransport
 }
 
 func (c *httpChecker) check(ctx context.Context) error {
 	logger.Debugf("Check %q (http): requesting %q", c.name, c.url)
 	client := &http.Client{}
+
+	// Use the trust context configured for this check (falling back to the
+	// "default" trust context if none is set) to validate the server's
+	// certificate. An explicitly configured trust context that can't be
+	// resolved fails the check rather than falling back to the system CAs.
+	if c.transport == nil {
+		c.transport = &truststate.HTTPTransport{TrustManager: c.trustMgr, Name: c.trustContext}
+	}
+	transport, err := c.transport.RoundTripper()
+	if err != nil {
+		return err
+	}
+	client.Transport = transport
+
 	request, err := http.NewRequestWithContext(ctx, "GET", c.url, nil)
 	if err != nil {
 		return fmt.Errorf("cannot build request: %w", err)
@@ -117,14 +135,40 @@ func (c *tcpChecker) check(ctx context.Context) error {
 
 // execChecker is a checker that ensures a command executes successfully.
 type execChecker struct {
-	name        string
-	command     string
-	environment map[string]string
-	userID      *int
-	user        string
-	groupID     *int
-	group       string
-	workingDir  string
+	name         string
+	command      string
+	environment  map[string]string
+	userID       *int
+	user         string
+	groupID      *int
+	group        string
+	workingDir   string
+	trustContext string
+	trustMgr     *truststate.TrustManager
+}
+
+// caBundleFile returns the CA bundle file of the check's trust context, or ""
+// if the trust context resolves to the system CA pool (or no trust context
+// is set and there's no trust manager).
+func (c *execChecker) caBundleFile() (string, error) {
+	if c.trustMgr == nil {
+		if c.trustContext == "" {
+			return "", nil
+		}
+		return "", fmt.Errorf("cannot resolve trust context %q: no trust manager", c.trustContext)
+	}
+	trustContext, err := c.trustMgr.TrustContext(c.trustContext)
+	if err != nil {
+		return "", fmt.Errorf("cannot resolve trust context %q: %w", c.trustContext, err)
+	}
+	if trustContext.IsSystemCA() {
+		return "", nil
+	}
+	caBundleFile, err := trustContext.CABundleFile()
+	if err != nil {
+		return "", fmt.Errorf("cannot get CA bundle file for trust context %q: %w", c.trustContext, err)
+	}
+	return caBundleFile, nil
 }
 
 func (c *execChecker) check(ctx context.Context) error {
@@ -137,6 +181,25 @@ func (c *execChecker) check(ctx context.Context) error {
 	environment := osutil.Environ()
 	// Requested environment takes precedence.
 	maps.Copy(environment, c.environment)
+
+	// Resolve the trust context configured for this check (falling back to
+	// the "default" trust context if none is set), and provide its CA bundle
+	// via SSL_CERT_FILE, unless the check has set that environment variable
+	// itself, or the trust context resolves to the system CA pool. An
+	// explicitly configured trust context that can't be resolved fails the
+	// check.
+	if c.environment["SSL_CERT_FILE"] == "" {
+		caBundleFile, err := c.caBundleFile()
+		if err != nil {
+			if c.trustContext != "" {
+				return err
+			}
+			logger.Noticef("Check %q (exec): %v", c.name, err)
+		}
+		if caBundleFile != "" {
+			environment["SSL_CERT_FILE"] = caBundleFile
+		}
+	}
 
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
 	cmd.Env = make([]string, 0, len(environment)) // avoid additional allocations

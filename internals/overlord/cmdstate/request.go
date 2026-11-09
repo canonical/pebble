@@ -27,6 +27,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 )
 
 // ExecArgs holds the arguments for a command execution.
@@ -42,6 +43,8 @@ type ExecArgs struct {
 	SplitStderr bool
 	Width       int
 	Height      int
+	// TrustContext is optionally set to the trust context to be used.
+	TrustContext *truststate.TrustContext
 }
 
 // ExecMetadata is the metadata returned from an Exec call.
@@ -118,6 +121,17 @@ func Exec(st *state.State, args *ExecArgs) (*state.Task, ExecMetadata, error) {
 	_, ok = environment["LANG"]
 	if !ok {
 		environment["LANG"] = "C.UTF-8"
+	}
+
+	// Set SSL_CERT_FILE if not already set.
+	if args.TrustContext != nil &&
+		!args.TrustContext.IsSystemCA() &&
+		args.Environment["SSL_CERT_FILE"] == "" {
+		caBundleFile, err := args.TrustContext.CABundleFile()
+		if err != nil {
+			return nil, ExecMetadata{}, err
+		}
+		environment["SSL_CERT_FILE"] = caBundleFile
 	}
 
 	workingDir, err := getWorkingDir(args.WorkingDir, environment["HOME"])

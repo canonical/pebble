@@ -19,6 +19,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -72,7 +74,7 @@ func (s *ManagerSuite) SetUpTest(c *C) {
 	s.planMgr, err = planstate.NewManager(layersDir)
 	c.Assert(err, IsNil)
 	s.overlord.AddManager(s.planMgr)
-	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.planMgr)
+	s.manager = checkstate.NewManager(s.overlord.State(), s.overlord.TaskRunner(), s.planMgr, nil)
 	s.planMgr.AddChangeListener(s.manager.PlanChanged)
 	s.overlord.AddManager(s.manager)
 	s.overlord.AddManager(s.overlord.TaskRunner())
@@ -1290,4 +1292,65 @@ func (s *ManagerSuite) TestPrevChangeIDOnThreshold(c *C) {
 		return check.Status == checkstate.CheckStatusUp && check.ChangeID != recoverChangeID
 	})
 	c.Assert(check.PrevChangeID, Equals, recoverChangeID)
+}
+
+// TestExplicitTrustContextFailsClosed checks that the check manager fails
+// checks with an explicit trust context that can't be resolved (here, because
+// there's no trust manager), rather than running them with the system CA
+// pool.
+func (s *ManagerSuite) TestExplicitTrustContextFailsClosed(c *C) {
+	marker := filepath.Join(c.MkDir(), "ran")
+	var requests atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+	}))
+	defer server.Close()
+
+	s.manager.PlanChanged(&plan.Plan{
+		Checks: map[string]*plan.Check{
+			"exec": {
+				Name:      "exec",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Threshold: 1,
+				Exec: &plan.ExecCheck{
+					Command:      fmt.Sprintf("touch %s", marker),
+					TrustContext: "vendorA",
+				},
+			},
+			"http": {
+				Name:      "http",
+				Override:  "replace",
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond},
+				Timeout:   plan.OptionalDuration{Value: 10 * time.Millisecond},
+				Threshold: 1,
+				HTTP: &plan.HTTPCheck{
+					URL:          server.URL,
+					TrustContext: "vendorA",
+				},
+			},
+		},
+	})
+
+	for _, name := range []string{"exec", "http"} {
+		check := waitCheck(c, s.manager, name, func(check *checkstate.CheckInfo) bool {
+			return check.Status == checkstate.CheckStatusDown
+		})
+		c.Check(check.Failures >= 1, Equals, true)
+	}
+
+	_, err := os.Stat(marker)
+	c.Check(os.IsNotExist(err), Equals, true)
+	c.Check(requests.Load(), Equals, int32(0))
+
+	info, err := s.manager.RefreshCheck(context.Background(), &plan.Check{
+		Name:    "refresh",
+		Timeout: plan.OptionalDuration{Value: time.Second},
+		Exec:    &plan.ExecCheck{Command: fmt.Sprintf("touch %s", marker), TrustContext: "vendorA"},
+	})
+	c.Check(err, ErrorMatches, `cannot resolve trust context "vendorA": no trust manager`)
+	c.Check(info, NotNil)
+	_, err = os.Stat(marker)
+	c.Check(os.IsNotExist(err), Equals, true)
 }

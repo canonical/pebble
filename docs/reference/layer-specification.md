@@ -30,6 +30,15 @@ services:
         # Example: /usr/bin/somedaemon --db=/db/path [ --port 8080 ]
         command: <commmand>
 
+        # (Optional) The name of the trust context used to provide a CA
+        # certificate bundle to the service process. If a trust context is
+        # configured (and it doesn't resolve to the system CA pool), its CA
+        # bundle is exposed to the process via the SSL_CERT_FILE environment
+        # variable, unless SSL_CERT_FILE is already set explicitly. If not
+        # specified, the "default" trust context is used. See the
+        # "trust-contexts" section below for details.
+        trust-context: <trust context name>
+
         # (Optional) A short summary of the service.
         summary: <summary>
 
@@ -180,6 +189,12 @@ checks:
             headers:
                 <name>: <value>
 
+            # (Optional) The name of the trust context used to validate the
+            # TLS certificate presented by the server (relevant only for
+            # "https" URLs). If not specified, the "default" trust context
+            # is used. See the "trust-contexts" section below for details.
+            trust-context: <trust context name>
+
         # Configures a TCP port check, which is successful if the specified
         # TCP port is listening and we can successfully open it. Nothing is
         # sent to the port.
@@ -235,6 +250,16 @@ checks:
             # command is run in the service manager's current directory.
             working-dir: <directory>
 
+            # (Optional) The name of the trust context used to provide a CA
+            # certificate bundle to the command. If a trust context is
+            # configured (and it doesn't resolve to the system CA pool), its
+            # CA bundle is exposed to the command via the SSL_CERT_FILE
+            # environment variable, unless SSL_CERT_FILE is already set
+            # explicitly (or inherited via service-context). If not
+            # specified, the "default" trust context is used. See the
+            # "trust-contexts" section below for details.
+            trust-context: <trust context name>
+
 # (Optional) A list of remote log receivers, to which service logs can be sent.
 log-targets:
 
@@ -284,6 +309,81 @@ log-targets:
     # be substituted using the environment for the corresponding service.
     labels:
       <label name>: <label value>
+
+    # (Optional) The name of the trust context used to validate the TLS
+    # certificate presented by the remote log target. Only applicable to the
+    # "loki" and "opentelemetry" types. If not specified, the "default" trust
+    # context is used. See the "trust-contexts" section below for details.
+    #
+    # Syslog targets send logs over plain TCP or UDP, without TLS, so they
+    # don't use a trust context. Specifying "trust-context" for a "syslog"
+    # target is ineffective, but it is not an error: the trust context must
+    # still exist, but it is ignored. This is expected behaviour, and does not
+    # mean the syslog connection is protected by TLS.
+    trust-context: <trust context name>
+
+# (Optional) A list of named trust contexts, each holding a set of trusted CA
+# certificates that can be referenced (by name, via "trust-context" fields)
+# in services, checks, and log targets that need to establish TLS trust with
+# an external server or provide a CA bundle to a process.
+#
+# Two trust contexts are always available, even if not declared in any
+# layer:
+#
+# - "system": an immutable trust context backed by the host's default x509
+#   CA certificate pool. This name is reserved and cannot be declared in a
+#   layer.
+# - "default": the trust context used by consumers (services, checks, log
+#   targets and "pebble exec") that don't set "trust-context" explicitly.
+#   If no layer declares it, "default" includes "system". It may be declared
+#   in a layer to change what it includes, but it must use
+#   "override: replace" and cannot define "x509" itself. A declared "default"
+#   without "include" includes nothing, so trusts no CA certificates.
+#
+# Every reference to a trust context (a "trust-context" field in a service,
+# check or log target, or an entry in "include") must name a built-in trust
+# context, or one defined in the same layer or an earlier layer.
+#
+# When a process (a service, an exec check or "pebble exec") uses a trust
+# context whose effective CA certificates differ from the system CA pool,
+# Pebble writes them to "$PEBBLE/trust/<trust context name>/x509-ca.pem"
+# (with permissions 0644) and points the process's SSL_CERT_FILE environment
+# variable at that file, unless SSL_CERT_FILE is already set explicitly.
+trust-contexts:
+
+    # Trust context names must start and end with a letter or digit, and contain
+    # only letters, digits, and "-".
+    <trust context name>:
+
+        # (Required) Control how this trust context definition is combined with
+        # any other pre-existing definition with the same name in the plan.
+        #
+        # The value 'merge' will ensure that values in this layer specification
+        # are merged over existing definitions, whereas 'replace' will entirely
+        # override the existing trust context spec in the plan with the same
+        # name. The "default" trust context must use 'replace'.
+        override: merge | replace
+
+        # (Optional) The names of other trust contexts whose CA certificates
+        # are trusted as the base of this trust context (recursively,
+        # following their own "include"). Either a single name or a list of
+        # names. Use the built-in name "system" to include the host's default
+        # CA certificate pool. To include nothing, leave it unset or provide
+        # an empty list. When merging, a later layer's "include" replaces the
+        # previous value.
+        include: <other trust context name> | [<other trust context name>, ...]
+
+        # (Optional) Configures the x509 certificates trusted directly by
+        # this trust context. Not allowed for the "default" trust context.
+        # When merging, the nested fields are merged.
+        x509:
+            # (Optional) One or more PEM-encoded CA certificates. When
+            # merging, the certificates from each layer are appended. The
+            # resolved trust context contains the certificates of all its
+            # included trust contexts (in order), followed by its own. In both
+            # cases, duplicate certificates are dropped, retaining the first.
+            ca-cert: |
+                <PEM-encoded CA certificate(s)>
 
 # (Optional) HTTPS (using mTLS) communication between the client and server
 # requires both sides to be paired first. Pairing is currently only supported

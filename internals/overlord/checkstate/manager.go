@@ -28,6 +28,7 @@ import (
 	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/state"
+	"github.com/canonical/pebble/internals/overlord/truststate"
 	"github.com/canonical/pebble/internals/plan"
 )
 
@@ -41,8 +42,9 @@ const (
 
 // CheckManager starts and manages the health checks.
 type CheckManager struct {
-	state   *state.State
-	planMgr *planstate.PlanManager
+	state    *state.State
+	planMgr  *planstate.PlanManager
+	trustMgr *truststate.TrustManager
 
 	failureHandlers []FailureFunc
 
@@ -54,11 +56,12 @@ type CheckManager struct {
 type FailureFunc func(name string)
 
 // NewManager creates a new check manager.
-func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager) *CheckManager {
+func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager, trustMgr *truststate.TrustManager) *CheckManager {
 	manager := &CheckManager{
-		state:   s,
-		checks:  make(map[string]*checkData),
-		planMgr: planMgr,
+		state:    s,
+		checks:   make(map[string]*checkData),
+		planMgr:  planMgr,
+		trustMgr: trustMgr,
 	}
 
 	// Health check changes can be long-running; ensure they don't get pruned.
@@ -254,13 +257,15 @@ func checkType(config *plan.Check) string {
 
 // newChecker creates a new checker of the configured type. Assumes
 // mergeServiceContext has already been called.
-func newChecker(config *plan.Check) checker {
+func newChecker(config *plan.Check, trustMgr *truststate.TrustManager) checker {
 	switch {
 	case config.HTTP != nil:
 		return &httpChecker{
-			name:    config.Name,
-			url:     config.HTTP.URL,
-			headers: config.HTTP.Headers,
+			name:         config.Name,
+			url:          config.HTTP.URL,
+			headers:      config.HTTP.Headers,
+			trustContext: config.HTTP.TrustContext,
+			trustMgr:     trustMgr,
 		}
 
 	case config.TCP != nil:
@@ -272,14 +277,16 @@ func newChecker(config *plan.Check) checker {
 
 	case config.Exec != nil:
 		return &execChecker{
-			name:        config.Name,
-			command:     config.Exec.Command,
-			environment: config.Exec.Environment,
-			userID:      config.Exec.UserID,
-			user:        config.Exec.User,
-			groupID:     config.Exec.GroupID,
-			group:       config.Exec.Group,
-			workingDir:  config.Exec.WorkingDir,
+			name:         config.Name,
+			command:      config.Exec.Command,
+			environment:  config.Exec.Environment,
+			userID:       config.Exec.UserID,
+			user:         config.Exec.User,
+			groupID:      config.Exec.GroupID,
+			group:        config.Exec.Group,
+			workingDir:   config.Exec.WorkingDir,
+			trustContext: config.Exec.TrustContext,
+			trustMgr:     trustMgr,
 		}
 
 	default:
@@ -658,7 +665,7 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 
 	// If the check is stopped, run the check directly without using changes and tasks.
 	if changeID == "" {
-		chk := newChecker(check)
+		chk := newChecker(check, m.trustMgr)
 		err := runCheck(ctx, chk, check.Timeout.Value)
 		if err != nil {
 			return getCheckInfo(), fmt.Errorf("%s", errorDetails(err))
