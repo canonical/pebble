@@ -12,25 +12,6 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-// Package schedule implements the schedule syntax described at
-// https://github.com/niemeyer/schedule-syntax.
-//
-// A schedule is one or more sets separated by a double comma. Each set
-// selects days of the year (months and days of the month), weekdays
-// (optionally positioned within the month), and clock spans (optionally
-// split into repeating triggers), for example:
-//
-//	mon-fri,8:00-17:00,,sat,sun,10:00,,mon1,9:00
-//	dec-mar,1-14,sat
-//	mon,8:00-10:00/30s
-//
-// Whitespace is not allowed anywhere in a schedule, including around it,
-// and is deliberately not trimmed or skipped: it is rejected by the grammar
-// like any other unexpected character.
-//
-// Clock spans are evaluated in wall-clock time, in the location of the
-// current time passed to [Schedule.Next]. See its documentation for how
-// daylight saving time transitions are handled.
 package schedule
 
 import (
