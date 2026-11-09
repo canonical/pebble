@@ -71,7 +71,7 @@ func Parse(text string) (*Schedule, error) {
 func parseSet(text string) (set, error) {
 	var st set
 	if text == "" {
-		return st, fmt.Errorf("empty set")
+		return set{}, fmt.Errorf("empty set")
 	}
 
 	// Months accumulate into a group until days follow them, at which point
@@ -99,30 +99,30 @@ func parseSet(text string) (set, error) {
 	for elem := range strings.SplitSeq(text, ",") {
 		switch {
 		case elem == "":
-			return st, fmt.Errorf("empty element")
+			return set{}, fmt.Errorf("empty element")
 		case isClockElem(elem):
 			if len(st.clockSpans) == maxClockSpans {
-				return st, fmt.Errorf("more than %d clock spans in a set", maxClockSpans)
+				return set{}, fmt.Errorf("more than %d clock spans in a set", maxClockSpans)
 			}
 			cspan, err := parseClockSpan(elem)
 			if err != nil {
-				return st, err
+				return set{}, err
 			}
 			st.clockSpans = append(st.clockSpans, cspan)
 		case isDigit(elem[0]):
 			if months == 0 {
-				return st, fmt.Errorf("days %q before a month", elem)
+				return set{}, fmt.Errorf("days %q before a month", elem)
 			}
 			d, err := parseDays(elem)
 			if err != nil {
-				return st, err
+				return set{}, err
 			}
 			days |= d
 		default:
 			if _, isMonth := lookupName(monthNames, elem[:min(len(elem), 3)]); isMonth {
 				m, err := parseMonths(elem)
 				if err != nil {
-					return st, err
+					return set{}, err
 				}
 				if days != 0 {
 					flush()
@@ -132,11 +132,11 @@ func parseSet(text string) (set, error) {
 				continue
 			}
 			if len(st.weekSpans) == maxWeekSpans {
-				return st, fmt.Errorf("more than %d week spans in a set", maxWeekSpans)
+				return set{}, fmt.Errorf("more than %d week spans in a set", maxWeekSpans)
 			}
 			wspan, err := parseWeekSpan(elem)
 			if err != nil {
-				return st, err
+				return set{}, err
 			}
 			st.weekSpans = append(st.weekSpans, wspan)
 		}
