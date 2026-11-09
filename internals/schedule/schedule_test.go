@@ -38,7 +38,7 @@ func newWeekSpan(start time.Weekday, startPos nthday, end time.Weekday, endPos n
 	}
 }
 
-func newClockSpan(startHour, startMinute, endHour, endMinute int, period time.Duration) clockSpan {
+func newClockSpan(startHour, startMinute, endHour, endMinute uint8, period time.Duration) clockSpan {
 	return clockSpan{
 		start:  clock{hour: startHour, minute: startMinute},
 		end:    clock{hour: endHour, minute: endMinute},

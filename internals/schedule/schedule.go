@@ -47,7 +47,7 @@ const (
 )
 
 // nthday is the position of a weekday within a month.
-type nthday int
+type nthday uint8
 
 const (
 	// nthdayAny matches any position within the month.
@@ -59,8 +59,8 @@ const (
 
 // clock is a time of day.
 type clock struct {
-	hour   int
-	minute int
+	hour   uint8
+	minute uint8
 }
 
 func (c clock) String() string {
@@ -187,7 +187,7 @@ func (s *Schedule) validate() error {
 		}
 		for _, cspan := range st.clockSpans {
 			for _, c := range []clock{cspan.start, cspan.end} {
-				if c.hour < 0 || c.hour > 23 || c.minute < 0 || c.minute > 59 {
+				if c.hour > 23 || c.minute > 59 {
 					return fmt.Errorf("invalid clock %d:%02d", c.hour, c.minute)
 				}
 			}

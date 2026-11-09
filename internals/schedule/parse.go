@@ -309,8 +309,8 @@ func parseClockSpan(elem string) (clockSpan, error) {
 }
 
 func clockAfter(c clock, d time.Duration) clock {
-	mins := (c.hour*60 + c.minute + int(d/time.Minute)) % (24 * 60)
-	return clock{hour: mins / 60, minute: mins % 60}
+	mins := (int(c.hour)*60 + int(c.minute) + int(d/time.Minute)) % (24 * 60)
+	return clock{hour: uint8(mins / 60), minute: uint8(mins % 60)}
 }
 
 // parseClock parses "H:MM" or "HH:MM". "24:00" is accepted as midnight.
@@ -326,10 +326,10 @@ func parseClock(s string) (clock, error) {
 	if hour == 24 && minute == 0 {
 		hour = 0
 	}
-	if hour > 23 || minute > 59 {
+	if hour < 0 || hour > 23 || minute < 0 || minute > 59 {
 		return clock{}, fmt.Errorf("invalid time %q", s)
 	}
-	return clock{hour: hour, minute: minute}, nil
+	return clock{hour: uint8(hour), minute: uint8(minute)}, nil
 }
 
 // parseSplit parses the N or N plus unit after the "/" of a clock span. With
