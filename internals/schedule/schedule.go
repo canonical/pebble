@@ -111,6 +111,7 @@ type Schedule struct {
 	text string
 }
 
+// String returns the original schedule string passed to [Parse].
 func (s *Schedule) String() string {
 	return s.text
 }
@@ -132,12 +133,9 @@ var ErrNoNext = errors.New("schedule has no further triggers")
 // go back, a trigger at a repeated wall-clock time happens only once, at the
 // earlier of the two instants.
 //
-// Next returns errNoNext if the schedule has no further triggers, or
+// Next returns ErrNoNext if the schedule has no further triggers, or
 // another error if the schedule is invalid.
 func (s *Schedule) Next(last, now time.Time) (time.Time, error) {
-	if err := s.validate(); err != nil {
-		return time.Time{}, fmt.Errorf("cannot evaluate schedule due to %w", err)
-	}
 	var next time.Time
 	found := false
 	for i := range s.sets {
@@ -151,33 +149,6 @@ func (s *Schedule) Next(last, now time.Time) (time.Time, error) {
 		return time.Time{}, ErrNoNext
 	}
 	return next, nil
-}
-
-// validate checks the invariants that Parse guarantees and Next relies on.
-func (s *Schedule) validate() error {
-	for _, st := range s.sets {
-		for _, wspan := range st.weekSpans {
-			for _, wp := range []weekdayPos{wspan.start, wspan.end} {
-				if wp.weekday < time.Sunday || wp.weekday > time.Saturday {
-					return fmt.Errorf("invalid weekday %d", wp.weekday)
-				}
-				if wp.pos < nthdayAny || wp.pos > nthdayLast {
-					return fmt.Errorf("invalid weekday position %d", wp.pos)
-				}
-			}
-		}
-		for _, cspan := range st.clockSpans {
-			for _, c := range []clock{cspan.start, cspan.end} {
-				if c.hour > 23 || c.minute > 59 {
-					return fmt.Errorf("invalid clock %d:%02d", c.hour, c.minute)
-				}
-			}
-			if cspan.period <= 0 {
-				return fmt.Errorf("invalid clock span period %v", cspan.period)
-			}
-		}
-	}
-	return nil
 }
 
 // next returns the earliest trigger of the set that is after last and whose

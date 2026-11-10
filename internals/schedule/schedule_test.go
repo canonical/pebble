@@ -230,6 +230,36 @@ var nextTests = []nextTest{
 		now:      "2020-01-11 00:25:00",
 		next:     "2020-01-11 00:10:00",
 	}, {
+		comment:  "split cross-day part competes with an earlier span on the second day",
+		schedule: "23:50-2:00/1h,0:15",
+		last:     "2020-01-10 23:50:00",
+		now:      "2020-01-11 00:05:00",
+		next:     "2020-01-11 00:15:00",
+	}, {
+		comment:  "split cross-day part competes with a later span on the second day",
+		schedule: "23:55-2:00/2h,1:00",
+		last:     "2020-01-10 23:55:00",
+		now:      "2020-01-11 00:30:00",
+		next:     "2020-01-11 01:00:00",
+	}, {
+		comment:  "split cross-day part competes with an earlier span before midnight",
+		schedule: "23:50-2:00/1h,0:15",
+		last:     "2020-01-10 23:50:00",
+		now:      "2020-01-10 23:55:00",
+		next:     "2020-01-11 00:15:00",
+	}, {
+		comment:  "split cross-day part on the span end isn't a trigger, so second day span wins",
+		schedule: "23:00-1:00/2h,0:30",
+		last:     "2020-01-10 23:00:00",
+		now:      "2020-01-11 00:10:00",
+		next:     "2020-01-11 00:30:00",
+	}, {
+		comment:  "split cross-day part kept when the second day doesn't match",
+		schedule: "mon,23:50-2:00/1h",
+		last:     "2020-01-13 23:50:00",
+		now:      "2020-01-14 00:05:00",
+		next:     "2020-01-14 00:50:00",
+	}, {
 		comment:  "split unit with hours",
 		schedule: "8:00-10:00/1h",
 		last:     "2020-01-10 08:15:00",
