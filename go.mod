@@ -1,6 +1,6 @@
 module github.com/canonical/pebble
 
-go 1.27.3
+go 1.27.4
 
 godebug multipathtcp=0
 
