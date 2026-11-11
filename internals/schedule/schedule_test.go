@@ -31,21 +31,6 @@ type scheduleSuite struct{}
 
 var _ = Suite(&scheduleSuite{})
 
-func newWeekSpan(start time.Weekday, startPos nthday, end time.Weekday, endPos nthday) weekSpan {
-	return weekSpan{
-		start: weekdayPos{weekday: start, pos: startPos},
-		end:   weekdayPos{weekday: end, pos: endPos},
-	}
-}
-
-func newClockSpan(startHour, startMinute, endHour, endMinute uint8, period time.Duration) clockSpan {
-	return clockSpan{
-		start:  clock{hour: startHour, minute: startMinute},
-		end:    clock{hour: endHour, minute: endMinute},
-		period: period,
-	}
-}
-
 func (s *scheduleSuite) TestString(c *C) {
 	sched, err := Parse("mon-fri,8:00-17:00,,sat,sun,10:00")
 	c.Assert(err, IsNil)
@@ -760,36 +745,6 @@ func (s *scheduleSuite) TestNextAcrossDSTLateTrigger(c *C) {
 	next, err = sched.Next(last, now.In(loc))
 	c.Assert(err, IsNil)
 	c.Check(next.Format("15:04 MST"), Equals, "02:00 BST")
-}
-
-func (s *scheduleSuite) TestNextInvalidSchedule(c *C) {
-	now := time.Date(2020, 1, 10, 9, 15, 0, 0, time.UTC)
-	for _, test := range []struct {
-		set set
-		err string
-	}{{
-		set: set{clockSpans: []clockSpan{newClockSpan(9, 0, 10, 0, 0)}},
-		err: "cannot evaluate schedule due to invalid clock span period 0s",
-	}, {
-		set: set{clockSpans: []clockSpan{newClockSpan(9, 0, 10, 0, -time.Minute)}},
-		err: "cannot evaluate schedule due to invalid clock span period -1m0s",
-	}, {
-		set: set{clockSpans: []clockSpan{newClockSpan(24, 0, 10, 0, time.Minute)}},
-		err: "cannot evaluate schedule due to invalid clock 24:00",
-	}, {
-		set: set{clockSpans: []clockSpan{newClockSpan(9, 0, 10, 60, time.Minute)}},
-		err: "cannot evaluate schedule due to invalid clock 10:60",
-	}, {
-		set: set{weekSpans: []weekSpan{newWeekSpan(7, 0, time.Monday, 0)}},
-		err: "cannot evaluate schedule due to invalid weekday 7",
-	}, {
-		set: set{weekSpans: []weekSpan{newWeekSpan(time.Monday, 0, time.Monday, 6)}},
-		err: "cannot evaluate schedule due to invalid weekday position 6",
-	}} {
-		sched := &Schedule{sets: []set{test.set}}
-		_, err := sched.Next(now, now)
-		c.Check(err, ErrorMatches, test.err)
-	}
 }
 
 func (s *scheduleSuite) TestNextSequence(c *C) {

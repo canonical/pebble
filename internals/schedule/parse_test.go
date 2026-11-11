@@ -32,6 +32,21 @@ var (
 	wholeDay = clockSpan{period: 24 * time.Hour}
 )
 
+func newWeekSpan(start time.Weekday, startPos nthday, end time.Weekday, endPos nthday) weekSpan {
+	return weekSpan{
+		start: weekdayPos{weekday: start, pos: startPos},
+		end:   weekdayPos{weekday: end, pos: endPos},
+	}
+}
+
+func newClockSpan(startHour, startMinute, endHour, endMinute uint8, period time.Duration) clockSpan {
+	return clockSpan{
+		start:  clock{hour: startHour, minute: startMinute},
+		end:    clock{hour: endHour, minute: endMinute},
+		period: period,
+	}
+}
+
 func allYear() [12]uint32 {
 	var days [12]uint32
 	for m := range days {

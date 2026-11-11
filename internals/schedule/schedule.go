@@ -162,13 +162,21 @@ func (st *set) next(last, now time.Time) (time.Time, bool) {
 	y, m, d := now.Date()
 	day := civilDate(y, m, d-1)
 
+	var next time.Time
+	found := false
 	for range maxSearchDays {
+		if found {
+			// A clock span crossing midnight may trigger after a span on the
+			// following day starts, so keep going until a day starts no
+			// earlier than the trigger found.
+			if dayStart, _ := wallTime(day, loc); !dayStart.Before(next) {
+				break
+			}
+		}
 		if !st.matchesDay(day) {
 			day = st.skipDay(day)
 			continue
 		}
-		var next time.Time
-		found := false
 		for _, cspan := range st.clockSpans {
 			t, ok := cspan.next(day, last, now, loc)
 			if ok && (!found || t.Before(next)) {
@@ -176,12 +184,9 @@ func (st *set) next(last, now time.Time) (time.Time, bool) {
 				found = true
 			}
 		}
-		if found {
-			return next, true
-		}
 		day = day.AddDate(0, 0, 1)
 	}
-	return time.Time{}, false
+	return next, found
 }
 
 // skipDay returns the day after day, skipping straight to the following
