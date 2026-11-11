@@ -232,6 +232,11 @@ func streamLogs(
 // stepBack moves the iterators back line by line, so that when read forwards
 // again they start at the most recent numLogs lines across all of them (all
 // lines if numLogs is negative).
+//
+// A partial line at the start of a log (where the ring buffer has discarded
+// its beginning) is never stepped back past, so it isn't output. A partial
+// line at the end of a log (not yet terminated by a newline) is stepped back
+// past like any other line, so it is output and counts towards numLogs.
 func stepBack(iterators []servicelog.Iterator, numLogs int) {
 	if numLogs == 0 {
 		return

@@ -48,6 +48,9 @@ type testServiceManager struct {
 	buffers        map[string]*servicelog.RingBuffer
 	servicesErr    error
 	serviceLogsErr error
+
+	// If non-nil, set to the "last" argument of each ServiceLogs call.
+	serviceLogsLast *int
 }
 
 func (m testServiceManager) Services(names []string) ([]*servstate.ServiceInfo, error) {
@@ -68,6 +71,9 @@ func (m testServiceManager) Services(names []string) ([]*servstate.ServiceInfo, 
 }
 
 func (m testServiceManager) ServiceLogs(services []string, last int) (map[string]servicelog.Iterator, error) {
+	if m.serviceLogsLast != nil {
+		*m.serviceLogsLast = last
+	}
 	if m.serviceLogsErr != nil {
 		return nil, m.serviceLogsErr
 	}
@@ -164,6 +170,29 @@ func (s *logsSuite) TestOneServiceWithN(c *C) {
 	for i := range 3 {
 		checkLog(c, logs[i], "nginx", fmt.Sprintf("message %d", i+17))
 	}
+}
+
+func (s *logsSuite) TestOneServiceHugeN(c *C) {
+	rb := servicelog.NewRingBuffer(4096)
+	lw := servicelog.NewFormatWriter(rb, "nginx")
+	fmt.Fprintf(lw, "message 0\n")
+
+	last := -2
+	svcMgr := testServiceManager{
+		buffers: map[string]*servicelog.RingBuffer{
+			"nginx": rb,
+		},
+		serviceLogsLast: &last,
+	}
+	rec := s.recordResponse(c, "/v1/logs?n=1000000000", svcMgr)
+	c.Assert(rec.Code, Equals, http.StatusOK)
+
+	logs := decodeLogs(c, rec.Body)
+	c.Assert(logs, HasLen, 1)
+	checkLog(c, logs[0], "nginx", "message 0")
+
+	// Iterators start at the head rather than buffering n entries of history.
+	c.Check(last, Equals, 0)
 }
 
 func (s *logsSuite) TestOneServiceAllLogs(c *C) {
@@ -396,19 +425,24 @@ func (s *logsSuite) TestMultipleServicesFollow(c *C) {
 
 	// Start a cancellable request
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true&n=2", nil)
 	c.Assert(err, IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 
 	// writeChan is sent to whenever a response write occurs
 	logChan := make(chan string)
-	rec := &followRecorder{logChan: logChan}
+	rec := &followRecorder{ctx: ctx, logChan: logChan}
 
 	// Serve the request on a background goroutine
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		rsp.ServeHTTP(rec, req)
-		done <- struct{}{}
+	}()
+	defer func() {
+		cancel()
+		<-done
 	}()
 
 	waitLogs := func() []testLogEntry {
@@ -469,15 +503,20 @@ func (s *logsSuite) TestFollowPartialLine(c *C) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "GET", "/v1/logs?follow=true&n=2", nil)
 	c.Assert(err, IsNil)
 	rsp := logsResponse{svcMgr: svcMgr}
 	logChan := make(chan string)
-	rec := &followRecorder{logChan: logChan}
+	rec := &followRecorder{ctx: ctx, logChan: logChan}
 	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		rsp.ServeHTTP(rec, req)
-		done <- struct{}{}
+	}()
+	defer func() {
+		cancel()
+		<-done
 	}()
 
 	waitLogs := func() []testLogEntry {
@@ -512,6 +551,7 @@ func (s *logsSuite) TestFollowPartialLine(c *C) {
 }
 
 type followRecorder struct {
+	ctx     context.Context
 	logChan chan string
 	header  http.Header
 	status  int
@@ -538,7 +578,11 @@ func (r *followRecorder) WriteHeader(status int) {
 }
 
 func (r *followRecorder) Flush() {
-	r.logChan <- string(r.written)
+	// Don't block the handler once the test has stopped receiving.
+	select {
+	case r.logChan <- string(r.written):
+	case <-r.ctx.Done():
+	}
 	r.written = r.written[:0]
 }
 
