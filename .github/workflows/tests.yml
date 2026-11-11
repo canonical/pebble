@@ -44,7 +44,14 @@ jobs:
 
     - name: Test
       run: |
-        PEBBLE_TEST_USER=runner PEBBLE_TEST_GROUP=runner sudo -E -H "$(which go)" test ./...
+        cat > "$RUNNER_TEMP/root-tests.sh" <<EOF
+        #!/bin/sh
+        export PEBBLE_TEST_USER=runner
+        export PEBBLE_TEST_GROUP=runner
+        "$(command -v go)" test ./...
+        EOF
+        chmod +x "$RUNNER_TEMP/root-tests.sh"
+        sudo -H "$RUNNER_TEMP/root-tests.sh"
 
   format:
     runs-on: ubuntu-latest
