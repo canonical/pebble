@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/tomb.v2"
 
@@ -45,6 +46,7 @@ type CheckManager struct {
 	planMgr *planstate.PlanManager
 
 	failureHandlers []FailureFunc
+	successHandlers []SuccessFunc
 
 	checksLock sync.Mutex
 	checks     map[string]*checkData
@@ -52,6 +54,10 @@ type CheckManager struct {
 
 // FailureFunc is the type of function called when a failure action is triggered.
 type FailureFunc func(name string)
+
+// SuccessFunc is the type of function called after each successful
+// check run. runStartedAt is the time that run began.
+type SuccessFunc func(name string, runStartedAt time.Time)
 
 // NewManager creates a new check manager.
 func NewManager(s *state.State, runner *state.TaskRunner, planMgr *planstate.PlanManager) *CheckManager {
@@ -98,6 +104,12 @@ func (m *CheckManager) Ensure() error {
 // a check hits its failure threshold.
 func (m *CheckManager) NotifyCheckFailed(f FailureFunc) {
 	m.failureHandlers = append(m.failureHandlers, f)
+}
+
+// NotifyCheckSucceeded adds f to the list of functions that are called whenever
+// a check succeeds.
+func (m *CheckManager) NotifyCheckSucceeded(f SuccessFunc) {
+	m.successHandlers = append(m.successHandlers, f)
 }
 
 // PlanChanged handles updates to the plan (server configuration),
@@ -222,6 +234,12 @@ func (m *CheckManager) changeStatusChanged(change *state.Change, old, new state.
 func (m *CheckManager) callFailureHandlers(name string) {
 	for _, f := range m.failureHandlers {
 		f(name)
+	}
+}
+
+func (m *CheckManager) callSuccessHandlers(name string, runStartedAt time.Time) {
+	for _, f := range m.successHandlers {
+		f(name, runStartedAt)
 	}
 }
 

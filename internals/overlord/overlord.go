@@ -16,6 +16,7 @@
 package overlord
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ import (
 	"gopkg.in/tomb.v2"
 
 	"github.com/canonical/pebble/cmd"
+	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
 	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/cmdstate"
@@ -255,11 +257,31 @@ func New(opts *Options) (*Overlord, error) {
 	// Tell check manager about plan updates.
 	o.planMgr.AddChangeListener(o.checkMgr.PlanChanged)
 
+	// Allow service manager to refresh a service's latch checks
+	o.serviceMgr.SetCheckProber(func(name string) {
+		check, ok := o.planMgr.Plan().Checks[name]
+		if !ok {
+			logger.Noticef("check %q not found in plan", name)
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), check.Period.Value)
+
+		// Run asynchronously: the prober is called with the service
+		// manager's lock held.
+		go func() {
+			defer cancel()
+			_, _ = o.checkMgr.RefreshCheck(ctx, check)
+		}()
+	})
+
 	// Tell log manager about plan updates.
 	o.planMgr.AddChangeListener(o.logMgr.PlanChanged)
 
 	// Tell service manager about check failures.
 	o.checkMgr.NotifyCheckFailed(o.serviceMgr.CheckFailed)
+
+	// Tell service manager about check successes.
+	o.checkMgr.NotifyCheckSucceeded(o.serviceMgr.CheckSucceeded)
 
 	if o.extension != nil {
 		extraManagers, err := o.extension.ExtraManagers(o)
