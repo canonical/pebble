@@ -494,6 +494,36 @@ var planTests = []planTest{{
 				backoff-delay: foo
 	`},
 }, {
+	summary: `Negative backoff-delay`,
+	error:   `plan service "svc1" backoff-delay must not be negative`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				backoff-delay: -1s
+	`},
+}, {
+	summary: `Negative backoff-limit`,
+	error:   `plan service "svc1" backoff-limit must not be negative`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				backoff-limit: -1s
+	`},
+}, {
+	summary: `Negative kill-delay`,
+	error:   `plan service "svc1" kill-delay must not be negative`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				kill-delay: -1s
+	`},
+}, {
 	summary: `Zero backoff-factor`,
 	error:   `plan service "svc1" backoff-factor must be 1.0 or greater, not 0`,
 	input: []string{`
