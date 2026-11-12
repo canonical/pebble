@@ -74,6 +74,24 @@ func (s *lastLinesSuite) TestServiceLastLinesStripPrefix(c *C) {
 	c.Assert(lines, Equals, "foo\nbar")
 }
 
+func (s *lastLinesSuite) TestLastLinesEmpty(c *C) {
+	buffer := servicelog.NewRingBuffer(1024)
+	defer buffer.Close()
+
+	lines, err := servicelog.LastLines(buffer, 10, "    ", false)
+	c.Assert(err, IsNil)
+	c.Assert(lines, Equals, "")
+	lines, err = servicelog.ServiceLastLines(buffer, 10, "    ", "svc")
+	c.Assert(err, IsNil)
+	c.Assert(lines, Equals, "")
+
+	// Output that is only whitespace counts as no output.
+	fmt.Fprintf(buffer, "\n \n")
+	lines, err = servicelog.ServiceLastLines(buffer, 10, "    ", "svc")
+	c.Assert(err, IsNil)
+	c.Assert(lines, Equals, "")
+}
+
 func (s *lastLinesSuite) TestLastLinesWhitespace(c *C) {
 	buffer := servicelog.NewRingBuffer(1024)
 	defer buffer.Close()

@@ -48,6 +48,10 @@ type Parser struct {
 	br    *bufio.Reader
 	entry Entry
 	err   error
+
+	// midLine is true if the last data read didn't end with a newline, so
+	// the next data read continues that line rather than starting a new one.
+	midLine bool
 }
 
 // NewParser creates a Parser with the given buffer size.
@@ -76,18 +80,24 @@ func (p *Parser) Next() bool {
 		// If EOF reached, stop iterating after processing line.
 		eof = errors.Is(err, io.EOF)
 
-		entry, err := Parse(line)
-		if err == nil {
-			p.entry = entry
-			if entry.Message == "" {
-				// FormatWriter has only written "timestamp [service]" and not
-				// yet written log message, break this iteration so caller can
-				// wait for next write. When message comes through it'll use
-				// this p.entry's timestamp and service name.
-				return false
+		// Only parse a prefix at the start of a line: the rest of a line is
+		// service output, which may itself look like a log line.
+		continuation := p.midLine
+		p.midLine = line[len(line)-1] != '\n'
+		if !continuation {
+			entry, err := Parse(line)
+			if err == nil {
+				p.entry = entry
+				if entry.Message == "" {
+					// FormatWriter has only written "timestamp [service]" and not
+					// yet written log message, break this iteration so caller can
+					// wait for next write. When message comes through it'll use
+					// this p.entry's timestamp and service name.
+					return false
+				}
+				// Normal log line
+				return true
 			}
-			// Normal log line
-			return true
 		}
 		if !p.entry.Time.IsZero() {
 			// Partial log line due to long line or "(... output truncated ...)",

@@ -760,9 +760,9 @@ services:
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.ErrorStatus)
 	c.Check(chg.Err(), ErrorMatches, `(?s).*\n- Start service "test1" \(service start attempt: exited quickly with code 1, will ignore\)`)
-	c.Check(chg.Tasks()[0].Log(), HasLen, 2)
-	c.Check(chg.Tasks()[0].Log()[0], Matches, `(?s).* INFO Most recent service output:\n    `)
-	c.Check(chg.Tasks()[0].Log()[1], Matches, `.* ERROR service start attempt: exited quickly with code 1, will ignore`)
+	// The service has no output, so there's no "Most recent service output" log.
+	c.Check(chg.Tasks()[0].Log(), HasLen, 1)
+	c.Check(chg.Tasks()[0].Log()[0], Matches, `.* ERROR service start attempt: exited quickly with code 1, will ignore`)
 	s.st.Unlock()
 
 	svc := s.serviceByName(c, "test1")
