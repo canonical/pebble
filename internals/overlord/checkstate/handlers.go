@@ -51,6 +51,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	chk := newChecker(config)
 
 	performCheck := func() (shouldExit bool, err error) {
+		startedAt := time.Now()
 		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
 		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
 		if !tomb.Alive() {
@@ -107,6 +108,7 @@ func (m *CheckManager) doPerformCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 			task.Set(checkDetailsAttr, &details)
 			m.state.Unlock()
 		}
+		m.callSuccessHandlers(config.Name, startedAt)
 		return false, nil
 	}
 
@@ -169,6 +171,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 	chk := newChecker(config)
 
 	recoverCheck := func() (shouldExit bool, err error) {
+		startedAt := time.Now()
 		//lint:ignore SA1012 providing a nil context to tomb.Context() is valid
 		err = runCheck(tomb.Context(nil), chk, config.Timeout.Value)
 		if !tomb.Alive() {
@@ -196,6 +199,7 @@ func (m *CheckManager) doRecoverCheck(task *state.Task, tomb *tombpkg.Tomb) erro
 		m.state.Lock()
 		task.Set(checkDetailsAttr, &details)
 		m.state.Unlock()
+		m.callSuccessHandlers(config.Name, startedAt)
 		return true, nil
 	}
 

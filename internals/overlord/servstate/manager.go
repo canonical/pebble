@@ -37,6 +37,18 @@ type ServiceManager struct {
 	rand     *rand.Rand
 
 	logMgr LogManager
+
+	checkProber CheckProber
+}
+
+// CheckProber requests an immediate run of a named check. It is called
+// with servicesLock held, so it must not block (e.g. by waiting on the
+// check result), as check results can call back into the ServiceManager
+// (CheckSucceeded, CheckFailed), which take servicesLock.
+type CheckProber func(name string)
+
+func (s *ServiceManager) SetCheckProber(f CheckProber) {
+	s.checkProber = f
 }
 
 type LogManager interface {
@@ -193,7 +205,7 @@ func (m *ServiceManager) StopTimeout() time.Duration {
 			continue
 		}
 		switch service.state {
-		case stateStarting, stateRunning, stateTerminating:
+		case stateStarting, stateLatching, stateRunning, stateTerminating:
 			if service.killDelay() > maxDuration {
 				maxDuration = service.killDelay()
 			}
@@ -207,7 +219,7 @@ func (m *ServiceManager) StopTimeout() time.Duration {
 
 func stateToStatus(state serviceState) ServiceStatus {
 	switch state {
-	case stateStarting, stateRunning:
+	case stateStarting, stateLatching, stateRunning:
 		return StatusActive
 	case stateTerminating, stateKilling, stateStopped:
 		return StatusInactive
@@ -364,7 +376,7 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	return nil
 }
 
-// CheckFailed response to a health check failure. If the given check name is
+// CheckFailed responds to a health check failure. If the given check name is
 // in the on-check-failure map for a service, tell the service to perform the
 // configured action (for example, "restart").
 func (m *ServiceManager) CheckFailed(name string) {
@@ -377,6 +389,19 @@ func (m *ServiceManager) CheckFailed(name string) {
 				service.checkFailed(action)
 			}
 		}
+	}
+}
+
+// CheckSucceeded responds to a health check success. Any service in the
+// latching state that requires the named check records the success, and
+// transitions to running once all of its latch checks have succeeded.
+// See `serviceData.checkSucceeded`.
+func (m *ServiceManager) CheckSucceeded(name string, runStartedAt time.Time) {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	for _, service := range m.services {
+		service.checkSucceeded(name, runStartedAt)
 	}
 }
 
@@ -466,7 +491,7 @@ func servicesToStop(m *ServiceManager) ([][]string, error) {
 		var notStopped []string
 		for _, name := range services {
 			s := m.services[name]
-			if s != nil && (s.state == stateStarting || s.state == stateRunning || s.state == stateBackoff) {
+			if s != nil && (s.state == stateStarting || s.state == stateLatching || s.state == stateRunning || s.state == stateBackoff) {
 				notStopped = append(notStopped, name)
 			}
 		}

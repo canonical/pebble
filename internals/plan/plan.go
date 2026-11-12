@@ -238,6 +238,7 @@ type Service struct {
 	// Auto-restart and backoff functionality
 	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
 	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
+	OnCheckSuccess map[string]ServiceAction `yaml:"on-check-success,omitempty"`
 	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
 	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
 	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
@@ -259,6 +260,7 @@ func (s *Service) Copy() *Service {
 		copied.GroupID = copyIntPtr(s.GroupID)
 	}
 	copied.OnCheckFailure = maps.Clone(s.OnCheckFailure)
+	copied.OnCheckSuccess = maps.Clone(s.OnCheckSuccess)
 	return &copied
 }
 
@@ -317,6 +319,12 @@ func (s *Service) Merge(other *Service) {
 			s.OnCheckFailure = make(map[string]ServiceAction)
 		}
 		s.OnCheckFailure[k] = v
+	}
+	for k, v := range other.OnCheckSuccess {
+		if s.OnCheckSuccess == nil {
+			s.OnCheckSuccess = make(map[string]ServiceAction)
+		}
+		s.OnCheckSuccess[k] = v
 	}
 	if other.BackoffDelay.IsSet {
 		s.BackoffDelay = other.BackoffDelay
@@ -445,6 +453,7 @@ const (
 	// Actions only allowed in specific contexts
 	ActionFailureShutdown ServiceAction = "failure-shutdown"
 	ActionSuccessShutdown ServiceAction = "success-shutdown"
+	ActionLatch           ServiceAction = "latch"
 )
 
 // Check specifies configuration for a single health check.
@@ -903,6 +912,13 @@ func (layer *Layer) Validate() error {
 				}
 			}
 		}
+		for _, action := range service.OnCheckSuccess {
+			if !validOnCheckSuccessAction(action) {
+				return &FormatError{
+					Message: fmt.Sprintf("plan service %q on-check-success action %q invalid", name, action),
+				}
+			}
+		}
 		if service.BackoffFactor.IsSet && (math.IsNaN(service.BackoffFactor.Value) || math.IsInf(service.BackoffFactor.Value, 0)) {
 			return &FormatError{
 				Message: fmt.Sprintf("plan service %q backoff-factor must be a finite number", name),
@@ -1132,6 +1148,23 @@ func (p *Plan) Validate() error {
 		if target.Location == "" {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan must define "location" for log target %q`, name),
+			}
+		}
+	}
+
+	// Validate on-success checks referenced in service definitions
+	for name, svc := range p.Services {
+		for k, action := range svc.OnCheckSuccess {
+			chk, ok := p.Checks[k]
+			if !ok {
+				return &FormatError{
+					Message: fmt.Sprintf(`plan service %q on-check-success references nonexistent check: %q`, name, k),
+				}
+			}
+			if action == ActionLatch && chk.Startup == CheckStartupDisabled {
+				return &FormatError{
+					Message: fmt.Sprintf(`plan service %q on-check-success cannot latch on check %q with startup disabled`, name, k),
+				}
 			}
 		}
 	}
@@ -1425,6 +1458,20 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 	}
 	switch action {
 	case ActionUnset, ActionRestart, ActionShutdown, ActionIgnore:
+		return true
+	default:
+		return false
+	}
+}
+
+// `validOnCheckSuccessAction` reports whether an action is valid for an
+// `on-check-success` entry. Unlike the other action contexts, check
+// successes may only latch (require the check before transitioning the
+// service to running) or be ignored. The base actions (restart,
+// shutdown, etc.) are not allowed here.
+func validOnCheckSuccessAction(action ServiceAction) bool {
+	switch action {
+	case ActionLatch, ActionIgnore, ActionUnset:
 		return true
 	default:
 		return false
