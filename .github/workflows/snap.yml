@@ -167,7 +167,7 @@ jobs:
         id: build-snap
         uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         if: failure()
         with:
           name: snapcraft-logs-${{ matrix.arch }}
@@ -177,7 +177,7 @@ jobs:
             pebble_*.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: pebble-snap-${{ matrix.arch }}
           path: ${{ steps.build-snap.outputs.snap }}
@@ -356,7 +356,7 @@ jobs:
         if: always()
         run: cat snapcraft-pebble-*.txt > snapcraft-logs.txt || echo "no log files"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         if: always()
         with:
           name: snapcraft-logs-${{ matrix.arch }}
@@ -367,7 +367,7 @@ jobs:
             snapcraft-logs.txt
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         if: steps.build-snap.outcome == 'success'
         with:
           name: pebble-snap-${{ matrix.arch }}
@@ -692,14 +692,14 @@ jobs:
         with:
           subject-path: ${{ steps.build-snap.outputs.snap }}
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         if: always()
         with:
           name: qemu-build-logs-${{ matrix.arch }}
           path: serial.log
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         if: steps.build-snap.outcome == 'success'
         with:
           name: pebble-snap-${{ matrix.arch }}
@@ -717,7 +717,7 @@ jobs:
       (needs.remote-build.result == 'success' || needs.remote-build.result == 'skipped') &&
       (needs.qemu-build.result == 'success' || needs.qemu-build.result == 'skipped')
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           pattern: pebble-snap-amd64
           if-no-artifact-found: ignore
@@ -779,7 +779,7 @@ jobs:
       matrix:
         arch: ${{ fromJSON(needs.plan-snap-builds.outputs.built-arch) }}
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           pattern: pebble-snap-${{ matrix.arch }}
           if-no-artifact-found: ignore
