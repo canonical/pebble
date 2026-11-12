@@ -291,6 +291,6 @@ html_js_files = [
 intersphinx_mapping = {
     "operator": ("https://canonical.com/juju/docs/ops/latest/", None),
     "juju": ("https://documentation.ubuntu.com/juju/3.6/", None),
-    "rockcraft": ("https://documentation.ubuntu.com/rockcraft/latest/", None),
+    "rockcraft": ("https://ubuntu.com/containers/rockcraft/docs/latest/", None),
     "chisel": ("https://ubuntu.com/chisel/docs/latest/", None),
 }

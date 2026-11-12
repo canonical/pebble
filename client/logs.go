@@ -26,10 +26,12 @@ import (
 	"time"
 )
 
-// This needs to be the size of daemon.logReaderSize, plus extra to handle the
-// timestamp, service name, and JSON syntax.
+// This needs to be the size of daemon.logReaderSize once JSON-encoded, plus
+// extra to handle the timestamp, service name, and JSON syntax. Encoding can
+// make the message up to 6 times longer, as a single byte such as a control
+// character or invalid UTF-8 is written as a 6-byte "\uXXXX" escape.
 const (
-	logReaderSize = 5 * 1024
+	logReaderSize = 6*4*1024 + 1024
 )
 
 type LogsOptions struct {
