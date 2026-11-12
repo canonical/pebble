@@ -96,20 +96,22 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager      *ServiceManager
-	state        serviceState
-	config       *plan.Service
-	workload     *workloads.Workload
-	logs         *servicelog.RingBuffer
-	started      chan error
-	stopped      chan error
-	cmd          *exec.Cmd
-	backoffNum   int
-	backoffTime  time.Duration
-	resetTimer   *time.Timer
-	restarting   bool
-	currentSince time.Time
-	startCount   atomic.Int64
+	manager       *ServiceManager
+	state         serviceState
+	config        *plan.Service
+	workload      *workloads.Workload
+	logs          *servicelog.RingBuffer
+	started       chan error
+	stopped       chan error
+	cmd           *exec.Cmd
+	backoffNum    int
+	backoffTime   time.Duration
+	resetTimer    *time.Timer
+	okayTimer     *time.Timer
+	okayTimerDone chan struct{}
+	restarting    bool
+	currentSince  time.Time
+	startCount    atomic.Int64
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -179,6 +181,15 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		// the best we can do.
 		m.servicesLock.Lock()
 		defer m.servicesLock.Unlock()
+		// Cancel the okay timer if the start is aborted.
+		if service.okayTimer != nil {
+			if !service.okayTimer.Stop() {
+				<-service.okayTimer.C
+			}
+			close(service.okayTimerDone)
+			service.okayTimer = nil
+			service.okayTimerDone = nil
+		}
 		service.transition(stateStopped)
 		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
@@ -347,7 +358,18 @@ func (s *serviceData) start() error {
 			return err
 		}
 		s.transition(stateStarting)
-		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+		timer := time.NewTimer(okayDelay)
+		done := make(chan struct{})
+		go func(t *time.Timer, stopCh <-chan struct{}) {
+			select {
+			case <-t.C:
+				logError(s.okayWaitElapsed(t))
+			case <-stopCh:
+				return
+			}
+		}(timer, done)
+		s.okayTimer = timer
+		s.okayTimerDone = done
 
 	default:
 		return fmt.Errorf("cannot start service while %s", s.state)
@@ -519,15 +541,31 @@ func (s *serviceData) startInternal() error {
 }
 
 // okayWaitElapsed is called when the okay-wait timer has elapsed (and the
-// service is considered running successfully).
-func (s *serviceData) okayWaitElapsed() error {
+// service is considered running successfully). The timer parameter is the
+// *time.Timer that was scheduled; we verify it still matches s.okayTimer
+// before transitioning, to handle the case where the timer was cancelled
+// and a new one stored in its place.
+func (s *serviceData) okayWaitElapsed(timer *time.Timer) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
+	return s.okayWaitElapsedLocked(timer)
+}
 
+// okayWaitElapsedLocked is the internal implementation that assumes the
+// lock is already held.
+func (s *serviceData) okayWaitElapsedLocked(timer *time.Timer) error {
 	switch s.state {
 	case stateStarting:
-		s.started <- nil // still running fine after short duration, no error
-		s.transition(stateRunning)
+		// Only complete the start if this callback belongs to the current timer.
+		// If s.okayTimer has been replaced (service left stateStarting and was
+		// restarted), ignore this stale callback.
+		if s.okayTimer == timer {
+			s.okayTimer = nil
+			close(s.okayTimerDone)
+			s.okayTimerDone = nil
+			s.started <- nil // still running fine after short duration, no error
+			s.transition(stateRunning)
+		}
 
 	default:
 		// Ignore if timer elapsed in any other state.
@@ -543,6 +581,15 @@ func (s *serviceData) exited(exitCode int) error {
 
 	if s.resetTimer != nil {
 		s.resetTimer.Stop()
+	}
+	// Cancel the okay timer if the process exits while we're still in stateStarting.
+	if s.okayTimer != nil {
+		if !s.okayTimer.Stop() {
+			<-s.okayTimer.C
+		}
+		close(s.okayTimerDone)
+		s.okayTimer = nil
+		s.okayTimerDone = nil
 	}
 
 	switch s.state {
@@ -722,6 +769,15 @@ func (s *serviceData) stop() error {
 
 	switch s.state {
 	case stateStarting:
+		// Cancel the okay timer if it's still pending.
+		if s.okayTimer != nil {
+			if !s.okayTimer.Stop() {
+				<-s.okayTimer.C
+			}
+			close(s.okayTimerDone)
+			s.okayTimer = nil
+			s.okayTimerDone = nil
+		}
 		s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
 		fallthrough
 
