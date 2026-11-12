@@ -919,6 +919,21 @@ var planTests = []planTest{{
 		Sections:   map[string]plan.Section{},
 	},
 }, {
+	summary: "Cannot have null check definition",
+	error:   `check object cannot be null for check "chk1"`,
+	input: []string{`
+		checks:
+			chk1: ~
+`},
+}, {
+	summary: "Cannot use empty string as check name",
+	error:   "cannot use empty string as check name",
+	input: []string{`
+		checks:
+			"":
+				override: replace
+`},
+}, {
 	summary: "One of http, tcp, or exec must be present for check",
 	error:   `plan must specify one of "http", "tcp", or "exec" for check "chk1"`,
 	input: []string{`

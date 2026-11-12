@@ -926,11 +926,6 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("check object cannot be null for check %q", name),
 			}
 		}
-		if name == "" {
-			return &FormatError{
-				Message: "cannot use empty string as log target name",
-			}
-		}
 		if check.Level != UnsetLevel && check.Level != AliveLevel && check.Level != ReadyLevel {
 			return &FormatError{
 				Message: fmt.Sprintf(`plan check %q level must be "alive" or "ready"`, name),
