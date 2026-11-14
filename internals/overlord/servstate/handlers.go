@@ -1,6 +1,7 @@
 package servstate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -8,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -87,6 +90,7 @@ const (
 	stateInitial     serviceState = "initial"
 	stateStarting    serviceState = "starting"
 	stateRunning     serviceState = "running"
+	stateLatching    serviceState = "latching"
 	stateTerminating serviceState = "terminating"
 	stateKilling     serviceState = "killing"
 	stateStopped     serviceState = "stopped"
@@ -96,20 +100,22 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager      *ServiceManager
-	state        serviceState
-	config       *plan.Service
-	workload     *workloads.Workload
-	logs         *servicelog.RingBuffer
-	started      chan error
-	stopped      chan error
-	cmd          *exec.Cmd
-	backoffNum   int
-	backoffTime  time.Duration
-	resetTimer   *time.Timer
-	restarting   bool
-	currentSince time.Time
-	startCount   atomic.Int64
+	manager            *ServiceManager
+	state              serviceState
+	config             *plan.Service
+	workload           *workloads.Workload
+	logs               *servicelog.RingBuffer
+	started            chan error
+	stopped            chan error
+	cmd                *exec.Cmd
+	backoffNum         int
+	backoffTime        time.Duration
+	resetTimer         *time.Timer
+	restarting         bool
+	currentSince       time.Time
+	startCount         atomic.Int64
+	pendingLatchChecks map[string]struct{}
+	latchCancel        context.CancelFunc
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -223,7 +229,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 	}
 
 	switch service.state {
-	case stateInitial, stateStarting, stateRunning:
+	case stateInitial, stateStarting, stateLatching, stateRunning:
 		return nil, fmt.Sprintf("Service %q already started.", config.Name)
 	case stateBackoff, stateStopped, stateExited:
 		// Start allowed when service is backing off, was stopped, or has exited.
@@ -330,6 +336,17 @@ func (s *serviceData) transitionRestarting(state serviceState, restarting bool) 
 		s.currentSince = time.Now()
 	}
 
+	if s.state == stateLatching && state != stateLatching {
+		// Stop waiting for latch checks. Every way out of stateLatching goes
+		// through here, with servicesLock held, which is what guarantees
+		// that a stale latch check result is never applied (see
+		// waitLatchCheck).
+		if s.latchCancel != nil {
+			s.latchCancel()
+			s.latchCancel = nil
+		}
+		s.pendingLatchChecks = nil
+	}
 	s.state = state
 	s.restarting = restarting
 }
@@ -518,16 +535,50 @@ func (s *serviceData) startInternal() error {
 	return nil
 }
 
-// okayWaitElapsed is called when the okay-wait timer has elapsed (and the
-// service is considered running successfully).
+// okayWaitElapsed is called when the okay-wait timer has elapsed. If the
+// service requires latch checks, its state is changed to `stateLatching`,
+// otherwise it is considered running successfully and transitioned to
+// `stateRunning`.
 func (s *serviceData) okayWaitElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateStarting:
-		s.started <- nil // still running fine after short duration, no error
-		s.transition(stateRunning)
+		var latchChecks map[string]struct{}
+		for c, a := range s.config.OnCheckSuccess {
+			if a == plan.ActionLatch {
+				if latchChecks == nil {
+					latchChecks = make(map[string]struct{})
+				}
+				latchChecks[c] = struct{}{}
+			}
+		}
+
+		if len(latchChecks) == 0 {
+			s.started <- nil // Service still running after delay; no latch checks configured
+			s.transition(stateRunning)
+			return nil
+		}
+
+		s.transition(stateLatching)
+		s.pendingLatchChecks = latchChecks
+		if s.manager.checkWaiter == nil {
+			// Fail closed: stay latching rather than letting dependent
+			// services start without the checks having passed.
+			return fmt.Errorf("internal error: cannot wait for service %q latch checks: no check waiter set", s.config.Name)
+		}
+		logger.Noticef("Service %q latching, waiting for checks: %s",
+			s.config.Name, strings.Join(slices.Sorted(maps.Keys(latchChecks)), ", "))
+
+		// Each check is waited for in its own goroutine. Because the waits
+		// only start now, every check run that can latch the service starts
+		// after the okay delay has elapsed.
+		ctx, cancel := context.WithCancel(context.Background())
+		s.latchCancel = cancel
+		for c := range latchChecks {
+			go s.waitLatchCheck(ctx, s.manager.checkWaiter, c)
+		}
 
 	default:
 		// Ignore if timer elapsed in any other state.
@@ -546,10 +597,14 @@ func (s *serviceData) exited(exitCode int) error {
 	}
 
 	switch s.state {
-	case stateStarting:
+	case stateStarting, stateLatching:
 		// Send error to select waiting in doStart, then fall through to perform action.
 		action, _ := getAction(s.config, exitCode == 0)
-		s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
+		if s.state == stateLatching {
+			s.started <- fmt.Errorf("exited while latching with code %d, will %s", exitCode, action)
+		} else {
+			s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
+		}
 		fallthrough
 
 	case stateRunning:
@@ -684,7 +739,7 @@ func getAction(config *plan.Service, success bool) (action plan.ServiceAction, o
 // function doesn't lock; it assumes the caller will.
 func (s *serviceData) sendSignal(signal string) error {
 	switch s.state {
-	case stateStarting, stateRunning:
+	case stateStarting, stateLatching, stateRunning:
 		sig := unix.SignalNum(signal)
 		if sig == 0 {
 			return fmt.Errorf("invalid signal name %q", signal)
@@ -721,8 +776,12 @@ func (s *serviceData) stop() error {
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
-	case stateStarting:
-		s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
+	case stateStarting, stateLatching:
+		if s.state == stateLatching {
+			s.started <- fmt.Errorf("stopped before latch checks passed")
+		} else {
+			s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
+		}
 		fallthrough
 
 	case stateRunning:
@@ -882,6 +941,44 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 		logger.Debugf("Service %q: ignoring on-check-failure action %q in state %s",
 			s.config.Name, action, s.state)
 	}
+}
+
+// waitLatchCheck waits for the named latch check to succeed, and then
+// records the success. It runs once per latch check in its own
+// goroutine. The services lock should not be held when calling
+// waitLatchCheck, as the CheckWaiter blocks while waiting for the
+// check to pass. The context is canceled when the service exits
+// stateLatching.
+func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, check string) {
+	err := waiter(ctx, check)
+
+	// Acquire the services lock to avoid any TOCTOU race between
+	// checking the cancellation channel and updating the service
+	// status.
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
+
+	if ctx.Err() != nil {
+		return
+	}
+	if err != nil {
+		logger.Noticef("Cannot wait for service %q latch check %q: %v", s.config.Name, check, err)
+		return
+	}
+	s.latchCheckPassed(check)
+}
+
+// latchCheckPassed records that a latch check has succeeded, and transitions
+// the service to stateRunning once all of its latch checks have succeeded.
+// The caller must hold servicesLock, and the service must be latching.
+func (s *serviceData) latchCheckPassed(check string) {
+	delete(s.pendingLatchChecks, check)
+	if len(s.pendingLatchChecks) > 0 {
+		return
+	}
+	s.started <- nil
+	s.transition(stateRunning)
+	logger.Noticef("Service %q latched", s.config.Name)
 }
 
 // writeMetric writes the service's metrics.

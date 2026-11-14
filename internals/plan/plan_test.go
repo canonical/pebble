@@ -484,6 +484,49 @@ var planTests = []planTest{{
 					url: https://example.com/foo
 	`},
 }, {
+	summary: `on-check-success latch on check with startup disabled`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test: latch
+		checks:
+			test:
+				override: replace
+				startup: disabled
+				http:
+					url: https://example.com/foo
+	`},
+}, {
+	summary: `Invalid on-check-success action`,
+	error:   `plan service "svc1" on-check-success action "restart" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test: restart
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
+	`},
+}, {
+	summary: `on-check-success references non-existent check`,
+	error:   `plan service "svc1" on-check-success references non-existent check: "missing"`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					missing: latch
+	`},
+}, {
 	summary: `Invalid backoff-delay duration`,
 	error:   `cannot parse layer "layer-0" section "services": invalid duration "foo"`,
 	input: []string{`

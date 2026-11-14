@@ -101,6 +101,7 @@ type ServiceInfo struct {
 	Current      ServiceStatus  `json:"current" yaml:"current"`
 	CurrentSince time.Time      `json:"current-since,omitzero" yaml:"current-since,omitempty"`
 	Outdated     bool           `json:"outdated,omitempty" yaml:"outdated,omitempty"`
+	Latching     bool           `json:"latching,omitempty" yaml:"latching,omitempty"`
 }
 
 // ServiceStartup defines the different startup modes for a service.

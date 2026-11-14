@@ -1,6 +1,7 @@
 package servstate
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"math/rand"
@@ -37,6 +38,22 @@ type ServiceManager struct {
 	rand     *rand.Rand
 
 	logMgr LogManager
+
+	checkWaiter CheckWaiter
+}
+
+// CheckWaiter blocks until a run of the named latch check succeeds
+// (returning nil) or its ctx is canceled (returning `ctx.Err()`). If
+// the check is missing from the plan (e.g. if it was removed after
+// the service was started), the function returns early with a
+// ChecksNotFound error. It should not be called while the services
+// lock is held.
+type CheckWaiter func(ctx context.Context, name string) error
+
+// SetCheckWaiter sets the function used to wait for latch checks to
+// succeed.  It must be called before any services are started.
+func (m *ServiceManager) SetCheckWaiter(f CheckWaiter) {
+	m.checkWaiter = f
 }
 
 type LogManager interface {
@@ -110,6 +127,7 @@ type ServiceInfo struct {
 	Current      ServiceStatus
 	CurrentSince time.Time
 	Outdated     bool
+	Latching     bool
 }
 
 type ServiceStartup string
@@ -166,6 +184,7 @@ func (m *ServiceManager) Services(names []string) ([]*ServiceInfo, error) {
 		if s, ok := m.services[name]; ok {
 			info.Current = stateToStatus(s.state)
 			info.CurrentSince = s.currentSince
+			info.Latching = s.state == stateLatching
 
 			var workload *workloads.Workload
 			if ws != nil {
@@ -193,7 +212,7 @@ func (m *ServiceManager) StopTimeout() time.Duration {
 			continue
 		}
 		switch service.state {
-		case stateStarting, stateRunning, stateTerminating:
+		case stateStarting, stateLatching, stateRunning, stateTerminating:
 			if service.killDelay() > maxDuration {
 				maxDuration = service.killDelay()
 			}
@@ -207,7 +226,7 @@ func (m *ServiceManager) StopTimeout() time.Duration {
 
 func stateToStatus(state serviceState) ServiceStatus {
 	switch state {
-	case stateStarting, stateRunning:
+	case stateStarting, stateLatching, stateRunning:
 		return StatusActive
 	case stateTerminating, stateKilling, stateStopped:
 		return StatusInactive
@@ -364,7 +383,7 @@ func (m *ServiceManager) SendSignal(services []string, signal string) error {
 	return nil
 }
 
-// CheckFailed response to a health check failure. If the given check name is
+// CheckFailed responds to a health check failure. If the given check name is
 // in the on-check-failure map for a service, tell the service to perform the
 // configured action (for example, "restart").
 func (m *ServiceManager) CheckFailed(name string) {
@@ -466,7 +485,7 @@ func servicesToStop(m *ServiceManager) ([][]string, error) {
 		var notStopped []string
 		for _, name := range services {
 			s := m.services[name]
-			if s != nil && (s.state == stateStarting || s.state == stateRunning || s.state == stateBackoff) {
+			if s != nil && (s.state == stateStarting || s.state == stateLatching || s.state == stateRunning || s.state == stateBackoff) {
 				notStopped = append(notStopped, name)
 			}
 		}

@@ -34,6 +34,7 @@ type serviceInfo struct {
 	Current      string     `json:"current"`
 	CurrentSince *time.Time `json:"current-since,omitempty"` // pointer as omitempty doesn't work with time.Time directly
 	Outdated     bool       `json:"outdated,omitempty"`
+	Latching     bool       `json:"latching,omitempty"`
 }
 
 func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
@@ -56,6 +57,7 @@ func v1GetServices(c *Command, r *http.Request, _ *UserState) Response {
 			info.CurrentSince = &svc.CurrentSince
 		}
 		info.Outdated = svc.Outdated
+		info.Latching = svc.Latching
 		infos = append(infos, info)
 	}
 	return SyncResponse(infos)
