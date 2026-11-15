@@ -2584,6 +2584,30 @@ func (s *S) TestCheckNonPositiveDurations(c *C) {
 	}
 }
 
+func (s *S) TestCheckNegativeThreshold(c *C) {
+	_, err := plan.ParseLayer(1, "layer-1", reindent(`
+		checks:
+			check:
+				override: replace
+				threshold: -1
+		`))
+	c.Assert(err, ErrorMatches, `plan check "check" threshold must not be negative`)
+
+	// Zero means "use the default", so it stays valid.
+	layer, err := plan.ParseLayer(1, "layer-1", reindent(`
+		checks:
+			check:
+				override: replace
+				threshold: 0
+				exec:
+					command: echo
+		`))
+	c.Assert(err, IsNil)
+	combined, err := plan.CombineLayers(layer)
+	c.Assert(err, IsNil)
+	c.Assert(combined.Checks["check"].Threshold, Equals, 3)
+}
+
 func (s *S) TestHTTPCheckHostHeader(c *C) {
 	for _, header := range []string{"Host", "host", "HOST"} {
 		layer, err := plan.ParseLayer(1, "layer-1", reindent(fmt.Sprintf(`
