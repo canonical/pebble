@@ -1614,6 +1614,9 @@ components:
         outdated:
           type: boolean
           description: True if the service was started with an older plan definition and is now outdated.
+        latching:
+          type: boolean
+          description: True if the service is waiting for its "on-check-success" latch checks to succeed before transitioning to running.
     changeInfo:
       type: object
       properties:

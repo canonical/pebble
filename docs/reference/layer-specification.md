@@ -99,6 +99,20 @@ services:
         # - ignore: do nothing further
         on-failure: restart | shutdown | success-shutdown | ignore
 
+        # (Optional) Defines checks that must succeed before the service
+        # transitions from starting to running. Possible values are:
+        #
+        # - latch: wait for this check to succeed before the service is
+        #          considered running
+        # - ignore: do nothing further (the check is not waited on)
+        #
+        # Every check referenced here must be defined in the plan.
+        # Latching on a check with "startup: disabled" is allowed:
+        # the check runs only while the service is latching and is
+        # not started automatically.
+        on-check-success:
+            <check name>: latch | ignore
+
         # (Optional) Defines what happens when each of the named health checks
         # fail. Possible values are:
         #
