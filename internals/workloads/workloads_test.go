@@ -317,7 +317,7 @@ workloads:
     default:
         unknown-field: true
 `))
-	c.Assert(err, ErrorMatches, `cannot parse the "workloads" section: json: .*unknown object member name "unknown-field".*`)
+	c.Assert(err, ErrorMatches, `.*cannot parse the "workloads" section: json: .*unknown object member name "unknown-field".*`)
 }
 
 func parseCombineLayers(yamls []string) (*plan.Layer, error) {

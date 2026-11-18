@@ -168,10 +168,10 @@ func (*WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section, er
 	return workloads, nil
 }
 
-func (*WorkloadsSectionExtension) ParseSectionCNF(data any) (plan.Section, error) {
+func (*WorkloadsSectionExtension) ParseSectionJSON(data []byte) (plan.Section, error) {
 	workloads := &WorkloadsSection{}
-	if data != nil {
-		if err := plan.SectionDecodeCNF(data, &workloads.Entries); err != nil {
+	if len(data) > 0 {
+		if err := plan.SectionDecodeJSON(data, &workloads.Entries); err != nil {
 			return nil, &plan.FormatError{
 				Message: fmt.Sprintf(`cannot parse the "workloads" section: %v`, err),
 			}

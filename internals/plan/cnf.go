@@ -15,70 +15,105 @@
 package plan
 
 import (
+	"bytes"
 	"encoding/json/v2"
 	"fmt"
-	"slices"
 
-	"github.com/canonical/go-cnf/cnfmap"
+	"github.com/canonical/go-cnf/cnfjson"
 )
+
+type jsonLayer struct {
+	Summary     string                 `json:"summary"`
+	Description string                 `json:"description"`
+	Services    map[string]*Service    `json:"services"`
+	Checks      map[string]*Check      `json:"checks"`
+	LogTargets  map[string]*LogTarget  `json:"log-targets"`
+	Sections    map[string]jsonSection `json:",embed"`
+}
+
+type unknownSection struct {
+	data []byte
+}
+
+func (unknownSection) Validate() error {
+	return nil
+}
+
+func (unknownSection) IsZero() bool {
+	return false
+}
+
+type jsonSection struct {
+	ext   SectionExtension
+	value Section
+}
+
+func (s *jsonSection) UnmarshalJSON(data []byte) error {
+	if s.ext == nil {
+		s.value = unknownSection{
+			data: data,
+		}
+		return nil
+	}
+	var err error
+	s.value, err = s.ext.ParseSectionJSON(data)
+	return err
+}
 
 // ParseLayerCNF parses a layer in CNF format.
 func ParseLayerCNF(order int, label string, data []byte) (*Layer, error) {
-	decoded, err := cnfmap.Unmarshal(data)
+	encoded, err := cnfjson.ToJSON(data, &cnfjson.Options{})
 	if err != nil {
 		return nil, &FormatError{
 			Message: fmt.Sprintf("cannot parse layer %q: %v", label, err),
 		}
 	}
-	sections, ok := decoded.(map[string]any)
-	if !ok {
+
+	if encoded = bytes.TrimSpace(encoded); len(encoded) == 0 || encoded[0] != '{' {
 		return nil, &FormatError{
 			Message: fmt.Sprintf("cannot parse layer %q: top-level value must be a map", label),
 		}
 	}
 
-	layer := &Layer{
+	raw := jsonLayer{
 		Services:   make(map[string]*Service),
 		Checks:     make(map[string]*Check),
 		LogTargets: make(map[string]*LogTarget),
-		Sections:   make(map[string]Section),
+		Sections:   make(map[string]jsonSection),
 	}
-	builtins := map[string]any{
-		"summary":     &layer.Summary,
-		"description": &layer.Description,
-		"services":    &layer.Services,
-		"checks":      &layer.Checks,
-		"log-targets": &layer.LogTargets,
+	for field, extension := range sectionExtensions {
+		raw.Sections[field] = jsonSection{
+			ext: extension,
+		}
 	}
-
-	// Give every extension an empty value, matching the empty yaml.Node passed
-	// to extensions when parsing YAML layers without the section.
-	for field := range sectionExtensions {
-		if _, ok := sections[field]; !ok {
-			sections[field] = nil
+	err = json.Unmarshal(encoded, &raw, json.RejectUnknownMembers(true))
+	if err != nil {
+		return nil, &FormatError{
+			Message: fmt.Sprintf("cannot parse layer %q: %v", label, err),
 		}
 	}
 
-	for field, section := range sections {
-		if slices.Contains(builtinSections, field) {
-			if err := SectionDecodeCNF(section, builtins[field]); err != nil {
-				return nil, &FormatError{
-					Message: fmt.Sprintf("cannot parse layer %q section %q: %v", label, field, err),
-				}
-			}
-			continue
-		}
-
-		extension, ok := sectionExtensions[field]
-		if !ok {
+	layer := &Layer{
+		Summary:     raw.Summary,
+		Description: raw.Description,
+		Services:    raw.Services,
+		Checks:      raw.Checks,
+		LogTargets:  raw.LogTargets,
+		Sections:    make(map[string]Section, len(sectionExtensions)),
+	}
+	for field, section := range raw.Sections {
+		if _, ok := section.value.(unknownSection); ok {
 			return nil, &FormatError{
 				Message: fmt.Sprintf("cannot parse layer %q: unknown section %q", label, field),
 			}
 		}
-		layer.Sections[field], err = extension.ParseSectionCNF(section)
-		if err != nil {
-			return nil, err
+		if section.value == nil {
+			section.value, err = section.ext.ParseSectionJSON(nil)
+			if err != nil {
+				return nil, err
+			}
 		}
+		layer.Sections[field] = section.value
 	}
 
 	return layer.finishParse(order, label)
@@ -86,23 +121,15 @@ func ParseLayerCNF(order int, label string, data []byte) (*Layer, error) {
 
 // MarshalPlanCNF encodes a plan in CNF format using its JSON representation.
 func MarshalPlanCNF(p *Plan) ([]byte, error) {
-	encoded, err := json.Marshal(p)
+	encoded, err := json.Marshal(p, json.Deterministic(true))
 	if err != nil {
 		return nil, err
 	}
-	var decoded any
-	if err := json.Unmarshal(encoded, &decoded); err != nil {
-		return nil, err
-	}
-	return cnfmap.Marshal(decoded)
+	return cnfjson.FromJSON(encoded, &cnfjson.Options{})
 }
 
-// SectionDecodeCNF decodes a generic value returned by cnfmap.Unmarshal into v.
+// SectionDecodeJSON decodes a JSON section into v.
 // Unknown struct fields are rejected, matching SectionDecode's YAML behavior.
-func SectionDecodeCNF(data any, v any) error {
-	encoded, err := json.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("cannot encode CNF data as JSON: %w", err)
-	}
-	return json.Unmarshal(encoded, v, json.RejectUnknownMembers(true))
+func SectionDecodeJSON(data []byte, v any) error {
+	return json.Unmarshal(data, v, json.RejectUnknownMembers(true))
 }

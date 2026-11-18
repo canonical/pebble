@@ -163,20 +163,23 @@ func (s *S) TestMarshalCNF(c *C) {
 
 	data, err := plan.MarshalPlanCNF(p)
 	c.Assert(err, IsNil)
-	c.Assert(string(data), Equals, `
-services:
-    srv:
-        backoff-delay: "1s"
-        backoff-factor: 1.5
-        command: "run"
-        override: "replace"
-x-field:
+	xField := `x-field:
     somepolicy: "disabled"
     x1:
+        override: "replace"
         a: "a"
         b: "b"
+`
+	services := `services:
+    srv:
         override: "replace"
-`[1:])
+        command: "run"
+        backoff-delay: "1s"
+        backoff-factor: 1.5
+`
+	if string(data) != xField+services {
+		c.Assert(string(data), Equals, services+xField)
+	}
 }
 
 func (s *S) TestParseLayerCNFErrors(c *C) {
@@ -195,19 +198,19 @@ func (s *S) TestParseLayerCNFErrors(c *C) {
 	}, {
 		summary: "Unknown built-in field",
 		data:    "services:\n    srv:\n        future: true\n",
-		error:   `cannot parse layer "broken" section "services": json: .*unknown object member name "future".*`,
+		error:   `cannot parse layer "broken": json: .*unknown object member name "future".*`,
 	}, {
 		summary: "Invalid duration",
 		data:    "services:\n    srv:\n        backoff-delay: \"invalid\"\n",
-		error:   `cannot parse layer "broken" section "services": json: .*invalid duration "invalid"`,
+		error:   `cannot parse layer "broken": json: .*invalid duration "invalid"`,
 	}, {
 		summary: "Invalid optional float",
 		data:    "services:\n    srv:\n        backoff-factor: \"1.5\"\n",
-		error:   `cannot parse layer "broken" section "services": json: .*value must be a JSON number`,
+		error:   `cannot parse layer "broken": json: .*value must be a JSON number`,
 	}, {
 		summary: "Non-string environment value",
 		data:    "services:\n    srv:\n        environment: {PORT: 8080}\n",
-		error:   `cannot parse layer "broken" section "services": json: cannot unmarshal JSON number into Go string within "/srv/environment/PORT"`,
+		error:   `cannot parse layer "broken": json: .*unmarshal JSON number into Go string within "/services/srv/environment/PORT"`,
 	}, {
 		summary: "Top-level value must be a map",
 		data:    `[1, 2, 3]`,

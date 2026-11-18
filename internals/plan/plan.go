@@ -42,10 +42,9 @@ type SectionExtension interface {
 	// unmarshalled YAML section content.
 	ParseSection(data yaml.Node) (Section, error)
 
-	// ParseSectionCNF returns a newly allocated concrete type containing the
-	// unmarshalled CNF section content. Data contains the generic values
-	// returned by cnfmap.Unmarshal.
-	ParseSectionCNF(data any) (Section, error)
+	// ParseSectionJSON returns a newly allocated concrete type containing the
+	// unmarshalled JSON section content. A nil slice represents a missing section.
+	ParseSectionJSON(data []byte) (Section, error)
 
 	// CombineSections returns a newly allocated concrete type containing the
 	// result of combining the supplied sections in order.

@@ -129,7 +129,7 @@ func (s *pairingSuite) TestPairingSectionExtensionCNF(c *C) {
 	c.Assert(ps, DeepEquals, &pairingstate.PairingConfig{Mode: pairingstate.ModeSingle})
 
 	_, err = plan.ParseLayerCNF(0, "cnf", []byte(`pairing: {unknown-field: true}`))
-	c.Assert(err, ErrorMatches, `cannot parse the pairing section: json: .*unknown object member name "unknown-field".*`)
+	c.Assert(err, ErrorMatches, `.*cannot parse the pairing section: json: .*unknown object member name "unknown-field".*`)
 }
 
 func (s *pairingSuite) TestPairingSectionExtensionSchema(c *C) {

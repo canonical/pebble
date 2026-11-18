@@ -545,27 +545,10 @@ func (x xExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	return xs, nil
 }
 
-func (x xExtension) ParseSectionCNF(data any) (plan.Section, error) {
+func (x xExtension) ParseSectionJSON(data []byte) (plan.Section, error) {
 	xs := &xSection{}
-	if data == nil {
-		return xs, nil
-	}
-	fields, ok := data.(map[string]any)
-	if !ok {
-		return nil, fmt.Errorf("cannot decode x-section as a map")
-	}
-	entries := make(map[string]any, len(fields))
-	for field, value := range fields {
-		if field == "somepolicy" {
-			if err := plan.SectionDecodeCNF(value, &xs.SomePolicy); err != nil {
-				return nil, err
-			}
-		} else {
-			entries[field] = value
-		}
-	}
-	if len(entries) > 0 {
-		if err := plan.SectionDecodeCNF(entries, &xs.Entries); err != nil {
+	if len(data) > 0 {
+		if err := plan.SectionDecodeJSON(data, xs); err != nil {
 			return nil, err
 		}
 	}
@@ -723,10 +706,10 @@ func (y yExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	return ys, nil
 }
 
-func (y yExtension) ParseSectionCNF(data any) (plan.Section, error) {
+func (y yExtension) ParseSectionJSON(data []byte) (plan.Section, error) {
 	ys := &ySection{}
-	if data != nil {
-		if err := plan.SectionDecodeCNF(data, &ys.Entries); err != nil {
+	if len(data) > 0 {
+		if err := plan.SectionDecodeJSON(data, &ys.Entries); err != nil {
 			return nil, err
 		}
 	}

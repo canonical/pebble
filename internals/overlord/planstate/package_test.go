@@ -126,10 +126,10 @@ func (te testExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	return ts, nil
 }
 
-func (te testExtension) ParseSectionCNF(data any) (plan.Section, error) {
+func (te testExtension) ParseSectionJSON(data []byte) (plan.Section, error) {
 	ts := &testSection{}
-	if data != nil {
-		if err := plan.SectionDecodeCNF(data, &ts.Entries); err != nil {
+	if len(data) > 0 {
+		if err := plan.SectionDecodeJSON(data, &ts.Entries); err != nil {
 			return nil, err
 		}
 	}
