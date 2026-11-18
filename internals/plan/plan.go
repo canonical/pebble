@@ -1079,6 +1079,11 @@ func (p *Plan) Validate() error {
 					Message: fmt.Sprintf(`plan must set "port" for tcp check %q`, name),
 				}
 			}
+			if check.TCP.Port < 0 || check.TCP.Port > 65535 {
+				return &FormatError{
+					Message: fmt.Sprintf(`plan tcp check %q port must be between 1 and 65535, not %d`, name, check.TCP.Port),
+				}
+			}
 			numTypes++
 		}
 		if check.Exec != nil {
