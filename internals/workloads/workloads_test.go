@@ -274,6 +274,52 @@ func (s *workloadsSuite) TestWorkloadsSectionExtensionSchema(c *C) {
 	}
 }
 
+func (s *workloadsSuite) TestWorkloadsSectionExtensionCNF(c *C) {
+	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
+	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
+
+	layer, err := plan.ParseLayerCNF(0, "cnf", []byte(`
+services:
+    srv:
+        override: "replace"
+        command: "run"
+        workload: "default"
+workloads:
+    default:
+        override: "replace"
+        environment: {FOO: "bar"}
+        user-id: 1000
+        group-id: 1001
+`))
+	c.Assert(err, IsNil)
+	combined, err := plan.CombineLayers(layer)
+	c.Assert(err, IsNil)
+	ws := combined.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
+	c.Assert(ws.Entries, DeepEquals, map[string]*workloads.Workload{
+		"default": {
+			Name:        "default",
+			Override:    plan.ReplaceOverride,
+			Environment: map[string]string{"FOO": "bar"},
+			UserID:      new(1000),
+			GroupID:     new(1001),
+		},
+	})
+
+	p := &plan.Plan{
+		Services: combined.Services,
+		Checks:   combined.Checks,
+		Sections: combined.Sections,
+	}
+	c.Assert(p.Validate(), IsNil)
+
+	_, err = plan.ParseLayerCNF(0, "cnf", []byte(`
+workloads:
+    default:
+        unknown-field: true
+`))
+	c.Assert(err, ErrorMatches, `cannot parse the "workloads" section: json: .*unknown object member name "unknown-field".*`)
+}
+
 func parseCombineLayers(yamls []string) (*plan.Layer, error) {
 	var layers []*plan.Layer
 	for i, yaml := range yamls {

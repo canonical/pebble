@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"encoding/json/v2"
 	"fmt"
 	"strconv"
 	"time"
@@ -28,9 +29,21 @@ func (o *OptionalDuration) UnmarshalYAML(value *yaml.Node) error {
 	if value.Kind != yaml.ScalarNode {
 		return fmt.Errorf("duration must be a YAML string")
 	}
-	duration, err := time.ParseDuration(value.Value)
+	return o.set(value.Value)
+}
+
+func (o *OptionalDuration) UnmarshalJSON(data []byte) error {
+	var value *string
+	if err := json.Unmarshal(data, &value); err != nil || value == nil {
+		return fmt.Errorf("duration must be a JSON string")
+	}
+	return o.set(*value)
+}
+
+func (o *OptionalDuration) set(value string) error {
+	duration, err := time.ParseDuration(value)
 	if err != nil {
-		return fmt.Errorf("invalid duration %q", value.Value)
+		return fmt.Errorf("invalid duration %q", value)
 	}
 	o.Value = duration
 	o.IsSet = true
@@ -62,6 +75,16 @@ func (o *OptionalFloat) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("invalid floating-point number %q", value.Value)
 	}
 	o.Value = n
+	o.IsSet = true
+	return nil
+}
+
+func (o *OptionalFloat) UnmarshalJSON(data []byte) error {
+	var value *float64
+	if err := json.Unmarshal(data, &value); err != nil || value == nil {
+		return fmt.Errorf("value must be a JSON number")
+	}
+	o.Value = *value
 	o.IsSet = true
 	return nil
 }

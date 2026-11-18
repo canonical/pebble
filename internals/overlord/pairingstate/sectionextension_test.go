@@ -20,6 +20,7 @@ import (
 	. "gopkg.in/check.v1"
 
 	"github.com/canonical/pebble/internals/overlord/pairingstate"
+	"github.com/canonical/pebble/internals/plan"
 )
 
 var schemaTests = []struct {
@@ -118,6 +119,18 @@ pairing:
     mode: single
     `,
 }}
+
+func (s *pairingSuite) TestPairingSectionExtensionCNF(c *C) {
+	layer, err := plan.ParseLayerCNF(0, "cnf", []byte(`pairing: {mode: "single"}`))
+	c.Assert(err, IsNil)
+	combined, err := plan.CombineLayers(layer)
+	c.Assert(err, IsNil)
+	ps := combined.Sections[pairingstate.PairingField].(*pairingstate.PairingConfig)
+	c.Assert(ps, DeepEquals, &pairingstate.PairingConfig{Mode: pairingstate.ModeSingle})
+
+	_, err = plan.ParseLayerCNF(0, "cnf", []byte(`pairing: {unknown-field: true}`))
+	c.Assert(err, ErrorMatches, `cannot parse the pairing section: json: .*unknown object member name "unknown-field".*`)
+}
 
 func (s *pairingSuite) TestPairingSectionExtensionSchema(c *C) {
 

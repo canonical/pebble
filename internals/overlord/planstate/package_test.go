@@ -126,6 +126,21 @@ func (te testExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	return ts, nil
 }
 
+func (te testExtension) ParseSectionCNF(data any) (plan.Section, error) {
+	ts := &testSection{}
+	if data != nil {
+		if err := plan.SectionDecodeCNF(data, &ts.Entries); err != nil {
+			return nil, err
+		}
+	}
+	for name, entry := range ts.Entries {
+		if entry != nil {
+			entry.Name = name
+		}
+	}
+	return ts, nil
+}
+
 func (te testExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
 	ts := &testSection{}
 	for _, section := range sections {
@@ -144,7 +159,7 @@ func (te testExtension) ValidatePlan(p *plan.Plan) error {
 
 // testSection is the backing type for testExtension.
 type testSection struct {
-	Entries map[string]*T `yaml:",inline"`
+	Entries map[string]*T `yaml:",inline" json:"-"`
 }
 
 func (ts *testSection) Validate() error {
@@ -193,10 +208,10 @@ func (ts *testSection) Combine(other plan.Section) error {
 }
 
 type T struct {
-	Name     string        `yaml:"-"`
-	Override plan.Override `yaml:"override,omitempty"`
-	A        string        `yaml:"a,omitempty"`
-	B        string        `yaml:"b,omitempty"`
+	Name     string        `yaml:"-" json:"-"`
+	Override plan.Override `yaml:"override,omitempty" json:"override,omitempty"`
+	A        string        `yaml:"a,omitempty" json:"a,omitempty"`
+	B        string        `yaml:"b,omitempty" json:"b,omitempty"`
 }
 
 func (t *T) Copy() *T {

@@ -53,6 +53,18 @@ func (s SectionExtension) ParseSection(data yaml.Node) (plan.Section, error) {
 	return p, nil
 }
 
+func (s SectionExtension) ParseSectionCNF(data any) (plan.Section, error) {
+	p := &pairingConfig{}
+	if data != nil {
+		if err := plan.SectionDecodeCNF(data, p); err != nil {
+			return nil, &plan.FormatError{
+				Message: fmt.Sprintf("cannot parse the pairing section: %v", err),
+			}
+		}
+	}
+	return p, nil
+}
+
 func (s SectionExtension) CombineSections(sections ...plan.Section) (plan.Section, error) {
 	p := &pairingConfig{}
 	for _, section := range sections {

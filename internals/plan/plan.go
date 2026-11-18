@@ -38,8 +38,13 @@ import (
 // adding centralised schema knowledge to the plan library.
 type SectionExtension interface {
 	// ParseSection returns a newly allocated concrete type containing the
-	// unmarshalled section content.
+	// unmarshalled YAML section content.
 	ParseSection(data yaml.Node) (Section, error)
+
+	// ParseSectionCNF returns a newly allocated concrete type containing the
+	// unmarshalled CNF section content. Data contains the generic values
+	// returned by cnfmap.Unmarshal.
+	ParseSectionCNF(data any) (Section, error)
 
 	// CombineSections returns a newly allocated concrete type containing the
 	// result of combining the supplied sections in order.
@@ -117,12 +122,12 @@ func UnregisterSectionExtension(field string) {
 }
 
 type Plan struct {
-	Layers     []*Layer              `yaml:"-"`
-	Services   map[string]*Service   `yaml:"services,omitempty"`
-	Checks     map[string]*Check     `yaml:"checks,omitempty"`
-	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty"`
+	Layers     []*Layer              `yaml:"-" json:"-"`
+	Services   map[string]*Service   `yaml:"services,omitempty" json:"services,omitempty"`
+	Checks     map[string]*Check     `yaml:"checks,omitempty" json:"checks,omitempty"`
+	LogTargets map[string]*LogTarget `yaml:"log-targets,omitempty" json:"log-targets,omitempty"`
 
-	Sections map[string]Section `yaml:",inline"`
+	Sections map[string]Section `yaml:",inline" json:"-"`
 }
 
 // NewPlan creates an empty plan which includes empty registered extension
@@ -188,8 +193,8 @@ func (p *Plan) MarshalYAML() (any, error) {
 	return plan, nil
 }
 
-// Layer represents an unmarshalled YAML layer configuration file. Layer files
-// are maintained as part of the Plan, ordered by their respective order
+// Layer represents an unmarshalled YAML or CNF layer configuration file. Layer
+// files are maintained as part of the Plan, ordered by their respective order
 // number. Each layer configuration also has a unique label, used for locating
 // and updating a specific layer configuration.
 //
@@ -199,48 +204,48 @@ func (p *Plan) MarshalYAML() (any, error) {
 //
 // Please see ReadLayersDir for more details.
 type Layer struct {
-	Order       int                   `yaml:"-"`
-	Label       string                `yaml:"-"`
-	Summary     string                `yaml:"summary,omitempty"`
-	Description string                `yaml:"description,omitempty"`
-	Services    map[string]*Service   `yaml:"services,omitempty"`
-	Checks      map[string]*Check     `yaml:"checks,omitempty"`
-	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty"`
+	Order       int                   `yaml:"-" json:"-"`
+	Label       string                `yaml:"-" json:"-"`
+	Summary     string                `yaml:"summary,omitempty" json:"summary,omitempty"`
+	Description string                `yaml:"description,omitempty" json:"description,omitempty"`
+	Services    map[string]*Service   `yaml:"services,omitempty" json:"services,omitempty"`
+	Checks      map[string]*Check     `yaml:"checks,omitempty" json:"checks,omitempty"`
+	LogTargets  map[string]*LogTarget `yaml:"log-targets,omitempty" json:"log-targets,omitempty"`
 
-	Sections map[string]Section `yaml:",inline"`
+	Sections map[string]Section `yaml:",inline" json:"-"`
 }
 
 type Service struct {
 	// Basic details
-	Name        string         `yaml:"-"`
-	Summary     string         `yaml:"summary,omitempty"`
-	Description string         `yaml:"description,omitempty"`
-	Startup     ServiceStartup `yaml:"startup,omitempty"`
-	Override    Override       `yaml:"override,omitempty"`
-	Command     string         `yaml:"command,omitempty"`
+	Name        string         `yaml:"-" json:"-"`
+	Summary     string         `yaml:"summary,omitempty" json:"summary,omitempty"`
+	Description string         `yaml:"description,omitempty" json:"description,omitempty"`
+	Startup     ServiceStartup `yaml:"startup,omitempty" json:"startup,omitempty"`
+	Override    Override       `yaml:"override,omitempty" json:"override,omitempty"`
+	Command     string         `yaml:"command,omitempty" json:"command,omitempty"`
 
 	// Service dependencies
-	After    []string `yaml:"after,omitempty"`
-	Before   []string `yaml:"before,omitempty"`
-	Requires []string `yaml:"requires,omitempty"`
+	After    []string `yaml:"after,omitempty" json:"after,omitempty"`
+	Before   []string `yaml:"before,omitempty" json:"before,omitempty"`
+	Requires []string `yaml:"requires,omitempty" json:"requires,omitempty"`
 
 	// Options for command execution
-	Workload    string            `yaml:"workload,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	UserID      *int              `yaml:"user-id,omitempty"`
-	User        string            `yaml:"user,omitempty"`
-	GroupID     *int              `yaml:"group-id,omitempty"`
-	Group       string            `yaml:"group,omitempty"`
-	WorkingDir  string            `yaml:"working-dir,omitempty"`
+	Workload    string            `yaml:"workload,omitempty" json:"workload,omitempty"`
+	Environment map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
+	UserID      *int              `yaml:"user-id,omitempty" json:"user-id,omitempty"`
+	User        string            `yaml:"user,omitempty" json:"user,omitempty"`
+	GroupID     *int              `yaml:"group-id,omitempty" json:"group-id,omitempty"`
+	Group       string            `yaml:"group,omitempty" json:"group,omitempty"`
+	WorkingDir  string            `yaml:"working-dir,omitempty" json:"working-dir,omitempty"`
 
 	// Auto-restart and backoff functionality
-	OnSuccess      ServiceAction            `yaml:"on-success,omitempty"`
-	OnFailure      ServiceAction            `yaml:"on-failure,omitempty"`
-	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty"`
-	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty"`
-	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty"`
-	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty"`
-	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty"`
+	OnSuccess      ServiceAction            `yaml:"on-success,omitempty" json:"on-success,omitempty"`
+	OnFailure      ServiceAction            `yaml:"on-failure,omitempty" json:"on-failure,omitempty"`
+	OnCheckFailure map[string]ServiceAction `yaml:"on-check-failure,omitempty" json:"on-check-failure,omitempty"`
+	BackoffDelay   OptionalDuration         `yaml:"backoff-delay,omitempty" json:"backoff-delay,omitzero"`
+	BackoffFactor  OptionalFloat            `yaml:"backoff-factor,omitempty" json:"backoff-factor,omitzero"`
+	BackoffLimit   OptionalDuration         `yaml:"backoff-limit,omitempty" json:"backoff-limit,omitzero"`
+	KillDelay      OptionalDuration         `yaml:"kill-delay,omitempty" json:"kill-delay,omitzero"`
 }
 
 // Copy returns a deep copy of the service.
@@ -448,20 +453,20 @@ const (
 // Check specifies configuration for a single health check.
 type Check struct {
 	// Basic details
-	Name     string       `yaml:"-"`
-	Override Override     `yaml:"override,omitempty"`
-	Level    CheckLevel   `yaml:"level,omitempty"`
-	Startup  CheckStartup `yaml:"startup,omitempty"`
+	Name     string       `yaml:"-" json:"-"`
+	Override Override     `yaml:"override,omitempty" json:"override,omitempty"`
+	Level    CheckLevel   `yaml:"level,omitempty" json:"level,omitempty"`
+	Startup  CheckStartup `yaml:"startup,omitempty" json:"startup,omitempty"`
 
 	// Common check settings
-	Period    OptionalDuration `yaml:"period,omitempty"`
-	Timeout   OptionalDuration `yaml:"timeout,omitempty"`
-	Threshold int              `yaml:"threshold,omitempty"`
+	Period    OptionalDuration `yaml:"period,omitempty" json:"period,omitzero"`
+	Timeout   OptionalDuration `yaml:"timeout,omitempty" json:"timeout,omitzero"`
+	Threshold int              `yaml:"threshold,omitempty" json:"threshold,omitempty"`
 
 	// Type-specific check settings (only one of these can be set)
-	HTTP *HTTPCheck `yaml:"http,omitempty"`
-	TCP  *TCPCheck  `yaml:"tcp,omitempty"`
-	Exec *ExecCheck `yaml:"exec,omitempty"`
+	HTTP *HTTPCheck `yaml:"http,omitempty" json:"http,omitempty"`
+	TCP  *TCPCheck  `yaml:"tcp,omitempty" json:"tcp,omitempty"`
+	Exec *ExecCheck `yaml:"exec,omitempty" json:"exec,omitempty"`
 }
 
 // Copy returns a deep copy of the check configuration.
@@ -536,8 +541,8 @@ const (
 
 // HTTPCheck holds the configuration for an HTTP health check.
 type HTTPCheck struct {
-	URL     string            `yaml:"url,omitempty"`
-	Headers map[string]string `yaml:"headers,omitempty"`
+	URL     string            `yaml:"url,omitempty" json:"url,omitempty"`
+	Headers map[string]string `yaml:"headers,omitempty" json:"headers,omitempty"`
 }
 
 // Copy returns a deep copy of the HTTP check configuration.
@@ -562,8 +567,8 @@ func (c *HTTPCheck) Merge(other *HTTPCheck) {
 
 // TCPCheck holds the configuration for an HTTP health check.
 type TCPCheck struct {
-	Port int    `yaml:"port,omitempty"`
-	Host string `yaml:"host,omitempty"`
+	Port int    `yaml:"port,omitempty" json:"port,omitempty"`
+	Host string `yaml:"host,omitempty" json:"host,omitempty"`
 }
 
 // Copy returns a deep copy of the TCP check configuration.
@@ -584,14 +589,14 @@ func (c *TCPCheck) Merge(other *TCPCheck) {
 
 // ExecCheck holds the configuration for an exec health check.
 type ExecCheck struct {
-	Command        string            `yaml:"command,omitempty"`
-	ServiceContext string            `yaml:"service-context,omitempty"`
-	Environment    map[string]string `yaml:"environment,omitempty"`
-	UserID         *int              `yaml:"user-id,omitempty"`
-	User           string            `yaml:"user,omitempty"`
-	GroupID        *int              `yaml:"group-id,omitempty"`
-	Group          string            `yaml:"group,omitempty"`
-	WorkingDir     string            `yaml:"working-dir,omitempty"`
+	Command        string            `yaml:"command,omitempty" json:"command,omitempty"`
+	ServiceContext string            `yaml:"service-context,omitempty" json:"service-context,omitempty"`
+	Environment    map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
+	UserID         *int              `yaml:"user-id,omitempty" json:"user-id,omitempty"`
+	User           string            `yaml:"user,omitempty" json:"user,omitempty"`
+	GroupID        *int              `yaml:"group-id,omitempty" json:"group-id,omitempty"`
+	Group          string            `yaml:"group,omitempty" json:"group,omitempty"`
+	WorkingDir     string            `yaml:"working-dir,omitempty" json:"working-dir,omitempty"`
 }
 
 // Copy returns a deep copy of the exec check configuration.
@@ -640,12 +645,12 @@ func (c *ExecCheck) Merge(other *ExecCheck) {
 
 // LogTarget specifies a remote server to forward logs to.
 type LogTarget struct {
-	Name     string            `yaml:"-"`
-	Type     LogTargetType     `yaml:"type"`
-	Location string            `yaml:"location"`
-	Services []string          `yaml:"services"`
-	Override Override          `yaml:"override,omitempty"`
-	Labels   map[string]string `yaml:"labels,omitempty"`
+	Name     string            `yaml:"-" json:"-"`
+	Type     LogTargetType     `yaml:"type" json:"type"`
+	Location string            `yaml:"location" json:"location"`
+	Services []string          `yaml:"services" json:"services"`
+	Override Override          `yaml:"override,omitempty" json:"override,omitempty"`
+	Labels   map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 }
 
 // LogTargetType defines the protocol to use to forward logs.
@@ -1267,6 +1272,7 @@ func (p *Plan) checkCycles() error {
 	return err
 }
 
+// ParseLayer parses a layer in YAML format.
 func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 	layer := &Layer{
 		Services:   make(map[string]*Service),
@@ -1335,6 +1341,10 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		}
 	}
 
+	return layer.finishParse(order, label)
+}
+
+func (layer *Layer) finishParse(order int, label string) (*Layer, error) {
 	layer.Order = order
 	layer.Label = label
 
@@ -1357,12 +1367,10 @@ func ParseLayer(order int, label string, data []byte) (*Layer, error) {
 		}
 	}
 
-	err = layer.Validate()
-	if err != nil {
+	if err := layer.Validate(); err != nil {
 		return nil, err
 	}
-
-	return layer, err
+	return layer, nil
 }
 
 func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) bool {
@@ -1377,10 +1385,10 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 	}
 }
 
-// ReadLayersDir loads the YAML layer files from the first two directory
-// levels starting at layersDir in the order as specified by the order
-// directory and file order prefixes. The directory and file suffixes
-// are dropped in the returned labels.
+// ReadLayersDir loads the YAML and CNF layer files from the first two
+// directory levels starting at layersDir in the order as specified by the order
+// directory and file order prefixes. The directory and file suffixes are
+// dropped in the returned labels.
 //
 //	| File (inside layersDir)    | Order           | Label   |
 //	| -------------------------- | --------------- | ------- |
@@ -1458,18 +1466,16 @@ func loadConfigLayer(layersDir string, l1Entry *configEntry, l2Entry *configEntr
 		return nil, fmt.Errorf("cannot read layer file: %v", err)
 	}
 
-	layer, err := ParseLayer(order, label, data)
-	if err != nil {
-		return nil, err
+	if filepath.Ext(path) == ".cnf" {
+		return ParseLayerCNF(order, label, data)
 	}
-
-	return layer, nil
+	return ParseLayer(order, label, data)
 }
 
-// configEntryRegexp matches either a valid config layer YAML file name or a
-// valid config layer directory. Match[1] is the 3-digit order and match[2]
+// configEntryRegexp matches either a valid config layer YAML or CNF file name
+// or a valid config layer directory. Match[1] is the 3-digit order and match[2]
 // is the label.
-var configEntryRegexp = regexp.MustCompile(`^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})(.yaml|.d)$`)
+var configEntryRegexp = regexp.MustCompile(`^([0-9]{3})-([a-z](?:-?[a-z0-9]){2,})(?:\.yaml|\.cnf|\.d)$`)
 
 type configEntry struct {
 	name  string
@@ -1489,11 +1495,11 @@ func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, e
 	}
 
 	orders := make(map[int]string)
-	labels := make(map[string]int)
+	labels := make(map[string]string)
 	for _, entry := range entries {
 		// Let's not fail to start the system up if some unrelated file ended
 		// up in the layers directory by accident.
-		if !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".d") {
+		if !strings.HasSuffix(entry.Name(), ".yaml") && !strings.HasSuffix(entry.Name(), ".cnf") && !strings.HasSuffix(entry.Name(), ".d") {
 			continue
 		}
 
@@ -1526,18 +1532,16 @@ func configLayerEntries(configDir string, dirOK bool) (configs []*configEntry, e
 		}
 
 		// Let's make sure no duplicate orders or labels appear.
-		oldLabel, dupOrder := orders[order]
-		oldOrder, dupLabel := labels[label]
-		if dupOrder {
-			oldOrder = order
-		} else if dupLabel {
-			oldLabel = label
+		oldName, dupOrder := orders[order]
+		oldLabelName, dupLabel := labels[label]
+		if !dupOrder && dupLabel {
+			oldName = oldLabelName
 		}
 		if dupOrder || dupLabel {
-			return nil, fmt.Errorf("invalid layer filename: %q not unique (have \"%03d-%s.yaml\" already)", entry.Name(), oldOrder, oldLabel)
+			return nil, fmt.Errorf("invalid layer filename: %q not unique (have %q already)", entry.Name(), oldName)
 		}
-		orders[order] = label
-		labels[label] = order
+		orders[order] = entry.Name()
+		labels[label] = entry.Name()
 
 		// All is good for this entry.
 		configs = append(configs, &configEntry{

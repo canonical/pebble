@@ -28,15 +28,15 @@ import (
 
 type Workload struct {
 	// Basic details
-	Name     string        `yaml:"-"`
-	Override plan.Override `yaml:"override,omitempty"`
+	Name     string        `yaml:"-" json:"-"`
+	Override plan.Override `yaml:"override,omitempty" json:"override,omitempty"`
 
 	// Options for command execution
-	Environment map[string]string `yaml:"environment,omitempty"`
-	UserID      *int              `yaml:"user-id,omitempty"`
-	User        string            `yaml:"user,omitempty"`
-	GroupID     *int              `yaml:"group-id,omitempty"`
-	Group       string            `yaml:"group,omitempty"`
+	Environment map[string]string `yaml:"environment,omitempty" json:"environment,omitempty"`
+	UserID      *int              `yaml:"user-id,omitempty" json:"user-id,omitempty"`
+	User        string            `yaml:"user,omitempty" json:"user,omitempty"`
+	GroupID     *int              `yaml:"group-id,omitempty" json:"group-id,omitempty"`
+	Group       string            `yaml:"group,omitempty" json:"group,omitempty"`
 }
 
 func (w *Workload) validate() error {
@@ -83,7 +83,7 @@ const WorkloadsField = "workloads"
 var _ plan.ImmutableSection = (*WorkloadsSection)(nil)
 
 type WorkloadsSection struct {
-	Entries map[string]*Workload `yaml:",inline"`
+	Entries map[string]*Workload `yaml:",inline" json:"-"`
 }
 
 func (ws *WorkloadsSection) Immutable() {}
@@ -164,12 +164,29 @@ func (*WorkloadsSectionExtension) ParseSection(data yaml.Node) (plan.Section, er
 			Message: fmt.Sprintf(`cannot parse the "workloads" section: %v`, err),
 		}
 	}
-	for name, workload := range workloads.Entries {
+	workloads.setNames()
+	return workloads, nil
+}
+
+func (*WorkloadsSectionExtension) ParseSectionCNF(data any) (plan.Section, error) {
+	workloads := &WorkloadsSection{}
+	if data != nil {
+		if err := plan.SectionDecodeCNF(data, &workloads.Entries); err != nil {
+			return nil, &plan.FormatError{
+				Message: fmt.Sprintf(`cannot parse the "workloads" section: %v`, err),
+			}
+		}
+	}
+	workloads.setNames()
+	return workloads, nil
+}
+
+func (ws *WorkloadsSection) setNames() {
+	for name, workload := range ws.Entries {
 		if workload != nil {
 			workload.Name = name
 		}
 	}
-	return workloads, nil
 }
 
 // ValidatePlan validates the services layer against the workloads present

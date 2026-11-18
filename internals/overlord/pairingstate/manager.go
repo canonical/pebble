@@ -63,7 +63,7 @@ var _ plan.Section = (*pairingConfig)(nil)
 
 // pairingConfig contains the options exposed in the plan extension.
 type pairingConfig struct {
-	Mode Mode `yaml:"mode,omitempty"`
+	Mode Mode `yaml:"mode,omitempty" json:"mode,omitempty"`
 }
 
 func (c *pairingConfig) Validate() error {
