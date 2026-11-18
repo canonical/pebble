@@ -74,6 +74,37 @@ services:
 	}
 }
 
+func (cs *clientSuite) TestAddLayerCNF(c *check.C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 200,
+		"result": true
+	}`
+	layerCNF := `services.foo:
+    override: "replace"
+    command: "cmd"
+`
+	err := cs.cli.AddLayer(&client.AddLayerOptions{
+		Label:     "foo",
+		Format:    "cnf",
+		LayerData: []byte(layerCNF),
+	})
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.Method, check.Equals, "POST")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/layers")
+	c.Check(cs.req.URL.Query(), check.HasLen, 0)
+	var body map[string]any
+	c.Assert(json.NewDecoder(cs.req.Body).Decode(&body), check.IsNil)
+	c.Assert(body, check.DeepEquals, map[string]any{
+		"action":  "add",
+		"combine": false,
+		"label":   "foo",
+		"format":  "cnf",
+		"layer":   layerCNF,
+		"inner":   false,
+	})
+}
+
 func (cs *clientSuite) TestPlanBytes(c *check.C) {
 	cs.rsp = `{
 		"type": "sync",
@@ -91,4 +122,21 @@ services:
         override: replace
         command: cmd
 `[1:])
+}
+
+func (cs *clientSuite) TestPlanBytesCNF(c *check.C) {
+	cs.rsp = `{
+		"type": "sync",
+		"status-code": 200,
+		"result": "services.foo:\n    override: \"replace\"\n    command: \"cmd\"\n"
+	}`
+	data, err := cs.cli.PlanBytes(&client.PlanOptions{Format: "cnf"})
+	c.Assert(err, check.IsNil)
+	c.Check(cs.req.Method, check.Equals, "GET")
+	c.Check(cs.req.URL.Path, check.Equals, "/v1/plan")
+	c.Check(cs.req.URL.Query(), check.DeepEquals, url.Values{"format": []string{"cnf"}})
+	c.Assert(string(data), check.Equals, `services.foo:
+    override: "replace"
+    command: "cmd"
+`)
 }

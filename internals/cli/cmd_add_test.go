@@ -25,6 +25,40 @@ import (
 	"github.com/canonical/pebble/internals/cli"
 )
 
+func (s *PebbleSuite) TestAddCNF(c *check.C) {
+	layerCNF := `services.foo:
+    override: "replace"
+    command: "cmd"
+`
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "POST")
+		c.Check(r.URL.Path, check.Equals, "/v1/layers")
+		body := DecodedRequestBody(c, r)
+		c.Check(body, check.DeepEquals, map[string]any{
+			"action":  "add",
+			"combine": false,
+			"label":   "foo",
+			"format":  "cnf",
+			"layer":   layerCNF,
+			"inner":   false,
+		})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": true
+}`)
+	})
+
+	layerPath := filepath.Join(c.MkDir(), "layer.cnf")
+	err := os.WriteFile(layerPath, []byte(layerCNF), 0644)
+	c.Assert(err, check.IsNil)
+	rest, err := cli.ParserForTest().ParseArgs([]string{"add", "foo", layerPath})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Check(s.Stdout(), check.Matches, `Layer "foo" added successfully.*\n`)
+	c.Check(s.Stderr(), check.Equals, "")
+}
+
 func (s *PebbleSuite) TestAdd(c *check.C) {
 	for _, combine := range []bool{false, true} {
 		triggerLayerContent := "trigger layer"

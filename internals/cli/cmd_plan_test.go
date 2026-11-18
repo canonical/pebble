@@ -48,6 +48,28 @@ services:
 	c.Assert(s.Stderr(), check.Equals, ``)
 }
 
+func (s *PebbleSuite) TestGetPlanCNF(c *check.C) {
+	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
+		c.Check(r.Method, check.Equals, "GET")
+		c.Check(r.URL.Path, check.Equals, "/v1/plan")
+		c.Check(r.URL.Query(), check.DeepEquals, url.Values{"format": []string{"cnf"}})
+		fmt.Fprint(w, `{
+    "type": "sync",
+    "status-code": 200,
+    "result": "services.foo:\n    override: \"replace\"\n    command: \"cmd\"\n"
+}`)
+	})
+
+	rest, err := cli.ParserForTest().ParseArgs([]string{"plan", "--format", "cnf"})
+	c.Assert(err, check.IsNil)
+	c.Assert(rest, check.HasLen, 0)
+	c.Assert(s.Stdout(), check.Equals, `services.foo:
+    override: "replace"
+    command: "cmd"
+`)
+	c.Assert(s.Stderr(), check.Equals, ``)
+}
+
 func (s *PebbleSuite) TestGetPlanFails(c *check.C) {
 	s.RedirectClientToTestServer(func(w http.ResponseWriter, r *http.Request) {
 		c.Check(r.Method, check.Equals, "GET")

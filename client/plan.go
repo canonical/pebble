@@ -35,12 +35,19 @@ type AddLayerOptions struct {
 	// layer to combine with if Combine is true.
 	Label string
 
-	// LayerData is the new layer in YAML format.
+	// Format is the layer format, either "yaml" or "cnf". The default is "yaml".
+	Format string
+
+	// LayerData is the new layer in the format specified by Format.
 	LayerData []byte
 }
 
 // AddLayer adds a layer to the plan's configuration layers.
 func (client *Client) AddLayer(opts *AddLayerOptions) error {
+	format := opts.Format
+	if format == "" {
+		format = "yaml"
+	}
 	payload := struct {
 		Action  string `json:"action"`
 		Combine bool   `json:"combine"`
@@ -53,7 +60,7 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 		Combine: opts.Combine,
 		Inner:   opts.Inner,
 		Label:   opts.Label,
-		Format:  "yaml",
+		Format:  format,
 		Layer:   string(opts.LayerData),
 	}
 
@@ -77,12 +84,19 @@ func (client *Client) AddLayer(opts *AddLayerOptions) error {
 	return err
 }
 
-type PlanOptions struct{}
+type PlanOptions struct {
+	// Format is the output format, either "yaml" or "cnf". The default is "yaml".
+	Format string
+}
 
-// PlanBytes fetches the plan in YAML format.
-func (client *Client) PlanBytes(_ *PlanOptions) (data []byte, err error) {
+// PlanBytes fetches the plan in the requested format.
+func (client *Client) PlanBytes(opts *PlanOptions) (data []byte, err error) {
+	format := "yaml"
+	if opts != nil && opts.Format != "" {
+		format = opts.Format
+	}
 	query := url.Values{
-		"format": []string{"yaml"},
+		"format": []string{format},
 	}
 	var dataStr string
 	resp, err := client.Requester().Do(context.Background(), &RequestOptions{

@@ -17,6 +17,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/canonical/go-flags"
 
@@ -25,10 +26,11 @@ import (
 
 const cmdAddSummary = "Dynamically add a layer to the plan's layers"
 const cmdAddDescription = `
-The add command reads the plan's layer YAML from the path specified and
-appends a layer with the given label to the plan's layers. If --combine
-is specified, combine the layer with an existing layer that has the given
-label (or append if the label is not found).
+The add command reads the plan's layer from the path specified and appends
+a layer with the given label to the plan's layers. Files ending in .cnf are
+treated as CNF; all other files are treated as YAML. If --combine is specified,
+combine the layer with an existing layer that has the given label (or append
+if the label is not found).
 `
 
 type cmdAdd struct {
@@ -65,10 +67,15 @@ func (cmd *cmdAdd) Execute(args []string) error {
 	if err != nil {
 		return err
 	}
+	format := "yaml"
+	if strings.HasSuffix(cmd.Positional.LayerPath, ".cnf") {
+		format = "cnf"
+	}
 	opts := client.AddLayerOptions{
 		Combine:   cmd.Combine,
 		Inner:     cmd.Inner,
 		Label:     cmd.Positional.Label,
+		Format:    format,
 		LayerData: data,
 	}
 	err = cmd.client.AddLayer(&opts)

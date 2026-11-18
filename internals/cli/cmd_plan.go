@@ -23,11 +23,14 @@ import (
 var cmdPlanSummary = "Show the plan with layers combined"
 var cmdPlanDescription = `
 The plan command prints out the effective configuration of {{.DisplayName}} in YAML
-format. Layers are combined according to the override rules defined in them.
+or CNF format. Layers are combined according to the override rules defined in them.
 `
 
 type cmdPlan struct {
 	client *client.Client
+
+	//lint:ignore SA5008 "choice" tag is intentionally duplicated
+	Format string `long:"format" default:"yaml" choice:"yaml" choice:"cnf"`
 }
 
 func init() {
@@ -35,6 +38,9 @@ func init() {
 		Name:        "plan",
 		Summary:     cmdPlanSummary,
 		Description: cmdPlanDescription,
+		ArgsHelp: map[string]string{
+			"--format": "Output format",
+		},
 		New: func(opts *CmdOptions) flags.Commander {
 			return &cmdPlan{client: opts.Client}
 		},
@@ -45,10 +51,10 @@ func (cmd *cmdPlan) Execute(args []string) error {
 	if len(args) > 0 {
 		return ErrExtraArgs
 	}
-	planYAML, err := cmd.client.PlanBytes(&client.PlanOptions{})
+	planData, err := cmd.client.PlanBytes(&client.PlanOptions{Format: cmd.Format})
 	if err != nil {
 		return err
 	}
-	Stdout.Write(planYAML)
+	Stdout.Write(planData)
 	return nil
 }
