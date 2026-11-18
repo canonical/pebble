@@ -83,7 +83,7 @@ const WorkloadsField = "workloads"
 var _ plan.ImmutableSection = (*WorkloadsSection)(nil)
 
 type WorkloadsSection struct {
-	Entries map[string]*Workload `yaml:",inline" json:"-"`
+	Entries map[string]*Workload `yaml:",inline" json:",embed"`
 }
 
 func (ws *WorkloadsSection) Immutable() {}

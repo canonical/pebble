@@ -17,6 +17,7 @@ package daemon
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 
@@ -27,17 +28,22 @@ import (
 
 func v1GetPlan(c *Command, r *http.Request, _ *UserState) Response {
 	format := r.URL.Query().Get("format")
-	if format != "yaml" {
+	planMgr := overlordPlanManager(c.d.overlord)
+	p := planMgr.Plan()
+	var data []byte
+	var err error
+	switch format {
+	case "yaml":
+		data, err = yaml.Marshal(p)
+	case "cnf":
+		data, err = plan.MarshalPlanCNF(p)
+	default:
 		return BadRequest("invalid format %q", format)
 	}
-
-	planMgr := overlordPlanManager(c.d.overlord)
-	plan := planMgr.Plan()
-	planYAML, err := yaml.Marshal(plan)
 	if err != nil {
 		return ServerError("cannot serialize plan: %v", err)
 	}
-	return SyncResponse(string(planYAML))
+	return SyncResponse(string(data))
 }
 
 func v1PostLayers(c *Command, r *http.Request, user *UserState) Response {
@@ -60,12 +66,18 @@ func v1PostLayers(c *Command, r *http.Request, user *UserState) Response {
 	if payload.Label == "" {
 		return BadRequest("label must be set")
 	}
-	if payload.Format != "yaml" {
+	var layer *plan.Layer
+	var err error
+	switch payload.Format {
+	case "yaml":
+		layer, err = plan.ParseLayer(0, payload.Label, []byte(payload.Layer))
+	case "cnf":
+		layer, err = plan.ParseLayerCNF(0, payload.Label, []byte(payload.Layer))
+	default:
 		return BadRequest("invalid format %q", payload.Format)
 	}
-	layer, err := plan.ParseLayer(0, payload.Label, []byte(payload.Layer))
 	if err != nil {
-		return BadRequest("cannot parse layer YAML: %v", err)
+		return BadRequest("cannot parse layer %s: %v", strings.ToUpper(payload.Format), err)
 	}
 
 	logger.SecurityWarn(logger.SecurityAuthzAdmin, userString(user)+",add_layer", "Adding layer "+payload.Label)

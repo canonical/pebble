@@ -159,7 +159,7 @@ func (te testExtension) ValidatePlan(p *plan.Plan) error {
 
 // testSection is the backing type for testExtension.
 type testSection struct {
-	Entries map[string]*T `yaml:",inline" json:"-"`
+	Entries map[string]*T `yaml:",inline" json:",embed"`
 }
 
 func (ts *testSection) Validate() error {

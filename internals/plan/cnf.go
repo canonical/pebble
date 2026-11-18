@@ -84,6 +84,19 @@ func ParseLayerCNF(order int, label string, data []byte) (*Layer, error) {
 	return layer.finishParse(order, label)
 }
 
+// MarshalPlanCNF encodes a plan in CNF format using its JSON representation.
+func MarshalPlanCNF(p *Plan) ([]byte, error) {
+	encoded, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	var decoded any
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		return nil, err
+	}
+	return cnfmap.Marshal(decoded)
+}
+
 // SectionDecodeCNF decodes a generic value returned by cnfmap.Unmarshal into v.
 // Unknown struct fields are rejected, matching SectionDecode's YAML behavior.
 func SectionDecodeCNF(data any, v any) error {

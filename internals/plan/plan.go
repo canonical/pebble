@@ -16,6 +16,7 @@ package plan
 
 import (
 	"bytes"
+	"encoding/json/v2"
 	"fmt"
 	"maps"
 	"os"
@@ -151,6 +152,29 @@ func NewPlan() *Plan {
 		}
 	}
 	return p
+}
+
+// MarshalJSON includes extension sections, which encoding/json cannot inline.
+func (p *Plan) MarshalJSON() ([]byte, error) {
+	if p == nil {
+		return []byte("null"), nil
+	}
+	fields := make(map[string]any, 3+len(p.Sections))
+	if len(p.Services) > 0 {
+		fields["services"] = p.Services
+	}
+	if len(p.Checks) > 0 {
+		fields["checks"] = p.Checks
+	}
+	if len(p.LogTargets) > 0 {
+		fields["log-targets"] = p.LogTargets
+	}
+	for field, section := range p.Sections {
+		if section != nil && !section.IsZero() {
+			fields[field] = section
+		}
+	}
+	return json.Marshal(fields)
 }
 
 // MarshalYAML implements an override for top level omitempty tags handling.

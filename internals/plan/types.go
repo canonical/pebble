@@ -32,6 +32,13 @@ func (o *OptionalDuration) UnmarshalYAML(value *yaml.Node) error {
 	return o.set(value.Value)
 }
 
+func (o OptionalDuration) MarshalJSON() ([]byte, error) {
+	if !o.IsSet {
+		return []byte("null"), nil
+	}
+	return json.Marshal(o.Value.String())
+}
+
 func (o *OptionalDuration) UnmarshalJSON(data []byte) error {
 	var value *string
 	if err := json.Unmarshal(data, &value); err != nil || value == nil {
@@ -77,6 +84,13 @@ func (o *OptionalFloat) UnmarshalYAML(value *yaml.Node) error {
 	o.Value = n
 	o.IsSet = true
 	return nil
+}
+
+func (o OptionalFloat) MarshalJSON() ([]byte, error) {
+	if !o.IsSet {
+		return []byte("null"), nil
+	}
+	return json.Marshal(o.Value)
 }
 
 func (o *OptionalFloat) UnmarshalJSON(data []byte) error {

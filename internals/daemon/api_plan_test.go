@@ -16,6 +16,7 @@ package daemon
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 
@@ -84,6 +85,27 @@ services:
 	c.Assert(s.planYAML(c), Equals, expectedYAML)
 }
 
+func (s *apiSuite) TestGetPlanCNF(c *C) {
+	writeTestLayer(s.pebbleDir, planLayer)
+	_ = s.daemon(c)
+	planCmd := apiCmd("/v1/plan")
+
+	req, err := http.NewRequest("GET", "/v1/plan?format=cnf", nil)
+	c.Assert(err, IsNil)
+	rsp := v1GetPlan(planCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Assert(rec.Code, Equals, 200)
+	c.Assert(rsp.Status, Equals, 200)
+	c.Assert(rsp.Type, Equals, ResponseTypeSync)
+	c.Assert(rsp.Result.(string), Equals, `
+services:
+    static:
+        command: "echo static"
+        override: "replace"
+`[1:])
+}
+
 func (s *apiSuite) planYAML(c *C) string {
 	manager := s.d.overlord.PlanManager()
 	plan := manager.Plan()
@@ -109,6 +131,7 @@ func (s *apiSuite) TestLayersErrors(c *C) {
 		{`{"action": "add", "label": "", "format": "yaml"}`, 400, `label must be set`},
 		{`{"action": "add", "label": "x", "format": "xml"}`, 400, `invalid format "xml"`},
 		{`{"action": "add", "label": "x", "format": "yaml", "layer": "@"}`, 400, `cannot parse layer YAML: .*`},
+		{`{"action": "add", "label": "x", "format": "cnf", "layer": "summary: unquoted"}`, 400, `cannot parse layer CNF: .*`},
 	}
 
 	_ = s.daemon(c)
@@ -157,6 +180,44 @@ services:
 	s.planLayersHasLen(c, 2)
 
 	ensureSecurityLog(c, logBuf.String(), "WARN", "authz_admin:<unknown>,add_layer", "Adding layer foo")
+}
+
+func (s *apiSuite) TestLayersAddAppendCNF(c *C) {
+	writeTestLayer(s.pebbleDir, planLayer)
+	_ = s.daemon(c)
+	layersCmd := apiCmd("/v1/layers")
+
+	payload, err := json.Marshal(map[string]any{
+		"action": "add",
+		"label":  "foo",
+		"format": "cnf",
+		"layer": `
+services:
+    dynamic:
+        override: "replace"
+        command: "echo dynamic"
+`,
+	})
+	c.Assert(err, IsNil)
+	req, err := http.NewRequest("POST", "/v1/layers", bytes.NewReader(payload))
+	c.Assert(err, IsNil)
+	rsp := v1PostLayers(layersCmd, req, nil).(*resp)
+	rec := httptest.NewRecorder()
+	rsp.ServeHTTP(rec, req)
+	c.Assert(rec.Code, Equals, 200)
+	c.Assert(rsp.Status, Equals, 200)
+	c.Assert(rsp.Type, Equals, ResponseTypeSync)
+	c.Assert(rsp.Result.(bool), Equals, true)
+	c.Assert(s.planYAML(c), Equals, `
+services:
+    dynamic:
+        override: replace
+        command: echo dynamic
+    static:
+        override: replace
+        command: echo static
+`[1:])
+	s.planLayersHasLen(c, 2)
 }
 
 func (s *apiSuite) TestLayersAddCombine(c *C) {

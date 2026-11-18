@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	. "gopkg.in/check.v1"
 
@@ -135,6 +136,47 @@ log-targets:
 `))
 	c.Assert(err, IsNil)
 	c.Assert(cnfLayer, DeepEquals, yamlLayer)
+}
+
+func (s *S) TestMarshalCNF(c *C) {
+	plan.RegisterSectionExtension(xField, &xExtension{})
+	defer plan.UnregisterSectionExtension(xField)
+
+	p := plan.NewPlan()
+	p.Services = map[string]*plan.Service{
+		"srv": {
+			Name:          "srv",
+			Override:      plan.ReplaceOverride,
+			Command:       "run",
+			BackoffDelay:  plan.OptionalDuration{Value: time.Second, IsSet: true},
+			BackoffFactor: plan.OptionalFloat{Value: 1.5, IsSet: true},
+		},
+	}
+	p.Sections[xField].(*xSection).Entries = map[string]*X{
+		"x1": {
+			Name:     "x1",
+			Override: plan.ReplaceOverride,
+			A:        "a",
+			B:        "b",
+		},
+	}
+
+	data, err := plan.MarshalPlanCNF(p)
+	c.Assert(err, IsNil)
+	c.Assert(string(data), Equals, `
+services:
+    srv:
+        backoff-delay: "1s"
+        backoff-factor: 1.5
+        command: "run"
+        override: "replace"
+x-field:
+    somepolicy: "disabled"
+    x1:
+        a: "a"
+        b: "b"
+        override: "replace"
+`[1:])
 }
 
 func (s *S) TestParseLayerCNFErrors(c *C) {

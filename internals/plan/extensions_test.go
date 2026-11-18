@@ -619,7 +619,7 @@ func (x xExtension) ValidatePlan(p *plan.Plan) error {
 // xSection is the backing type for xExtension.
 type xSection struct {
 	SomePolicy string        `yaml:"somepolicy,omitempty" json:"somepolicy,omitempty"`
-	Entries    map[string]*X `yaml:",inline,omitempty" json:"-"`
+	Entries    map[string]*X `yaml:",inline,omitempty" json:",embed"`
 }
 
 func (xs *xSection) Validate() error {
@@ -756,7 +756,7 @@ func (y yExtension) ValidatePlan(p *plan.Plan) error {
 
 // ySection is the backing type for yExtension.
 type ySection struct {
-	Entries map[string]*Y `yaml:",inline,omitempty" json:"-"`
+	Entries map[string]*Y `yaml:",inline,omitempty" json:",embed"`
 }
 
 func (ys *ySection) Validate() error {
