@@ -975,6 +975,26 @@ var planTests = []planTest{{
 				tcp: {}
 `},
 }, {
+	summary: "TCP check port must not be negative",
+	error:   `plan tcp check "chk2" port must be between 1 and 65535, not -1`,
+	input: []string{`
+		checks:
+			chk2:
+				override: replace
+				tcp:
+					port: -1
+`},
+}, {
+	summary: "TCP check port must not be above 65535",
+	error:   `plan tcp check "chk2" port must be between 1 and 65535, not 65536`,
+	input: []string{`
+		checks:
+			chk2:
+				override: replace
+				tcp:
+					port: 65536
+`},
+}, {
 	summary: "Exec check requires command field",
 	error:   `plan must set "command" for exec check "chk3"`,
 	input: []string{`
