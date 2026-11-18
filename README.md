@@ -30,13 +30,12 @@ go install github.com/canonical/pebble/cmd/pebble@latest
 mkdir -p ~/.config/pebble/layers
 export PEBBLE=$HOME/.config/pebble
 
-echo """\
-services:
-    demo-service:
-        override: replace
-        command: sleep 1000
-        startup: enabled
-""" > $PEBBLE/layers/001-demo-service.yaml
+cat > $PEBBLE/layers/001-demo-service.cnf <<'EOF'
+services.demo-service:
+    override: "replace"
+    command: "sleep 1000"
+    startup: "enabled"
+EOF
 
 pebble run
 ```
