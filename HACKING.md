@@ -45,7 +45,7 @@ $ go run ./cmd/pebble run
 
 ## Using the CLI client
 
-The use the Pebble command line client, run one of the other Pebble sub-commands, such as `pebble plan` or `pebble services` (if the server is running in one terminal, do this in another):
+To use the Pebble command line client, run one of the other Pebble sub-commands, such as `pebble plan` or `pebble services` (if the server is running in one terminal, do this in another):
 
 ```
 $ export PEBBLE=~/pebble
