@@ -245,6 +245,21 @@ func (s *iteratorSuite) TestTruncation(c *C) {
 	c.Assert(buffer.String(), Equals, "\n(... output truncated ...)\n0123456789")
 }
 
+func (s *iteratorSuite) TestTruncationThenDiscarded(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	iter := rb.TailIterator()
+	fmt.Fprint(rb, "0123456789")
+	fmt.Fprint(rb, "0123456789")
+	c.Assert(rb.Discard(10), IsNil)
+	buffer := &bytes.Buffer{}
+	for i := 0; iter.Next(nil); i++ {
+		c.Assert(i < 10, Equals, true, Commentf("Next keeps reporting more to read"))
+		_, err := io.Copy(buffer, iter)
+		c.Assert(err, IsNil)
+	}
+	c.Assert(buffer.String(), Equals, "\n(... output truncated ...)\n")
+}
+
 func (s *iteratorSuite) TestTruncationByteByByte(c *C) {
 	rb := servicelog.NewRingBuffer(10)
 	iter := rb.TailIterator()

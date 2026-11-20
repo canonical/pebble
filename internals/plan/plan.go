@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/canonical/x-go/strutil/shlex"
 	"gopkg.in/yaml.v3"
@@ -873,6 +874,13 @@ func (layer *Layer) Validate() error {
 		if strings.HasPrefix(name, "-") {
 			return &FormatError{
 				Message: fmt.Sprintf(`cannot use service name %q: starting with "-" not allowed`, name),
+			}
+		}
+		if strings.ContainsFunc(name, unicode.IsSpace) {
+			// Service log lines are formatted as "<timestamp> [<service>] ",
+			// which can't be parsed if the service name contains whitespace.
+			return &FormatError{
+				Message: fmt.Sprintf(`cannot use service name %q: whitespace not allowed`, name),
 			}
 		}
 		if service == nil {
