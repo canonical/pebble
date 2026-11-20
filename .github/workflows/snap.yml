@@ -340,11 +340,22 @@ jobs:
           go generate ./cmd
           git add -f ./cmd/VERSION
 
+      - name: Install Snapcraft
+        run: sudo snap install snapcraft --classic
+
+      # Do not use snapcore/action-build here: it runs snapcraft with `sudo -u $user -E`, which current runners reject or ignore, breaking remote-build (see issue #1165).
       - name: Build Snap for ${{ matrix.arch }}
         id: build-snap
-        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79  # v1.3.0
-        with:
-          snapcraft-args: remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
+        env:
+          ARCH: ${{ matrix.arch }}
+          SNAPCRAFT_IMAGE_INFO: '{"build_url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+        run: |
+          snapcraft remote-build --build-for="$ARCH" --launchpad-accept-public-upload
+          if ! compgen -G "*.snap" > /dev/null; then
+            echo "::error::snapcraft remote-build did not produce a .snap file"
+            exit 1
+          fi
+          echo "snap=$(ls -1 *.snap | tail -n1)" >> "$GITHUB_OUTPUT"
 
       - name: Attest build provenance
         if: steps.build-snap.outcome == 'success'
