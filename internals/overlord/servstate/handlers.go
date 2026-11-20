@@ -347,6 +347,11 @@ func (s *serviceData) transitionRestarting(state serviceState, restarting bool) 
 		}
 		s.pendingLatchChecks = nil
 	}
+
+	if state == stateRunning && s.backoffNum > 0 {
+		s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
+	}
+
 	s.state = state
 	s.restarting = restarting
 }
@@ -358,6 +363,7 @@ func (s *serviceData) start() error {
 
 	switch s.state {
 	case stateInitial:
+		s.drainStarted()
 		err := s.startInternal()
 		if err != nil {
 			s.transition(stateStopped)
@@ -497,7 +503,6 @@ func (s *serviceData) startInternal() error {
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
-	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -574,7 +579,7 @@ func (s *serviceData) okayWaitElapsed() error {
 		// Each check is waited for in its own goroutine. Because the waits
 		// only start now, every check run that can latch the service starts
 		// after the okay delay has elapsed.
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(s.manager.stopCtx)
 		s.latchCancel = cancel
 		for c := range latchChecks {
 			go s.waitLatchCheck(ctx, s.manager.checkWaiter, c)
@@ -689,9 +694,10 @@ func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
 	logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
 		s.config.Name, onType, action, s.backoffTime, s.backoffNum)
+	failedDuringBringUp := s.state == stateStarting || s.state == stateLatching
 	s.transition(stateBackoff)
 	duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
-	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
+	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed(failedDuringBringUp)) })
 }
 
 func calculateNextBackoff(config *plan.Service, current time.Duration) time.Duration {
@@ -807,18 +813,31 @@ func (s *serviceData) stop() error {
 
 // backoffTimeElapsed is called when the current backoff's timer has elapsed,
 // to restart the service.
-func (s *serviceData) backoffTimeElapsed() error {
+func (s *serviceData) backoffTimeElapsed(failedDuringBringUp bool) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateBackoff:
+		// Draining is safe here in practice: if a doStart is waiting on this
+		// channel, the error that was sent to it by `exited` (which caused this
+		// function to fire) was sent before doBackoff armed the timer, and the
+		// timer fires at least `backoff-delay` (default 500ms) later, by which
+		// time doStart has already consumed it. The theoretical exception is a
+		// backoff delay of 0 combined with the doStart goroutine being starved
+		// the whole time, in which case the drain steals its error and the
+		// start task blocks until the restarted attempt resolves.
+		s.drainStarted()
 		err := s.startInternal()
 		if err != nil {
 			return err
 		}
-		s.transition(stateRunning)
-
+		if failedDuringBringUp {
+			s.transition(stateStarting)
+			time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+		} else {
+			s.transition(stateRunning)
+		}
 	default:
 		// Ignore if timer elapsed in any other state.
 		return nil
@@ -979,6 +998,18 @@ func (s *serviceData) latchCheckPassed(check string) {
 	s.started <- nil
 	s.transition(stateRunning)
 	logger.Noticef("Service %q latched", s.config.Name)
+}
+
+// drainStarted discards any stale value from the started channel. It
+// must be called before entering a new bring-up cycle, since bring-ups
+// in a restart cycle run with no doStart receiver (they do not use
+// doStart), so a leftover value would cause the next send to block
+// forever, and all sends are done while holding the services lock.
+func (s *serviceData) drainStarted() {
+	select {
+	case _ = <-s.started:
+	default:
+	}
 }
 
 // writeMetric writes the service's metrics.

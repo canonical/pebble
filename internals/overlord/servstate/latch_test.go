@@ -28,38 +28,49 @@ import (
 	"github.com/canonical/pebble/internals/overlord/state"
 )
 
-// fakeCheckWaiter is a servstate.CheckWaiter that lets tests decide exactly
-// when each wait returns, and with what result. Waits deliberately don't
-// return when their ctx is canceled, so that tests can deliver a result
-// after the service has left the latching state.
-type fakeCheckWaiter struct {
-	waits  chan *latchWait
-	closed chan struct{}
+// fakeCheckWaiters gives us `pendingCheckWait`s on a channel as they
+// are started with `waitForSuccess`. Production does not have an
+// equivalent structure -- in-flight waiters are tracked implicitly by
+// goroutines parked in real CheckWaiters. When you receive on the
+// `waiters` channel, this represents the function call being made,
+// and when you send on its `result` channel, this models the function
+// returning (you determine the value it returns). Waits deliberately
+// do not return when their ctx is canceled, so that tests can deliver
+// a result after the service has left the latching state.
+type fakeCheckWaiters struct {
+	waiters chan *pendingCheckWait
+	closed  chan struct{}
 }
 
-// latchWait is a single in-progress call to fakeCheckWaiter.wait.
-type latchWait struct {
+// pendingCheckWait represents a single in-progress call to a
+// `CheckWaiter`. It effectively models a "stack frame" for the
+// `CheckWaiter` call -- `check` and `ctx` are the inputs, and
+// `result` receives the return value.
+type pendingCheckWait struct {
 	check  string
 	ctx    context.Context
 	result chan error
 }
 
-// newFakeCheckWaiter creates a fakeCheckWaiter and sets it as the service
-// manager's check waiter. Any waits still in progress at the end of the test
-// are released.
-func (s *S) newFakeCheckWaiter() *fakeCheckWaiter {
-	w := &fakeCheckWaiter{
-		waits:  make(chan *latchWait, 10),
-		closed: make(chan struct{}),
+// newFakeCheckWaiters creates a fakeCheckWaiters and sets its
+// waitForSuccess method as the service manager's check waiter. Any
+// waiters still in progress at the end of the test are released.
+func (s *S) newFakeCheckWaiters() *fakeCheckWaiters {
+	w := &fakeCheckWaiters{
+		waiters: make(chan *pendingCheckWait, 10),
+		closed:  make(chan struct{}),
 	}
 	s.AddCleanup(func() { close(w.closed) })
-	s.manager.SetCheckWaiter(w.wait)
+	s.manager.SetCheckWaiter(w.waitForSuccess)
 	return w
 }
 
-func (w *fakeCheckWaiter) wait(ctx context.Context, check string) error {
-	lw := &latchWait{check: check, ctx: ctx, result: make(chan error, 1)}
-	w.waits <- lw
+// waitForSuccess is the mock CheckWaiter. Unlike the real
+// CheckWaiter, we can control the value returned here by sending on
+// the pendingCheckWait's `result` channel.
+func (w *fakeCheckWaiters) waitForSuccess(ctx context.Context, check string) error {
+	lw := &pendingCheckWait{check: check, ctx: ctx, result: make(chan error, 1)}
+	w.waiters <- lw
 	select {
 	case err := <-lw.result:
 		return err
@@ -68,31 +79,31 @@ func (w *fakeCheckWaiter) wait(ctx context.Context, check string) error {
 	}
 }
 
-// next returns the next n waits, sorted by check name.
-func (w *fakeCheckWaiter) next(c *C, n int) []*latchWait {
-	var waits []*latchWait
+// next returns the next n waiters, sorted by check name.
+func (w *fakeCheckWaiters) next(c *C, n int) []*pendingCheckWait {
+	var waiters []*pendingCheckWait
 	for range n {
 		select {
-		case lw := <-w.waits:
-			waits = append(waits, lw)
+		case lw := <-w.waiters:
+			waiters = append(waiters, lw)
 		case <-time.After(10 * time.Second):
-			c.Fatalf("timed out waiting for latch check waits (got %d of %d)", len(waits), n)
+			c.Fatalf("timed out waiting for latch check waiters (got %d of %d)", len(waiters), n)
 		}
 	}
-	sort.Slice(waits, func(i, j int) bool { return waits[i].check < waits[j].check })
-	return waits
+	sort.Slice(waiters, func(i, j int) bool { return waiters[i].check < waiters[j].check })
+	return waiters
 }
 
-// assertNoMoreWaits asserts that no further waits have been started.
-func (w *fakeCheckWaiter) assertNoMoreWaits(c *C) {
+// assertNoMoreWaits asserts that no further waiters have been started.
+func (w *fakeCheckWaiters) assertNoMoreWaits(c *C) {
 	select {
-	case lw := <-w.waits:
+	case lw := <-w.waiters:
 		c.Fatalf("unexpected wait for latch check %q", lw.check)
 	default:
 	}
 }
 
-func waitCanceled(c *C, lw *latchWait) {
+func waiterCanceled(c *C, lw *pendingCheckWait) {
 	select {
 	case <-lw.ctx.Done():
 	case <-time.After(10 * time.Second):
@@ -108,8 +119,8 @@ func assertNotReady(c *C, chg *state.Change) {
 	}
 }
 
-// startServicesNoWait creates a change to start the services, without waiting
-// for it to be ready.
+// startServicesNoWait creates a change to start the services, without
+// waiting for it to be ready.
 func (s *S) startServicesNoWait(c *C, lanes [][]string) *state.Change {
 	s.st.Lock()
 	ts, err := servstate.Start(s.st, lanes)
@@ -149,23 +160,23 @@ checks:
 
 func (s *S) TestLatchChecks(c *C) {
 	s.newServiceManager(c)
-	w := s.newFakeCheckWaiter()
+	w := s.newFakeCheckWaiters()
 	s.planAddLayer(c, fmt.Sprintf(latchLayer, "sleep 10"))
 	s.planChanged(c)
 
 	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
 
 	// Only the latch checks are waited for, not the "ignore" one.
-	waits := w.next(c, 2)
-	c.Assert(waits[0].check, Equals, "chk1")
-	c.Assert(waits[1].check, Equals, "chk2")
+	waiters := w.next(c, 2)
+	c.Assert(waiters[0].check, Equals, "chk1")
+	c.Assert(waiters[1].check, Equals, "chk2")
 
 	svc := s.serviceByName(c, "latch1")
 	c.Check(svc.Current, Equals, servstate.StatusActive)
 	c.Check(svc.Latching, Equals, true)
 
 	// One check passing isn't enough to latch.
-	waits[0].result <- nil
+	waiters[0].result <- nil
 	time.Sleep(50 * time.Millisecond)
 	w.assertNoMoreWaits(c)
 	c.Check(s.serviceByName(c, "latch1").Latching, Equals, true)
@@ -173,7 +184,7 @@ func (s *S) TestLatchChecks(c *C) {
 
 	// Once all latch checks pass, the service is running and the start
 	// change completes.
-	waits[1].result <- nil
+	waiters[1].result <- nil
 	waitChangeReady(c, s.runner, chg, "Start test")
 	s.st.Lock()
 	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
@@ -183,27 +194,27 @@ func (s *S) TestLatchChecks(c *C) {
 	c.Check(svc.Current, Equals, servstate.StatusActive)
 	c.Check(svc.Latching, Equals, false)
 
-	// Latching cancels the waits.
-	waitCanceled(c, waits[0])
-	waitCanceled(c, waits[1])
+	// Latching cancels the waiters.
+	waiterCanceled(c, waiters[0])
+	waiterCanceled(c, waiters[1])
 }
 
 func (s *S) TestLatchStopWhileLatching(c *C) {
 	s.newServiceManager(c)
-	w := s.newFakeCheckWaiter()
+	w := s.newFakeCheckWaiters()
 	s.planAddLayer(c, fmt.Sprintf(latchLayer, "sleep 10"))
 	s.planChanged(c)
 
 	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
-	waits := w.next(c, 2)
+	waiters := w.next(c, 2)
 
 	stopChg := s.stopServices(c, [][]string{{"latch1"}})
 	s.st.Lock()
 	c.Check(stopChg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", stopChg.Err()))
 	s.st.Unlock()
 
-	waitCanceled(c, waits[0])
-	waitCanceled(c, waits[1])
+	waiterCanceled(c, waiters[0])
+	waiterCanceled(c, waiters[1])
 
 	waitChangeReady(c, s.runner, chg, "Start test")
 	s.st.Lock()
@@ -214,21 +225,21 @@ func (s *S) TestLatchStopWhileLatching(c *C) {
 
 func (s *S) TestLatchExitWhileLatching(c *C) {
 	s.newServiceManager(c)
-	w := s.newFakeCheckWaiter()
+	w := s.newFakeCheckWaiters()
 	exitPath := filepath.Join(s.dir, "exit")
 	command := fmt.Sprintf(`/bin/sh -c "while [ ! -f %s ]; do sleep 0.01; done; exit 3"`, exitPath)
 	s.planAddLayer(c, fmt.Sprintf(latchLayer, command))
 	s.planChanged(c)
 
 	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
-	waits := w.next(c, 2)
+	waiters := w.next(c, 2)
 
 	// Make the service exit while it's latching.
 	err := os.WriteFile(exitPath, nil, 0o644)
 	c.Assert(err, IsNil)
 
-	waitCanceled(c, waits[0])
-	waitCanceled(c, waits[1])
+	waiterCanceled(c, waiters[0])
+	waiterCanceled(c, waiters[1])
 
 	waitChangeReady(c, s.runner, chg, "Start test")
 	s.st.Lock()
@@ -241,9 +252,66 @@ func (s *S) TestLatchExitWhileLatching(c *C) {
 	c.Check(svc.Latching, Equals, false)
 }
 
+func (s *S) TestLatchRestartAfterExitDuringLatching(c *C) {
+	s.newServiceManager(c)
+	w := s.newFakeCheckWaiters()
+	exitPath := filepath.Join(s.dir, "exit")
+	// The service waits for the exit file, removes it, and exits with a
+	// failure. The restarted instance finds no file, so it stays up long
+	// enough to pass the okay delay and re-latch.
+	command := fmt.Sprintf(`/bin/sh -c "while [ ! -f %s ]; do sleep 0.01; done; rm %s; exit 3"`, exitPath, exitPath)
+	s.planAddLayer(c, fmt.Sprintf(`
+services:
+    latch1:
+        override: replace
+        command: %s
+        on-failure: restart
+        backoff-delay: 10ms
+        on-check-success:
+            chk1: latch
+checks:
+    chk1:
+        override: replace
+        startup: disabled
+        exec:
+            command: "true"
+`, command))
+	s.planChanged(c)
+
+	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
+	waiters1 := w.next(c, 1)
+	c.Check(s.serviceByName(c, "latch1").Latching, Equals, true)
+
+	// Make the service exit while it's latching. With on-failure: restart
+	// this fails the start task and puts the service into backoff.
+	err := os.WriteFile(exitPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	waiterCanceled(c, waiters1[0])
+
+	waitChangeReady(c, s.runner, chg, "Start test")
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.ErrorStatus)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*exited while latching with code 3, will restart.*`)
+	s.st.Unlock()
+	c.Check(s.manager.BackoffNum("latch1"), Equals, 1)
+
+	// After the backoff, the service must be brought up again from
+	// scratch, since it did not finish latching before the restart.
+	waiters2 := w.next(c, 1)
+	c.Check(s.serviceByName(c, "latch1").Latching, Equals, true)
+	c.Check(s.manager.BackoffNum("latch1"), Equals, 1)
+
+	waiters2[0].result <- nil
+	s.waitUntilService(c, "latch1", func(svc *servstate.ServiceInfo) bool {
+		return !svc.Latching && svc.Current == servstate.StatusActive
+	})
+	// Check that there was not another backoff after the first
+	c.Check(s.manager.BackoffNum("latch1"), Equals, 1)
+}
+
 func (s *S) TestLatchStaleSuccessIgnored(c *C) {
 	s.newServiceManager(c)
-	w := s.newFakeCheckWaiter()
+	w := s.newFakeCheckWaiters()
 	s.planAddLayer(c, fmt.Sprintf(latchLayer, "sleep 10"))
 	s.planChanged(c)
 
@@ -276,17 +344,17 @@ func (s *S) TestLatchStaleSuccessIgnored(c *C) {
 
 func (s *S) TestLatchCheckWaitError(c *C) {
 	s.newServiceManager(c)
-	w := s.newFakeCheckWaiter()
+	w := s.newFakeCheckWaiters()
 	s.planAddLayer(c, fmt.Sprintf(latchLayer, "sleep 10"))
 	s.planChanged(c)
 
 	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
-	waits := w.next(c, 2)
+	waiters := w.next(c, 2)
 
 	// A wait that fails (rather than being canceled) doesn't latch the
 	// service, even if the other check passes.
-	waits[0].result <- fmt.Errorf("check gone")
-	waits[1].result <- nil
+	waiters[0].result <- fmt.Errorf("check gone")
+	waiters[1].result <- nil
 	time.Sleep(50 * time.Millisecond)
 	c.Check(s.serviceByName(c, "latch1").Latching, Equals, true)
 	assertNotReady(c, chg)

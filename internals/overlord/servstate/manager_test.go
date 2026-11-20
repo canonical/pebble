@@ -16,6 +16,7 @@ package servstate_test
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -2592,4 +2593,73 @@ func (s *S) TestStopClosesLogBuffers(c *C) {
 
 	c.Check(buf1.Closed(), Equals, true)
 	c.Check(buf2.Closed(), Equals, true)
+}
+
+func (s *S) TestStopCancelsActiveLatchChecks(c *C) {
+	layer := `
+services:
+  test1:
+    override: replace
+    command: /bin/sh -c "echo test1; {{.NotifyDoneCheck}}; sleep 10"
+    startup: enabled
+    on-check-success:
+      chk1: latch
+
+checks:
+  chk1:
+    override: replace
+    startup: disabled
+    exec:
+      command: "/bin/sh -c false"
+`
+	var err error
+	s.manager, err = servstate.NewManager(s.st, s.runner, s.logOutput, testRestarter{s.stopDaemon}, fakeLogManager{})
+	c.Assert(err, IsNil)
+
+	// Only created for testing cancellation, does not run any real
+	// check.
+	waitStarted := make(chan string, 1)
+	waitReturned := make(chan error, 1)
+	s.manager.SetCheckWaiter(func(ctx context.Context, check string) error {
+		waitStarted <- check
+		<-ctx.Done()
+		waitReturned <- ctx.Err()
+		return ctx.Err()
+	})
+
+	s.planAddLayer(c, layer)
+	s.planChanged(c)
+
+	chg := s.startServicesNoWait(c, [][]string{{"test1"}})
+	select {
+	case check := <-waitStarted:
+		c.Assert(check, Equals, "chk1")
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for latch check waiter to start")
+	}
+	assertNotReady(c, chg)
+
+	// Stopping the service manager cancels its root cancellation
+	// context, which cancels the child context that is copied into
+	// each waiter.
+	s.manager.Stop()
+	select {
+	case err := <-waitReturned:
+		c.Assert(err, Equals, context.Canceled)
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for latch check waiter to be canceled and drained")
+	}
+
+	// Stopping the service manager should not change the
+	// state of its services
+	svc := s.serviceByName(c, "test1")
+	c.Check(svc.Latching, Equals, true)
+	assertNotReady(c, chg)
+
+	// No further waits may be started after Stop.
+	select {
+	case check := <-waitStarted:
+		c.Fatalf("unexpected wait for latch check %q", check)
+	default:
+	}
 }

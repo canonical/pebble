@@ -40,6 +40,9 @@ type ServiceManager struct {
 	logMgr LogManager
 
 	checkWaiter CheckWaiter
+
+	stopCtx    context.Context
+	stopCancel context.CancelFunc
 }
 
 // CheckWaiter blocks until a run of the named latch check succeeds
@@ -65,6 +68,7 @@ type Restarter interface {
 }
 
 func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
+	ctx, cancel := context.WithCancel(context.Background())
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),
@@ -72,6 +76,8 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logMgr:        logMgr,
+		stopCtx:       ctx,
+		stopCancel:    cancel,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -108,8 +114,8 @@ func (m *ServiceManager) Ensure() error {
 	return nil
 }
 
-// Stop implements overlord.StateStopper and closes all service ring buffers
-// during daemon shutdown.
+// Stop implements overlord.StateStopper, closing all service
+// ring buffers and latch check waiters during daemon shutdown.
 func (m *ServiceManager) Stop() {
 	m.servicesLock.Lock()
 	defer m.servicesLock.Unlock()
@@ -119,6 +125,8 @@ func (m *ServiceManager) Stop() {
 			_ = s.logs.Close()
 		}
 	}
+
+	m.stopCancel()
 }
 
 type ServiceInfo struct {
