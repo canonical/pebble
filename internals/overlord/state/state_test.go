@@ -616,6 +616,26 @@ func (ss *stateSuite) TestEmptyStateDataAndCheckpointReadAndSet(c *C) {
 	})
 }
 
+func (ss *stateSuite) TestReadStateOmittedFields(c *C) {
+	st, err := state.ReadState(nil, bytes.NewBufferString("{}"))
+	c.Assert(err, IsNil)
+
+	st.Lock()
+	defer st.Unlock()
+
+	// no crash
+	st.Set("a", 1)
+	t := st.NewTask("download", "1...")
+	chg := st.NewChange("install", "...")
+	chg.AddTask(t)
+
+	c.Check(st.Changes(), HasLen, 1)
+	c.Check(st.Tasks(), HasLen, 1)
+	var a int
+	c.Check(st.Get("a", &a), IsNil)
+	c.Check(a, Equals, 1)
+}
+
 func (ss *stateSuite) TestEmptyTaskAndChangeDataAndCheckpointReadAndSet(c *C) {
 	b := new(fakeStateBackend)
 	st := state.New(b)
