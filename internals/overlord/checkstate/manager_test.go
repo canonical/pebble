@@ -831,6 +831,94 @@ func (s *ManagerSuite) TestStopChecksNotFound(c *C) {
 	c.Assert(changed, IsNil)
 }
 
+// startDownCheck adds a check that fails at its first run, waits until the
+// check is down with its recover-check task running, and returns the ID of the
+// recover-check change.
+func (s *ManagerSuite) startDownCheck(c *C) string {
+	chk := &plan.Check{
+		Name:      "chk1",
+		Override:  "replace",
+		Period:    plan.OptionalDuration{Value: time.Hour, IsSet: true}, // only run on refresh
+		Timeout:   plan.OptionalDuration{Value: time.Second, IsSet: true},
+		Threshold: 1,
+		Exec:      &plan.ExecCheck{Command: "/bin/sh -c 'exit 1'"},
+	}
+	err := s.planMgr.AppendLayer(&plan.Layer{Checks: map[string]*plan.Check{"chk1": chk}}, false)
+	c.Assert(err, IsNil)
+	s.overlord.State().EnsureBefore(0)
+	_, err = s.manager.RefreshCheck(context.Background(), chk)
+	c.Assert(err, NotNil)
+	down := waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusDown
+	})
+	s.waitChangeStatus(c, down.ChangeID, state.DoingStatus)
+	return down.ChangeID
+}
+
+func (s *ManagerSuite) waitChangeStatus(c *C, changeID string, status state.Status) {
+	st := s.overlord.State()
+	var current state.Status
+	for start := time.Now(); time.Since(start) < 10*time.Second; time.Sleep(time.Millisecond) {
+		st.Lock()
+		current = st.Change(changeID).Status()
+		st.Unlock()
+		if current == status {
+			return
+		}
+	}
+	c.Fatalf("timed out waiting for change %s to be %s, it is %s", changeID, status, current)
+}
+
+func (s *ManagerSuite) TestStopChecksWhileDown(c *C) {
+	recoverChangeID := s.startDownCheck(c)
+
+	changed, err := s.manager.StopChecks([]string{"chk1"})
+	c.Assert(err, IsNil)
+	c.Assert(changed, DeepEquals, []string{"chk1"})
+	s.overlord.State().EnsureBefore(0)
+
+	// The check never succeeded, so the recover-check change must not end in
+	// Done, the status that means the check recovered.
+	s.waitChangeStatus(c, recoverChangeID, state.HoldStatus)
+	waitCheck(c, s.manager, "chk1", func(check *checkstate.CheckInfo) bool {
+		return check.Status == checkstate.CheckStatusInactive
+	})
+}
+
+func (s *ManagerSuite) TestPlanChangedWhileDown(c *C) {
+	recoverChangeID := s.startDownCheck(c)
+
+	// Modify the check, which aborts its running change.
+	err := s.planMgr.AppendLayer(&plan.Layer{
+		Label: "modify",
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "merge",
+				Threshold: 2,
+			},
+		},
+	}, false)
+	c.Assert(err, IsNil)
+	s.overlord.State().EnsureBefore(0)
+
+	s.waitChangeStatus(c, recoverChangeID, state.HoldStatus)
+}
+
+func (s *ManagerSuite) TestStopTaskRunnerWhileDown(c *C) {
+	recoverChangeID := s.startDownCheck(c)
+
+	s.overlord.TaskRunner().Stop()
+
+	// The task is left to be aborted as a carryover when Pebble starts again,
+	// rather than ending in Done as if the check had recovered.
+	st := s.overlord.State()
+	st.Lock()
+	status := st.Change(recoverChangeID).Status()
+	st.Unlock()
+	c.Assert(status, Equals, state.DoingStatus)
+}
+
 func (s *ManagerSuite) TestReplan(c *C) {
 	origLayer := &plan.Layer{
 		Checks: map[string]*plan.Check{

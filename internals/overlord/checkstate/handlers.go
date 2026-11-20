@@ -238,6 +238,14 @@ func checkStopped(checkName, taskKind string, tombErr error) error {
 		reason = ": " + tombErr.Error()
 	}
 	logger.Debugf("Check %q stopped during %s%s", checkName, taskKind, reason)
+	if tombErr == nil && taskKind == recoverCheckKind {
+		// The check was stopped while it was down, so it never succeeded
+		// again. Returning nil would end the change in Done, which is the
+		// status that means the check recovered. With a retry, an aborted
+		// task ends in Hold instead, and on shutdown the task is left to be
+		// aborted as a carryover when Pebble starts again.
+		return &state.Retry{}
+	}
 	return tombErr
 }
 
