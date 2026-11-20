@@ -347,9 +347,10 @@ jobs:
       - name: Build Snap for ${{ matrix.arch }}
         id: build-snap
         env:
+          ARCH: ${{ matrix.arch }}
           SNAPCRAFT_IMAGE_INFO: '{"build_url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
         run: |
-          snapcraft remote-build --build-for=${{ matrix.arch }} --launchpad-accept-public-upload
+          snapcraft remote-build --build-for="$ARCH" --launchpad-accept-public-upload
           if ! compgen -G "*.snap" > /dev/null; then
             echo "::error::snapcraft remote-build did not produce a .snap file"
             exit 1
