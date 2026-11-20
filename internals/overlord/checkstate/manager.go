@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/tomb.v2"
 
@@ -683,6 +684,41 @@ func (m *CheckManager) RefreshCheck(ctx context.Context, check *plan.Check) (*Ch
 		return getCheckInfo(), nil
 	case <-ctx.Done():
 		return getCheckInfo(), ctx.Err()
+	}
+}
+
+// WaitForSuccess runs the named check immediately, and then once per
+// check period, until a run succeeds or ctx is canceled. It returns nil
+// on success, ctx.Err() if ctx was canceled, or a ChecksNotFound error
+// if the check is not in the plan. The check is run outside of any
+// perform-check or recover-check change, so latching check runs do not
+// change the check's status, success/failure counts, and do not call
+// failure actions. The check's configuration is read from the plan
+// before each run, so plan updates take effect on the next run.
+func (m *CheckManager) WaitForSuccess(ctx context.Context, name string) error {
+	for {
+		currentPlan := m.planMgr.Plan()
+		checkConfig, ok := currentPlan.Checks[name]
+		// This should only happen if a latch check is removed from the
+		// plan before having succeeded.
+		if !ok {
+			return &ChecksNotFound{Names: []string{name}}
+		}
+		chk := newChecker(mergeServiceContext(currentPlan, checkConfig))
+		err := runCheck(ctx, chk, checkConfig.Timeout.Value)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err == nil {
+			return nil
+		}
+		logger.Noticef("Check %q failed while waiting for success: %s", name, errorDetails(err))
+
+		select {
+		case <-time.After(checkConfig.Period.Value):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 

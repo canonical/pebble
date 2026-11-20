@@ -1206,6 +1206,173 @@ func (s *ManagerSuite) TestRefreshStoppedCheckFailure(c *C) {
 	})
 }
 
+func (s *ManagerSuite) TestWaitForSuccess(c *C) {
+	layer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Startup:   plan.CheckStartupDisabled,
+				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "echo chk1"},
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+
+	err = s.manager.WaitForSuccess(context.Background(), "chk1")
+	c.Assert(err, IsNil)
+
+	// Check runs for latching happen outside the a long-running check's
+	// changes, so the disabled check stays inactive and its counts are
+	// unchanged.
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "disabled", Status: "inactive", Threshold: 3},
+	})
+}
+
+func (s *ManagerSuite) TestWaitForSuccessRetries(c *C) {
+	dir := c.MkDir()
+	attemptsPath := filepath.Join(dir, "attempts")
+	passPath := filepath.Join(dir, "pass")
+	layer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Startup:   plan.CheckStartupDisabled,
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 20 * time.Millisecond, IsSet: true},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command: fmt.Sprintf(`/bin/sh -c 'echo x >>%s; [ -f %s ]'`, attemptsPath, passPath),
+				},
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	go func() {
+		result <- s.manager.WaitForSuccess(ctx, "chk1")
+	}()
+
+	// Wait for the check to have failed a few times.
+	for start := time.Now(); ; {
+		data, _ := os.ReadFile(attemptsPath)
+		if bytes.Count(data, []byte("x")) >= 3 {
+			break
+		}
+		if time.Since(start) > 10*time.Second {
+			c.Fatalf("timed out waiting for check attempts")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	select {
+	case err := <-result:
+		c.Fatalf("WaitForSuccess returned before check passed: %v", err)
+	default:
+	}
+
+	// Make the check pass.
+	err = os.WriteFile(passPath, nil, 0o644)
+	c.Assert(err, IsNil)
+	select {
+	case err := <-result:
+		c.Assert(err, IsNil)
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for WaitForSuccess to return")
+	}
+
+	// Failed runs don't count towards the check's failures.
+	waitChecks(c, s.manager, []*checkstate.CheckInfo{
+		{Name: "chk1", Startup: "disabled", Status: "inactive", Threshold: 3},
+	})
+}
+
+func (s *ManagerSuite) TestWaitForSuccessCanceled(c *C) {
+	layer := &plan.Layer{
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Startup:   plan.CheckStartupDisabled,
+				Period:    plan.OptionalDuration{Value: 20 * time.Millisecond, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: 20 * time.Millisecond, IsSet: true},
+				Threshold: 3,
+				Exec:      &plan.ExecCheck{Command: "/bin/sh -c 'exit 1'"},
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		result <- s.manager.WaitForSuccess(ctx, "chk1")
+	}()
+	time.Sleep(100 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-result:
+		c.Assert(err, Equals, context.Canceled)
+	case <-time.After(10 * time.Second):
+		c.Fatalf("timed out waiting for WaitForSuccess to return")
+	}
+}
+
+func (s *ManagerSuite) TestWaitForSuccessNotFound(c *C) {
+	err := s.manager.WaitForSuccess(context.Background(), "missing")
+	c.Assert(err, ErrorMatches, "cannot find checks in plan: missing")
+}
+
+func (s *ManagerSuite) TestWaitForSuccessServiceContext(c *C) {
+	layer := &plan.Layer{
+		Services: map[string]*plan.Service{
+			"svc1": {
+				Name:        "svc1",
+				Override:    "replace",
+				Command:     "dummy",
+				Environment: map[string]string{"LATCH_VAR": "from-service"},
+			},
+		},
+		Checks: map[string]*plan.Check{
+			"chk1": {
+				Name:      "chk1",
+				Override:  "replace",
+				Startup:   plan.CheckStartupDisabled,
+				Period:    plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Timeout:   plan.OptionalDuration{Value: time.Second, IsSet: true},
+				Threshold: 3,
+				Exec: &plan.ExecCheck{
+					Command:        `/bin/sh -c '[ "$LATCH_VAR" = from-service ]'`,
+					ServiceContext: "svc1",
+				},
+			},
+		},
+	}
+	err := s.planMgr.AppendLayer(layer, false)
+	c.Assert(err, IsNil)
+	s.manager.PlanChanged(s.planMgr.Plan())
+
+	// The check only passes if the service context has been merged in.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = s.manager.WaitForSuccess(ctx, "chk1")
+	c.Assert(err, IsNil)
+}
+
 func (s *ManagerSuite) TestChecksSuccesses(c *C) {
 	testPath := c.MkDir() + "/test"
 	err := os.WriteFile(testPath, nil, 0o644)
