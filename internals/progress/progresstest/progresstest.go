@@ -52,7 +52,7 @@ func (p *Meter) Spin(label string) {
 }
 
 func (p *Meter) Write(bs []byte) (n int, err error) {
-	p.Written = append(p.Written, bs)
+	p.Written = append(p.Written, append([]byte(nil), bs...))
 	n = len(bs)
 
 	return
