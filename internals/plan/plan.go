@@ -976,6 +976,11 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("plan check %q timeout must not be negative", name),
 			}
 		}
+		if check.Threshold < 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan check %q threshold must not be negative", name),
+			}
+		}
 
 		if check.Exec != nil {
 			args, err := shlex.Split(check.Exec.Command)
