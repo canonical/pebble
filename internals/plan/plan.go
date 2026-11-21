@@ -34,6 +34,7 @@ import (
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/schedule"
 )
 
 // SectionExtension allows the plan layer schema to be extended without
@@ -220,6 +221,7 @@ type Service struct {
 	Startup     ServiceStartup `yaml:"startup,omitempty"`
 	Override    Override       `yaml:"override,omitempty"`
 	Command     string         `yaml:"command,omitempty"`
+	Schedule    string         `yaml:"schedule,omitempty"`
 
 	// Service dependencies
 	After    []string `yaml:"after,omitempty"`
@@ -275,6 +277,9 @@ func (s *Service) Merge(other *Service) {
 	}
 	if other.Command != "" {
 		s.Command = other.Command
+	}
+	if other.Schedule != "" {
+		s.Schedule = other.Schedule
 	}
 	if other.KillDelay.IsSet {
 		s.KillDelay = other.KillDelay
@@ -926,6 +931,14 @@ func (layer *Layer) Validate() error {
 		if service.KillDelay.IsSet && service.KillDelay.Value < 0 {
 			return &FormatError{
 				Message: fmt.Sprintf("plan service %q kill-delay must not be negative", name),
+			}
+		}
+		if service.Schedule != "" {
+			_, err := schedule.Parse(service.Schedule)
+			if err != nil {
+				return &FormatError{
+					Message: fmt.Sprintf("plan service %q schedule %q invalid: %v", name, service.Schedule, err),
+				}
 			}
 		}
 	}

@@ -41,6 +41,22 @@ services:
         # Pebble starts or performs a 'replan' operation. Default is "disabled".
         startup: enabled | disabled
 
+        # (Optional) A schedule of when to start the service automatically.
+        # 
+        # By default, a service has no schedule by which it is started.
+        # 
+        # See https://ubuntu.com/docs/pebble/reference/timer-string-format/ for
+        # the syntax of the timer string format, including more examples of its
+        # use.
+        # 
+        # Examples:
+        # - `00:00-24:00/24` - Every hour on the hour
+        # - `00:00-24:00/48` - Every 30 minutes
+        # - `00:00-24:00/96` - Every 15 minutes
+        # - `12:00-13:00/12` - Every 5 minutes from 12:00 to 13:10
+        # - `23:00`          - Every day at 23:00
+        schedule: <timer string>
+
         # (Optional) A list of other services in the plan that this service
         # should start after.
         after:
