@@ -60,6 +60,10 @@ type clockSpan struct {
 	start  clock
 	end    clock
 	period time.Duration
+	// parts is N for a span split with "/N" into equal parts, and 0 otherwise.
+	// It limits the span to N triggers, as a period truncated to whole
+	// seconds would otherwise leave room for an extra trigger before end.
+	parts int
 }
 
 // duration returns the length of the clock span.
@@ -225,7 +229,7 @@ func (cs clockSpan) next(day, last, now time.Time, loc *time.Location) (time.Tim
 	// The wall clock of last can be before civilStart when the clocks went
 	// back, or when start was skipped forward, so begin at the first part.
 	part := max(civil(last.In(loc)).Sub(civilStart)/cs.period+1, 1)
-	for ; part*cs.period < cs.duration(); part++ {
+	for ; part*cs.period < cs.duration() && (cs.parts == 0 || part < time.Duration(cs.parts)); part++ {
 		// Normally the first part tried is after last, but when the clocks
 		// go back, wall-clock triggers already passed may come round again.
 		t, _ := wallTime(civilStart.Add(part*cs.period), loc)
