@@ -89,8 +89,8 @@ type serviceState string
 const (
 	stateInitial     serviceState = "initial"
 	stateStarting    serviceState = "starting"
-	stateRunning     serviceState = "running"
 	stateLatching    serviceState = "latching"
+	stateRunning     serviceState = "running"
 	stateTerminating serviceState = "terminating"
 	stateKilling     serviceState = "killing"
 	stateStopped     serviceState = "stopped"
@@ -115,6 +115,7 @@ type serviceData struct {
 	currentSince       time.Time
 	startCount         atomic.Int64
 	pendingLatchChecks map[string]struct{}
+	broughtUp          bool
 	latchCancel        context.CancelFunc
 }
 
@@ -163,7 +164,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	m.state.Unlock()
 
 	// Start the service and transition to stateStarting.
-	err = service.start()
+	startedCh, err := service.start()
 	if err != nil {
 		return err
 	}
@@ -171,7 +172,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// Wait for a small amount of time, and if the service hasn't exited,
 	// consider it a success.
 	select {
-	case err := <-service.started:
+	case err := <-startedCh:
 		if err != nil {
 			addLastLogs(task, service.logs, config.Name)
 			// Do not remove the service so that Pebble will restart it if the action is restart,
@@ -211,7 +212,6 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 			manager: m,
 			state:   stateInitial,
 			logs:    servicelog.NewRingBuffer(maxLogBytes),
-			started: make(chan error, 1),
 			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		service.config = config.Copy()
@@ -348,34 +348,41 @@ func (s *serviceData) transitionRestarting(state serviceState, restarting bool) 
 		s.pendingLatchChecks = nil
 	}
 
-	if state == stateRunning && s.backoffNum > 0 {
-		s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
+	if state == stateRunning {
+		s.broughtUp = true
+		if s.backoffNum > 0 {
+			s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
+		}
 	}
 
 	s.state = state
 	s.restarting = restarting
 }
 
-// start is called to transition from the initial state and start the service.
-func (s *serviceData) start() error {
+// start is called to transition from the initial state and start the
+// service. It returns the channel for this bring-up's result, created
+// under the services lock, as backoffTimeElapsed may replace s.started
+// afterwards.
+func (s *serviceData) start() (<-chan error, error) {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateInitial:
-		s.drainStarted()
+		s.started = make(chan error, 1)
+		s.broughtUp = false
 		err := s.startInternal()
 		if err != nil {
 			s.transition(stateStopped)
-			return err
+			return nil, err
 		}
 		s.transition(stateStarting)
 		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
 
 	default:
-		return fmt.Errorf("cannot start service while %s", s.state)
+		return nil, fmt.Errorf("cannot start service while %s", s.state)
 	}
-	return nil
+	return s.started, nil
 }
 
 func logError(err error) {
@@ -694,10 +701,9 @@ func (s *serviceData) doBackoff(action plan.ServiceAction, onType string) {
 	s.backoffTime = calculateNextBackoff(s.config, s.backoffTime)
 	logger.Noticef("Service %q %s action is %q, waiting ~%s before restart (backoff %d)",
 		s.config.Name, onType, action, s.backoffTime, s.backoffNum)
-	failedDuringBringUp := s.state == stateStarting || s.state == stateLatching
 	s.transition(stateBackoff)
 	duration := s.backoffTime + s.manager.getJitter(s.backoffTime)
-	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed(failedDuringBringUp)) })
+	time.AfterFunc(duration, func() { logError(s.backoffTimeElapsed()) })
 }
 
 func calculateNextBackoff(config *plan.Service, current time.Duration) time.Duration {
@@ -813,26 +819,21 @@ func (s *serviceData) stop() error {
 
 // backoffTimeElapsed is called when the current backoff's timer has elapsed,
 // to restart the service.
-func (s *serviceData) backoffTimeElapsed(failedDuringBringUp bool) error {
+func (s *serviceData) backoffTimeElapsed() error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateBackoff:
-		// Draining is safe here in practice: if a doStart is waiting on this
-		// channel, the error that was sent to it by `exited` (which caused this
-		// function to fire) was sent before doBackoff armed the timer, and the
-		// timer fires at least `backoff-delay` (default 500ms) later, by which
-		// time doStart has already consumed it. The theoretical exception is a
-		// backoff delay of 0 combined with the doStart goroutine being starved
-		// the whole time, in which case the drain steals its error and the
-		// start task blocks until the restarted attempt resolves.
-		s.drainStarted()
+		// Fresh channel per bring-up, so that a stale value from an
+		// earlier bring-up with no receiver cannot block this one's
+		// send.
+		s.started = make(chan error, 1)
 		err := s.startInternal()
 		if err != nil {
 			return err
 		}
-		if failedDuringBringUp {
+		if !s.broughtUp {
 			s.transition(stateStarting)
 			time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
 		} else {
@@ -998,18 +999,6 @@ func (s *serviceData) latchCheckPassed(check string) {
 	s.started <- nil
 	s.transition(stateRunning)
 	logger.Noticef("Service %q latched", s.config.Name)
-}
-
-// drainStarted discards any stale value from the started channel. It
-// must be called before entering a new bring-up cycle, since bring-ups
-// in a restart cycle run with no doStart receiver (they do not use
-// doStart), so a leftover value would cause the next send to block
-// forever, and all sends are done while holding the services lock.
-func (s *serviceData) drainStarted() {
-	select {
-	case _ = <-s.started:
-	default:
-	}
 }
 
 // writeMetric writes the service's metrics.
