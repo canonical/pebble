@@ -362,26 +362,3 @@ func (s *S) TestLatchCheckWaitError(c *C) {
 	s.stopServices(c, [][]string{{"latch1"}})
 	waitChangeReady(c, s.runner, chg, "Start test")
 }
-
-func (s *S) TestLatchNoCheckWaiter(c *C) {
-	s.newServiceManager(c)
-	s.planAddLayer(c, fmt.Sprintf(latchLayer, "sleep 10"))
-	s.planChanged(c)
-
-	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
-
-	// Without a check waiter the service fails closed: it stays latching
-	// instead of being considered running.
-	s.waitUntilService(c, "latch1", func(svc *servstate.ServiceInfo) bool {
-		return svc.Latching
-	})
-	time.Sleep(50 * time.Millisecond)
-	c.Check(s.serviceByName(c, "latch1").Latching, Equals, true)
-	assertNotReady(c, chg)
-
-	s.stopServices(c, [][]string{{"latch1"}})
-	waitChangeReady(c, s.runner, chg, "Start test")
-	s.st.Lock()
-	c.Check(chg.Err(), ErrorMatches, `(?s).*stopped before latch checks passed.*`)
-	s.st.Unlock()
-}

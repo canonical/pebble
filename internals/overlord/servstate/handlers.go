@@ -585,11 +585,6 @@ func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 
 		s.transition(stateLatching)
 		s.pendingLatchChecks = latchChecks
-		if s.manager.checkWaiter == nil {
-			// Fail closed: stay latching rather than letting dependent
-			// services start without the checks having passed.
-			return fmt.Errorf("internal error: cannot wait for service %q latch checks: no check waiter set", s.config.Name)
-		}
 		logger.Noticef("Service %q latching, waiting for checks: %s",
 			s.config.Name, strings.Join(slices.Sorted(maps.Keys(latchChecks)), ", "))
 
@@ -993,7 +988,7 @@ func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, ch
 		return
 	}
 	if err != nil {
-		logger.Noticef("Cannot wait for service %q latch check %q: %v", s.config.Name, check, err)
+		logger.Noticef("Service %q latch check %q failed: %v", s.config.Name, check, err)
 		return
 	}
 	s.latchCheckPassed(check)

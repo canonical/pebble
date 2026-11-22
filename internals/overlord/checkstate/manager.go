@@ -712,7 +712,7 @@ func (m *CheckManager) WaitForSuccess(ctx context.Context, name string) error {
 		if err == nil {
 			return nil
 		}
-		logger.Noticef("Check %q failed while waiting for success: %s", name, errorDetails(err))
+		logger.Debugf("Check %q failed while waiting for success: %s", name, errorDetails(err))
 
 		select {
 		case <-time.After(checkConfig.Period.Value):
