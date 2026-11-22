@@ -96,22 +96,21 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager       *ServiceManager
-	state         serviceState
-	config        *plan.Service
-	workload      *workloads.Workload
-	logs          *servicelog.RingBuffer
-	started       chan error
-	stopped       chan error
-	cmd           *exec.Cmd
-	backoffNum    int
-	backoffTime   time.Duration
-	resetTimer    *time.Timer
-	okayTimer     *time.Timer
-	okayTimerDone chan struct{}
-	restarting    bool
-	currentSince  time.Time
-	startCount    atomic.Int64
+	manager      *ServiceManager
+	state        serviceState
+	config       *plan.Service
+	workload     *workloads.Workload
+	logs         *servicelog.RingBuffer
+	started      chan error
+	stopped      chan error
+	cmd          *exec.Cmd
+	backoffNum   int
+	backoffTime  time.Duration
+	resetTimer   *time.Timer
+	okayTimer    *time.Timer
+	restarting   bool
+	currentSince time.Time
+	startCount   atomic.Int64
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -183,12 +182,8 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		defer m.servicesLock.Unlock()
 		// Cancel the okay timer if the start is aborted.
 		if service.okayTimer != nil {
-			if !service.okayTimer.Stop() {
-				<-service.okayTimer.C
-			}
-			close(service.okayTimerDone)
+			service.okayTimer.Stop()
 			service.okayTimer = nil
-			service.okayTimerDone = nil
 		}
 		service.transition(stateStopped)
 		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
@@ -358,18 +353,16 @@ func (s *serviceData) start() error {
 			return err
 		}
 		s.transition(stateStarting)
-		timer := time.NewTimer(okayDelay)
-		done := make(chan struct{})
-		go func(t *time.Timer, stopCh <-chan struct{}) {
-			select {
-			case <-t.C:
-				logError(s.okayWaitElapsed(t))
-			case <-stopCh:
-				return
+		s.okayTimer = time.AfterFunc(okayDelay, func() {
+			s.manager.servicesLock.Lock()
+			defer s.manager.servicesLock.Unlock()
+			timer := s.okayTimer
+			if timer != nil && s.state == stateStarting && s.okayTimer == timer {
+				s.okayTimer = nil
+				s.started <- nil
+				s.transition(stateRunning)
 			}
-		}(timer, done)
-		s.okayTimer = timer
-		s.okayTimerDone = done
+		})
 
 	default:
 		return fmt.Errorf("cannot start service while %s", s.state)
@@ -561,8 +554,6 @@ func (s *serviceData) okayWaitElapsedLocked(timer *time.Timer) error {
 		// restarted), ignore this stale callback.
 		if s.okayTimer == timer {
 			s.okayTimer = nil
-			close(s.okayTimerDone)
-			s.okayTimerDone = nil
 			s.started <- nil // still running fine after short duration, no error
 			s.transition(stateRunning)
 		}
@@ -584,12 +575,8 @@ func (s *serviceData) exited(exitCode int) error {
 	}
 	// Cancel the okay timer if the process exits while we're still in stateStarting.
 	if s.okayTimer != nil {
-		if !s.okayTimer.Stop() {
-			<-s.okayTimer.C
-		}
-		close(s.okayTimerDone)
+		s.okayTimer.Stop()
 		s.okayTimer = nil
-		s.okayTimerDone = nil
 	}
 
 	switch s.state {
@@ -771,12 +758,8 @@ func (s *serviceData) stop() error {
 	case stateStarting:
 		// Cancel the okay timer if it's still pending.
 		if s.okayTimer != nil {
-			if !s.okayTimer.Stop() {
-				<-s.okayTimer.C
-			}
-			close(s.okayTimerDone)
+			s.okayTimer.Stop()
 			s.okayTimer = nil
-			s.okayTimerDone = nil
 		}
 		s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
 		fallthrough
