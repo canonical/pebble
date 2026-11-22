@@ -377,12 +377,13 @@ func (s *serviceData) start() (<-chan error, error) {
 			return nil, err
 		}
 		s.transition(stateStarting)
-		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+		startedCh := s.started
+		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed(startedCh)) })
+		return startedCh, nil
 
 	default:
 		return nil, fmt.Errorf("cannot start service while %s", s.state)
 	}
-	return s.started, nil
 }
 
 func logError(err error) {
@@ -551,9 +552,18 @@ func (s *serviceData) startInternal() error {
 // service requires latch checks, its state is changed to `stateLatching`,
 // otherwise it is considered running successfully and transitioned to
 // `stateRunning`.
-func (s *serviceData) okayWaitElapsed() error {
+func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
+
+	// s.started is re-created before each bring-up (in start
+	// and backoffTimeElapsed), and the new channel is passed to
+	// the okayWaitElapsed call scheduled for that bring-up. If
+	// s.started changed since then, a newer bring-up has been
+	// started, so this call is stale.
+	if s.started != startedCh {
+		return nil
+	}
 
 	switch s.state {
 	case stateStarting:
@@ -835,7 +845,8 @@ func (s *serviceData) backoffTimeElapsed() error {
 		}
 		if !s.broughtUp {
 			s.transition(stateStarting)
-			time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+			startedCh := s.started
+			time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed(startedCh)) })
 		} else {
 			s.transition(stateRunning)
 		}
