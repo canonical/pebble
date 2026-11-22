@@ -1461,14 +1461,9 @@ func validServiceAction(action ServiceAction, additionalValid ...ServiceAction) 
 	}
 }
 
-// `validOnCheckSuccessAction` reports whether an action is valid for an
-// `on-check-success` entry. Unlike the other action contexts, check
-// successes may only latch (require the check before transitioning the
-// service to running) or be ignored. The base actions (restart,
-// shutdown, etc.) are not allowed here.
 func validOnCheckSuccessAction(action ServiceAction) bool {
 	switch action {
-	case ActionLatch, ActionIgnore, ActionUnset:
+	case ActionLatch, ActionIgnore:
 		return true
 	default:
 		return false
