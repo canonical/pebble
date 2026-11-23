@@ -323,6 +323,12 @@ var nextTests = []nextTest{
 		now:      "2020-01-10 08:45:00",
 		next:     "2020-01-10 09:00:00",
 	}, {
+		comment:  "whole day split into seven parts, no extra trigger before midnight",
+		schedule: "0:00-24:00/7",
+		last:     "2020-01-10 20:34:12",
+		now:      "2020-01-10 20:34:12",
+		next:     "2020-01-11 00:00:00",
+	}, {
 		comment:  "whole day span split every minute, wrapping into next day",
 		schedule: "0:00-24:00/1m",
 		last:     "2020-01-10 23:59:00",

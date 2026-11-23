@@ -291,11 +291,12 @@ func parseClockSpan(elem string) (clockSpan, error) {
 	cspan := clockSpan{start: start, end: end}
 	cspan.period = cspan.duration()
 	if isSplit {
-		period, err := parseSplit(splitText, cspan.duration())
+		period, parts, err := parseSplit(splitText, cspan.duration())
 		if err != nil {
 			return clockSpan{}, err
 		}
 		cspan.period = period
+		cspan.parts = parts
 	}
 	return cspan, nil
 }
@@ -326,31 +327,32 @@ func parseClock(s string) (clock, error) {
 
 // parseSplit parses the N or N plus unit after the "/" of a clock span. With
 // no unit, N is the number of equal parts the span is divided into.
-// With a unit (s, m or h), N is the period between triggers.
-func parseSplit(s string, span time.Duration) (time.Duration, error) {
+// With a unit (s, m or h), N is the period between triggers. It returns the
+// period, and the number of parts for a split into equal parts (0 otherwise).
+func parseSplit(s string, span time.Duration) (period time.Duration, parts int, err error) {
 	numText := strings.TrimRight(s, "smh")
 	unitText := s[len(numText):]
 	if len(numText) < 1 || len(numText) > 5 || numText[0] == '0' || len(unitText) > 1 {
-		return 0, fmt.Errorf("invalid clock span split %q", "/"+s)
+		return 0, 0, fmt.Errorf("invalid clock span split %q", "/"+s)
 	}
 	for i := range len(numText) {
 		if !isDigit(numText[i]) {
-			return 0, fmt.Errorf("invalid clock span split %q", "/"+s)
+			return 0, 0, fmt.Errorf("invalid clock span split %q", "/"+s)
 		}
 	}
 	n, _ := strconv.Atoi(numText)
 	if n > maxSplit {
-		return 0, fmt.Errorf("invalid clock span split %q", "/"+s)
+		return 0, 0, fmt.Errorf("invalid clock span split %q", "/"+s)
 	}
 	switch unitText {
 	case "s":
-		return time.Duration(n) * time.Second, nil
+		return time.Duration(n) * time.Second, 0, nil
 	case "m":
-		return time.Duration(n) * time.Minute, nil
+		return time.Duration(n) * time.Minute, 0, nil
 	case "h":
-		return time.Duration(n) * time.Hour, nil
+		return time.Duration(n) * time.Hour, 0, nil
 	}
 	// Whole seconds, like the original implementation.
-	period := (span / time.Duration(n)).Truncate(time.Second)
-	return max(period, time.Second), nil
+	period = (span / time.Duration(n)).Truncate(time.Second)
+	return max(period, time.Second), n, nil
 }

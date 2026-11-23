@@ -47,6 +47,12 @@ func newClockSpan(startHour, startMinute, endHour, endMinute uint8, period time.
 	}
 }
 
+func newSplitClockSpan(startHour, startMinute, endHour, endMinute uint8, period time.Duration, parts int) clockSpan {
+	cspan := newClockSpan(startHour, startMinute, endHour, endMinute, period)
+	cspan.parts = parts
+	return cspan
+}
+
 func allYear() [12]uint32 {
 	var days [12]uint32
 	for m := range days {
@@ -81,7 +87,7 @@ func (s *parseSuite) TestParseClockSpans(c *C) {
 	c.Assert(sched.sets, HasLen, 2)
 
 	c.Check(sched.sets[0].clockSpans, DeepEquals, []clockSpan{
-		newClockSpan(10, 5, 20, 35, 300*time.Second),
+		newSplitClockSpan(10, 5, 20, 35, 300*time.Second, 126),
 		newClockSpan(0, 0, 0, 0, 24*time.Hour),
 		newClockSpan(0, 0, 0, 15, 15*time.Minute),
 	})
@@ -166,7 +172,7 @@ func (s *parseSuite) TestParseMixedSets(c *C) {
 	})
 	c.Check(sched.sets[0].clockSpans, DeepEquals, []clockSpan{
 		newClockSpan(9, 45, 10, 0, 15*time.Minute),
-		newClockSpan(13, 0, 17, 0, 48*time.Minute),
+		newSplitClockSpan(13, 0, 17, 0, 48*time.Minute, 5),
 	})
 
 	expected = [12]uint32{}
