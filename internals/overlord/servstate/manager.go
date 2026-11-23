@@ -56,7 +56,7 @@ type ServiceManager struct {
 type CheckWaiter func(ctx context.Context, name string) error
 
 // SetCheckWaiter sets the function used to wait for latch checks to
-// succeed.  It must be called before any services are started.
+// succeed. It must be called before any services are started.
 func (m *ServiceManager) SetCheckWaiter(f CheckWaiter) {
 	m.checkWaiter = f
 }

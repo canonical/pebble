@@ -516,6 +516,38 @@ var planTests = []planTest{{
 					url: https://example.com/foo
 	`},
 }, {
+	summary: `Empty on-check-success action`,
+	error:   `plan service "svc1" on-check-success action "" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test: ""
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
+	`},
+}, {
+	summary: `Unset on-check-success action`,
+	error:   `plan service "svc1" on-check-success action "" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test:
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
+	`},
+}, {
 	summary: `on-check-success references non-existent check`,
 	error:   `plan service "svc1" on-check-success references non-existent check: "missing"`,
 	input: []string{`

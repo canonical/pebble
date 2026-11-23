@@ -362,3 +362,125 @@ func (s *S) TestLatchCheckWaitError(c *C) {
 	s.stopServices(c, [][]string{{"latch1"}})
 	waitChangeReady(c, s.runner, chg, "Start test")
 }
+
+// waitRunningCmd waits until the service is in the running state with a
+// process other than notPID, and returns the new process's PID.
+func (s *S) waitRunningCmd(c *C, service string, notPID int) int {
+	for range 1000 {
+		if cmd, ok := s.manager.RunningCmds()[service]; ok && cmd.Process.Pid != notPID {
+			return cmd.Process.Pid
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	c.Fatalf("timed out waiting for service %q to be running", service)
+	return 0
+}
+
+func (s *S) TestLatchBackoffAfterRunningSkipsLatch(c *C) {
+	s.newServiceManager(c)
+	w := s.newFakeCheckWaiters()
+	exitPath := filepath.Join(s.dir, "exit")
+	// The service waits for the exit file, removes it, and exits with a
+	// failure. The restarted instance finds no file, so it stays up.
+	command := fmt.Sprintf(`/bin/sh -c "while [ ! -f %s ]; do sleep 0.01; done; rm %s; exit 3"`, exitPath, exitPath)
+	s.planAddLayer(c, fmt.Sprintf(`
+services:
+    latch1:
+        override: replace
+        command: %s
+        on-failure: restart
+        backoff-delay: 10ms
+        on-check-success:
+            chk1: latch
+checks:
+    chk1:
+        override: replace
+        startup: disabled
+        exec:
+            command: "true"
+`, command))
+	s.planChanged(c)
+
+	// Latch the service so that it reaches running.
+	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
+	waiters := w.next(c, 1)
+	waiters[0].result <- nil
+	waitChangeReady(c, s.runner, chg, "Start test")
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	pid := s.waitRunningCmd(c, "latch1", 0)
+
+	// Make the running service exit, so that it's restarted by the
+	// backoff logic.
+	err := os.WriteFile(exitPath, nil, 0o644)
+	c.Assert(err, IsNil)
+
+	// The restarted process goes straight to running. If it re-ran the
+	// bring-up instead, it would sit in latching on the fake waiter and
+	// never reach running.
+	s.waitRunningCmd(c, "latch1", pid)
+	c.Check(s.manager.BackoffNum("latch1"), Equals, 1)
+	c.Check(s.serviceByName(c, "latch1").Latching, Equals, false)
+	w.assertNoMoreWaits(c)
+}
+
+func (s *S) TestLatchIgnoresOkayDelayFromEarlierBringUp(c *C) {
+	// Use an okay delay that's longer than the backoff delay, so that the
+	// first bring-up's okay-delay timer fires during the second
+	// bring-up's okay delay.
+	const okayDelay = 600 * time.Millisecond
+	const backoffDelay = 300 * time.Millisecond
+	s.AddCleanup(servstate.FakeOkayWait(okayDelay))
+
+	s.newServiceManager(c)
+	w := s.newFakeCheckWaiters()
+	markerPath := filepath.Join(s.dir, "marker")
+	// The first instance exits immediately (during the okay delay), the
+	// restarted instance stays up.
+	command := fmt.Sprintf(`/bin/sh -c "if [ ! -f %s ]; then touch %s; exit 3; fi; sleep 10"`, markerPath, markerPath)
+	s.planAddLayer(c, fmt.Sprintf(`
+services:
+    latch1:
+        override: replace
+        command: %s
+        on-failure: restart
+        backoff-delay: %s
+        on-check-success:
+            chk1: latch
+checks:
+    chk1:
+        override: replace
+        startup: disabled
+        exec:
+            command: "true"
+`, command, backoffDelay))
+	s.planChanged(c)
+
+	start := time.Now()
+	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
+	waitChangeReady(c, s.runner, chg, "Start test")
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.ErrorStatus)
+	c.Check(chg.Err(), ErrorMatches, `(?s).*exited quickly with code 3, will restart.*`)
+	s.st.Unlock()
+
+	// The first instance exited during its okay delay, before latching,
+	// so no waiter was started for the first bring-up. Any waiter
+	// received below belongs to the second bring-up.
+	w.assertNoMoreWaits(c)
+
+	// The second bring-up's latch must start only after its own okay
+	// delay, which can't elapse before backoffDelay+okayDelay. If the
+	// first bring-up's timer were applied, the latch would start at
+	// around okayDelay.
+	waiters := w.next(c, 1)
+	elapsed := time.Since(start)
+	c.Check(elapsed >= backoffDelay+okayDelay, Equals, true,
+		Commentf("latch started %s after start, before the second okay delay elapsed", elapsed))
+	c.Check(s.manager.BackoffNum("latch1"), Equals, 1)
+
+	waiters[0].result <- nil
+	s.waitRunningCmd(c, "latch1", 0)
+	w.assertNoMoreWaits(c)
+}

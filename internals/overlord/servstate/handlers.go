@@ -606,7 +606,7 @@ func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 // the service to stateRunning if they all succeed. It runs in
 // latchTomb, keeping the tomb alive while the latch check goroutines
 // are registered, so that the tomb cannot become dead before all of the
-// checks have bene added.
+// checks have been added.
 func (s *serviceData) latch(ctx context.Context, latchTomb *tomb.Tomb, checks map[string]struct{}) error {
 	results := make(chan bool, len(checks))
 	for check := range checks {
@@ -1013,8 +1013,8 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, check string) bool {
 	err := waiter(ctx, check)
 
-	// Acquire the services lock to avoid any TOCTOU race between checking
-	// cancellation and the latch pause goroutine applying the final result.
+	// Take the services lock to read s.config.Name for logging, as
+	// serviceForStart and Replan can replace s.config concurrently.
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
