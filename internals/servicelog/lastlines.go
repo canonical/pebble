@@ -94,6 +94,7 @@ func ServiceLastLines(logBuffer *RingBuffer, n int, indent string, serviceName s
 
 // lastLines reads the last n lines from logBuffer with leading whitespace
 // trimmed. If there are more than n lines, the first is replaced with "(...)".
+// If there is no output other than whitespace, no lines are returned.
 func lastLines(logBuffer *RingBuffer, n int) ([]string, error) {
 	it := logBuffer.HeadIterator(n + 1)
 	defer it.Close()
@@ -103,6 +104,9 @@ func lastLines(logBuffer *RingBuffer, n int) ([]string, error) {
 	}
 
 	trimmed := strings.TrimLeftFunc(string(logBytes), unicode.IsSpace)
+	if trimmed == "" {
+		return nil, nil
+	}
 	trimmed = strings.TrimSuffix(trimmed, "\n")
 	lines := strings.Split(trimmed, "\n")
 	if len(lines) > n {
