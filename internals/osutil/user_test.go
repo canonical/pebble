@@ -155,6 +155,46 @@ func (s *userSuite) TestNormalizeUidGid(c *check.C) {
 	test(ptr(1), nil, "", "GROUP", nil, nil, "GROUP ERROR!")
 }
 
+func (s *userSuite) TestNormalizeUidGidMalformedIDs(c *check.C) {
+	ptr := func(n int) *int {
+		return &n
+	}
+
+	var userUid, userIdGid, groupGid string
+	restoreUser := osutil.FakeUserLookup(func(name string) (*user.User, error) {
+		return &user.User{Uid: userUid, Gid: "20"}, nil
+	})
+	defer restoreUser()
+	restoreUserId := osutil.FakeUserLookupId(func(uid string) (*user.User, error) {
+		return &user.User{Uid: uid, Gid: userIdGid}, nil
+	})
+	defer restoreUserId()
+	restoreGroup := osutil.FakeUserLookupGroup(func(name string) (*user.Group, error) {
+		return &user.Group{Gid: groupGid}, nil
+	})
+	defer restoreGroup()
+
+	for _, bad := range []string{"", "abc", "99999999999999999999"} {
+		userUid, userIdGid, groupGid = bad, "20", "30"
+		uid, gid, err := osutil.NormalizeUidGid(nil, nil, "USER", "GROUP")
+		c.Check(err, check.ErrorMatches, `cannot parse user id ".*" of user "USER": .*`)
+		c.Check(uid, check.IsNil)
+		c.Check(gid, check.IsNil)
+
+		userUid, userIdGid, groupGid = "10", "20", bad
+		uid, gid, err = osutil.NormalizeUidGid(nil, nil, "USER", "GROUP")
+		c.Check(err, check.ErrorMatches, `cannot parse group id ".*" of group "GROUP": .*`)
+		c.Check(uid, check.IsNil)
+		c.Check(gid, check.IsNil)
+
+		userUid, userIdGid, groupGid = "10", bad, "30"
+		uid, gid, err = osutil.NormalizeUidGid(ptr(10), nil, "", "")
+		c.Check(err, check.ErrorMatches, `cannot parse group id ".*" of user id 10: .*`)
+		c.Check(uid, check.IsNil)
+		c.Check(gid, check.IsNil)
+	}
+}
+
 func (s *userSuite) TestIsCurrent(c *check.C) {
 	isCurrent, err := osutil.IsCurrent(os.Getuid(), os.Getgid())
 	c.Assert(err, check.IsNil)
