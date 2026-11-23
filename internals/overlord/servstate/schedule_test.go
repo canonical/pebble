@@ -423,6 +423,83 @@ func (s *S) TestScheduleRemovedWithServiceRetiresChange(c *C) {
 	c.Check(logContains(logs, "removed from the plan"), Equals, true)
 }
 
+func (s *S) TestScheduleChangedWhileDoingUsesLatestPlan(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
+
+	// Model the window after TaskRunner has moved the due task to Doing,
+	// but before doStart has processed its stored schedule details.
+	s.st.Lock()
+	task.SetStatus(state.DoingStatus)
+	s.st.Unlock()
+
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: merge
+        schedule: 13:00-15:00
+`)
+	s.planChanged(c)
+
+	waitTaskReady(c, s.runner, s.st, task)
+
+	// The old occurrence must not start the service or enqueue another old
+	// schedule, and PlanChanged must not have created a duplicate change.
+	c.Check(s.countChangesOfKind(c, servstate.ServiceScheduleKind), Equals, 1)
+	c.Check(s.manager.RunningCmds(), HasLen, 0)
+	details := s.scheduleDetails(c, chg)
+	c.Check(details.Schedule, Equals, "13:00-15:00")
+	c.Check(details.Last.IsZero(), Equals, true)
+
+	s.st.Lock()
+	changeReady := chg.IsReady()
+	logs := task.Log()
+	s.st.Unlock()
+	c.Check(changeReady, Equals, false)
+	c.Check(logContains(logs, `changed from "9:00-11:00" to "13:00-15:00"`), Equals, true)
+}
+
+func (s *S) TestScheduleRemovedWhileDoingDoesNotStartOrReschedule(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
+
+	s.st.Lock()
+	task.SetStatus(state.DoingStatus)
+	s.st.Unlock()
+
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+`)
+	s.planChanged(c)
+
+	waitTaskReady(c, s.runner, s.st, task)
+
+	c.Check(s.manager.RunningCmds(), HasLen, 0)
+	s.st.Lock()
+	tasks := chg.Tasks()
+	changeStatus := chg.Status()
+	logs := task.Log()
+	s.st.Unlock()
+	c.Check(tasks, HasLen, 1)
+	c.Check(changeStatus, Equals, state.DoneStatus)
+	c.Check(logContains(logs, "unscheduled"), Equals, true)
+}
+
 // -- Ensure behaviour --
 
 func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {

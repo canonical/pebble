@@ -255,9 +255,9 @@ func pruneScheduleHistory(chg *state.Change, reserve int) {
 // guarding against doing so twice if Pebble restarted partway through
 // handling this occurrence), then decides whether the actual start should
 // proceed now, logging the outcome either way. It returns skip=true if the
-// caller should not go on to actually start the service (either because the
-// scheduled start was missed by too long, or because the service is already
-// running).
+// caller should not go on to actually start the service (because its schedule
+// was removed or superseded, the scheduled start was missed by too long, or
+// the service is already running).
 func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err error) {
 	if !task.Has(scheduleDetailsAttr) {
 		return false, nil
@@ -266,6 +266,33 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 	if err := task.Get(scheduleDetailsAttr, &details); err != nil {
 		return false, fmt.Errorf("cannot get service-schedule-details from task: %w", err)
 	}
+
+	// A plan update cannot reconcile a task that is already Doing, so check
+	// the latest plan here before carrying its schedule forward or starting
+	// the service. PlanChanged publishes the plan before taking the state
+	// lock, which makes this check sufficient to close that race.
+	currentPlan := m.getPlan()
+	config, inPlan := currentPlan.Services[details.ServiceName]
+	if !inPlan || config.Schedule == "" {
+		reason := "its schedule was removed from the plan"
+		if !inPlan {
+			reason = "it was removed from the plan"
+		}
+		task.Logf("Service %q unscheduled: %s; no more scheduled starts.", details.ServiceName, reason)
+		if chg := task.Change(); chg != nil {
+			// A successor may already exist if Pebble restarted after queueing
+			// it. Retire it here as PlanChanged will skip the ready change.
+			if next := pendingScheduleTask(chg); next != nil {
+				next.SetStatus(state.DoneStatus)
+			}
+			chg.SetStatus(state.DoneStatus)
+		}
+		return true, nil
+	}
+
+	oldSchedule := details.Schedule
+	scheduleChanged := config.Schedule != oldSchedule
+	details.Schedule = config.Schedule
 
 	now := timeNow()
 	missed := details.Next
@@ -276,8 +303,9 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 	}
 
 	// The schedule fires for this occurrence unless it was missed by too
-	// long, in which case it's skipped in favour of the following one.
-	fire := scheduleShouldRunNow(now, missed, following)
+	// long, in which case it's skipped in favour of the following one. An
+	// occurrence from a superseded schedule never fires.
+	fire := !scheduleChanged && scheduleShouldRunNow(now, missed, following)
 	last := details.Last
 	if fire {
 		last = now
@@ -303,6 +331,12 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 	followingMsg := "not scheduled again"
 	if !following.IsZero() {
 		followingMsg = fmt.Sprintf("next scheduled start at %s", following.Format(time.RFC3339))
+	}
+
+	if scheduleChanged {
+		task.Logf("Schedule for service %q changed from %q to %q; skipped scheduled start at %s; %s.",
+			details.ServiceName, oldSchedule, details.Schedule, missed.Format(time.RFC3339), followingMsg)
+		return true, nil
 	}
 
 	if !fire {
@@ -338,9 +372,22 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 		}
 		task := pendingScheduleTask(change)
 		if task == nil {
-			// No task currently waiting on its scheduled time (for example,
-			// a scheduled start is being processed right now): nothing to
-			// update here; it'll be picked up on a following PlanChanged.
+			// A scheduled start that is already Doing will be reconciled with
+			// the latest plan by prepareScheduledStart. Still record it as
+			// existing so the loop below doesn't create a duplicate change.
+			for _, candidate := range change.Tasks() {
+				if candidate.Status() != state.DoingStatus || !candidate.Has(scheduleDetailsAttr) {
+					continue
+				}
+				var details scheduleDetails
+				if err := candidate.Get(scheduleDetailsAttr, &details); err != nil {
+					logger.Noticef("Cannot get %s change %s schedule details: %v", change.Kind(), change.ID(), err)
+					candidate.Errorf("Cannot get %s change %s schedule details: %v", change.Kind(), change.ID(), err)
+				} else {
+					existing[details.ServiceName] = true
+				}
+				break
+			}
 			continue
 		}
 		var details scheduleDetails
