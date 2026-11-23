@@ -1181,8 +1181,8 @@ any other services it depends on, in the correct order.
 ### How it works
 
 - If the command is still running at the end of the 1 second window, and the service defines no latch checks, the start is considered successful.
-- If the service defines [latch checks](#latch-checks) (`on-check-success`), the start is only considered successful once all of its latch checks have succeeded. There is no timeout: the start stays in progress until the checks pass or the service is stopped or exits.
-- If the command exits within the 1 second window, Pebble retries the command after a configurable backoff, using the restart logic described in [](service-auto-restart.md). If one of the started services exits within the 1 second window, `pebble start` prints an appropriate error message and exits with an error.
+- If the service defines [latch checks](#latch-checks) in `on-check-success`, the start is only considered successful once all of its latch checks have succeeded. There is no timeout: the start stays in progress until the checks pass or the service is stopped or exits.
+- If the command exits within the 1 second window or while waiting for its latch checks, Pebble retries the command after a configurable backoff, using the restart logic described in [](service-auto-restart.md). If one of the started services exits before its start is successful, `pebble start` prints an appropriate error message and exits with an error.
 
 ### Examples
 

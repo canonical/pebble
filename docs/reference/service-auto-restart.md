@@ -14,7 +14,7 @@ In `restart` mode, the first time a service exits, Pebble waits the `backoff-del
 
 The `backoff-limit` value is also used as a "backoff reset" time. If the service stays running after a restart for `backoff-limit` seconds, the backoff process is reset and the delay reverts to `backoff-delay`.
 
-If a service defines [latch checks](health-checks) (its `on-check-success` map), they run every time the service is started by a start change. Restarts performed by the backoff loop do not re-latch: after a backoff, the service goes straight to "running" without waiting for its latch checks again. To gate a service on its latch checks again, restart it explicitly with `pebble restart`.
+When a service is started by a start or restart change, Pebble waits for its 1-second startup delay and then its [latch checks](#latch-checks) (its `on-check-success` map, if any) before considering it running. If the service exits before it reaches running, its backoff restarts go through the startup delay and latch checks again. Once the service has reached running, later backoff restarts go straight to "running" without waiting for the startup delay or latch checks again, until the service is next started by a start or restart change.
 
 If a service exits while it is still waiting for its latch checks, this is treated the same as exiting during the 1-second startup delay: the service's `on-success` or `on-failure` action applies, and with the default `restart` action, the service enters the backoff loop.
 

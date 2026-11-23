@@ -2,8 +2,8 @@
 
 When multiple services need to be started together, they're started in order according to the `before` and `after` in the [layer configuration](../reference/layer-specification.md). For a service to be considered ready, Pebble:
 
-1. [waits 1 second](#reference_pebble_start_command) after starting the service to ensure the command doesn't exit too quickly.
-2. runs all the service's [latch checks](#latch-checks), requiring each of them to succeed once before transitioning the service to the "running" state.
+1. [Waits 1 second](#reference_pebble_start_command) after starting the service to ensure the command doesn't exit too quickly, and
+2. Runs the service's [latch checks](#latch-checks) (if any), requiring each of them to succeed once before transitioning the service to the "running" state.
 
 The `before` option is a list of services that this service must start before (it may or may not `requires` them, see [Service dependencies](./service-dependencies.md)). Or if it's easier to specify this ordering the other way around, `after` is a list of services that this service must start after.
 

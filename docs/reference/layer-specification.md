@@ -120,6 +120,10 @@ services:
         # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
         # - success-shutdown: shut down and exit Pebble with exit code 0
         # - ignore: do nothing further
+        #
+        # Check failures are ignored while the service is starting
+        # (during its startup delay and while waiting for its latch
+        # checks).
         on-check-failure:
             <check name>: restart | shutdown | success-shutdown | ignore
 

@@ -123,7 +123,7 @@ See also:
 
 (latch-checks)=
 ## Latch checks
-A latch check is a check that is listed in a service's `on-check-success` map with the `latch` action. It must succeed once before the service is considered running. See the [layer specification](./layer-specification.md) for the option's details.
+A latch check is a check that is listed in a service's `on-check-success` map with the `latch` action. Each latch check must succeed once before the service is considered running. See the [layer specification](./layer-specification.md) for the option's details.
 
 Latch checks run in their own loop, separate from the regular health check cadence. A latch check runs immediately when the service starts latching, then once per its `period` until it succeeds or the service stops latching. Latch runs happen outside the `perform-check` and `recover-check` changes: they do not affect a check's status or success and failure counts, do not trigger `on-check-failure` actions, and do not show up under `pebble checks`. A latch check's configuration is re-read from the plan before each run, so plan updates take effect on the next run.
 
