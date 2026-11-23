@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/tomb.v2"
+
 	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
@@ -114,19 +116,27 @@ func (m *ServiceManager) Ensure() error {
 	return nil
 }
 
-// Stop implements overlord.StateStopper, closing all service
-// ring buffers and latch check waiters during daemon shutdown.
+// Stop implements overlord.StateStopper, closing all service ring buffers
+// and stopping and waiting for latch check waiters during daemon shutdown.
 func (m *ServiceManager) Stop() {
-	m.servicesLock.Lock()
-	defer m.servicesLock.Unlock()
+	m.stopCancel()
 
+	m.servicesLock.Lock()
+	var latchTombs []*tomb.Tomb
 	for _, s := range m.services {
 		if s.logs != nil {
 			_ = s.logs.Close()
 		}
+		if s.latchTomb != nil {
+			latchTombs = append(latchTombs, s.latchTomb)
+		}
 	}
+	m.servicesLock.Unlock()
 
-	m.stopCancel()
+	// Do not hold servicesLock while waiting.
+	for _, latchTomb := range latchTombs {
+		_ = latchTomb.Wait()
+	}
 }
 
 type ServiceInfo struct {

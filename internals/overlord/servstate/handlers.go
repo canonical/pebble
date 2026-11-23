@@ -100,23 +100,22 @@ const (
 
 // serviceData holds the state and other data for a service under our control.
 type serviceData struct {
-	manager            *ServiceManager
-	state              serviceState
-	config             *plan.Service
-	workload           *workloads.Workload
-	logs               *servicelog.RingBuffer
-	started            chan error
-	stopped            chan error
-	cmd                *exec.Cmd
-	backoffNum         int
-	backoffTime        time.Duration
-	resetTimer         *time.Timer
-	restarting         bool
-	currentSince       time.Time
-	startCount         atomic.Int64
-	pendingLatchChecks map[string]struct{}
-	broughtUp          bool
-	latchCancel        context.CancelFunc
+	manager      *ServiceManager
+	state        serviceState
+	config       *plan.Service
+	workload     *workloads.Workload
+	logs         *servicelog.RingBuffer
+	started      chan error
+	stopped      chan error
+	cmd          *exec.Cmd
+	backoffNum   int
+	backoffTime  time.Duration
+	resetTimer   *time.Timer
+	restarting   bool
+	currentSince time.Time
+	startCount   atomic.Int64
+	broughtUp    bool
+	latchTomb    *tomb.Tomb
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -339,13 +338,10 @@ func (s *serviceData) transitionRestarting(state serviceState, restarting bool) 
 	if s.state == stateLatching && state != stateLatching {
 		// Stop waiting for latch checks. Every way out of stateLatching goes
 		// through here, with servicesLock held, which is what guarantees
-		// that a stale latch check result is never applied (see
-		// waitLatchCheck).
-		if s.latchCancel != nil {
-			s.latchCancel()
-			s.latchCancel = nil
+		// that a stale latch check result is never applied (see latch).
+		if s.latchTomb != nil {
+			s.latchTomb.Kill(nil)
 		}
-		s.pendingLatchChecks = nil
 	}
 
 	if state == stateRunning {
@@ -584,23 +580,63 @@ func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 		}
 
 		s.transition(stateLatching)
-		s.pendingLatchChecks = latchChecks
 		logger.Noticef("Service %q latching, waiting for checks: %s",
 			s.config.Name, strings.Join(slices.Sorted(maps.Keys(latchChecks)), ", "))
 
 		// Each check is waited for in its own goroutine. Because the waits
 		// only start now, every check run that can latch the service starts
 		// after the okay delay has elapsed.
-		ctx, cancel := context.WithCancel(s.manager.stopCtx)
-		s.latchCancel = cancel
-		for c := range latchChecks {
-			go s.waitLatchCheck(ctx, s.manager.checkWaiter, c)
-		}
+		latchTomb, ctx := tomb.WithContext(s.manager.stopCtx)
+		s.latchTomb = latchTomb
+		// Pass the locally-created tomb address so that a `latch` run
+		// from an earlier bring-up cannot operate on a newer tomb
+		// stored in s.latchTomb.
+		latchTomb.Go(func() error {
+			return s.latch(ctx, latchTomb, latchChecks)
+		})
 
 	default:
 		// Ignore if timer elapsed in any other state.
 		return nil
 	}
+	return nil
+}
+
+// latch waits for all of the service's latch checks, and transitions
+// the service to stateRunning if they all succeed. It runs in
+// latchTomb, keeping the tomb alive while the latch check goroutines
+// are registered, so that the tomb cannot become dead before all of the
+// checks have bene added.
+func (s *serviceData) latch(ctx context.Context, latchTomb *tomb.Tomb, checks map[string]struct{}) error {
+	results := make(chan bool, len(checks))
+	for check := range checks {
+		latchTomb.Go(func() error {
+			results <- s.waitLatchCheck(ctx, s.manager.checkWaiter, check)
+			return nil
+		})
+	}
+
+	allPassed := true
+	for range checks {
+		if !<-results {
+			allPassed = false
+			latchTomb.Kill(nil)
+			break
+		}
+	}
+
+	// The context is canceled whenever the service leaves
+	// stateLatching. Checking it under servicesLock avoids a race
+	// with the state transition.
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
+	if ctx.Err() != nil || !allPassed {
+		return nil
+	}
+
+	s.started <- nil
+	s.transition(stateRunning)
+	logger.Noticef("Service %q latched", s.config.Name)
 	return nil
 }
 
@@ -969,42 +1005,27 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 	}
 }
 
-// waitLatchCheck waits for the named latch check to succeed, and then
-// records the success. It runs once per latch check in its own
-// goroutine. The services lock should not be held when calling
-// waitLatchCheck, as the CheckWaiter blocks while waiting for the
-// check to pass. The context is canceled when the service exits
+// waitLatchCheck waits for the named latch check to succeed. It runs once
+// per latch check in its own goroutine. The services lock should not be held
+// when calling waitLatchCheck, as the CheckWaiter blocks while waiting for
+// the check to pass. The context is canceled when the service exits
 // stateLatching.
-func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, check string) {
+func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, check string) bool {
 	err := waiter(ctx, check)
 
-	// Acquire the services lock to avoid any TOCTOU race between
-	// checking the cancellation channel and updating the service
-	// status.
+	// Acquire the services lock to avoid any TOCTOU race between checking
+	// cancellation and the latch pause goroutine applying the final result.
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	if ctx.Err() != nil {
-		return
+		return false
 	}
 	if err != nil {
 		logger.Noticef("Service %q latch check %q failed: %v", s.config.Name, check, err)
-		return
+		return false
 	}
-	s.latchCheckPassed(check)
-}
-
-// latchCheckPassed records that a latch check has succeeded, and transitions
-// the service to stateRunning once all of its latch checks have succeeded.
-// The caller must hold servicesLock, and the service must be latching.
-func (s *serviceData) latchCheckPassed(check string) {
-	delete(s.pendingLatchChecks, check)
-	if len(s.pendingLatchChecks) > 0 {
-		return
-	}
-	s.started <- nil
-	s.transition(stateRunning)
-	logger.Noticef("Service %q latched", s.config.Name)
+	return true
 }
 
 // writeMetric writes the service's metrics.

@@ -2595,7 +2595,7 @@ func (s *S) TestStopClosesLogBuffers(c *C) {
 	c.Check(buf2.Closed(), Equals, true)
 }
 
-func (s *S) TestStopCancelsActiveLatchChecks(c *C) {
+func (s *S) TestStopCancelsAndWaitsActiveLatchChecks(c *C) {
 	layer := `
 services:
   test1:
@@ -2620,7 +2620,9 @@ checks:
 	// check.
 	waitStarted := make(chan string, 1)
 	waitReturned := make(chan error, 1)
+	waiterExited := make(chan struct{})
 	s.manager.SetCheckWaiter(func(ctx context.Context, check string) error {
+		defer close(waiterExited)
 		waitStarted <- check
 		<-ctx.Done()
 		waitReturned <- ctx.Err()
@@ -2643,6 +2645,15 @@ checks:
 	// context, which cancels the child context that is copied into
 	// each waiter.
 	s.manager.Stop()
+	// Stop joins the service's latch tomb, and the tomb tracks the
+	// goroutine that runs waitLatchCheck, which only returns after the
+	// waiter has. So by the time Stop returns, waiterExited must already
+	// be closed.
+	select {
+	case <-waiterExited:
+	default:
+		c.Fatalf("Stop returned before the latch check waiter exited")
+	}
 	select {
 	case err := <-waitReturned:
 		c.Assert(err, Equals, context.Canceled)
