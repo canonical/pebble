@@ -229,12 +229,13 @@ jobs:
           # Per-architecture QEMU boot configuration for qemu-build, kept
           # here (rather than as a static matrix on that job) so it can be
           # filtered down to only the architectures actually selected below.
+          # Ubuntu 26.04+ ships the riscv64 binary in qemu-system-riscv, not qemu-system-misc.
           QEMU_CONFIG='[
             {"arch":"amd64","qemu-pkg":"qemu-system-x86","qemu-bin":"qemu-system-x86_64","machine":"pc","accel-flags":"-cpu host -enable-kvm"},
             {"arch":"arm64","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-aarch64","machine":"virt","accel-flags":"-cpu max","firmware-pkg":"qemu-efi-aarch64","firmware-path":"/usr/share/AAVMF/AAVMF_CODE.fd"},
             {"arch":"armhf","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-arm","machine":"virt","accel-flags":"-cpu cortex-a15","firmware-pkg":"qemu-efi-arm","firmware-path":"/usr/share/AAVMF/AAVMF32_CODE.fd"},
             {"arch":"ppc64el","qemu-pkg":"qemu-system-ppc","qemu-bin":"qemu-system-ppc64","machine":"pseries","accel-flags":"-cpu POWER9"},
-            {"arch":"riscv64","qemu-pkg":"qemu-system-misc","qemu-bin":"qemu-system-riscv64","machine":"virt","accel-flags":"-cpu rv64","firmware-flags":"-bios default","direct-kernel-append":"root=LABEL=cloudimg-rootfs ro console=ttyS0"},
+            {"arch":"riscv64","qemu-pkg":"qemu-system-riscv","qemu-bin":"qemu-system-riscv64","machine":"virt","accel-flags":"-cpu rv64","firmware-flags":"-bios default","direct-kernel-append":"root=LABEL=cloudimg-rootfs ro console=ttyS0"},
             {"arch":"s390x","qemu-pkg":"qemu-system-s390x","qemu-bin":"qemu-system-s390x","machine":"s390-ccw-virtio","accel-flags":"-cpu max"}
           ]'
 
