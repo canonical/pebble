@@ -40,7 +40,9 @@ const (
 	// (DoStatus) with its At time set to the next occurrence, so the task
 	// runner starts it automatically once that time arrives. If the schedule
 	// has no next occurrence, the remaining task is dormant (WaitStatus)
-	// until a plan change supplies a schedule with a next occurrence.
+	// until a plan change supplies a schedule with a next occurrence. Each
+	// occurrence has its own lane so that a failed start doesn't abort the
+	// task tracking the following occurrence.
 	//
 	// When a pending task's time arrives and it's processed (see
 	// prepareScheduledStart, called from doStart), a new pending task
@@ -289,6 +291,10 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 	// occurrence and finishing this task.
 	if chg := task.Change(); chg != nil && !scheduleHasPendingTask(chg, task) {
 		next := newScheduledStartTask(m.state, details.ServiceName, details.Schedule, following, last)
+		// TaskRunner aborts the failed task's lane when a start fails. Keep
+		// every occurrence in a separate lane so the following occurrence
+		// survives and the long-lived schedule change remains pending.
+		next.JoinLane(task.Lanes()[0] + 1)
 		chg.AddTask(next)
 		pruneScheduleHistory(chg, 1)
 		m.state.EnsureBefore(0)

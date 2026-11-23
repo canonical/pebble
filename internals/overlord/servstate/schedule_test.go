@@ -468,6 +468,48 @@ func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {
 	c.Check(ready, Equals, false)
 }
 
+func (s *S) TestEnsureFailedStartKeepsNextSchedulePending(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: replace
+        command: /bin/sh -c "exit 1"
+        on-failure: ignore
+        schedule: 9:00-11:00
+`)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
+
+	waitTaskReady(c, s.runner, s.st, task)
+
+	s.st.Lock()
+	status := task.Status()
+	var next *state.Task
+	for _, candidate := range chg.Tasks() {
+		if candidate.ID() != task.ID() && candidate.Has(servstate.ScheduleDetailsAttr) {
+			next = candidate
+			break
+		}
+	}
+	s.st.Unlock()
+	c.Check(status, Equals, state.ErrorStatus)
+	c.Assert(next, NotNil)
+
+	// A failed occurrence must not abort the successor in the same change.
+	s.st.Lock()
+	nextStatus := next.Status()
+	changeReady := chg.IsReady()
+	s.st.Unlock()
+	c.Check(nextStatus, Equals, state.DoStatus)
+	c.Check(changeReady, Equals, false)
+	c.Check(s.scheduleDetails(c, chg).Next.After(time.Now()), Equals, true)
+}
+
 func (s *S) TestEnsureLogsMissedScheduleButStillRuns(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, scheduleTestLayer)
