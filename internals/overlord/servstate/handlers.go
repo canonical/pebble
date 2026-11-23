@@ -209,18 +209,14 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		service.config = config.Copy()
-		if workload != nil {
-			service.workload = workload
-		}
+		service.workload = workload
 		m.services[config.Name] = service
 		return service, ""
 	}
 
 	// Ensure config is up-to-date from the plan whenever the user starts a service.
 	service.config = config.Copy()
-	if workload != nil {
-		service.workload = workload
-	}
+	service.workload = workload
 
 	switch service.state {
 	case stateInitial, stateStarting, stateRunning:
