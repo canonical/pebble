@@ -231,9 +231,9 @@ jobs:
           # filtered down to only the architectures actually selected below.
           # Ubuntu 26.04+ ships the riscv64 binary in qemu-system-riscv, not qemu-system-misc.
           QEMU_CONFIG='[
-            {"arch":"amd64","qemu-pkg":"qemu-system-x86","qemu-bin":"qemu-system-x86_64","machine":"pc","accel-flags":"-cpu host -enable-kvm"},
-            {"arch":"arm64","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-aarch64","machine":"virt","accel-flags":"-cpu max","firmware-pkg":"qemu-efi-aarch64","firmware-path":"/usr/share/AAVMF/AAVMF_CODE.fd"},
-            {"arch":"armhf","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-arm","machine":"virt","accel-flags":"-cpu cortex-a15","firmware-pkg":"qemu-efi-arm","firmware-path":"/usr/share/AAVMF/AAVMF32_CODE.fd"},
+            {"arch":"amd64","qemu-pkg":"qemu-system-x86","qemu-bin":"qemu-system-x86_64","machine":"pc","accel-flags":"-cpu max"},
+            {"arch":"arm64","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-aarch64","machine":"virt","accel-flags":"-cpu max","direct-kernel-append":"root=LABEL=cloudimg-rootfs ro console=ttyAMA0"},
+            {"arch":"armhf","qemu-pkg":"qemu-system-arm","qemu-bin":"qemu-system-arm","machine":"virt","accel-flags":"-cpu cortex-a15","direct-kernel-append":"root=LABEL=cloudimg-rootfs ro console=ttyAMA0"},
             {"arch":"ppc64el","qemu-pkg":"qemu-system-ppc","qemu-bin":"qemu-system-ppc64","machine":"pseries","accel-flags":"-cpu POWER9"},
             {"arch":"riscv64","qemu-pkg":"qemu-system-riscv","qemu-bin":"qemu-system-riscv64","machine":"virt","accel-flags":"-cpu rv64","firmware-flags":"-bios default","direct-kernel-append":"root=LABEL=cloudimg-rootfs ro console=ttyS0"},
             {"arch":"s390x","qemu-pkg":"qemu-system-s390x","qemu-bin":"qemu-system-s390x","machine":"s390-ccw-virtio","accel-flags":"-cpu max"}
@@ -618,8 +618,8 @@ jobs:
             -drive if=virtio,format=raw,file=seed.img \
             -netdev user,id=net0,hostfwd=tcp::2222-:22 \
             -device virtio-net-pci,netdev=net0,romfile= \
-            -nographic -serial file:serial.log \
-            &
+            -vga none -nographic -serial file:serial.log \
+            2>qemu-stderr.log &
           echo $! > qemu.pid
           disown
 
@@ -630,10 +630,15 @@ jobs:
               echo "VM is up."
               exit 0
             fi
+            if ! kill -0 "$(cat qemu.pid)" 2>/dev/null; then
+              echo "QEMU exited before the VM became available over SSH" >&2
+              cat serial.log qemu-stderr.log 2>/dev/null || true
+              exit 1
+            fi
             sleep 10
           done
           echo "Timed out waiting for the VM to boot" >&2
-          cat serial.log || true
+          cat serial.log qemu-stderr.log 2>/dev/null || true
           exit 1
 
       - name: Copy Pebble source into the VM
@@ -659,6 +664,7 @@ jobs:
         run: |
           set -eu
           SSH_OPTS=(-i vm-key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "sudo cloud-init status --wait --timeout 600"
           ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "sudo snap install snapcraft --classic"
           # snapcraft runs under sudo, so the resulting .snap is root-owned;
           # hand it back to builder so the unprivileged SSH session below can
@@ -708,7 +714,9 @@ jobs:
         if: always()
         with:
           name: qemu-build-logs-${{ matrix.arch }}
-          path: serial.log
+          path: |
+            serial.log
+            qemu-stderr.log
 
       - name: Attach ${{ steps.build-snap.outputs.snap }} to GH workflow execution
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
