@@ -66,7 +66,8 @@ func (s *S) scheduleTask(c *C, chg *state.Change) *state.Task {
 	s.st.Lock()
 	defer s.st.Unlock()
 	for _, t := range chg.Tasks() {
-		if t.Status() == state.DoStatus && t.Has(servstate.ScheduleDetailsAttr) {
+		status := t.Status()
+		if (status == state.DoStatus || status == state.WaitStatus) && t.Has(servstate.ScheduleDetailsAttr) {
 			return t
 		}
 	}
@@ -230,6 +231,39 @@ func (s *S) TestScheduleCreatedOnPlanChanged(c *C) {
 	c.Check(details.Next.Before(time.Now().Add(25*time.Hour)), Equals, true)
 }
 
+func (s *S) TestScheduleWithoutNextOccurrenceIsDormant(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        schedule: feb,30
+`)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+
+	// Ensuring must not run a schedule which has no next occurrence.
+	s.runner.Ensure()
+	s.st.Lock()
+	status := task.Status()
+	at := task.AtTime()
+	s.st.Unlock()
+	c.Check(status, Equals, state.WaitStatus)
+	c.Check(at.IsZero(), Equals, true)
+	c.Check(s.scheduleDetails(c, chg).Next.IsZero(), Equals, true)
+	c.Check(s.manager.RunningCmds(), HasLen, 0)
+
+	services, err := s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	c.Check(services[0].Current, Equals, servstate.StatusInactive)
+	c.Check(services[0].ScheduleNext.IsZero(), Equals, true)
+}
+
 func (s *S) TestScheduleNotCreatedWithoutSchedule(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, `
@@ -292,6 +326,44 @@ services:
 
 	logs := s.scheduleTaskLog(c, chg2)
 	c.Check(logContains(logs, "Schedule for service"), Equals, true)
+}
+
+func (s *S) TestScheduleChangedWithoutNextOccurrenceIsDormant(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: merge
+        schedule: feb,30
+`)
+	s.planChanged(c)
+
+	// Reuse the existing change and task, but leave the task dormant rather
+	// than clearing its At time and making it immediately runnable.
+	c.Check(s.countChangesOfKind(c, servstate.ServiceScheduleKind), Equals, 1)
+	c.Check(s.scheduleChange(c).ID(), Equals, chg.ID())
+	c.Check(s.scheduleTask(c, chg).ID(), Equals, task.ID())
+
+	s.runner.Ensure()
+	s.st.Lock()
+	status := task.Status()
+	s.st.Unlock()
+	c.Check(status, Equals, state.WaitStatus)
+	c.Check(s.scheduleDetails(c, chg).Next.IsZero(), Equals, true)
+	c.Check(s.manager.RunningCmds(), HasLen, 0)
+
+	services, err := s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	c.Check(services[0].Current, Equals, servstate.StatusInactive)
+	c.Check(services[0].ScheduleNext.IsZero(), Equals, true)
 }
 
 func (s *S) TestScheduleRemovedRetiresChange(c *C) {

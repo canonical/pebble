@@ -38,7 +38,9 @@ const (
 	// but (at most) one of them are Ready (Done or Error), forming a bounded
 	// history (see maxScheduleHistory); the remaining one is still pending
 	// (DoStatus) with its At time set to the next occurrence, so the task
-	// runner starts it automatically once that time arrives.
+	// runner starts it automatically once that time arrives. If the schedule
+	// has no next occurrence, the remaining task is dormant (WaitStatus)
+	// until a plan change supplies a schedule with a next occurrence.
 	//
 	// When a pending task's time arrives and it's processed (see
 	// prepareScheduledStart, called from doStart), a new pending task
@@ -150,10 +152,12 @@ func scheduleShouldRunNow(now, missed, following time.Time) bool {
 
 // newScheduledStartTask creates (but doesn't add to any change) a "start"
 // task tracking a service's scheduled occurrence at next, with last being the
-// time the schedule last fired (zero if never). It's exactly like a task
-// created by Start, except it also carries scheduleDetailsAttr, which is what
-// identifies it (to prepareScheduledStart and scheduleChanged) as tracking a
-// scheduled occurrence rather than a manually-requested start.
+// time the schedule last fired (zero if never). A zero next puts the task into
+// WaitStatus, keeping the schedule dormant without making the task runnable.
+// It's exactly like a task created by Start, except it also carries
+// scheduleDetailsAttr, which is what identifies it (to prepareScheduledStart
+// and scheduleChanged) as tracking a scheduled occurrence rather than a
+// manually-requested start.
 func newScheduledStartTask(st *state.State, name, scheduleStr string, next, last time.Time) *state.Task {
 	task := st.NewTask("start", fmt.Sprintf("Start service %q", name))
 	task.Set("service-request", &ServiceRequest{Name: name})
@@ -163,7 +167,11 @@ func newScheduledStartTask(st *state.State, name, scheduleStr string, next, last
 		Next:        next,
 		Last:        last,
 	})
-	task.At(next)
+	if next.IsZero() {
+		task.SetToWait(state.DoStatus)
+	} else {
+		task.At(next)
+	}
 	return task
 }
 
@@ -182,8 +190,8 @@ func serviceScheduleChange(st *state.State, name, scheduleStr string, next time.
 }
 
 // pendingScheduleTask returns the task in a service-schedule change that's
-// still waiting for its scheduled time to arrive, i.e. the one tracking the
-// service's next scheduled occurrence, or nil if there is currently none.
+// still waiting for its scheduled time to arrive, or is dormant because the
+// schedule has no next occurrence, or nil if there is currently none.
 //
 // The latter is normally only the case right after the service's schedule
 // has been removed (see scheduleChanged); while a scheduled occurrence is
@@ -193,7 +201,8 @@ func serviceScheduleChange(st *state.State, name, scheduleStr string, next time.
 // the newly-added pending one) rather than none.
 func pendingScheduleTask(chg *state.Change) *state.Task {
 	for _, t := range chg.Tasks() {
-		if t.Status() == state.DoStatus && t.Has(scheduleDetailsAttr) {
+		status := t.Status()
+		if (status == state.DoStatus || status == state.WaitStatus) && t.Has(scheduleDetailsAttr) {
 			return t
 		}
 	}
@@ -278,7 +287,7 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 	// track. The pending-task check guards against doing this twice for the
 	// same occurrence, in case Pebble restarted between queuing the next
 	// occurrence and finishing this task.
-	if chg := task.Change(); chg != nil && !following.IsZero() && !scheduleHasPendingTask(chg, task) {
+	if chg := task.Change(); chg != nil && !scheduleHasPendingTask(chg, task) {
 		next := newScheduledStartTask(m.state, details.ServiceName, details.Schedule, following, last)
 		chg.AddTask(next)
 		pruneScheduleHistory(chg, 1)
@@ -366,15 +375,24 @@ func (m *ServiceManager) scheduleChanged(newPlan *plan.Plan) {
 			logger.Noticef("Cannot parse schedule %q for service %q: %v", config.Schedule, details.ServiceName, err)
 			continue
 		}
-		task.Logf("Schedule for service %q changed from %q to %q; next scheduled start at %s.",
-			details.ServiceName, details.Schedule, config.Schedule, next.Format(time.RFC3339))
+		nextMsg := "no next scheduled start"
+		if !next.IsZero() {
+			nextMsg = fmt.Sprintf("next scheduled start at %s", next.Format(time.RFC3339))
+		}
+		task.Logf("Schedule for service %q changed from %q to %q; %s.",
+			details.ServiceName, details.Schedule, config.Schedule, nextMsg)
 		task.Set(scheduleDetailsAttr, &scheduleDetails{
 			ServiceName: details.ServiceName,
 			Schedule:    config.Schedule,
 			Next:        next,
 			Last:        details.Last,
 		})
-		task.At(next)
+		if next.IsZero() {
+			task.SetToWait(state.DoStatus)
+		} else {
+			task.SetStatus(state.DoStatus)
+			task.At(next)
+		}
 		shouldEnsure = true
 	}
 
@@ -425,8 +443,9 @@ func (m *ServiceManager) serviceIsActive(name string) bool {
 }
 
 // scheduledStarts returns the schedule details of the task waiting on its
-// scheduled time, for every service that currently has one. The details hold
-// both the next time the schedule fires and the last time it fired.
+// scheduled time (or dormant with no next occurrence), for every service that
+// currently has one. The details hold both the next time the schedule fires
+// and the last time it fired.
 //
 // The caller must hold the state lock.
 func (m *ServiceManager) scheduledStarts() map[string]scheduleDetails {
