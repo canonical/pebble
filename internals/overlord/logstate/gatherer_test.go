@@ -410,7 +410,8 @@ func (c *testClient) Flush(ctx context.Context) (err error) {
 	case c.sendCh <- c.buffered:
 	}
 
-	c.buffered = c.buffered[:0]
+	// Don't reuse the array: the receiver may still be reading the sent slice.
+	c.buffered = nil
 	return err
 }
 
