@@ -22,6 +22,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -1020,6 +1021,16 @@ func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, ch
 
 	if ctx.Err() != nil {
 		return false
+	}
+	var notFound *checkstate.ChecksNotFound
+	if errors.As(err, &notFound) {
+		// Plan validation guarantees that the current plan cannot
+		// contain a service reference to a missing check. Therefore
+		// removal of this check implies that the new plan also removed
+		// this check from the service's latch requirements (or removed
+		// the service itself).
+		logger.Debugf("Service %q latch check %q was removed from the plan; treating the removed requirement as satisfied", s.config.Name, check)
+		return true
 	}
 	if err != nil {
 		logger.Noticef("Service %q latch check %q failed: %v", s.config.Name, check, err)

@@ -24,6 +24,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 )
@@ -361,6 +362,32 @@ func (s *S) TestLatchCheckWaitError(c *C) {
 
 	s.stopServices(c, [][]string{{"latch1"}})
 	waitChangeReady(c, s.runner, chg, "Start test")
+}
+
+func (s *S) TestLatchCheckRemoved(c *C) {
+	s.newServiceManager(c)
+	w := s.newFakeCheckWaiters()
+	s.planAddLayer(c, fmt.Sprintf(latchLayer, "sleep 10"))
+	s.planChanged(c)
+
+	chg := s.startServicesNoWait(c, [][]string{{"latch1"}})
+	waiters := w.next(c, 2)
+
+	// A check removed from the plan is no longer required to latch, but
+	// the other latch check must still succeed.
+	waiters[0].result <- &checkstate.ChecksNotFound{Names: []string{"chk1"}}
+	time.Sleep(50 * time.Millisecond)
+	c.Check(s.serviceByName(c, "latch1").Latching, Equals, true)
+	assertNotReady(c, chg)
+
+	waiters[1].result <- nil
+	waitChangeReady(c, s.runner, chg, "Start test")
+	s.st.Lock()
+	c.Check(chg.Status(), Equals, state.DoneStatus, Commentf("Error: %v", chg.Err()))
+	s.st.Unlock()
+	c.Check(s.serviceByName(c, "latch1").Latching, Equals, false)
+	waiterCanceled(c, waiters[0])
+	waiterCanceled(c, waiters[1])
 }
 
 // waitRunningCmd waits until the service is in the running state with a
