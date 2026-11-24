@@ -207,13 +207,14 @@ func (m *PlanManager) appendLayer(newLayer *plan.Layer, inner bool) (*plan.Plan,
 		// sub-directory that exists and for which we already allocated
 		// an order?
 		newSubLabel, _, hasSub := strings.Cut(newLayer.Label, "/")
-		for i := layersCount - 1; i >= 0; i-- {
+		for i := layersCount - 1; hasSub && i >= 0; i-- {
 			layer := m.plan.Layers[i]
-			layerSubLabel, _, _ := strings.Cut(layer.Label, "/")
+			layerSubLabel, _, layerHasSub := strings.Cut(layer.Label, "/")
 			// If we have a sub-directory match we know it already exists.
 			// Since we searched backwards, we know the order should be the
-			// next integer value.
-			if layerSubLabel == newSubLabel {
+			// next integer value. A root layer with the same name as the
+			// sub-directory (e.g. "foo" vs "foo/bar") is not a match.
+			if layerHasSub && layerSubLabel == newSubLabel {
 				newOrder = layer.Order + 1
 				newIndex = i + 1
 				break
