@@ -21,6 +21,7 @@ import (
 
 	. "gopkg.in/check.v1"
 
+	"github.com/canonical/pebble/internals/overlord/planstate"
 	"github.com/canonical/pebble/internals/overlord/servstate"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -421,6 +422,74 @@ func (s *S) TestScheduleRemovedWithServiceRetiresChange(c *C) {
 	c.Check(status, Equals, state.DoneStatus)
 	c.Check(logContains(logs, "unscheduled"), Equals, true)
 	c.Check(logContains(logs, "removed from the plan"), Equals, true)
+}
+
+func (s *S) TestSchedulePlanNotificationsSerialized(c *C) {
+	s.newServiceManager(c)
+	planManager, err := planstate.NewManager(c.MkDir())
+	c.Assert(err, IsNil)
+
+	firstStarted := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	planManager.AddChangeListener(func(p *plan.Plan) {
+		if len(p.Layers) == 1 {
+			close(firstStarted)
+			<-releaseFirst
+		}
+		s.manager.PlanChanged(p)
+	})
+
+	firstLayer, err := plan.ParseLayer(0, "first", []byte(scheduleTestLayer))
+	c.Assert(err, IsNil)
+	firstDone := make(chan error, 1)
+	go func() {
+		firstDone <- planManager.AppendLayer(firstLayer, false)
+	}()
+	select {
+	case <-firstStarted:
+	case <-time.After(5 * time.Second):
+		c.Fatal("timed out waiting for first plan listener")
+	}
+
+	secondLayer, err := plan.ParseLayer(0, "second", []byte(`
+services:
+    sched1:
+        override: merge
+        schedule: 13:00-15:00
+`))
+	c.Assert(err, IsNil)
+	secondDone := make(chan error, 1)
+	go func() {
+		secondDone <- planManager.AppendLayer(secondLayer, false)
+	}()
+
+	// The second update cannot commit or notify while the first update's
+	// listener is blocked. Without serialized notifications, it would apply
+	// the final plan first and the older callback would then roll it back.
+	select {
+	case err := <-secondDone:
+		close(releaseFirst)
+		c.Assert(<-firstDone, IsNil)
+		c.Fatalf("second plan update completed while first listener was blocked: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(releaseFirst)
+	c.Assert(<-firstDone, IsNil)
+	c.Assert(<-secondDone, IsNil)
+	s.plan = planManager.Plan()
+	s.planPropagated = true
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	c.Check(s.scheduleDetails(c, chg).Schedule, Equals, "13:00-15:00")
+	c.Check(s.countChangesOfKind(c, servstate.ServiceScheduleKind), Equals, 1)
+
+	services, err := s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	c.Check(services[0].Schedule, Equals, s.plan.Services["sched1"].Schedule)
+	c.Check(services[0].Schedule, Equals, "13:00-15:00")
 }
 
 func (s *S) TestScheduleChangedWhileDoingUsesLatestPlan(c *C) {

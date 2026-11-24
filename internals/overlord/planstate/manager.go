@@ -40,13 +40,18 @@ type PlanManager struct {
 	plan     *plan.Plan
 	isLoaded bool
 
+	nextChangeTicket    int
+	currentChangeTicket int
+	ticketCond          *sync.Cond
+
 	changeListeners []PlanChangedFunc
 }
 
 func NewManager(layersDir string) (*PlanManager, error) {
 	manager := &PlanManager{
-		layersDir: layersDir,
-		plan:      plan.NewPlan(),
+		layersDir:  layersDir,
+		plan:       plan.NewPlan(),
+		ticketCond: sync.NewCond(new(sync.Mutex)),
 	}
 	return manager, nil
 }
@@ -86,9 +91,34 @@ type PlanChangedFunc func(p *plan.Plan)
 // AddChangeListener adds f to the list of functions that are called whenever
 // a plan change event took place (Load, AppendLayer, CombineLayer). A plan
 // change event does not guarantee that combined plan content has changed.
-// Notification registration must be completed before the plan is loaded.
+// Listeners run synchronously in commit order, and subsequent plan updates
+// wait for them to return. Notification registration must be completed before
+// the plan is loaded.
 func (m *PlanManager) AddChangeListener(f PlanChangedFunc) {
 	m.changeListeners = append(m.changeListeners, f)
+}
+
+// acquireChangeTicket allows an acquirer of the [planLock] to release the lock
+// yet still be ordered in the calling of change listeners.
+func (m *PlanManager) acquireChangeTicket() func(func()) {
+	ticket := m.nextChangeTicket
+	m.nextChangeTicket += 1
+	return func(f func()) {
+		m.ticketCond.L.Lock()
+		defer func() {
+			m.currentChangeTicket++
+			m.ticketCond.L.Unlock()
+			m.ticketCond.Broadcast()
+		}()
+		for m.currentChangeTicket <= ticket {
+			if m.currentChangeTicket != ticket {
+				m.ticketCond.Wait()
+				continue
+			}
+			f()
+			return
+		}
+	}
 }
 
 func (m *PlanManager) callChangeListeners(plan *plan.Plan) {
@@ -119,10 +149,11 @@ func (m *PlanManager) Plan() *plan.Plan {
 // configuration being located in a sub-directory. On any error the plan is
 // left exactly as it was, including its layer list.
 func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
-	var newPlan *plan.Plan
-	defer func() { m.callChangeListeners(newPlan) }()
-
 	m.planLock.Lock()
+	var newPlan *plan.Plan
+	defer m.acquireChangeTicket()(func() {
+		m.callChangeListeners(newPlan)
+	})
 	defer m.planLock.Unlock()
 
 	index, _ := findLayer(m.plan.Layers, layer.Label)
@@ -141,10 +172,11 @@ func (m *PlanManager) AppendLayer(layer *plan.Layer, inner bool) error {
 // layer not yet existing), and if the configuration layer is located in a
 // sub-directory (see AppendLayer).
 func (m *PlanManager) CombineLayer(layer *plan.Layer, inner bool) error {
-	var newPlan *plan.Plan
-	defer func() { m.callChangeListeners(newPlan) }()
-
 	m.planLock.Lock()
+	var newPlan *plan.Plan
+	defer m.acquireChangeTicket()(func() {
+		m.callChangeListeners(newPlan)
+	})
 	defer m.planLock.Unlock()
 
 	index, found := findLayer(m.plan.Layers, layer.Label)
@@ -307,10 +339,11 @@ func (m *PlanManager) Ensure() error {
 // NOTE: This functionality should be redesigned (moved out of the plan manager)
 // as the plan manager should not be concerned with schema section details.
 func (m *PlanManager) SetServiceArgs(serviceArgs map[string][]string) error {
-	var newPlan *plan.Plan
-	defer func() { m.callChangeListeners(newPlan) }()
-
 	m.planLock.Lock()
+	var newPlan *plan.Plan
+	defer m.acquireChangeTicket()(func() {
+		m.callChangeListeners(newPlan)
+	})
 	defer m.planLock.Unlock()
 
 	newLayer := &plan.Layer{
