@@ -580,6 +580,11 @@ func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 			return nil
 		}
 
+		if s.manager.stopCtx.Err() != nil {
+			// Manager is stopping, don't start latch waiters it won't join
+			return nil
+		}
+
 		s.transition(stateLatching)
 		logger.Noticef("Service %q latching, waiting for checks: %s",
 			s.config.Name, strings.Join(slices.Sorted(maps.Keys(latchChecks)), ", "))
