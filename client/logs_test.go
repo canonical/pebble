@@ -144,6 +144,40 @@ func (cs *clientSuite) TestLogsLong(c *check.C) {
 	c.Check(out.String(), check.Equals, expected)
 }
 
+func (cs *clientSuite) TestLogsLongEscaped(c *check.C) {
+	// The daemon reads log lines of up to 4KB, but JSON escaping can make
+	// the encoded message up to 6 times longer than the raw one: for
+	// example, each control character becomes a "\u00XX" escape.
+	const maxMessageSize = 4 * 1024
+	for _, test := range []struct {
+		name    string
+		raw     string
+		escaped string
+	}{
+		{name: "quotes", raw: `"`, escaped: `\"`},
+		{name: "tabs", raw: "\t", escaped: `\t`},
+		{name: "control characters", raw: "\x1b", escaped: `\u001b`},
+		{name: "invalid UTF-8", raw: "�", escaped: `�`},
+	} {
+		c.Logf(test.name)
+		shortLog1 := `{"time":"2021-05-03T03:55:49.360994155Z","service":"thing","message":"log 1\n"}`
+		longLog := (`{"time":"2021-05-03T03:55:49.460994155Z","service":"verbose","message":"` +
+			strings.Repeat(test.escaped, maxMessageSize) + `\n"}`)
+		shortLog2 := `{"time":"2021-05-03T03:55:49.654334232Z","service":"snappass","message":"log two\n"}`
+		cs.rsp = shortLog1 + "\n" + longLog + "\n" + shortLog2 + "\n"
+		out, writeLog := makeLogWriter()
+		err := cs.cli.Logs(&client.LogsOptions{
+			WriteLog: writeLog,
+			N:        -1,
+		})
+		c.Assert(err, check.IsNil)
+		shortExpected1 := "2021-05-03T03:55:49.360Z [thing] log 1\n"
+		longExpected := "2021-05-03T03:55:49.460Z [verbose] " + strings.Repeat(test.raw, maxMessageSize) + "\n"
+		shortExpected2 := "2021-05-03T03:55:49.654Z [snappass] log two\n"
+		c.Check(out.String(), check.Equals, shortExpected1+longExpected+shortExpected2)
+	}
+}
+
 func (cs *clientSuite) TestFollowLogsNilOptions(c *check.C) {
 	cs.rsp = ""
 

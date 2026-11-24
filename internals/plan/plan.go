@@ -913,6 +913,21 @@ func (layer *Layer) Validate() error {
 				Message: fmt.Sprintf("plan service %q backoff-factor must be 1.0 or greater, not %g", name, service.BackoffFactor.Value),
 			}
 		}
+		if service.BackoffDelay.IsSet && service.BackoffDelay.Value < 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-delay must not be negative", name),
+			}
+		}
+		if service.BackoffLimit.IsSet && service.BackoffLimit.Value < 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q backoff-limit must not be negative", name),
+			}
+		}
+		if service.KillDelay.IsSet && service.KillDelay.Value < 0 {
+			return &FormatError{
+				Message: fmt.Sprintf("plan service %q kill-delay must not be negative", name),
+			}
+		}
 	}
 
 	for name, check := range layer.Checks {
