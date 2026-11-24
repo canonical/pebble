@@ -131,3 +131,45 @@ func (s *patch2Suite) TestNewAndLegacyIdentities(c *C) {
 		},
 	})
 }
+
+func (s *patch2Suite) TestNullLegacyIdentities(c *C) {
+	restore := patch.FakeLevel(2, 1)
+	defer restore()
+
+	tests := []struct {
+		summary    string
+		identities string
+		error      string
+	}{{
+		summary:    "single null identity",
+		identities: `{"bob": null}`,
+		error:      `.*cannot migrate legacy identity "bob": identity must not be nil`,
+	}, {
+		summary:    "null identity alongside a valid one",
+		identities: `{"bob": {"access": "read", "local": {"user-id": 42}}, "mary": null}`,
+		error:      `.*cannot migrate legacy identity "mary": identity must not be nil`,
+	}, {
+		summary:    "multiple null identities report the first by name",
+		identities: `{"mary": null, "bob": null}`,
+		error:      `.*cannot migrate legacy identity "bob": identity must not be nil`,
+	}}
+
+	for _, test := range tests {
+		c.Logf("Test: %s", test.summary)
+		data := []byte(`{"data": {"patch-level": 1}, "identities": ` + test.identities + `}`)
+		st, err := state.ReadState(nil, bytes.NewReader(data))
+		c.Assert(err, IsNil)
+
+		err = patch.Apply(st)
+		c.Assert(err, ErrorMatches, test.error)
+
+		// The migration must not have been applied.
+		st.Lock()
+		c.Check(st.Has("identities"), Equals, false)
+		var patchLevel int
+		err = st.Get("patch-level", &patchLevel)
+		st.Unlock()
+		c.Assert(err, IsNil)
+		c.Check(patchLevel, Equals, 1)
+	}
+}

@@ -17,6 +17,8 @@ package patch
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/overlord/identities"
@@ -42,6 +44,14 @@ func patch2(s *state.State) error {
 	err := json.Unmarshal(legacy, &idents)
 	if err != nil {
 		return fmt.Errorf("cannot unmarshal legacy identities: %v", err)
+	}
+	// A null entry would be stored as a nil identity and make the identities
+	// manager panic on startup, so fail the migration instead. Check names in
+	// sorted order so the error is deterministic.
+	for _, name := range slices.Sorted(maps.Keys(idents)) {
+		if idents[name] == nil {
+			return fmt.Errorf("cannot migrate legacy identity %q: identity must not be nil", name)
+		}
 	}
 	s.Set("identities", idents)
 	logger.Noticef("Loaded legacy identities from state file")
