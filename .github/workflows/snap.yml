@@ -664,7 +664,7 @@ jobs:
         run: |
           set -eu
           SSH_OPTS=(-i vm-key -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "sudo cloud-init status --wait --timeout 600"
+          ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "sudo cloud-init status --wait"
           ssh "${SSH_OPTS[@]}" builder@127.0.0.1 "sudo snap install snapcraft --classic"
           # snapcraft runs under sudo, so the resulting .snap is root-owned;
           # hand it back to builder so the unprivileged SSH session below can
