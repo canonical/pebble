@@ -64,6 +64,9 @@ type logGatherer struct {
 	*logGathererOptions
 
 	targetName string
+	// The target type and location the client was created with
+	targetType     plan.LogTargetType
+	targetLocation string
 	// tomb for the main loop
 	tomb tomb.Tomb
 
@@ -110,11 +113,13 @@ func newLogGathererInternal(target *plan.LogTarget, options *logGathererOptions)
 	g := &logGatherer{
 		logGathererOptions: options,
 
-		targetName: target.Name,
-		client:     client,
-		setLabels:  make(chan svcWithLabels),
-		entryCh:    make(chan servicelog.Entry),
-		pullers:    newPullerGroup(target.Name),
+		targetName:     target.Name,
+		targetType:     target.Type,
+		targetLocation: target.Location,
+		client:         client,
+		setLabels:      make(chan svcWithLabels),
+		entryCh:        make(chan servicelog.Entry),
+		pullers:        newPullerGroup(target.Name),
 	}
 	g.clientCtx, g.clientCancel = context.WithCancel(context.Background())
 	g.tomb.Go(g.loop)
@@ -140,6 +145,13 @@ func fillDefaultOptions(options *logGathererOptions) *logGathererOptions {
 		options.newClient = newLogClient
 	}
 	return options
+}
+
+// clientChanged reports whether the given target needs a different client
+// from the one this gatherer was created with. Labels and services aren't
+// included, as PlanChanged applies those to the existing client.
+func (g *logGatherer) clientChanged(target *plan.LogTarget) bool {
+	return target.Type != g.targetType || target.Location != g.targetLocation
 }
 
 // PlanChanged is called by the LogManager when the plan is changed, if this
