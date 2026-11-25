@@ -43,8 +43,11 @@ type ServiceManager struct {
 
 	checkWaiter CheckWaiter
 
-	stopCtx    context.Context
-	stopCancel context.CancelFunc
+	// tomb tracks latch-check work so that Stop can join it. Its keep-alive
+	// goroutine is started lazily, by the first service to latch (see
+	// okayWaitElapsed), and tombStarted records whether that has happened.
+	tomb        tomb.Tomb
+	tombStarted bool
 }
 
 // CheckWaiter blocks until a run of the named latch check succeeds
@@ -70,7 +73,6 @@ type Restarter interface {
 }
 
 func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Writer, restarter Restarter, logMgr LogManager) (*ServiceManager, error) {
-	ctx, cancel := context.WithCancel(context.Background())
 	manager := &ServiceManager{
 		state:         s,
 		services:      make(map[string]*serviceData),
@@ -78,8 +80,6 @@ func NewManager(s *state.State, runner *state.TaskRunner, serviceOutput io.Write
 		restarter:     restarter,
 		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
 		logMgr:        logMgr,
-		stopCtx:       ctx,
-		stopCancel:    cancel,
 	}
 
 	runner.AddHandler("start", manager.doStart, nil)
@@ -119,23 +119,21 @@ func (m *ServiceManager) Ensure() error {
 // Stop implements overlord.StateStopper, closing all service ring buffers
 // and stopping and waiting for latch check waiters during daemon shutdown.
 func (m *ServiceManager) Stop() {
-	m.stopCancel()
-
 	m.servicesLock.Lock()
-	var latchTombs []*tomb.Tomb
+	m.tomb.Kill(nil)
+	started := m.tombStarted
 	for _, s := range m.services {
 		if s.logs != nil {
 			_ = s.logs.Close()
 		}
-		if s.latchTomb != nil {
-			latchTombs = append(latchTombs, s.latchTomb)
-		}
 	}
 	m.servicesLock.Unlock()
 
-	// Do not hold servicesLock while waiting.
-	for _, latchTomb := range latchTombs {
-		_ = latchTomb.Wait()
+	if started {
+		// Do not hold servicesLock while waiting. Only wait if the
+		// keep-alive was started, as a tomb that never ran a goroutine
+		// never dies.
+		_ = m.tomb.Wait()
 	}
 }
 

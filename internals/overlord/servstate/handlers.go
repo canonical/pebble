@@ -580,25 +580,42 @@ func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 			return nil
 		}
 
-		if s.manager.stopCtx.Err() != nil {
+		if !s.manager.tomb.Alive() {
 			// Manager is stopping, don't start latch waiters it won't join
 			return nil
+		}
+		if !s.manager.tombStarted {
+			// Keep the manager tomb alive until Stop. Without this, the
+			// tomb would die as soon as its last latch goroutine finished,
+			// and later services could never latch. It is started lazily
+			// so that managers that never latch (and are never stopped,
+			// as in many tests) don't leave a parked goroutine behind.
+			s.manager.tombStarted = true
+			s.manager.tomb.Go(func() error {
+				<-s.manager.tomb.Dying()
+				return nil
+			})
 		}
 
 		s.transition(stateLatching)
 		logger.Noticef("Service %q latching, waiting for checks: %s",
 			s.config.Name, strings.Join(slices.Sorted(maps.Keys(latchChecks)), ", "))
 
-		// Each check is waited for in its own goroutine. Because the waits
-		// only start now, every check run that can latch the service starts
-		// after the okay delay has elapsed.
-		latchTomb, ctx := tomb.WithContext(s.manager.stopCtx)
+		// Each check is waited for in its own goroutine. Because the
+		// waits only start now, every check run that can latch the
+		// service starts after the okay delay has elapsed.
+		latchTomb, ctx := tomb.WithContext(s.manager.tomb.Context(nil))
 		s.latchTomb = latchTomb
-		// Pass the locally-created tomb address so that a `latch` run
-		// from an earlier bring-up cannot operate on a newer tomb
-		// stored in s.latchTomb.
 		latchTomb.Go(func() error {
-			return s.latch(ctx, latchTomb, latchChecks)
+			// Pass the locally-created tomb address so that a `latch`
+			// run from an earlier bring-up cannot operate on a newer
+			// tomb stored in s.latchTomb.
+			s.latch(ctx, latchTomb, latchChecks)
+			return nil
+		})
+		s.manager.tomb.Go(func() error {
+			_ = latchTomb.Wait()
+			return nil
 		})
 
 	default:
@@ -613,37 +630,42 @@ func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 // latchTomb, keeping the tomb alive while the latch check goroutines
 // are registered, so that the tomb cannot become dead before all of the
 // checks have been added.
-func (s *serviceData) latch(ctx context.Context, latchTomb *tomb.Tomb, checks map[string]struct{}) error {
-	results := make(chan bool, len(checks))
+func (s *serviceData) latch(ctx context.Context, latchTomb *tomb.Tomb, checks map[string]struct{}) {
+	results := make(chan bool)
 	for check := range checks {
 		latchTomb.Go(func() error {
-			results <- s.waitLatchCheck(ctx, s.manager.checkWaiter, check)
+			select {
+			case results <- s.waitLatchCheck(ctx, s.manager.checkWaiter, check):
+			case <-latchTomb.Dying():
+			}
 			return nil
 		})
 	}
 
-	allPassed := true
 	for range checks {
-		if !<-results {
-			allPassed = false
-			latchTomb.Kill(nil)
-			break
+		select {
+		case passed := <-results:
+			if !passed {
+				latchTomb.Kill(nil)
+				return
+			}
+		case <-latchTomb.Dying():
+			return
 		}
 	}
 
-	// The context is canceled whenever the service leaves
-	// stateLatching. Checking it under servicesLock avoids a race
-	// with the state transition.
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
-	if ctx.Err() != nil || !allPassed {
-		return nil
+	// Another path (exit, stop, abort) may have taken the service out
+	// of latching after the last result arrived, or a newer bring-up
+	// may be latching.
+	if s.state != stateLatching || s.latchTomb != latchTomb {
+		return
 	}
 
 	s.started <- nil
 	s.transition(stateRunning)
 	logger.Noticef("Service %q latched", s.config.Name)
-	return nil
 }
 
 // exited is called when the service's process exits.
@@ -1018,15 +1040,15 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 // stateLatching.
 func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, check string) bool {
 	err := waiter(ctx, check)
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
 
 	// Take the services lock to read s.config.Name for logging, as
 	// serviceForStart and Replan can replace s.config concurrently.
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
-	if ctx.Err() != nil {
-		return false
-	}
 	var notFound *checkstate.ChecksNotFound
 	if errors.As(err, &notFound) {
 		// Plan validation guarantees that the current plan cannot

@@ -186,6 +186,11 @@ func (s *S) TearDownTest(c *C) {
 
 	// General test cleanup
 	s.BaseTest.TearDownTest(c)
+	if s.manager != nil {
+		// Stop after the cleanup handlers, as they release fake latch
+		// check waiters that would otherwise block Stop indefinitely.
+		s.manager.Stop()
+	}
 	s.runner.Stop()
 	err := reaper.Stop()
 	if err != nil {
