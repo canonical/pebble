@@ -16,6 +16,7 @@ package checkstate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -706,13 +707,12 @@ func (m *CheckManager) WaitForSuccess(ctx context.Context, name string) error {
 		}
 		chk := newChecker(mergeServiceContext(currentPlan, checkConfig))
 		err := runCheck(ctx, chk, checkConfig.Timeout.Value)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
 		if err == nil {
 			return nil
+		} else if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+			return ctx.Err()
 		}
-		logger.Debugf("Check %q failed while waiting for success: %s", name, errorDetails(err))
+		logger.Noticef("Check %q failed while waiting for success: %s", name, errorDetails(err))
 
 		select {
 		case <-time.After(checkConfig.Period.Value):
