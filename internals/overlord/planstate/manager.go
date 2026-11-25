@@ -62,25 +62,24 @@ func NewManager(layersDir string) (*PlanManager, error) {
 // directory, the base plan (or an empty plan) is announced to change subscribers.
 func (m *PlanManager) Load(base *plan.Plan) (err error) {
 	m.planLock.Lock()
-
-	var p *plan.Plan
+	var newPlan *plan.Plan
 	wasLoaded := m.isLoaded
-	defer func() {
-		m.planLock.Unlock()
+	defer m.acquireChangeTicket()(func() {
 		if err == nil && !wasLoaded {
-			m.callChangeListeners(p)
+			m.callChangeListeners(newPlan)
 		}
-	}()
+	})
+	defer m.planLock.Unlock()
 
 	if m.isLoaded {
 		return nil
 	}
 
-	p, err = plan.ReadDir(m.layersDir, base)
+	newPlan, err = plan.ReadDir(m.layersDir, base)
 	if err != nil {
 		return err
 	}
-	m.plan = p
+	m.plan = newPlan
 	m.isLoaded = true
 	return nil
 }
