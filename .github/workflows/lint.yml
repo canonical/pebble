@@ -19,7 +19,7 @@ jobs:
       with:
         go-version-file: 'go.mod'
 
-    # Build against a newer x/tools so it can read Go 1.27.3 export data.
+    # Build against a newer x/tools so it can read Go 1.27.4 export data.
     # Once staticcheck releases a fix (https://github.com/dominikh/go-tools/issues/1832),
     # replace this step with: go install honnef.co/go/tools/cmd/staticcheck@<fixed version>
     # The Go version is taken from go.mod so this also works on branches pinned to

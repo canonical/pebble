@@ -376,6 +376,157 @@ func (s *iteratorSuite) TestHeadIteratorReplayLines(c *C) {
 	c.Assert(buffer.String(), Equals, "fourth\nfifth\n")
 }
 
+// reverseLines reads a line per call to Next using WriteTo.
+func reverseLines(c *C, it servicelog.Iterator) []string {
+	var lines []string
+	for it.Next(nil) {
+		buffer := &bytes.Buffer{}
+		_, err := io.Copy(buffer, it)
+		c.Assert(err, IsNil)
+		lines = append(lines, buffer.String())
+	}
+	return lines
+}
+
+func readAll(it servicelog.Iterator) string {
+	buffer := &bytes.Buffer{}
+	for it.Next(nil) {
+		io.Copy(buffer, it)
+	}
+	return buffer.String()
+}
+
+func (s *iteratorSuite) TestReverse(c *C) {
+	rb := servicelog.NewRingBuffer(200)
+	fmt.Fprintln(rb, "first")
+	fmt.Fprintln(rb, "second")
+	fmt.Fprint(rb, "third")
+	it := rb.HeadIterator(0)
+	defer it.Close()
+	fmt.Fprintln(rb, " continued")
+	fmt.Fprintln(rb, "fourth")
+
+	it.Reverse()
+	c.Assert(reverseLines(c, it), DeepEquals, []string{"third", "second\n", "first\n"})
+	c.Assert(it.Next(nil), Equals, false)
+
+	// Going forward again reads everything from the start of the first line.
+	it.Forward()
+	c.Assert(readAll(it), Equals, "first\nsecond\nthird continued\nfourth\n")
+}
+
+func (s *iteratorSuite) TestReverseThenForward(c *C) {
+	rb := servicelog.NewRingBuffer(200)
+	fmt.Fprintln(rb, "first")
+	fmt.Fprintln(rb, "second")
+	fmt.Fprintln(rb, "third")
+	it := rb.HeadIterator(0)
+	defer it.Close()
+
+	it.Reverse()
+	buffer := &bytes.Buffer{}
+	c.Assert(it.Next(nil), Equals, true)
+	io.Copy(buffer, it)
+	c.Assert(buffer.String(), Equals, "third\n")
+	c.Assert(it.Next(nil), Equals, true)
+	buffer.Reset()
+	io.Copy(buffer, it)
+	c.Assert(buffer.String(), Equals, "second\n")
+
+	// "second" was read, but Next hasn't moved past it, so forward iteration
+	// starts at "third".
+	it.Forward()
+	c.Assert(readAll(it), Equals, "third\n")
+
+	// New data is read as normal.
+	fmt.Fprintln(rb, "fourth")
+	c.Assert(readAll(it), Equals, "fourth\n")
+}
+
+func (s *iteratorSuite) TestReverseRead(c *C) {
+	rb := servicelog.NewRingBuffer(200)
+	fmt.Fprintln(rb, "first")
+	fmt.Fprintln(rb, "second")
+	it := rb.HeadIterator(0)
+	defer it.Close()
+	it.Reverse()
+
+	// Read stops at the end of each line, returning io.EOF.
+	var lines []string
+	for it.Next(nil) {
+		var line []byte
+		buf := make([]byte, 4)
+		for {
+			n, err := it.Read(buf)
+			line = append(line, buf[:n]...)
+			if err == io.EOF {
+				break
+			}
+			c.Assert(err, IsNil)
+		}
+		lines = append(lines, string(line))
+	}
+	c.Assert(lines, DeepEquals, []string{"second\n", "first\n"})
+
+	n, err := it.Read(make([]byte, 4))
+	c.Assert(n, Equals, 0)
+	c.Assert(err, Equals, io.EOF)
+}
+
+func (s *iteratorSuite) TestReverseEmpty(c *C) {
+	rb := servicelog.NewRingBuffer(10)
+	it := rb.HeadIterator(0)
+	defer it.Close()
+	it.Reverse()
+	c.Assert(it.Next(nil), Equals, false)
+}
+
+func (s *iteratorSuite) TestReverseWrapped(c *C) {
+	rb := servicelog.NewRingBuffer(16)
+	fmt.Fprintln(rb, "aaaaa")
+	fmt.Fprintln(rb, "bbbbb")
+	fmt.Fprintln(rb, "ccccc") // discards "aa", and wraps in the middle of this line
+	it := rb.HeadIterator(0)
+	defer it.Close()
+
+	// The partial line left at the tail is not returned.
+	it.Reverse()
+	c.Assert(reverseLines(c, it), DeepEquals, []string{"ccccc\n", "bbbbb\n"})
+}
+
+func (s *iteratorSuite) TestReverseDiscarded(c *C) {
+	rb := servicelog.NewRingBuffer(12)
+	fmt.Fprintln(rb, "one")
+	fmt.Fprintln(rb, "two")
+	it := rb.HeadIterator(0)
+	defer it.Close()
+	it.Reverse()
+
+	c.Assert(it.Next(nil), Equals, true)
+	buffer := &bytes.Buffer{}
+	_, err := io.Copy(buffer, it)
+	c.Assert(err, IsNil)
+	c.Assert(buffer.String(), Equals, "two\n")
+
+	// Overwrite the remaining lines, so iteration stops.
+	fmt.Fprintln(rb, "three")
+	fmt.Fprintln(rb, "four")
+	c.Assert(it.Next(nil), Equals, false)
+
+	// Going forward, the iterator has been truncated.
+	it.Forward()
+	c.Assert(readAll(it), Equals, "\n(... output truncated ...)\n\nthree\nfour\n")
+}
+
+func (s *iteratorSuite) TestReverseClosed(c *C) {
+	rb := servicelog.NewRingBuffer(12)
+	fmt.Fprintln(rb, "one")
+	it := rb.HeadIterator(0)
+	it.Reverse()
+	c.Assert(it.Close(), IsNil)
+	c.Assert(it.Next(nil), Equals, false)
+}
+
 func (s *iteratorSuite) TestEOF(c *C) {
 	rb := servicelog.NewRingBuffer(200)
 	fmt.Fprintln(rb, "first")
