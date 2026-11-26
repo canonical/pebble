@@ -709,7 +709,9 @@ func (m *CheckManager) WaitForSuccess(ctx context.Context, name string) error {
 		err := runCheck(ctx, chk, checkConfig.Timeout.Value)
 		if err == nil {
 			return nil
-		} else if errors.Is(err, context.Canceled) && ctx.Err() != nil {
+		}
+
+		if errors.Is(err, context.Canceled) && ctx.Err() != nil {
 			return ctx.Err()
 		}
 		logger.Noticef("Check %q failed while waiting for success: %s", name, errorDetails(err))

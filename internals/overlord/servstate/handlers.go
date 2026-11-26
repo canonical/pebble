@@ -182,10 +182,23 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		// Started successfully (ran for small amount of time without exiting).
 		return nil
 	case <-tomb.Dying():
+		// A sender may be blocked on startedCh while holding the
+		// services lock.
+		go func() {
+			<-startedCh
+		}()
 		// User tried to abort the start, sending SIGKILL to process is about
 		// the best we can do.
 		m.servicesLock.Lock()
 		defer m.servicesLock.Unlock()
+
+		switch service.state {
+		// If the service is still starting or latching, no result has
+		// been sent, and none will be after stopping, so send this
+		// bring-up's result here.
+		case stateStarting, stateLatching:
+			service.started <- errors.New("start aborted")
+		}
 		service.transition(stateStopped)
 		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
@@ -366,7 +379,7 @@ func (s *serviceData) start() (<-chan error, error) {
 
 	switch s.state {
 	case stateInitial:
-		s.started = make(chan error, 1)
+		s.started = make(chan error)
 		s.broughtUp = false
 		err := s.startInternal()
 		if err != nil {
@@ -894,10 +907,9 @@ func (s *serviceData) backoffTimeElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
-		// Fresh channel per bring-up, so that a stale value from an
-		// earlier bring-up with no receiver cannot block this one's
-		// send.
-		s.started = make(chan error, 1)
+		// Fresh channel per bring-up so `okayWaitElapsed` can exit
+		// early on stale timer runs.
+		s.started = make(chan error)
 		err := s.startInternal()
 		if err != nil {
 			return err
@@ -906,6 +918,11 @@ func (s *serviceData) backoffTimeElapsed() error {
 			s.transition(stateStarting)
 			startedCh := s.started
 			time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed(startedCh)) })
+			// No `doStart` waits on a backoff bring-up, so start a
+			// goroutine to consume this bring-up's result.
+			go func() {
+				<-startedCh
+			}()
 		} else {
 			s.transition(stateRunning)
 		}
