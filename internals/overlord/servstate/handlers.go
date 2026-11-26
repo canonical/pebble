@@ -617,7 +617,7 @@ func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 		// Each check is waited for in its own goroutine. Because the
 		// waits only start now, every check run that can latch the
 		// service starts after the okay delay has elapsed.
-		latchTomb, ctx := tomb.WithContext(s.manager.tomb.Context(nil))
+		latchTomb, ctx := tomb.WithContext(s.manager.tomb.Context(context.Background()))
 		s.latchTomb = latchTomb
 		latchTomb.Go(func() error {
 			// Pass the locally-created tomb address so that a `latch`
