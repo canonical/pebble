@@ -212,13 +212,17 @@ func pendingScheduleTask(chg *state.Change) *state.Task {
 }
 
 // scheduleHasPendingTask reports whether chg already has a task (other than
-// exclude) that isn't Ready yet.
+// exclude) tracking a following occurrence, i.e. one still waiting for its
+// scheduled time (or dormant). A previous occurrence that's still Doing (for
+// example, waiting out the okay delay after starting the service) doesn't
+// count, as it has already queued exclude as its following occurrence.
 func scheduleHasPendingTask(chg *state.Change, exclude *state.Task) bool {
 	for _, t := range chg.Tasks() {
 		if t.ID() == exclude.ID() {
 			continue
 		}
-		if !t.Status().Ready() {
+		status := t.Status()
+		if (status == state.DoStatus || status == state.WaitStatus) && t.Has(scheduleDetailsAttr) {
 			return true
 		}
 	}
@@ -258,19 +262,25 @@ func pruneScheduleHistory(chg *state.Change, reserve int) {
 // caller should not go on to actually start the service (because its schedule
 // was removed or superseded, the scheduled start was missed by too long, or
 // the service is already running).
-func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err error) {
+//
+// If the start should proceed, the returned occurrence (non-nil only for a
+// scheduled start) is the one this task has been checked against. The plan
+// can still change after this returns, so the caller must have the occurrence
+// re-authorized at the point the start is initiated (see doStart).
+func (m *ServiceManager) prepareScheduledStart(task *state.Task) (occurrence *scheduleDetails, skip bool, err error) {
 	if !task.Has(scheduleDetailsAttr) {
-		return false, nil
+		return nil, false, nil
 	}
 	var details scheduleDetails
 	if err := task.Get(scheduleDetailsAttr, &details); err != nil {
-		return false, fmt.Errorf("cannot get service-schedule-details from task: %w", err)
+		return nil, false, fmt.Errorf("cannot get service-schedule-details from task: %w", err)
 	}
 
 	// A plan update cannot reconcile a task that is already Doing, so check
-	// the latest plan here before carrying its schedule forward or starting
-	// the service. PlanChanged publishes the plan before taking the state
-	// lock, which makes this check sufficient to close that race.
+	// the latest plan here before carrying its schedule forward. PlanChanged
+	// publishes the plan before taking the state lock, so an update this
+	// check misses will go on to reconcile the following occurrence queued
+	// below; the occurrence being processed is re-authorized by doStart.
 	currentPlan := m.getPlan()
 	config, inPlan := currentPlan.Services[details.ServiceName]
 	if !inPlan || config.Schedule == "" {
@@ -287,7 +297,7 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 			}
 			chg.SetStatus(state.DoneStatus)
 		}
-		return true, nil
+		return nil, true, nil
 	}
 
 	oldSchedule := details.Schedule
@@ -336,13 +346,13 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 	if scheduleChanged {
 		task.Logf("Schedule for service %q changed from %q to %q; skipped scheduled start at %s; %s.",
 			details.ServiceName, oldSchedule, details.Schedule, missed.Format(time.RFC3339), followingMsg)
-		return true, nil
+		return nil, true, nil
 	}
 
 	if !fire {
 		task.Logf("Skipped scheduled start at %s for service %q (missed by too long); %s.",
 			missed.Format(time.RFC3339), details.ServiceName, followingMsg)
-		return true, nil
+		return nil, true, nil
 	}
 
 	if now.Sub(missed) > scheduleMissThreshold {
@@ -351,10 +361,34 @@ func (m *ServiceManager) prepareScheduledStart(task *state.Task) (skip bool, err
 	}
 	if m.serviceIsActive(details.ServiceName) {
 		task.Logf("Service %q is already running; %s.", details.ServiceName, followingMsg)
-		return true, nil
+		return nil, true, nil
 	}
 
-	return false, nil
+	return &details, false, nil
+}
+
+// scheduledStartPrepared is called from doStart, with no locks held, after a
+// scheduled occurrence has passed prepareScheduledStart and before the start
+// is initiated. It can be faked during testing.
+var scheduledStartPrepared = func() {}
+
+// staleScheduledStart reports why a scheduled occurrence must not start under
+// the given plan config for its service (nil if the service is not in the
+// plan), or returns an empty string if the occurrence is still current.
+func staleScheduledStart(config *plan.Service, occurrence *scheduleDetails) string {
+	at := occurrence.Next.Format(time.RFC3339)
+	switch {
+	case config == nil:
+		return fmt.Sprintf("Service %q unscheduled: it was removed from the plan; skipped scheduled start at %s.",
+			occurrence.ServiceName, at)
+	case config.Schedule == "":
+		return fmt.Sprintf("Service %q unscheduled: its schedule was removed from the plan; skipped scheduled start at %s.",
+			occurrence.ServiceName, at)
+	case config.Schedule != occurrence.Schedule:
+		return fmt.Sprintf("Schedule for service %q changed from %q to %q; skipped scheduled start at %s.",
+			occurrence.ServiceName, occurrence.Schedule, config.Schedule, at)
+	}
+	return ""
 }
 
 // scheduleChanged is called from PlanChanged to create, update, or retire

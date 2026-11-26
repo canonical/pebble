@@ -126,3 +126,13 @@ func FakeTimeNow(t time.Time) (restore func()) {
 		timeNow = old
 	}
 }
+
+// FakeScheduledStartPrepared sets a function that's called after a scheduled
+// start has been checked against the plan, but before it's initiated.
+func FakeScheduledStartPrepared(f func()) (restore func()) {
+	old := scheduledStartPrepared
+	scheduledStartPrepared = f
+	return func() {
+		scheduledStartPrepared = old
+	}
+}

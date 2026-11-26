@@ -131,9 +131,14 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 
 	// If this task is tracking a scheduled occurrence (see
 	// newScheduledStartTask), decide whether it should actually proceed, and
-	// queue up the following occurrence.
+	// queue up the following occurrence. If the start is going ahead, record
+	// the attempt up front, as the state lock cannot be taken while holding
+	// the plan lock below.
 	m.state.Lock()
-	skip, err := m.prepareScheduledStart(task)
+	occurrence, skip, err := m.prepareScheduledStart(task)
+	if err == nil && !skip {
+		task.Set("started", true)
+	}
 	m.state.Unlock()
 	if err != nil {
 		return err
@@ -141,10 +146,27 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	if skip {
 		return nil
 	}
+	if occurrence != nil {
+		scheduledStartPrepared()
+	}
 
-	currentPlan := m.getPlan()
+	// Hold the plan lock from reading the plan until the service has been
+	// started. PlanChanged publishes a new plan under the same lock, so a plan
+	// update lands either before the plan is read here (and is used), or after
+	// the service has been started. A scheduled occurrence is re-authorized
+	// against the plan here, as it may have changed since prepareScheduledStart.
+	m.planLock.Lock()
+	currentPlan := m.plan
 	config, ok := currentPlan.Services[request.Name]
+	if occurrence != nil {
+		if reason := staleScheduledStart(config, occurrence); reason != "" {
+			m.planLock.Unlock()
+			addTaskLog(task, reason)
+			return nil
+		}
+	}
 	if !ok {
+		m.planLock.Unlock()
 		return fmt.Errorf("cannot find service %q in plan", request.Name)
 	}
 
@@ -152,25 +174,27 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	if config.Workload != "" {
 		ws := currentPlan.Sections[workloads.WorkloadsField].(*workloads.WorkloadsSection)
 		if workload = ws.Entries[config.Workload]; workload == nil {
+			m.planLock.Unlock()
 			return fmt.Errorf("internal error: cannot find workload %q for service %q in plan", config.Workload, request.Name)
 		}
 	}
 
 	// Create the service object (or reuse the existing one by name).
 	service, taskLog := m.serviceForStart(config, workload)
-	if taskLog != "" {
-		addTaskLog(task, taskLog)
-	}
 	if service == nil {
+		m.planLock.Unlock()
+		if taskLog != "" {
+			addTaskLog(task, taskLog)
+		}
 		return nil
 	}
 
-	m.state.Lock()
-	task.Set("started", true)
-	m.state.Unlock()
-
 	// Start the service and transition to stateStarting.
 	err = service.start()
+	m.planLock.Unlock()
+	if taskLog != "" {
+		addTaskLog(task, taskLog)
+	}
 	if err != nil {
 		return err
 	}

@@ -569,6 +569,127 @@ services:
 	c.Check(logContains(logs, "unscheduled"), Equals, true)
 }
 
+// pauseScheduledStart makes the next scheduled start pause after it has been
+// checked against the plan, but before the start is initiated. It runs the
+// task runner until the start is paused there, and returns a function that
+// resumes it.
+func (s *S) pauseScheduledStart(c *C) (resume func()) {
+	paused := make(chan struct{})
+	resumed := make(chan struct{})
+	restore := servstate.FakeScheduledStartPrepared(func() {
+		close(paused)
+		<-resumed
+	})
+	s.AddCleanup(restore)
+
+	timeout := time.After(10 * time.Second)
+	for {
+		s.runner.Ensure()
+		select {
+		case <-paused:
+			return func() { close(resumed) }
+		case <-timeout:
+			close(resumed)
+			c.Fatal("timed out waiting for scheduled start to be checked against the plan")
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+func (s *S) TestScheduleChangedAfterCheckDoesNotStart(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
+
+	// The occurrence passes the plan check and is about to start...
+	resume := s.pauseScheduledStart(c)
+
+	// ...when a plan update supersedes its schedule.
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: merge
+        schedule: 13:00-15:00
+`)
+	s.planChanged(c)
+
+	resume()
+	waitTaskReady(c, s.runner, s.st, task)
+
+	// The stale occurrence must not have started the service.
+	c.Check(s.manager.Config("sched1"), IsNil)
+	services, err := s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	c.Check(services[0].Current, Equals, servstate.StatusInactive)
+
+	// The following occurrence tracks the new schedule, in the same change.
+	c.Check(s.countChangesOfKind(c, servstate.ServiceScheduleKind), Equals, 1)
+	details := s.scheduleDetails(c, chg)
+	c.Check(details.Schedule, Equals, "13:00-15:00")
+
+	s.st.Lock()
+	taskStatus := task.Status()
+	changeReady := chg.IsReady()
+	logs := task.Log()
+	s.st.Unlock()
+	c.Check(taskStatus, Equals, state.DoneStatus)
+	c.Check(changeReady, Equals, false)
+	c.Check(logContains(logs, `changed from "9:00-11:00" to "13:00-15:00"; skipped scheduled start`), Equals, true)
+}
+
+func (s *S) TestScheduleRemovedAfterCheckDoesNotStart(c *C) {
+	s.newServiceManager(c)
+	s.planAddLayer(c, scheduleTestLayer)
+	s.planChanged(c)
+
+	chg := s.scheduleChange(c)
+	c.Assert(chg, NotNil)
+	task := s.scheduleTask(c, chg)
+	s.setScheduleNext(c, chg, time.Now().Add(-time.Second))
+
+	resume := s.pauseScheduledStart(c)
+
+	s.planAddLayer(c, `
+services:
+    sched1:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+`)
+	s.planChanged(c)
+
+	resume()
+	waitTaskReady(c, s.runner, s.st, task)
+
+	c.Check(s.manager.Config("sched1"), IsNil)
+	services, err := s.manager.Services([]string{"sched1"})
+	c.Assert(err, IsNil)
+	c.Assert(services, HasLen, 1)
+	c.Check(services[0].Current, Equals, servstate.StatusInactive)
+
+	// The schedule is retired, including the occurrence queued to follow the
+	// stale one.
+	c.Check(s.scheduleChange(c), IsNil)
+	s.st.Lock()
+	changeStatus := chg.Status()
+	pending := 0
+	for _, t := range chg.Tasks() {
+		if !t.Status().Ready() {
+			pending++
+		}
+	}
+	logs := task.Log()
+	s.st.Unlock()
+	c.Check(changeStatus, Equals, state.DoneStatus)
+	c.Check(pending, Equals, 0)
+	c.Check(logContains(logs, "unscheduled"), Equals, true)
+}
+
 // -- Ensure behaviour --
 
 func (s *S) TestEnsureStartsServiceOnSchedule(c *C) {
