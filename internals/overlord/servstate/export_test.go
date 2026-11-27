@@ -23,6 +23,18 @@ import (
 	"github.com/canonical/pebble/internals/servicelog"
 )
 
+const (
+	ServiceScheduleKind = serviceScheduleKind
+	ScheduleDetailsAttr = scheduleDetailsAttr
+	MaxScheduleHistory  = maxScheduleHistory
+)
+
+var (
+	ScheduleShouldRunNow  = scheduleShouldRunNow
+	NextScheduleTime      = nextScheduleTime
+	NextScheduleTimeAfter = nextScheduleTimeAfter
+)
+
 var CalculateNextBackoff = calculateNextBackoff
 var GetAction = getAction
 
@@ -112,5 +124,15 @@ func FakeTimeNow(t time.Time) (restore func()) {
 	}
 	return func() {
 		timeNow = old
+	}
+}
+
+// FakeScheduledStartPrepared sets a function that's called after a scheduled
+// start has been checked against the plan, but before it's initiated.
+func FakeScheduledStartPrepared(f func()) (restore func()) {
+	old := scheduledStartPrepared
+	scheduledStartPrepared = f
+	return func() {
+		scheduledStartPrepared = old
 	}
 }

@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+var timeNow = time.Now
+
 // start-of-day
 func sod(t time.Time) time.Time {
 	y, m, d := t.Date()
@@ -29,7 +31,7 @@ func sod(t time.Time) time.Time {
 // consumption.
 // Human(t)  --> "today at 07:47"
 func Human(then time.Time) string {
-	return humanTimeSince(then.Local(), time.Now().Local(), 60)
+	return humanTimeSince(then.Local(), timeNow().Local(), 60)
 }
 
 func delta(then, now time.Time) int {
