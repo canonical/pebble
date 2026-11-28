@@ -51,6 +51,13 @@ func (m *LogManager) PlanChanged(pl *plan.Plan) {
 
 	for _, target := range pl.LogTargets {
 		gatherer := m.gatherers[target.Name]
+		if gatherer != nil && gatherer.clientChanged(target) {
+			// The client still sends to the old type or location, so replace
+			// the gatherer. The old one flushes its buffered logs as it stops.
+			go gatherer.Stop()
+			delete(m.gatherers, target.Name)
+			gatherer = nil
+		}
 		if gatherer == nil {
 			// Create new gatherer
 			var err error

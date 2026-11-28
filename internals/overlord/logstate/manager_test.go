@@ -338,3 +338,94 @@ func (l *labelStore) waitLabels(c *C) {
 		c.Fatal("timed out waiting for labels to be set")
 	}
 }
+
+func (s *managerSuite) TestPlanChangeTargetClient(c *C) {
+	// One channel of flushed logs per (type, location) pair, so we can see
+	// which client the logs were sent with.
+	var mu sync.Mutex
+	received := map[string]chan []servicelog.Entry{}
+	receivedFor := func(typ plan.LogTargetType, location string) chan []servicelog.Entry {
+		mu.Lock()
+		defer mu.Unlock()
+		key := string(typ) + " " + location
+		if received[key] == nil {
+			received[key] = make(chan []servicelog.Entry, 10)
+		}
+		return received[key]
+	}
+
+	m := NewLogManager()
+	defer m.Stop()
+	m.newGatherer = func(t *plan.LogTarget) (*logGatherer, error) {
+		return newLogGathererInternal(t, &logGathererOptions{
+			bufferTimeout: 1 * time.Millisecond,
+			newClient: func(t *plan.LogTarget) (logClient, error) {
+				return &testClient{bufferSize: 5, sendCh: receivedFor(t.Type, t.Location)}, nil
+			},
+		})
+	}
+
+	svc1 := newTestService("svc1")
+	planWith := func(target *plan.LogTarget) *plan.Plan {
+		target.Name = "tgt1"
+		return &plan.Plan{
+			Services:   map[string]*plan.Service{"svc1": svc1.config},
+			LogTargets: map[string]*plan.LogTarget{"tgt1": target},
+		}
+	}
+	waitLogs := func(typ plan.LogTargetType, location string, expected []string) {
+		var logs []servicelog.Entry
+		for len(logs) < len(expected) {
+			select {
+			case batch := <-receivedFor(typ, location):
+				logs = append(logs, batch...)
+			case <-time.After(1 * time.Second):
+				c.Fatalf("timeout waiting for logs sent to %s %s", typ, location)
+			}
+		}
+		checkLogs(c, logs, expected)
+	}
+
+	m.PlanChanged(planWith(&plan.LogTarget{
+		Type:     plan.LokiTarget,
+		Location: "http://old:3100",
+		Services: []string{"all"},
+	}))
+	m.ServiceStarted(svc1.config, svc1.ringBuffer)
+	svc1.writeLog("log line #1")
+	waitLogs(plan.LokiTarget, "http://old:3100", []string{"log line #1"})
+	gatherer := m.gatherers["tgt1"]
+
+	// Changing only the labels or services keeps the gatherer and its client.
+	m.PlanChanged(planWith(&plan.LogTarget{
+		Type:     plan.LokiTarget,
+		Location: "http://old:3100",
+		Services: []string{"svc1"},
+		Labels:   map[string]string{"foo": "bar"},
+	}))
+	c.Assert(m.gatherers["tgt1"] == gatherer, Equals, true)
+	svc1.writeLog("log line #2")
+	waitLogs(plan.LokiTarget, "http://old:3100", []string{"log line #2"})
+
+	// Changing the location needs a new client. Like a newly added target, the
+	// new gatherer starts reading from the tail of the service's log buffer.
+	m.PlanChanged(planWith(&plan.LogTarget{
+		Type:     plan.LokiTarget,
+		Location: "https://new:3100",
+		Services: []string{"all"},
+	}))
+	svc1.writeLog("log line #3")
+	waitLogs(plan.LokiTarget, "https://new:3100", []string{"log line #1", "log line #2", "log line #3"})
+	c.Assert(m.gatherers["tgt1"] != gatherer, Equals, true)
+	gatherer = m.gatherers["tgt1"]
+
+	// So does changing the type.
+	m.PlanChanged(planWith(&plan.LogTarget{
+		Type:     plan.OpenTelemetryTarget,
+		Location: "https://new:3100",
+		Services: []string{"all"},
+	}))
+	svc1.writeLog("log line #4")
+	waitLogs(plan.OpenTelemetryTarget, "https://new:3100", []string{"log line #1", "log line #2", "log line #3", "log line #4"})
+	c.Assert(m.gatherers["tgt1"] != gatherer, Equals, true)
+}
