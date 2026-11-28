@@ -616,6 +616,58 @@ func (ps *planSuite) TestAppendLayersWithInner(c *C) {
 	}
 }
 
+func (ps *planSuite) TestAppendLayersRootAndSubDirSamePrefix(c *C) {
+	plan.RegisterSectionExtension(testField, testExtension{})
+	defer plan.UnregisterSectionExtension(testField)
+
+	type labelOrder struct {
+		label string
+		order int
+	}
+	tests := []struct {
+		summary string
+		labels  []string
+		result  []labelOrder
+	}{{
+		summary: "root layer after sub-directory with the same name",
+		labels:  []string{"foo/bar", "foo"},
+		result:  []labelOrder{{"foo/bar", 1000}, {"foo", 2000}},
+	}, {
+		summary: "sub-directory after root layer with the same name",
+		labels:  []string{"foo", "foo/bar"},
+		result:  []labelOrder{{"foo", 1000}, {"foo/bar", 2001}},
+	}, {
+		summary: "root layer after sub-directory with the same name, not last",
+		labels:  []string{"foo/bar", "baz", "foo"},
+		result:  []labelOrder{{"foo/bar", 1000}, {"baz", 2000}, {"foo", 3000}},
+	}, {
+		summary: "sub-directory still matches its own entries",
+		labels:  []string{"foo", "foo/bar", "foo/baz"},
+		result:  []labelOrder{{"foo", 1000}, {"foo/bar", 2001}, {"foo/baz", 2002}},
+	}}
+
+	for _, test := range tests {
+		c.Logf("Test: %s", test.summary)
+		var err error
+		ps.planMgr, err = planstate.NewManager(c.MkDir())
+		c.Assert(err, IsNil)
+
+		// None of these require inserting, so inner=false must succeed.
+		for _, label := range test.labels {
+			layer := ps.parseLayer(c, 0, label, "")
+			err = ps.planMgr.AppendLayer(layer, false)
+			c.Assert(err, IsNil)
+		}
+
+		plan := ps.planMgr.Plan()
+		c.Assert(plan.Layers, HasLen, len(test.result))
+		for i, expected := range test.result {
+			c.Check(plan.Layers[i].Label, Equals, expected.label)
+			c.Check(plan.Layers[i].Order, Equals, expected.order)
+		}
+	}
+}
+
 func (ps *planSuite) TestAppendWorkloadLayer(c *C) {
 	plan.RegisterSectionExtension(workloads.WorkloadsField, &workloads.WorkloadsSectionExtension{})
 	defer plan.UnregisterSectionExtension(workloads.WorkloadsField)
