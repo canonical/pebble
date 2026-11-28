@@ -66,6 +66,36 @@ func (cs *clientSuite) TestNoticeInvalidID(c *C) {
 	c.Assert(err, ErrorMatches, "invalid notice ID.*")
 }
 
+func (cs *clientSuite) TestNoticeInvalidExpireAfter(c *C) {
+	cs.rsp = `{"type": "sync", "result": {
+		"id": "123",
+		"type": "custom",
+		"key": "a.b/c",
+		"first-occurred": "2023-09-05T15:43:00.123Z",
+		"last-occurred": "2023-09-05T17:43:00.567Z",
+		"last-repeated": "2023-09-05T16:43:00Z",
+		"occurrences": 7,
+		"expire-after": "bogus"
+	}}`
+	_, err := cs.cli.Notice("123")
+	c.Assert(err, ErrorMatches, `cannot parse notice expire-after "bogus": .*`)
+}
+
+func (cs *clientSuite) TestNoticeInvalidRepeatAfter(c *C) {
+	cs.rsp = `{"type": "sync", "result": {
+		"id": "123",
+		"type": "custom",
+		"key": "a.b/c",
+		"first-occurred": "2023-09-05T15:43:00.123Z",
+		"last-occurred": "2023-09-05T17:43:00.567Z",
+		"last-repeated": "2023-09-05T16:43:00Z",
+		"occurrences": 7,
+		"repeat-after": "bogus"
+	}}`
+	_, err := cs.cli.Notice("123")
+	c.Assert(err, ErrorMatches, `cannot parse notice repeat-after "bogus": .*`)
+}
+
 func (cs *clientSuite) TestNotices(c *C) {
 	cs.rsp = `{"type": "sync", "result": [{
 		"id":   "1",
@@ -117,6 +147,21 @@ func (cs *clientSuite) TestNotices(c *C) {
 		LastRepeated:  time.Date(2023, 9, 6, 16, 43, 0, 0, time.UTC),
 		Occurrences:   1,
 	}})
+}
+
+func (cs *clientSuite) TestNoticesInvalidDuration(c *C) {
+	cs.rsp = `{"type": "sync", "result": [{
+		"id":   "1",
+		"type": "custom",
+		"key": "a.b/c",
+		"first-occurred": "2023-09-05T15:43:00.123Z",
+		"last-occurred": "2023-09-05T17:43:00.567Z",
+		"last-repeated": "2023-09-05T16:43:00Z",
+		"occurrences": 7,
+		"repeat-after": "bogus"
+	}]}`
+	_, err := cs.cli.Notices(&client.NoticesOptions{})
+	c.Assert(err, ErrorMatches, `cannot parse notice repeat-after "bogus": .*`)
 }
 
 func (cs *clientSuite) TestNoticesFilters(c *C) {

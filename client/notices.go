@@ -193,7 +193,7 @@ func (client *Client) Notice(id string) (*Notice, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jsonNoticeToNotice(jn), nil
+	return jsonNoticeToNotice(jn)
 }
 
 // Notices returns a list of notices that match the filters given in opts,
@@ -214,7 +214,7 @@ func (client *Client) Notices(opts *NoticesOptions) ([]*Notice, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jsonNoticesToNotices(jns), err
+	return jsonNoticesToNotices(jns)
 }
 
 // WaitNotices returns a list of notices that match the filters given in opts,
@@ -242,7 +242,7 @@ func (client *Client) WaitNotices(ctx context.Context, serverTimeout time.Durati
 	if err != nil {
 		return nil, err
 	}
-	return jsonNoticesToNotices(jns), err
+	return jsonNoticesToNotices(jns)
 }
 
 func makeNoticesQuery(opts *NoticesOptions) url.Values {
@@ -268,17 +268,42 @@ func makeNoticesQuery(opts *NoticesOptions) url.Values {
 	return query
 }
 
-func jsonNoticesToNotices(jns []*jsonNotice) []*Notice {
+func jsonNoticesToNotices(jns []*jsonNotice) ([]*Notice, error) {
 	ns := make([]*Notice, len(jns))
 	for i, jn := range jns {
-		ns[i] = jsonNoticeToNotice(jn)
+		n, err := jsonNoticeToNotice(jn)
+		if err != nil {
+			return nil, err
+		}
+		ns[i] = n
 	}
-	return ns
+	return ns, nil
 }
 
-func jsonNoticeToNotice(jn *jsonNotice) *Notice {
+func jsonNoticeToNotice(jn *jsonNotice) (*Notice, error) {
 	n := &jn.Notice
-	n.ExpireAfter, _ = time.ParseDuration(jn.ExpireAfter)
-	n.RepeatAfter, _ = time.ParseDuration(jn.RepeatAfter)
-	return n
+	var err error
+	n.ExpireAfter, err = parseNoticeDuration("expire-after", jn.ExpireAfter)
+	if err != nil {
+		return nil, err
+	}
+	n.RepeatAfter, err = parseNoticeDuration("repeat-after", jn.RepeatAfter)
+	if err != nil {
+		return nil, err
+	}
+	return n, nil
+}
+
+// parseNoticeDuration parses a notice duration field such as "repeat-after"
+// or "expire-after". An empty string means the field wasn't set, which is
+// not an error.
+func parseNoticeDuration(field, s string) (time.Duration, error) {
+	if s == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("cannot parse notice %s %q: %w", field, s, err)
+	}
+	return d, nil
 }
