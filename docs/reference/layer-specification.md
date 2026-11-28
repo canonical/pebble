@@ -99,6 +99,20 @@ services:
         # - ignore: do nothing further
         on-failure: restart | shutdown | success-shutdown | ignore
 
+        # (Optional) Defines checks that must succeed before the service
+        # transitions from starting to running. Possible values are:
+        #
+        # - latch: wait for this check to succeed before the service is
+        #          considered running
+        # - ignore: do nothing further (the check is not waited on)
+        #
+        # Every check referenced here must be defined in the plan.
+        # Latching on a check with "startup: disabled" is allowed:
+        # the check runs only while the service is latching and is
+        # not started automatically.
+        on-check-success:
+            <check name>: latch | ignore
+
         # (Optional) Defines what happens when each of the named health checks
         # fail. Possible values are:
         #
@@ -106,6 +120,10 @@ services:
         # - shutdown: shut down and exit the Pebble daemon (with exit code 11)
         # - success-shutdown: shut down and exit Pebble with exit code 0
         # - ignore: do nothing further
+        #
+        # Check failures are ignored while the service is starting
+        # (during its startup delay and while waiting for its latch
+        # checks).
         on-check-failure:
             <check name>: restart | shutdown | success-shutdown | ignore
 

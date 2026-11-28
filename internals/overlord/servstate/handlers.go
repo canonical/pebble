@@ -1,6 +1,7 @@
 package servstate
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -8,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"os/user"
+	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -19,6 +22,7 @@ import (
 	"github.com/canonical/pebble/internals/logger"
 	"github.com/canonical/pebble/internals/metrics"
 	"github.com/canonical/pebble/internals/osutil"
+	"github.com/canonical/pebble/internals/overlord/checkstate"
 	"github.com/canonical/pebble/internals/overlord/restart"
 	"github.com/canonical/pebble/internals/overlord/state"
 	"github.com/canonical/pebble/internals/plan"
@@ -86,6 +90,7 @@ type serviceState string
 const (
 	stateInitial     serviceState = "initial"
 	stateStarting    serviceState = "starting"
+	stateLatching    serviceState = "latching"
 	stateRunning     serviceState = "running"
 	stateTerminating serviceState = "terminating"
 	stateKilling     serviceState = "killing"
@@ -110,6 +115,8 @@ type serviceData struct {
 	restarting   bool
 	currentSince time.Time
 	startCount   atomic.Int64
+	broughtUp    bool
+	latchTomb    *tomb.Tomb
 }
 
 func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
@@ -157,7 +164,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	m.state.Unlock()
 
 	// Start the service and transition to stateStarting.
-	err = service.start()
+	startedCh, err := service.start()
 	if err != nil {
 		return err
 	}
@@ -165,7 +172,7 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 	// Wait for a small amount of time, and if the service hasn't exited,
 	// consider it a success.
 	select {
-	case err := <-service.started:
+	case err := <-startedCh:
 		if err != nil {
 			addLastLogs(task, service.logs, config.Name)
 			// Do not remove the service so that Pebble will restart it if the action is restart,
@@ -175,10 +182,23 @@ func (m *ServiceManager) doStart(task *state.Task, tomb *tomb.Tomb) error {
 		// Started successfully (ran for small amount of time without exiting).
 		return nil
 	case <-tomb.Dying():
+		// A sender may be blocked on startedCh while holding the
+		// services lock.
+		go func() {
+			<-startedCh
+		}()
 		// User tried to abort the start, sending SIGKILL to process is about
 		// the best we can do.
 		m.servicesLock.Lock()
 		defer m.servicesLock.Unlock()
+
+		switch service.state {
+		// If the service is still starting or latching, no result has
+		// been sent, and none will be after stopping, so send this
+		// bring-up's result here.
+		case stateStarting, stateLatching:
+			service.started <- errors.New("start aborted")
+		}
 		service.transition(stateStopped)
 		err := syscall.Kill(-service.cmd.Process.Pid, syscall.SIGKILL)
 		if err != nil {
@@ -205,7 +225,6 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 			manager: m,
 			state:   stateInitial,
 			logs:    servicelog.NewRingBuffer(maxLogBytes),
-			started: make(chan error, 1),
 			stopped: make(chan error, 2), // enough for killTimeElapsed to send, and exit if it happens after
 		}
 		service.config = config.Copy()
@@ -223,7 +242,7 @@ func (m *ServiceManager) serviceForStart(config *plan.Service, workload *workloa
 	}
 
 	switch service.state {
-	case stateInitial, stateStarting, stateRunning:
+	case stateInitial, stateStarting, stateLatching, stateRunning:
 		return nil, fmt.Sprintf("Service %q already started.", config.Name)
 	case stateBackoff, stateStopped, stateExited:
 		// Start allowed when service is backing off, was stopped, or has exited.
@@ -330,29 +349,51 @@ func (s *serviceData) transitionRestarting(state serviceState, restarting bool) 
 		s.currentSince = time.Now()
 	}
 
+	if s.state == stateLatching && state != stateLatching {
+		// Stop waiting for latch checks. Every way out of stateLatching goes
+		// through here, with servicesLock held, which is what guarantees
+		// that a stale latch check result is never applied (see latch).
+		if s.latchTomb != nil {
+			s.latchTomb.Kill(nil)
+		}
+	}
+
+	if state == stateRunning {
+		s.broughtUp = true
+		if s.backoffNum > 0 {
+			s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
+		}
+	}
+
 	s.state = state
 	s.restarting = restarting
 }
 
-// start is called to transition from the initial state and start the service.
-func (s *serviceData) start() error {
+// start is called to transition from the initial state and start the
+// service. It returns the channel for this bring-up's result, created
+// under the services lock, as backoffTimeElapsed may replace s.started
+// afterwards.
+func (s *serviceData) start() (<-chan error, error) {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
 	case stateInitial:
+		s.started = make(chan error)
+		s.broughtUp = false
 		err := s.startInternal()
 		if err != nil {
 			s.transition(stateStopped)
-			return err
+			return nil, err
 		}
 		s.transition(stateStarting)
-		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed()) })
+		startedCh := s.started
+		time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed(startedCh)) })
+		return startedCh, nil
 
 	default:
-		return fmt.Errorf("cannot start service while %s", s.state)
+		return nil, fmt.Errorf("cannot start service while %s", s.state)
 	}
-	return nil
 }
 
 func logError(err error) {
@@ -480,7 +521,6 @@ func (s *serviceData) startInternal() error {
 		return fmt.Errorf("cannot start service: %w", err)
 	}
 	logger.Debugf("Service %q started with PID %d", serviceName, s.cmd.Process.Pid)
-	s.resetTimer = time.AfterFunc(s.config.BackoffLimit.Value, func() { logError(s.backoffResetElapsed()) })
 
 	// Start a goroutine to wait for the process to finish.
 	done := make(chan struct{})
@@ -518,22 +558,127 @@ func (s *serviceData) startInternal() error {
 	return nil
 }
 
-// okayWaitElapsed is called when the okay-wait timer has elapsed (and the
-// service is considered running successfully).
-func (s *serviceData) okayWaitElapsed() error {
+// okayWaitElapsed is called when the okay-wait timer has elapsed. If the
+// service requires latch checks, its state is changed to `stateLatching`,
+// otherwise it is considered running successfully and transitioned to
+// `stateRunning`.
+func (s *serviceData) okayWaitElapsed(startedCh chan error) error {
 	s.manager.servicesLock.Lock()
 	defer s.manager.servicesLock.Unlock()
 
+	// s.started is re-created before each bring-up (in start
+	// and backoffTimeElapsed), and the new channel is passed to
+	// the okayWaitElapsed call scheduled for that bring-up. If
+	// s.started changed since then, a newer bring-up has been
+	// started, so this call is stale.
+	if s.started != startedCh {
+		return nil
+	}
+
 	switch s.state {
 	case stateStarting:
-		s.started <- nil // still running fine after short duration, no error
-		s.transition(stateRunning)
+		var latchChecks map[string]struct{}
+		for c, a := range s.config.OnCheckSuccess {
+			if a == plan.ActionLatch {
+				if latchChecks == nil {
+					latchChecks = make(map[string]struct{})
+				}
+				latchChecks[c] = struct{}{}
+			}
+		}
+
+		if len(latchChecks) == 0 {
+			s.started <- nil // Service still running after delay; no latch checks configured
+			s.transition(stateRunning)
+			return nil
+		}
+
+		if !s.manager.tomb.Alive() {
+			// Manager is stopping, don't start latch waiters it won't join
+			return nil
+		}
+		if !s.manager.tombStarted {
+			// Keep the manager tomb alive until Stop. Without this, the
+			// tomb would die as soon as its last latch goroutine finished,
+			// and later services could never latch. It is started lazily
+			// so that managers that never latch (and are never stopped,
+			// as in many tests) don't leave a parked goroutine behind.
+			s.manager.tombStarted = true
+			s.manager.tomb.Go(func() error {
+				<-s.manager.tomb.Dying()
+				return nil
+			})
+		}
+
+		s.transition(stateLatching)
+		logger.Noticef("Service %q latching, waiting for checks: %s",
+			s.config.Name, strings.Join(slices.Sorted(maps.Keys(latchChecks)), ", "))
+
+		// Each check is waited for in its own goroutine. Because the
+		// waits only start now, every check run that can latch the
+		// service starts after the okay delay has elapsed.
+		latchTomb, ctx := tomb.WithContext(s.manager.tomb.Context(context.Background()))
+		s.latchTomb = latchTomb
+		latchTomb.Go(func() error {
+			// Pass the locally-created tomb address so that a `latch`
+			// run from an earlier bring-up cannot operate on a newer
+			// tomb stored in s.latchTomb.
+			s.latch(ctx, latchTomb, latchChecks)
+			return nil
+		})
+		s.manager.tomb.Go(func() error {
+			_ = latchTomb.Wait()
+			return nil
+		})
 
 	default:
 		// Ignore if timer elapsed in any other state.
 		return nil
 	}
 	return nil
+}
+
+// latch waits for all of the service's latch checks, and transitions
+// the service to stateRunning if they all succeed. It runs in
+// latchTomb, keeping the tomb alive while the latch check goroutines
+// are registered, so that the tomb cannot become dead before all of the
+// checks have been added.
+func (s *serviceData) latch(ctx context.Context, latchTomb *tomb.Tomb, checks map[string]struct{}) {
+	results := make(chan bool)
+	for check := range checks {
+		latchTomb.Go(func() error {
+			select {
+			case results <- s.waitLatchCheck(ctx, s.manager.checkWaiter, check):
+			case <-latchTomb.Dying():
+			}
+			return nil
+		})
+	}
+
+	for range checks {
+		select {
+		case passed := <-results:
+			if !passed {
+				latchTomb.Kill(nil)
+				return
+			}
+		case <-latchTomb.Dying():
+			return
+		}
+	}
+
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
+	// Another path (exit, stop, abort) may have taken the service out
+	// of latching after the last result arrived, or a newer bring-up
+	// may be latching.
+	if s.state != stateLatching || s.latchTomb != latchTomb {
+		return
+	}
+
+	s.started <- nil
+	s.transition(stateRunning)
+	logger.Noticef("Service %q latched", s.config.Name)
 }
 
 // exited is called when the service's process exits.
@@ -546,10 +691,14 @@ func (s *serviceData) exited(exitCode int) error {
 	}
 
 	switch s.state {
-	case stateStarting:
+	case stateStarting, stateLatching:
 		// Send error to select waiting in doStart, then fall through to perform action.
 		action, _ := getAction(s.config, exitCode == 0)
-		s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
+		if s.state == stateLatching {
+			s.started <- fmt.Errorf("exited while latching with code %d, will %s", exitCode, action)
+		} else {
+			s.started <- fmt.Errorf("exited quickly with code %d, will %s", exitCode, action)
+		}
 		fallthrough
 
 	case stateRunning:
@@ -684,7 +833,7 @@ func getAction(config *plan.Service, success bool) (action plan.ServiceAction, o
 // function doesn't lock; it assumes the caller will.
 func (s *serviceData) sendSignal(signal string) error {
 	switch s.state {
-	case stateStarting, stateRunning:
+	case stateStarting, stateLatching, stateRunning:
 		sig := unix.SignalNum(signal)
 		if sig == 0 {
 			return fmt.Errorf("invalid signal name %q", signal)
@@ -721,8 +870,12 @@ func (s *serviceData) stop() error {
 	defer s.manager.servicesLock.Unlock()
 
 	switch s.state {
-	case stateStarting:
-		s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
+	case stateStarting, stateLatching:
+		if s.state == stateLatching {
+			s.started <- fmt.Errorf("stopped before latch checks passed")
+		} else {
+			s.started <- fmt.Errorf("stopped before the %s okay delay", okayDelay)
+		}
 		fallthrough
 
 	case stateRunning:
@@ -754,12 +907,25 @@ func (s *serviceData) backoffTimeElapsed() error {
 
 	switch s.state {
 	case stateBackoff:
+		// Fresh channel per bring-up so `okayWaitElapsed` can exit
+		// early on stale timer runs.
+		s.started = make(chan error)
 		err := s.startInternal()
 		if err != nil {
 			return err
 		}
-		s.transition(stateRunning)
-
+		if !s.broughtUp {
+			s.transition(stateStarting)
+			startedCh := s.started
+			time.AfterFunc(okayDelay, func() { logError(s.okayWaitElapsed(startedCh)) })
+			// No `doStart` waits on a backoff bring-up, so start a
+			// goroutine to consume this bring-up's result.
+			go func() {
+				<-startedCh
+			}()
+		} else {
+			s.transition(stateRunning)
+		}
 	default:
 		// Ignore if timer elapsed in any other state.
 		return nil
@@ -882,6 +1048,39 @@ func (s *serviceData) checkFailed(action plan.ServiceAction) {
 		logger.Debugf("Service %q: ignoring on-check-failure action %q in state %s",
 			s.config.Name, action, s.state)
 	}
+}
+
+// waitLatchCheck waits for the named latch check to succeed. It runs once
+// per latch check in its own goroutine. The services lock should not be held
+// when calling waitLatchCheck, as the CheckWaiter blocks while waiting for
+// the check to pass. The context is canceled when the service exits
+// stateLatching.
+func (s *serviceData) waitLatchCheck(ctx context.Context, waiter CheckWaiter, check string) bool {
+	err := waiter(ctx, check)
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+
+	// Take the services lock to read s.config.Name for logging, as
+	// serviceForStart and Replan can replace s.config concurrently.
+	s.manager.servicesLock.Lock()
+	defer s.manager.servicesLock.Unlock()
+
+	var notFound *checkstate.ChecksNotFound
+	if errors.As(err, &notFound) {
+		// Plan validation guarantees that the current plan cannot
+		// contain a service reference to a missing check. Therefore
+		// removal of this check implies that the new plan also removed
+		// this check from the service's latch requirements (or removed
+		// the service itself).
+		logger.Debugf("Service %q latch check %q was removed from the plan; treating the removed requirement as satisfied", s.config.Name, check)
+		return true
+	}
+	if err != nil {
+		logger.Noticef("Service %q latch check %q failed: %v", s.config.Name, check, err)
+		return false
+	}
+	return true
 }
 
 // writeMetric writes the service's metrics.

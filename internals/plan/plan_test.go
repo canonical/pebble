@@ -484,6 +484,81 @@ var planTests = []planTest{{
 					url: https://example.com/foo
 	`},
 }, {
+	summary: `on-check-success latch on check with startup disabled`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test: latch
+		checks:
+			test:
+				override: replace
+				startup: disabled
+				http:
+					url: https://example.com/foo
+	`},
+}, {
+	summary: `Invalid on-check-success action`,
+	error:   `plan service "svc1" on-check-success action "restart" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test: restart
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
+	`},
+}, {
+	summary: `Empty on-check-success action`,
+	error:   `plan service "svc1" on-check-success action "" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test: ""
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
+	`},
+}, {
+	summary: `Unset on-check-success action`,
+	error:   `plan service "svc1" on-check-success action "" invalid`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					test:
+		checks:
+			test:
+				override: replace
+				http:
+					url: https://example.com/foo
+	`},
+}, {
+	summary: `on-check-success references non-existent check`,
+	error:   `plan service "svc1" on-check-success references non-existent check: "missing"`,
+	input: []string{`
+		services:
+			"svc1":
+				override: replace
+				command: cmd
+				on-check-success:
+					missing: latch
+	`},
+}, {
 	summary: `Invalid backoff-delay duration`,
 	error:   `cannot parse layer "layer-0" section "services": invalid duration "foo"`,
 	input: []string{`
@@ -1611,6 +1686,39 @@ services:
 	c.Assert(err, ErrorMatches, `services in before/after loop: .*`)
 	_, ok := err.(*plan.FormatError)
 	c.Assert(ok, Equals, true, Commentf("error must be *plan.FormatError, not %T", err))
+}
+
+func (s *S) TestCombineLayersOnCheckSuccess(c *C) {
+	layer1, err := plan.ParseLayer(1, "label1", []byte(`
+services:
+    srv1:
+        override: replace
+        command: cmd
+        on-check-success:
+            chk1: latch
+            chk2: latch
+`))
+	c.Assert(err, IsNil)
+	layer2, err := plan.ParseLayer(2, "label2", []byte(`
+services:
+    srv1:
+        override: merge
+        on-check-success:
+            chk2: ignore
+            chk3: latch
+`))
+	c.Assert(err, IsNil)
+	combined, err := plan.CombineLayers(layer1, layer2)
+	c.Assert(err, IsNil)
+
+	// Keys from both layers are merged, and a later layer's action
+	// overrides an earlier one for the same check.
+	svc := combined.Services["srv1"]
+	c.Assert(svc.OnCheckSuccess, DeepEquals, map[string]plan.ServiceAction{
+		"chk1": plan.ActionLatch,
+		"chk2": plan.ActionIgnore,
+		"chk3": plan.ActionLatch,
+	})
 }
 
 func (s *S) TestMissingOverride(c *C) {

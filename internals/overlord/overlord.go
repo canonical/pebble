@@ -255,6 +255,9 @@ func New(opts *Options) (*Overlord, error) {
 	// Tell check manager about plan updates.
 	o.planMgr.AddChangeListener(o.checkMgr.PlanChanged)
 
+	// Let the service manager wait for checks that services latch on.
+	o.serviceMgr.SetCheckWaiter(o.checkMgr.WaitForSuccess)
+
 	// Tell log manager about plan updates.
 	o.planMgr.AddChangeListener(o.logMgr.PlanChanged)
 

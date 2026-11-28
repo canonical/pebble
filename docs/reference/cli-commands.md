@@ -1129,12 +1129,12 @@ The "Startup" column shows whether this service is automatically started when Pe
 
 The "Current" column shows the current status of the service, and can be one of the following:
 
-* `active`: starting or running
+* `active`: starting, latching, or running
 * `inactive`: not yet started, being stopped, or stopped
 * `backoff`: in a [backoff-restart loop](service-auto-restart.md)
 * `error`: in an error state
 
-The "Notes" column displays comma-separated flags or notes about the service status (or `-` if none). For example, `outdated` indicates that the service was started with an older plan and its configuration has changed since it was started.
+The "Notes" column displays comma-separated flags or notes about the service status (or `-` if none). For example, `outdated` indicates that the service was started with an older plan and its configuration has changed since it was started. The `latching` note indicates that the service is waiting for its [latch checks](#latch-checks) to succeed before it transitions to running.
 
 
 (reference_pebble_signal_command)=
@@ -1180,8 +1180,9 @@ any other services it depends on, in the correct order.
 
 ### How it works
 
-- If the command is still running at the end of the 1 second window, the start is considered successful.
-- If the command exits within the 1 second window, Pebble retries the command after a configurable backoff, using the restart logic described in [](service-auto-restart.md). If one of the started services exits within the 1 second window, `pebble start` prints an appropriate error message and exits with an error.
+- If the command is still running at the end of the 1 second window, and the service defines no latch checks, the start is considered successful.
+- If the service defines [latch checks](#latch-checks) in `on-check-success`, the start is only considered successful once all of its latch checks have succeeded. There is no timeout: the start stays in progress until the checks pass or the service is stopped or exits.
+- If the command exits within the 1 second window or while waiting for its latch checks, Pebble retries the command after a configurable backoff, using the restart logic described in [](service-auto-restart.md). If one of the started services exits before its start is successful, `pebble start` prints an appropriate error message and exits with an error.
 
 ### Examples
 
