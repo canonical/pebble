@@ -107,7 +107,10 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 			}
 			return nil, nil, err
 		}
-		n, _ := strconv.Atoi(u.Uid)
+		n, err := strconv.Atoi(u.Uid)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot parse user id %q of user %q: %w", u.Uid, username, err)
+		}
 		if uid != nil && *uid != n {
 			return nil, nil, fmt.Errorf("user %q UID (%d) does not match user-id (%d)",
 				username, n, *uid)
@@ -123,7 +126,10 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 			}
 			return nil, nil, err
 		}
-		n, _ := strconv.Atoi(g.Gid)
+		n, err := strconv.Atoi(g.Gid)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot parse group id %q of group %q: %w", g.Gid, group, err)
+		}
 		if gid != nil && *gid != n {
 			return nil, nil, fmt.Errorf("group %q GID (%d) does not match group-id (%d)",
 				group, n, *gid)
@@ -141,7 +147,10 @@ func NormalizeUidGid(uid, gid *int, username, group string) (*int, *int, error) 
 			}
 			return nil, nil, err
 		}
-		gidVal, _ := strconv.Atoi(uidInfo.Gid)
+		gidVal, err := strconv.Atoi(uidInfo.Gid)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot parse group id %q of user id %d: %w", uidInfo.Gid, *uid, err)
+		}
 		gid = &gidVal
 	}
 	if uid == nil && gid != nil {
