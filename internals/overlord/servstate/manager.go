@@ -301,16 +301,14 @@ func (m *ServiceManager) Replan() ([][]string, [][]string, error) {
 			// workload definition (if any) have changed
 			var workload *workloads.Workload
 			if ws != nil {
-				workload = ws.Entries[s.config.Workload]
+				workload = ws.Entries[config.Workload]
 			}
-			if config.Equal(s.config) && (workload == nil || workload.Equal(s.workload)) {
+			if config.Equal(s.config) && workload.Equal(s.workload) {
 				continue
 			}
 			// Update service config and workload from plan
 			s.config = config.Copy()
-			if workload != nil {
-				s.workload = workload
-			}
+			s.workload = workload
 		}
 		needsRestart[name] = true
 		stop = append(stop, name)

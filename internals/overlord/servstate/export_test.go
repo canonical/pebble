@@ -21,6 +21,7 @@ import (
 
 	"github.com/canonical/pebble/internals/plan"
 	"github.com/canonical/pebble/internals/servicelog"
+	"github.com/canonical/pebble/internals/workloads"
 )
 
 var CalculateNextBackoff = calculateNextBackoff
@@ -59,6 +60,17 @@ func (m *ServiceManager) Config(serviceName string) *plan.Service {
 		return nil
 	}
 	return s.config
+}
+
+func (m *ServiceManager) Workload(serviceName string) *workloads.Workload {
+	m.servicesLock.Lock()
+	defer m.servicesLock.Unlock()
+
+	s := m.services[serviceName]
+	if s == nil {
+		return nil
+	}
+	return s.workload
 }
 
 // ServiceLogBuffer returns the ring buffer for the named service, or nil if

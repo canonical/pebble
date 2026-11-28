@@ -480,6 +480,165 @@ workloads:
 	s.stopTestServices(c)
 }
 
+func (s *S) TestReplanWorkloadRemoved(c *C) {
+	s.newServiceManager(c)
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        workload: default
+workloads:
+    default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	s.startServices(c, [][]string{{"test6"}})
+	defer s.stopServices(c, [][]string{{"test6"}})
+
+	c.Assert(s.manager.Workload("test6"), NotNil)
+
+	// Add layer dropping workload from test6.
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+`)
+	s.planChanged(c)
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test6"}})
+
+	c.Check(s.manager.Workload("test6"), IsNil)
+}
+
+func (s *S) TestStartAfterWorkloadRemovedNoReplan(c *C) {
+	s.newServiceManager(c)
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        workload: default
+workloads:
+    default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	s.startServices(c, [][]string{{"test6"}})
+	defer s.stopServices(c, [][]string{{"test6"}})
+
+	c.Assert(s.manager.Workload("test6"), NotNil)
+
+	s.stopServices(c, [][]string{{"test6"}})
+
+	// Add layer dropping workload from test6.
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+`)
+	s.planChanged(c)
+
+	// Start without calling Replan.
+	s.startServices(c, [][]string{{"test6"}})
+
+	c.Check(s.manager.Workload("test6"), IsNil)
+}
+
+func (s *S) TestReplanWorkloadRenamed(c *C) {
+	s.newServiceManager(c)
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        workload: default
+workloads:
+    default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	s.startServices(c, [][]string{{"test6"}})
+	defer s.stopServices(c, [][]string{{"test6"}})
+
+	c.Assert(s.manager.Workload("test6"), NotNil)
+	c.Assert(s.manager.Workload("test6").Name, Equals, "default")
+
+	// Add layer switching test6 to new workload.
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: merge
+        workload: new-workload
+workloads:
+    new-workload:
+        override: replace
+        user: nobody
+        group: nogroup
+        environment:
+            TEST_WORKLOAD: "renamed"
+`)
+	s.planChanged(c)
+
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{{"test6"}})
+	c.Check(starts, DeepEquals, [][]string{{"test6"}})
+
+	c.Assert(s.manager.Workload("test6"), NotNil)
+	c.Check(s.manager.Workload("test6").Name, Equals, "new-workload")
+	c.Check(s.manager.Workload("test6").Environment["TEST_WORKLOAD"], Equals, "renamed")
+}
+
+func (s *S) TestReplanWorkloadUnchanged(c *C) {
+	s.newServiceManager(c)
+	resetWorkloadsSectionExtension()
+	s.planAddLayer(c, `
+services:
+    test6:
+        override: replace
+        command: /bin/sh -c "sleep 10"
+        workload: default
+workloads:
+    default:
+        override: replace
+        user: nobody
+        group: nogroup
+`)
+	s.planChanged(c)
+
+	s.startServices(c, [][]string{{"test6"}})
+	defer s.stopServices(c, [][]string{{"test6"}})
+
+	c.Assert(s.manager.Workload("test6"), NotNil)
+
+	// Calling Replan with no changes should not stop or restart test6.
+	stops, starts, err := s.manager.Replan()
+	c.Assert(err, IsNil)
+	c.Check(stops, DeepEquals, [][]string{nil})
+	c.Check(starts, DeepEquals, [][]string{nil})
+}
+
 func (s *S) TestReplanUpdatesConfig(c *C) {
 	s.newServiceManager(c)
 	s.planAddLayer(c, testPlanLayer)
